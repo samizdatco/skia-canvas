@@ -1,0 +1,18 @@
+{
+  "name": "skia-canvas",
+  "version": "0.1.0",
+  "description": "",
+  "main": "lib/index.js",
+  "author": "Christian Swinehart <drafting@samizdat.co>",
+  "license": "MIT",
+  "dependencies": {
+    "color-convert": "^2.0.1",
+    "neon-cli": "^0.4.0"
+  },
+  "scripts": {
+    "install": "neon build"
+  },
+  "devDependencies": {
+    "jest": "^26.2.2"
+  }
+}

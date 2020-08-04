@@ -1,0 +1,19 @@
+[package]
+name = "skia-canvas"
+version = "0.1.0"
+authors = ["Christian Swinehart <drafting@samizdat.co>"]
+license = "MIT"
+build = "build.rs"
+edition = "2018"
+exclude = ["artifacts.json", "index.node"]
+
+[lib]
+name = "skia_canvas"
+crate-type = ["cdylib"]
+
+[build-dependencies]
+neon-build = "0.4.0"
+
+[dependencies]
+neon = "0.4.0"
+skia-safe = {version = "0", features = ["textlayout"]} # { git = "https://github.com/rust-skia/rust-skia" }

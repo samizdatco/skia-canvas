@@ -1,0 +1,7 @@
+.vscode
+native/artifacts.json
+native/target
+native/*.node
+
+scr[ia]bble.*
+/*.png
