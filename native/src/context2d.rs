@@ -11,6 +11,10 @@ use skia_safe::{utils::text_utils::Align};
 
 use crate::utils::*;
 use crate::path2d::{Path2D, JsPath2D};
+use crate::gradient::{CanvasGradient, JsCanvasGradient};
+
+const BLACK:Color = Color::BLACK;
+const TRANSPARENT:Color = Color::TRANSPARENT;
 
 pub struct Context2D{
   surface: Option<Surface>,
@@ -18,6 +22,38 @@ pub struct Context2D{
   font: Option<Font>, // for now
   state_stack: Vec<State>,
   state: State,
+}
+
+#[derive(Clone)]
+pub struct State{
+  paint: Paint,
+  transform: Matrix,
+
+  font_string: String,
+  text_ltr: bool,
+  text_align: Align,
+  text_baseline: Baseline,
+
+  stroke_style: Dye,
+  fill_style: Dye,
+  shadow_blur: scalar,
+  shadow_color: Color,
+  shadow_offset: Point,
+
+  global_alpha: scalar,
+  stroke_width: scalar,
+  line_dash_offset: scalar,
+  line_dash_list: Vec<scalar>,
+
+  global_composite_operation: BlendMode,
+  image_filter_quality: FilterQuality,
+  image_smoothing_enabled: bool,
+}
+
+#[derive(Clone)]
+pub enum Dye{
+  Color(Color),
+  Shader{shader:Shader}
 }
 
 impl Context2D{
@@ -94,6 +130,7 @@ impl Context2D{
   }
 
   pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint>{
+    let c = self.state.shadow_color;
     let shadow_color = self.color_with_alpha(&self.state.shadow_color);
     let State {shadow_blur, shadow_offset, ..} = self.state;
     if shadow_color.a() == 0 || shadow_blur == 0.0 || shadow_offset.is_zero(){
@@ -112,16 +149,10 @@ impl Context2D{
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Fill);
 
-    // TKTK check for color vs shader
-    let ink_type = "color";
-
-    match ink_type{
-      "color" => {
-        paint.set_color(self.color_with_alpha(&self.state.fill_style));
-      },
-      "shader" => {},
-      _ => ()
-    };
+    match &self.state.fill_style{
+      Dye::Color(color) => { paint.set_color(self.color_with_alpha(&color)); },
+      Dye::Shader{shader,..} => {paint.set_shader(Some(shader.clone()));}
+    }
 
     paint
   }
@@ -131,16 +162,10 @@ impl Context2D{
     paint.set_style(PaintStyle::Stroke);
     paint.set_stroke_width(self.state.stroke_width);
 
-    // TKTK check for color vs shader
-    let ink_type = "color";
-
-    match ink_type{
-      "color" => {
-        paint.set_color(self.color_with_alpha(&self.state.stroke_style));
-      },
-      "shader" => {},
-      _ => ()
-    };
+    match &self.state.stroke_style{
+      Dye::Color(color) => { paint.set_color(self.color_with_alpha(&color)); },
+      Dye::Shader{shader,..} => {paint.set_shader(Some(shader.clone()));}
+    }
 
     if !self.state.line_dash_list.is_empty() {
       let dash = dash_path_effect::new(&self.state.line_dash_list, self.state.line_dash_offset);
@@ -152,38 +177,12 @@ impl Context2D{
 
 }
 
-#[derive(Clone)]
-pub struct State{
-  paint: Paint,
-  transform: Matrix,
-
-  font_string: String,
-  text_ltr: bool,
-  text_align: Align,
-  text_baseline: Baseline,
-
-  stroke_style: Color,
-  fill_style: Color,
-  shadow_blur: scalar,
-  shadow_color: Color,
-  shadow_offset: Point,
-
-  global_alpha: scalar,
-  stroke_width: scalar,
-  line_dash_offset: scalar,
-  line_dash_list: Vec<scalar>,
-
-  global_composite_operation: BlendMode,
-  image_filter_quality: FilterQuality,
-  image_smoothing_enabled: bool,
-}
-
 declare_types! {
   pub class JsContext2D for Context2D {
     init(_) {
       let mut paint = Paint::default();
       paint.set_stroke_miter(10.0);
-      paint.set_color(Color::BLACK);
+      paint.set_color(BLACK);
       paint.set_anti_alias(true);
       paint.set_stroke_width(1.0);
 
@@ -201,8 +200,8 @@ declare_types! {
           text_baseline: Baseline::Alphabetic,
 
           paint,
-          stroke_style: Color::BLACK,
-          fill_style: Color::BLACK,
+          stroke_style: Dye::Color(BLACK),
+          fill_style: Dye::Color(BLACK),
 
           stroke_width: 1.0,
           line_dash_offset: 0.0,
@@ -214,7 +213,7 @@ declare_types! {
           image_smoothing_enabled: true,
 
           shadow_blur: 0.0,
-          shadow_color: Color::TRANSPARENT,
+          shadow_color: TRANSPARENT,
           shadow_offset: (0.0, 0.0).into(),
         },
       })
@@ -276,40 +275,78 @@ declare_types! {
 
     method get_fillStyle(mut cx){
       let this = cx.this();
-      let color:Color4f = cx.borrow(&this, |this| this.state.fill_style.into() );
-      let rgba = JsArray::new(&mut cx, 4);
-      for (i, c) in color.as_array().iter().enumerate(){
-        let c = cx.number(*c as f64);
-        rgba.set(&mut cx, i as u32, c)?;
+
+      match cx.borrow(&this, |this| this.state.fill_style.clone() ){
+        Dye::Color(color) => {
+          let color:Color4f = color.into();
+          let rgba = JsArray::new(&mut cx, 4);
+          for (i, c) in color.as_array().iter().enumerate(){
+            let c = cx.number(*c as f64);
+            rgba.set(&mut cx, i as u32, c)?;
+          }
+          Ok(rgba.upcast())
+        },
+        Dye::Shader{shader} => {
+          println!("Unimplemented: return ref to CanvasGradient");
+          Ok(cx.empty_object().upcast())
+        }
       }
-      Ok(rgba.upcast())
     }
 
     method set_fillStyle(mut cx){
       let mut this = cx.this();
 
-      // TKTK: need to check whether it's a shader
+      if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
+        let gradient = cx.argument::<JsCanvasGradient>(0)?;
+        if let Some(shader) = cx.borrow(&gradient, |gradient| gradient.shader()){
+          cx.borrow_mut(&mut this, |mut this| {
+            this.state.fill_style = Dye::Shader{shader};
+          });
+        }
+      }else{
+        let color = color_args(&mut cx, 0..4, "fillStyle")?;
+        cx.borrow_mut(&mut this, |mut this| { this.state.fill_style = Dye::Color(color); });
+      }
 
-      let color = color_args(&mut cx, 0..4, "fillStyle")?;
-      cx.borrow_mut(&mut this, |mut this| { this.state.fill_style = color; });
       Ok(cx.undefined().upcast())
     }
 
     method get_strokeStyle(mut cx){
       let this = cx.this();
-      let color:Color4f = cx.borrow(&this, |this| this.state.stroke_style.into() );
-      let rgba = JsArray::new(&mut cx, 4);
-      for (i, c) in color.as_array().iter().enumerate(){
-        let c = cx.number(*c as f64);
-        rgba.set(&mut cx, i as u32, c)?;
+
+      match cx.borrow(&this, |this| this.state.stroke_style.clone() ){
+        Dye::Color(color) => {
+          let color:Color4f = color.into();
+          let rgba = JsArray::new(&mut cx, 4);
+          for (i, c) in color.as_array().iter().enumerate(){
+            let c = cx.number(*c as f64);
+            rgba.set(&mut cx, i as u32, c)?;
+          }
+          Ok(rgba.upcast())
+        },
+        Dye::Shader{shader} => {
+          println!("Unimplemented: return ref to CanvasGradient");
+          Ok(cx.empty_object().upcast())
+        }
       }
-      Ok(rgba.upcast())
+
     }
 
     method set_strokeStyle(mut cx){
       let mut this = cx.this();
-      let color = color_args(&mut cx, 0..4, "strokeStyle")?;
-      cx.borrow_mut(&mut this, |mut this| { this.state.stroke_style = color; });
+
+      if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
+        let gradient = cx.argument::<JsCanvasGradient>(0)?;
+        if let Some(shader) = cx.borrow(&gradient, |gradient| gradient.shader()){
+          cx.borrow_mut(&mut this, |mut this| {
+            this.state.stroke_style = Dye::Shader{shader};
+          });
+        }
+      }else{
+        let color = color_args(&mut cx, 0..4, "fillStyle")?;
+        cx.borrow_mut(&mut this, |mut this| { this.state.stroke_style = Dye::Color(color); });
+      }
+
       Ok(cx.undefined().upcast())
     }
 

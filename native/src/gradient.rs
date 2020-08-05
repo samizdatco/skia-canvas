@@ -25,8 +25,7 @@ pub struct CanvasGradient{
 }
 
 impl CanvasGradient{
-    #![allow(dead_code)]
-    pub fn shader(&self) -> Option<Shader>{
+  pub fn shader(&self) -> Option<Shader>{
     match self.gradient.as_ref(){
       Some(gradient) => match gradient{
         Gradient::Linear{start, end, stops, colors} => {
@@ -41,6 +40,22 @@ impl CanvasGradient{
         },
       },
       None => None
+    }
+  }
+
+  pub fn add_color_stop(&mut self, offset: f32, color:Color){
+    if let Some(gradient) = self.gradient.as_mut(){
+      let stops = match gradient{
+        Gradient::Linear{stops, ..} => stops,
+        Gradient::Radial{stops, ..} => stops,
+      };
+
+      // insert the new entries at the right index to keep the vectors sorted
+      let idx = stops.binary_search_by(|n| n.partial_cmp(&offset).unwrap()).unwrap_or_else(|x| x);
+      match gradient{
+        Gradient::Linear{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
+        Gradient::Radial{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
+      };
     }
   }
 }
@@ -81,18 +96,17 @@ declare_types! {
       Ok(None)
     }
 
-    method add_color_stop(mut cx){
+    method addColorStop(mut cx){
       let mut this = cx.this();
       let offset = float_arg(&mut cx, 0, "offset")?;
       let color = color_args(&mut cx, 1..5, "color")?;
-      cx.borrow_mut(&mut this, |mut this| {
-        if let Some(gradient) = this.gradient.as_mut(){
-          match gradient{
-            Gradient::Linear{colors, stops, ..} => { colors.push(color); stops.push(offset); },
-            Gradient::Radial{colors, stops, ..} => { colors.push(color); stops.push(offset); },
-          };
-        }
-      });
+
+      if offset < 0.0 || offset > 1.0 {
+        let err = JsError::range_error(&mut cx, "Color stop offsets must be between 0 and 1")?;
+        return cx.throw(err)
+      }
+
+      cx.borrow_mut(&mut this, |mut this| this.add_color_stop(offset, color) );
       Ok(cx.undefined().upcast())
     }
 
