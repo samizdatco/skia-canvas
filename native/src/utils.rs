@@ -90,7 +90,7 @@ pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> Js
 // strings
 //
 
-pub fn opt_string_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<String>{
+pub fn opt_string_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<String>{
   match cx.argument_opt(idx as i32) {
     Some(arg) => match arg.downcast::<JsString>() {
       Ok(v) => Some(v.value()),
@@ -100,14 +100,15 @@ pub fn opt_string_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize) -> Optio
   }
 }
 
-pub fn string_arg_or<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, default:&str) -> String{
+pub fn string_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default:&str) -> String{
   match opt_string_arg(cx, idx){
     Some(v) => v,
     None => String::from(default)
   }
 }
 
-pub fn string_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> Result<String, Throw>{
+
+pub fn string_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize, attr:&str) -> Result<String, Throw> {
   let exists = cx.len() > idx as i32;
   match opt_string_arg(cx, idx){
     Some(v) => Ok(v),
@@ -122,7 +123,7 @@ pub fn string_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -
 // bools
 //
 
-pub fn opt_bool_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<bool>{
+pub fn opt_bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<bool>{
   match cx.argument_opt(idx as i32) {
     Some(arg) => match arg.downcast::<JsBoolean>() {
       Ok(v) => Some(v.value()),
@@ -132,14 +133,14 @@ pub fn opt_bool_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<
   }
 }
 
-pub fn bool_arg_or<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, default:bool) -> bool{
+pub fn bool_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default:bool) -> bool{
   match opt_bool_arg(cx, idx){
     Some(v) => v,
     None => default
   }
 }
 
-pub fn bool_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> Result<bool, Throw>{
+pub fn bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> Result<bool, Throw>{
   let exists = cx.len() > idx as i32;
   match opt_bool_arg(cx, idx){
     Some(v) => Ok(v),
@@ -163,7 +164,7 @@ pub fn floats_in(vals: &[Handle<JsValue>]) -> Vec<f32>{
       .collect()
 }
 
-pub fn opt_float_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<f32>{
+pub fn opt_float_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<f32>{
   match cx.argument_opt(idx as i32) {
     Some(arg) => match arg.downcast::<JsNumber>() {
       Ok(v) => Some(v.value() as f32),
@@ -173,14 +174,14 @@ pub fn opt_float_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize) -> Option
   }
 }
 
-pub fn float_arg_or<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, default:f64) -> f32{
+pub fn float_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default:f64) -> f32{
   match opt_float_arg(cx, idx){
     Some(v) => v,
     None => default as f32
   }
 }
 
-pub fn float_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> Result<f32, Throw>{
+pub fn float_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> Result<f32, Throw>{
   let exists = cx.len() > idx as i32;
   match opt_float_arg(cx, idx){
     Some(v) => Ok(v),
@@ -195,7 +196,7 @@ pub fn float_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) ->
 // float spreads
 //
 
-pub fn opt_float_args<T:Class>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Vec<f32>{
+pub fn opt_float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Vec<f32>{
   let end = cmp::min(rng.end, cx.len() as usize);
   let rng = rng.start..end;
   rng.map(|i| cx.argument::<JsNumber>(i as i32))
@@ -204,7 +205,7 @@ pub fn opt_float_args<T:Class>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -
      .collect()
 }
 
-pub fn float_args<T:Class>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Vec<f32>, Throw>{
+pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Vec<f32>, Throw>{
   let need = rng.end - rng.start;
   let list = opt_float_args(cx, rng);
   let got = list.len();
@@ -234,7 +235,7 @@ pub fn to_color(vals:&[f32]) -> Option<Color>{
   if colors.is_empty(){ None }else{ Some(colors.remove(0)) }
 }
 
-pub fn color_args<T:Class>(cx: &mut CallContext<'_, T>, rng: Range<usize>, attr:&str) -> Result<Color, Throw>{
+pub fn color_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>, attr:&str) -> Result<Color, Throw>{
   let mut nums = opt_float_args(cx, rng);
   if nums.len() == 3{
     nums.push(1.0 as f32);
@@ -249,7 +250,7 @@ pub fn color_args<T:Class>(cx: &mut CallContext<'_, T>, rng: Range<usize>, attr:
 // Matrices
 //
 
-pub fn matrix_in<T:Class>(cx: &mut CallContext<'_, T>, vals:&[Handle<JsValue>]) -> Result<Matrix, Throw>{
+pub fn matrix_in<T: This>(cx: &mut CallContext<'_, T>, vals:&[Handle<JsValue>]) -> Result<Matrix, Throw>{
   // for converting single js-array args
   let terms = floats_in(vals);
   match to_matrix(&terms){
@@ -266,7 +267,7 @@ pub fn to_matrix(t:&[f32]) -> Option<Matrix>{
   }
 }
 
-pub fn matrix_args<T:Class>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Matrix, Throw>{
+pub fn matrix_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Matrix, Throw>{
   // for converting inline args (e.g., in Path.transform())
   let terms = opt_float_args(cx, rng);
   match to_matrix(&terms){
@@ -479,7 +480,7 @@ pub fn from_text_baseline(mode:Baseline) -> String{
 
 
 use skia_safe::path::FillType;
-pub fn fill_rule_arg_or<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, default: &str) -> Result<FillType, Throw>{
+pub fn fill_rule_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default: &str) -> Result<FillType, Throw>{
   let rule = match string_arg_or(cx, idx, default).as_str(){
     "nonzero" => FillType::Winding,
     "evenodd" => FillType::EvenOdd,
@@ -501,7 +502,7 @@ pub fn fill_rule_arg_or<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, defaul
 
 
 
-pub fn blend_mode_arg<T:Class>(cx: &mut CallContext<'_, T>, idx: usize, attr: &str) -> Result<BlendMode, Throw>{
+pub fn blend_mode_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr: &str) -> Result<BlendMode, Throw>{
   let mode_name = string_arg(cx, idx, attr)?;
   match to_blend_mode(&mode_name){
     Some(blend_mode) => Ok(blend_mode),
