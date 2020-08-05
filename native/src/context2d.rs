@@ -116,17 +116,20 @@ impl Context2D{
     }
   }
 
+  pub fn clear_rect(&mut self, rect:&Rect){
+    let mut paint = Paint::default();
+    paint.set_style(PaintStyle::Fill);
+    paint.set_blend_mode(BlendMode::Clear);
+
+    if let Some(surface) = &mut self.surface{
+      surface.canvas().draw_rect(&rect, &paint);
+    }
+  }
+
   pub fn color_with_alpha(&self, src:&Color) -> Color{
     let mut color:Color4f = src.clone().into();
     color.a *= self.state.global_alpha;
     color.to_color()
-  }
-
-  pub fn paint_for_clear(&self) -> Paint{
-    let mut paint = Paint::default();
-    paint.set_style(PaintStyle::Fill);
-    paint.set_blend_mode(BlendMode::Clear);
-    paint
   }
 
   pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint>{
@@ -961,8 +964,7 @@ declare_types! {
       if let [x, y, w, h] = nums.as_slice() {
         let rect = Rect::from_xywh(*x, *y, *w, *h);
         cx.borrow_mut(&mut this, |mut this| {
-          let paint = this.paint_for_clear();
-          this.draw_rect(&rect, &paint);
+          this.clear_rect(&rect);
         })
       }
       Ok(cx.undefined().upcast())
