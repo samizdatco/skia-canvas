@@ -4,9 +4,9 @@
 #![allow(dead_code)]
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Surface, Paint, PaintStyle, BlendMode, FilterQuality};
+use skia_safe::{Surface, Canvas, Paint, PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle};
 use skia_safe::{Path, Matrix, PathDirection, Rect, Point, scalar, path::{AddPathMode, FillType}};
-use skia_safe::{Data, Image, EncodedImageFormat, Font, Color, Color4f, dash_path_effect};
+use skia_safe::{Data, Image, EncodedImageFormat, Font, Color, Color4f, Shader, dash_path_effect};
 use skia_safe::{utils::text_utils::Align};
 
 use crate::utils::*;
@@ -28,35 +28,55 @@ impl Context2D{
     }
   }
 
-  pub fn stroke_path(&mut self){
-    let paint = self.paint_for_stroke();
+  pub fn draw_path(&mut self, paint: &Paint){
+    let path = &mut self.path;
+
+    // draw shadow if applicable
+    if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+      if let Some(surface) = &mut self.surface{
+        let canvas = surface.canvas();
+        canvas.save();
+
+        let inverted = self.state.transform.clone().invert().unwrap();
+        let nudge = Matrix::new_trans(self.state.shadow_offset);
+        canvas.concat(&inverted);
+        canvas.concat(&nudge);
+        canvas.concat(&self.state.transform);
+        canvas.draw_path(&self.path, &shadow_paint);
+
+        canvas.restore();
+      }
+    }
+
+    // then draw the actual path
     if let Some(surface) = &mut self.surface{
-      let canvas = surface.canvas();
-      canvas.draw_path(&self.path, &paint);
+      surface.canvas().draw_path(&self.path, &paint);
     }
   }
 
-  pub fn fill_path(&mut self){
-    let paint = self.paint_for_fill();
-    if let Some(surface) = &mut self.surface{
-      let canvas = surface.canvas();
-      canvas.draw_path(&self.path, &paint);
-    }
-  }
+  pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
+    let path = &mut self.path;
 
-  pub fn stroke_rect(&mut self, rect:&Rect){
-    let paint = self.paint_for_stroke();
-    if let Some(surface) = &mut self.surface{
-      let canvas = surface.canvas();
-      canvas.draw_rect(&rect, &paint);
-    }
-  }
+    // draw shadow if applicable
+    if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+      if let Some(surface) = &mut self.surface{
+        let canvas = surface.canvas();
+        canvas.save();
 
-  pub fn fill_rect(&mut self, rect:&Rect, erase:bool){
-    let paint = if erase{ self.paint_for_clear() } else { self.paint_for_fill() };
+        let inverted = self.state.transform.clone().invert().unwrap();
+        let nudge = Matrix::new_trans(self.state.shadow_offset);
+        canvas.concat(&inverted);
+        canvas.concat(&nudge);
+        canvas.concat(&self.state.transform);
+        canvas.draw_rect(&rect, &shadow_paint);
+
+        canvas.restore();
+      }
+    }
+
+    // then draw the actual rect
     if let Some(surface) = &mut self.surface{
-      let canvas = surface.canvas();
-      canvas.draw_rect(&rect, &paint);
+      surface.canvas().draw_rect(&rect, &paint);
     }
   }
 
@@ -71,6 +91,21 @@ impl Context2D{
     paint.set_style(PaintStyle::Fill);
     paint.set_blend_mode(BlendMode::Clear);
     paint
+  }
+
+  pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint>{
+    let shadow_color = self.color_with_alpha(&self.state.shadow_color);
+    let State {shadow_blur, shadow_offset, ..} = self.state;
+    if shadow_color.a() == 0 || shadow_blur == 0.0 || shadow_offset.is_zero(){
+      return None
+    }
+
+    let mut shadow_paint = base_paint.clone();
+    shadow_paint.set_color(shadow_color);
+    let blur_filter = MaskFilter::blur(BlurStyle::Normal, shadow_blur/2.0, Some(false));
+    shadow_paint.set_mask_filter(blur_filter);
+
+    Some(shadow_paint)
   }
 
   pub fn paint_for_fill(&self) -> Paint{
@@ -435,11 +470,19 @@ declare_types! {
 
     method get_shadowColor(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      let color:Color4f = cx.borrow(&this, |this| this.state.shadow_color.into() );
+      let rgba = JsArray::new(&mut cx, 4);
+      for (i, c) in color.as_array().iter().enumerate(){
+        let c = cx.number(*c as f64);
+        rgba.set(&mut cx, i as u32, c)?;
+      }
+      Ok(rgba.upcast())
     }
 
     method set_shadowColor(mut cx){
       let mut this = cx.this();
+      let color = color_args(&mut cx, 0..4, "shadowColor")?;
+      cx.borrow_mut(&mut this, |mut this| { this.state.shadow_color = color; });
       Ok(cx.undefined().upcast())
     }
 
@@ -849,11 +892,10 @@ declare_types! {
 
       let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
 
-      // TKTK create shadow paint and draw with that first
-
       cx.borrow_mut(&mut this, |mut this| {
+        let paint = this.paint_for_fill();
         this.path.set_fill_type(rule);
-        this.fill_path();
+        this.draw_path(&paint);
       });
 
       Ok(cx.undefined().upcast())
@@ -868,9 +910,10 @@ declare_types! {
         }
       }
 
-      // TKTK create shadow paint and draw with that first
-
-      cx.borrow_mut(&mut this, |mut this| { this.stroke_path(); });
+      cx.borrow_mut(&mut this, |mut this| {
+        let paint = this.paint_for_stroke();
+        this.draw_path(&paint);
+      });
 
       Ok(cx.undefined().upcast())
     }
@@ -881,7 +924,8 @@ declare_types! {
       if let [x, y, w, h] = nums.as_slice() {
         let rect = Rect::from_xywh(*x, *y, *w, *h);
         cx.borrow_mut(&mut this, |mut this| {
-          this.fill_rect(&rect, true);
+          let paint = this.paint_for_clear();
+          this.draw_rect(&rect, &paint);
         })
       }
       Ok(cx.undefined().upcast())
@@ -893,7 +937,9 @@ declare_types! {
       if let [x, y, w, h] = nums.as_slice() {
         let rect = Rect::from_xywh(*x, *y, *w, *h);
         cx.borrow_mut(&mut this, |mut this| {
-          this.fill_rect(&rect, false);
+          let paint =  this.paint_for_fill();
+          this.draw_rect(&rect, &paint);
+
         })
       }
       Ok(cx.undefined().upcast())
@@ -905,7 +951,8 @@ declare_types! {
       if let [x, y, w, h] = nums.as_slice() {
         let rect = Rect::from_xywh(*x, *y, *w, *h);
         cx.borrow_mut(&mut this, |mut this| {
-          this.stroke_rect(&rect);
+          let paint = this.paint_for_stroke();
+          this.draw_rect(&rect, &paint);
         })
       }
       Ok(cx.undefined().upcast())
