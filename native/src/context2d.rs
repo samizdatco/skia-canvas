@@ -237,9 +237,9 @@ declare_types! {
       Ok(None)
     }
 
-    // --------------------------------------------------------------------- //
-    //                              PROPERTIES                               //
-    // --------------------------------------------------------------------- //
+    /* ---------------------------------------------------------------------- *
+     |                              PROPERTIES                                |
+     * ---------------------------------------------------------------------- */
 
     method get_canvas(mut cx){
       let this = cx.this();
@@ -355,12 +355,14 @@ declare_types! {
 
     method get_filter(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
 
     method set_filter(mut cx){
       let mut this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
 
     //
@@ -369,12 +371,14 @@ declare_types! {
 
     method get_font(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
 
     method set_font(mut cx){
       let mut this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
 
     method get_direction(mut cx){
@@ -631,9 +635,9 @@ declare_types! {
     }
 
 
-    // --------------------------------------------------------------------- //
-    //                                METHODS                                //
-    // --------------------------------------------------------------------- //
+    /* ---------------------------------------------------------------------- *
+     |                                METHODS                                 |
+     * ---------------------------------------------------------------------- */
 
     //
     // State
@@ -687,7 +691,8 @@ declare_types! {
 
     method clip(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
 
     //
@@ -1003,19 +1008,23 @@ declare_types! {
 
     method createImageData(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
     method getImageData(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
     method putImageData(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
     method drawImage(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
 
     //
@@ -1023,15 +1032,18 @@ declare_types! {
     //
     method measureText(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
     method strokeText(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
     method fillText(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
 
     //
@@ -1046,7 +1058,8 @@ declare_types! {
     //
     method createPattern(mut cx){
       let this = cx.this();
-      Ok(cx.undefined().upcast())
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
     }
 
     //
