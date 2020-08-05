@@ -14,6 +14,12 @@ impl Path2D{
     Self{ path:Path::new() }
   }
 
+  pub fn scoot(&mut self, x: f32, y: f32){
+    if self.path.is_empty(){
+      self.path.move_to((x, y));
+    }
+  }
+
   pub fn add_ellipse(&mut self, origin:impl Into<Point>, radii:impl Into<Point>, rotation: f32, start_angle:f32, end_angle:f32, ccw:bool){
     let Point{x, y} = origin.into();
     let Point{x:x_radius, y:y_radius} = radii.into();
@@ -150,7 +156,7 @@ declare_types! {
       let x = float_arg(&mut cx, 0, "x")?;
       let y = float_arg(&mut cx, 1, "y")?;
       cx.borrow_mut(&mut this, |mut this| {
-        if this.path.is_empty(){ this.path.move_to((x, y)); }
+        this.scoot(x, y);
         this.path.line_to((x, y));
       });
 
@@ -164,7 +170,7 @@ declare_types! {
       let nums = float_args(&mut cx, 0..6)?;
       if let [cp1x, cp1y, cp2x, cp2y, x, y] = nums.as_slice(){
         cx.borrow_mut(&mut this, |mut this| {
-          if this.path.is_empty(){ this.path.move_to((*cp1x, *cp1y)); }
+          this.scoot(*cp1x, *cp1y);
           this.path.cubic_to((*cp1x, *cp1y), (*cp2x, *cp2y), (*x, *y));
         });
       }
@@ -179,7 +185,7 @@ declare_types! {
       let nums = float_args(&mut cx, 0..4)?;
       if let [cpx, cpy, x, y] = nums.as_slice(){
         cx.borrow_mut(&mut this, |mut this| {
-          if this.path.is_empty(){ this.path.move_to((*cpx, *cpy)); }
+          this.scoot(*cpx, *cpy);
           this.path.quad_to((*cpx, *cpy), (*x, *y));
         });
       }
@@ -212,7 +218,7 @@ declare_types! {
 
       if let [x1, y1, x2, y2] = coords.as_slice(){
         cx.borrow_mut(&mut this, |mut this| {
-          if this.path.is_empty(){ this.path.move_to((*x1, *y1)); }
+          this.scoot(*x1, *y1);
           this.path.arc_to_tangent((*x1, *y1), (*x2, *y2), radius);
         });
       }
