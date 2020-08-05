@@ -4,6 +4,7 @@ use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
 use neon::result::Throw;
+use neon::object::This;
 use skia_safe::{Matrix, Point, Color, Color4f};
 // use serde::{de::Error, Deserialize, Deserializer};
 
@@ -73,6 +74,17 @@ pub fn to_degrees(radians: f32) -> f32{
   radians / PI * 180.0
 }
 
+pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> JsResult<'a, JsValue> {
+  let global = cx.global();
+  let symbol_ctor = global
+      .get(cx, "Symbol")?
+      .downcast::<JsFunction>()
+      .or_throw(cx)?;
+
+  let symbol_label = cx.string(symbol_name);
+  let sym = symbol_ctor.call(cx, global, vec![symbol_label])?;
+  Ok(sym)
+}
 
 //
 // strings
