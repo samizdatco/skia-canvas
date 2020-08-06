@@ -6,7 +6,6 @@ use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
 use skia_safe::{Matrix, Point, Color, Color4f};
-// use serde::{de::Error, Deserialize, Deserializer};
 
 
 //
@@ -471,16 +470,6 @@ pub fn fill_rule_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, defaul
   Ok(rule)
 }
 
-
-
-
-
-
-
-
-
-
-
 pub fn blend_mode_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr: &str) -> Result<BlendMode, Throw>{
   let mode_name = string_arg(cx, idx, attr)?;
   match to_blend_mode(&mode_name){
@@ -491,90 +480,3 @@ pub fn blend_mode_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr: &s
                             Exclusion, Hue, Saturation, Color, Luminosity, or Modulate")
   }
 }
-
-//
-// neon-serde arg-parsing helpers
-//
-
-// pub fn ds_matrix<'de, D>(deserializer: D) -> Result<Option<Matrix>, D::Error>
-// where
-//     D: Deserializer<'de>,
-// {
-//   let terms: Option<Vec<f32>> = Deserialize::deserialize(deserializer).unwrap_or(None);
-//   match terms{
-//     None => Ok(None),
-//     Some(t) => match t.len(){
-//       6 => Ok(Some(Matrix::new_all(t[0], t[1], t[2], t[3], t[4], t[5], 0.0 as f32, 0.0 as f32, 1.0 as f32))),
-//       9 => Ok(Some(Matrix::new_all(t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8]))),
-//       _ => Err(D::Error::custom(format!("expected 6 or 9 matrix values (got {})", t.len())))
-//     }
-//   }
-// }
-
-// pub fn ds_point<'de, D>(deserializer: D) -> Result<Point, D::Error>
-// where
-//     D: Deserializer<'de>,
-// {
-//   let vals: Vec<f32> = Deserialize::deserialize(deserializer)?;
-//   match vals.len(){
-//     2 => Ok(Point::new(vals[0], vals[1])),
-//     _ => Err(D::Error::custom(format!("expected an [x, y] coordinate pair (got {})", vals.len())))
-//   }
-// }
-
-// // pub fn ds_points<'de, D>(deserializer: D) -> Result<Vec<Point>, D::Error>
-// // where
-// //     D: Deserializer<'de>,
-// // {
-// //   let vals: Vec<f32> = Deserialize::deserialize(deserializer)?;
-// //   let points = vals.as_slice()
-// //     .chunks(2)
-// //     .map(|pair| Point::new(pair[0], pair[1]))
-// //     .collect();
-// //   Ok(points)
-// // }
-
-// pub fn ds_color<'de, D>(deserializer: D) -> Result<Color, D::Error>
-// where
-//     D: Deserializer<'de>,
-// {
-//   let c: Vec<f32> = Deserialize::deserialize(deserializer)?;
-//   match c.len(){
-//     4 => Ok(Color4f::new(c[0], c[1], c[2], c[3]).to_color()),
-//     3 => Ok(Color4f::new(c[0], c[1], c[2], 1.0).to_color()),
-//     _ => Err(D::Error::custom(format!("expected either 3 or 4 color components (got {})", c.len())))
-//   }
-// }
-
-// pub fn ds_colors<'de, D>(deserializer: D) -> Result<Vec<Color>, D::Error>
-// where
-//     D: Deserializer<'de>,
-// {
-//   let vals: Vec<f32> = Deserialize::deserialize(deserializer)?;
-//   let colors = vals.as_slice()
-//     .chunks(4)
-//     .map(|c| Color4f::new(c[0], c[1], c[2], c[3]).to_color())
-//     .collect();
-//   Ok(colors)
-// }
-
-// // pub fn ds_blend_mode<'de, D: Deserializer<'de>>(deserializer: D) -> Result<BlendMode, D::Error>{
-// //   let mode_name: String = Deserialize::deserialize(deserializer)?;
-// //   match to_blend_mode(&mode_name){
-// //     Some(blend_mode) => Ok(blend_mode),
-// //     None => Err(D::Error::custom("blendMode must be SrcOver, DstOver, Src, Dst, Clear, SrcIn, DstIn, \
-// //                                   SrcOut, DstOut, SrcATop, DstATop, Xor, Plus, Multiply, Screen, Overlay, \
-// //                                   Darken, Lighten, ColorDodge, ColorBurn, HardLight, SoftLight, Difference, \
-// //                                   Exclusion, Hue, Saturation, Color, Luminosity, or Modulate"))
-// //   }
-// // }
-
-// pub fn ds_tile_mode<'de, D: Deserializer<'de>>(deserializer: D) -> Result<TileMode, D::Error>{
-//   let mode_name: String = Deserialize::deserialize(deserializer)?;
-//   match to_tile_mode(&mode_name){
-//     Some(tile_mode) => Ok(tile_mode),
-//     None => Err(D::Error::custom("tileMode must be Clamp, Repeat, Mirror, or Decal"))
-//   }
-// }
-
-
