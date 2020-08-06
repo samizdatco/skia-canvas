@@ -88,8 +88,6 @@ declare_types! {
                                    and \"createRadialGradient\" methods instead)")
       };
 
-      // cx.borrow_mut(&mut this, |mut this| { this.gradient = gradient });
-
       Ok(CanvasGradient{ gradient:Rc::new(RefCell::new(gradient)) })
     }
 
