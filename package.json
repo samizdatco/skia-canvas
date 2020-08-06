@@ -7,7 +7,8 @@
   "license": "MIT",
   "dependencies": {
     "color-convert": "^2.0.1",
-    "neon-cli": "^0.4.0"
+    "neon-cli": "^0.4.0",
+    "simple-get": "^4.0.0"
   },
   "scripts": {
     "install": "neon build"

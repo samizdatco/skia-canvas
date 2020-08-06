@@ -8,11 +8,12 @@ use neon::prelude::*;
 use neon::object::This;
 use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4f,
                 PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle, PathDirection,
-                Data, Image, EncodedImageFormat, Font, Shader, dash_path_effect, ClipOp,
+                Data, Image as SkImage, EncodedImageFormat, Font, Shader, dash_path_effect, ClipOp,
                 utils::text_utils::Align, path::{AddPathMode, FillType}};
 
 use crate::utils::*;
 use crate::path2d::{Path2D, JsPath2D};
+use crate::image::{Image, JsImage};
 use crate::gradient::{CanvasGradient, JsCanvasGradient};
 
 const BLACK:Color = Color::BLACK;
@@ -1054,9 +1055,22 @@ declare_types! {
       // Ok(cx.undefined().upcast())
     }
     method drawImage(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let mut this = cx.this();
+      let img = cx.argument::<JsImage>(0)?;
+
+      let x = float_arg(&mut cx, 1, "dx")?;
+      let y = float_arg(&mut cx, 2, "dy")?;
+      cx.borrow(&img, |img| {
+        cx.borrow_mut(&mut this, |mut this| {
+          if let Some(surface) = this.surface.as_mut(){
+            if let Some(image) = &img.image{
+              surface.canvas().draw_image(&image, (x, y), None);
+            }
+
+          }
+        });
+      });
+      Ok(cx.undefined().upcast())
     }
 
     //
