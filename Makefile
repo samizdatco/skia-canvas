@@ -1,37 +1,28 @@
-REPO=https://github.com/google/skia/trunk/modules/canvaskit
-UPSTREAM := $(CURDIR)/upstream
 NEON := $(CURDIR)/node_modules/.bin/neon
 JEST := $(CURDIR)/node_modules/.bin/jest
-.PHONY: build run test clean upstream
+LIB := $(CURDIR)/native/index.node
+SRC := $(wildcard $(CURDIR)/native/src/*)
+.PHONY: build run test check clean
 
-all:
-	@$(MAKE) build && $(MAKE) run
+all: run
 
 $(NEON):
 	npm install
 
+$(LIB): $(NEON) $(SRC)
+	@$(NEON) build
+
+build: $(LIB)
+
+run: $(LIB)
+	@node scribble.js
+
+test: $(LIB)
+	@$(JEST)
+
 check:
 	@cd native; cargo check
 
-build: $(NEON)
-	@$(NEON) build
-
-run:
-	@node scribble.js
-
-test: $(NEON)
-	@$(JEST)
-
 clean:
-	rm -rf native/dist
-
-upstream:
-	@mkdir -p $(UPSTREAM)/{bindings,htmlcanvas,module}
-	@$(eval TMP := $(shell mktemp -d))
-	svn checkout -q $(REPO) $(TMP)
-	cp $(TMP)/canvaskit/LICENSE $(UPSTREAM)
-	cp $(TMP)/*.cpp $(UPSTREAM)/bindings
-	cp $(TMP)/*.js $(UPSTREAM)/module
-	rm -f $(UPSTREAM)/module/karma*.js
-	cp $(TMP)/htmlcanvas/*.js $(UPSTREAM)/htmlcanvas
-	rm -rf $(TMP)
+	rm -rf native/target/debug
+	rm -rf native/target/release
