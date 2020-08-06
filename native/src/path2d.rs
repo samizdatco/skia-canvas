@@ -104,24 +104,21 @@ declare_types! {
     // Adds a path to the current path.
     method addPath(mut cx){
       let mut this = cx.this();
-      let arg = cx.argument::<JsValue>(0)?;
-      if !arg.is_a::<JsPath2D>(){
-        return cx.throw_type_error("Argument 1 ('path') to Path2D.addPath must be an instance of Path2D")
-      }
-      let matrix = match cx.argument_opt(1){
-        Some(val) => {
-          let arg = val.downcast::<JsArray>().or_throw(&mut cx)?.to_vec(&mut cx)?;
-          matrix_in(&mut cx, &arg)?
-        },
-        None => Matrix::new_identity()
+
+      let other_path = match path2d_arg(&mut cx, 0){
+        Ok(path) => path,
+        Err(_e) => return cx.throw_type_error("Argument 1 ('path') to Path2D.addPath must be an instance of Path2D")
       };
 
-      let that = arg.downcast::<JsPath2D>().or_throw(&mut cx)?;
-      cx.borrow(&that, |that| {
-        cx.borrow_mut(&mut this, |mut this|{
-          this.path.add_path_matrix(&that.path, &matrix, AddPathMode::Append);
-        })
+      let matrix = match matrix_arg(&mut cx, 1){
+        Ok(matrix) => matrix,
+        Err(_e) => Matrix::new_identity()
+      };
+
+      cx.borrow_mut(&mut this, |mut this|{
+        this.path.add_path_matrix(&other_path, &matrix, AddPathMode::Append);
       });
+
       Ok(cx.undefined().upcast())
     }
 
