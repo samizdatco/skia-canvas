@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+use std::cmp;
 use std::f32::consts::PI;
 use neon::prelude::*;
 use neon::object::This;
@@ -198,6 +199,46 @@ impl Context2D{
 
 }
 
+
+pub fn stash_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str, obj:Handle<'a, JsValue>) -> JsResult<'a, JsUndefined>{
+  let mut this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
+  let sym = symbol(cx, queue_name)?;
+  let queue = match this.get(cx, sym)?.downcast::<JsArray>(){
+    Ok(array) => array,
+    Err(_e) => {
+      // create ref queues lazily
+      let array = JsArray::new(cx, 0);
+      this.set(cx, sym, array)?;
+      array
+    }
+  };
+
+  let depth = cx.borrow(&this, |this| this.state_stack.len() as f64);
+  let len = cx.number(depth + 1.0);
+  let idx = cx.number(depth);
+  let length = cx.string("length");
+
+  queue.set(cx, length, len)?;
+  queue.set(cx, idx, obj)?;
+  Ok(cx.undefined())
+}
+
+pub fn fetch_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str) -> JsResult<'a, JsValue>{
+  let mut this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
+  let sym = symbol(cx, queue_name)?;
+  let queue = this.get(cx, sym)?.downcast::<JsArray>().or_throw(cx)?;
+
+  let length = cx.string("length");
+  let len = queue.get(cx, length)?.downcast::<JsNumber>().or_throw(cx)?.value() as f64;
+  let depth = cx.borrow(&this, |this| this.state_stack.len() as f64);
+  let idx = cx.number(depth.min(len - 1.0));
+
+  match queue.get(cx, idx){
+    Ok(gradient) => Ok(gradient.upcast()),
+    Err(_e) => Ok(cx.undefined().upcast())
+  }
+}
+
 declare_types! {
   pub class JsContext2D for Context2D {
     init(_) {
@@ -298,6 +339,7 @@ declare_types! {
       let this = cx.this();
 
       match cx.borrow(&this, |this| this.state.fill_style.clone() ){
+        Dye::Shader{shader} => { fetch_ref(&mut cx, "fillShader") },
         Dye::Color(color) => {
           let color:Color4f = color.into();
           let rgba = JsArray::new(&mut cx, 4);
@@ -306,10 +348,6 @@ declare_types! {
             rgba.set(&mut cx, i as u32, c)?;
           }
           Ok(rgba.upcast())
-        },
-        Dye::Shader{shader} => {
-          println!("Unimplemented: return ref to CanvasGradient");
-          Ok(cx.empty_object().upcast())
         }
       }
     }
@@ -320,13 +358,16 @@ declare_types! {
       if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
         let gradient = cx.argument::<JsCanvasGradient>(0)?;
         if let Some(shader) = cx.borrow(&gradient, |gradient| gradient.shader()){
+          stash_ref(&mut cx, "fillShader", gradient.upcast::<JsValue>())?;
           cx.borrow_mut(&mut this, |mut this| {
             this.state.fill_style = Dye::Shader{shader};
           });
         }
       }else{
         let color = color_args(&mut cx, 0..4, "fillStyle")?;
-        cx.borrow_mut(&mut this, |mut this| { this.state.fill_style = Dye::Color(color); });
+        cx.borrow_mut(&mut this, |mut this| {
+          this.state.fill_style = Dye::Color(color);
+        });
       }
 
       Ok(cx.undefined().upcast())
@@ -336,6 +377,7 @@ declare_types! {
       let this = cx.this();
 
       match cx.borrow(&this, |this| this.state.stroke_style.clone() ){
+        Dye::Shader{shader} => { fetch_ref(&mut cx, "strokeShader") },
         Dye::Color(color) => {
           let color:Color4f = color.into();
           let rgba = JsArray::new(&mut cx, 4);
@@ -344,13 +386,8 @@ declare_types! {
             rgba.set(&mut cx, i as u32, c)?;
           }
           Ok(rgba.upcast())
-        },
-        Dye::Shader{shader} => {
-          println!("Unimplemented: return ref to CanvasGradient");
-          Ok(cx.empty_object().upcast())
         }
       }
-
     }
 
     method set_strokeStyle(mut cx){
@@ -359,13 +396,16 @@ declare_types! {
       if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
         let gradient = cx.argument::<JsCanvasGradient>(0)?;
         if let Some(shader) = cx.borrow(&gradient, |gradient| gradient.shader()){
+          stash_ref(&mut cx, "strokeShader", gradient.upcast::<JsValue>())?;
           cx.borrow_mut(&mut this, |mut this| {
             this.state.stroke_style = Dye::Shader{shader};
           });
         }
       }else{
-        let color = color_args(&mut cx, 0..4, "fillStyle")?;
-        cx.borrow_mut(&mut this, |mut this| { this.state.stroke_style = Dye::Color(color); });
+        let color = color_args(&mut cx, 0..4, "strokeStyle")?;
+        cx.borrow_mut(&mut this, |mut this| {
+          this.state.stroke_style = Dye::Color(color);
+        });
       }
 
       Ok(cx.undefined().upcast())

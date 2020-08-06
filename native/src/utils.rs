@@ -78,6 +78,9 @@ pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> Js
   let global = cx.global();
   let symbol_ctor = global
       .get(cx, "Symbol")?
+      .downcast::<JsObject>()
+      .or_throw(cx)?
+      .get(cx, "for")?
       .downcast::<JsFunction>()
       .or_throw(cx)?;
 
