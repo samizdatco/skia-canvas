@@ -4,10 +4,11 @@
 #![allow(dead_code)]
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Surface, Canvas, Paint, PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle};
-use skia_safe::{Path, Matrix, PathDirection, Rect, Point, scalar, path::{AddPathMode, FillType}};
-use skia_safe::{Data, Image, EncodedImageFormat, Font, Color, Color4f, Shader, dash_path_effect};
-use skia_safe::{utils::text_utils::Align};
+use neon::object::This;
+use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4f,
+                PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle, PathDirection,
+                Data, Image, EncodedImageFormat, Font, Shader, dash_path_effect,
+                utils::text_utils::Align, path::{AddPathMode, FillType}};
 
 use crate::utils::*;
 use crate::path2d::{Path2D, JsPath2D};
@@ -36,14 +37,14 @@ pub struct State{
 
   stroke_style: Dye,
   fill_style: Dye,
-  shadow_blur: scalar,
+  shadow_blur: f32,
   shadow_color: Color,
   shadow_offset: Point,
 
-  global_alpha: scalar,
-  stroke_width: scalar,
-  line_dash_offset: scalar,
-  line_dash_list: Vec<scalar>,
+  global_alpha: f32,
+  stroke_width: f32,
+  line_dash_offset: f32,
+  line_dash_list: Vec<f32>,
 
   global_composite_operation: BlendMode,
   image_filter_quality: FilterQuality,
