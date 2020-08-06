@@ -215,6 +215,16 @@ pub fn color_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>, attr:
   }
 }
 
+pub fn color_to_rgba<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color) -> JsResult<'a, JsValue> {
+  let color = Color4f::from(*color);
+  let rgba = JsArray::new(cx, 4);
+  for (i, c) in color.as_array().iter().enumerate(){
+    let c = cx.number(*c as f64);
+    rgba.set(cx, i as u32, c)?;
+  }
+  Ok(rgba.upcast())
+}
+
 //
 // Matrices
 //

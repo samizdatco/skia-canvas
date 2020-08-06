@@ -353,16 +353,8 @@ declare_types! {
       let this = cx.this();
 
       match cx.borrow(&this, |this| this.state.fill_style.clone() ){
-        Dye::Shader{shader} => { fetch_ref(&mut cx, "fillShader") },
-        Dye::Color(color) => {
-          let color:Color4f = color.into();
-          let rgba = JsArray::new(&mut cx, 4);
-          for (i, c) in color.as_array().iter().enumerate(){
-            let c = cx.number(*c as f64);
-            rgba.set(&mut cx, i as u32, c)?;
-          }
-          Ok(rgba.upcast())
-        }
+        Dye::Shader{shader} => fetch_ref(&mut cx, "fillShader"),
+        Dye::Color(color) => color_to_rgba(&mut cx, &color)
       }
     }
 
@@ -391,16 +383,8 @@ declare_types! {
       let this = cx.this();
 
       match cx.borrow(&this, |this| this.state.stroke_style.clone() ){
-        Dye::Shader{shader} => { fetch_ref(&mut cx, "strokeShader") },
-        Dye::Color(color) => {
-          let color:Color4f = color.into();
-          let rgba = JsArray::new(&mut cx, 4);
-          for (i, c) in color.as_array().iter().enumerate(){
-            let c = cx.number(*c as f64);
-            rgba.set(&mut cx, i as u32, c)?;
-          }
-          Ok(rgba.upcast())
-        }
+        Dye::Shader{shader} => fetch_ref(&mut cx, "strokeShader") ,
+        Dye::Color(color) => color_to_rgba(&mut cx, &color)
       }
     }
 
@@ -586,13 +570,8 @@ declare_types! {
 
     method get_shadowColor(mut cx){
       let this = cx.this();
-      let color:Color4f = cx.borrow(&this, |this| this.state.shadow_color.into() );
-      let rgba = JsArray::new(&mut cx, 4);
-      for (i, c) in color.as_array().iter().enumerate(){
-        let c = cx.number(*c as f64);
-        rgba.set(&mut cx, i as u32, c)?;
-      }
-      Ok(rgba.upcast())
+      let shadow_color = cx.borrow(&this, |this| this.state.shadow_color );
+      color_to_rgba(&mut cx, &shadow_color)
     }
 
     method set_shadowColor(mut cx){
