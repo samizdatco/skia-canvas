@@ -1,3 +1,5 @@
+use std::rc::Rc;
+use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::{Shader, Color, Point, TileMode, gradient_shader, gradient_shader::GradientShaderColors::Colors};
 
@@ -20,61 +22,54 @@ enum Gradient{
   }
 }
 
+#[derive(Clone)]
 pub struct CanvasGradient{
-  gradient:Option<Gradient>
+  gradient:Rc<RefCell<Gradient>>
 }
 
 impl CanvasGradient{
   pub fn shader(&self) -> Option<Shader>{
-    match self.gradient.as_ref(){
-      Some(gradient) => match gradient{
+      match &*self.gradient.borrow(){
         Gradient::Linear{start, end, stops, colors} => {
-          gradient_shader::linear((*start, *end), Colors(&colors), Some(stops.as_ref()), TileMode::Clamp, None, None)
+          gradient_shader::linear((*start, *end), Colors(&colors), Some(stops.as_slice()), TileMode::Clamp, None, None)
         },
         Gradient::Radial{start_point, start_radius, end_point, end_radius, stops, colors} => {
           gradient_shader::two_point_conical(
             *start_point, *start_radius,
             *end_point, *end_radius,
-            Colors(&colors), Some(stops.as_ref()),
+            Colors(&colors), Some(stops.as_slice()),
             TileMode::Clamp, None, None)
-        },
-      },
-      None => None
-    }
+        }
+      }
   }
 
   pub fn add_color_stop(&mut self, offset: f32, color:Color){
-    if let Some(gradient) = self.gradient.as_mut(){
-      let stops = match gradient{
-        Gradient::Linear{stops, ..} => stops,
-        Gradient::Radial{stops, ..} => stops,
-      };
+    let gradient = &mut *self.gradient.borrow_mut();
 
-      // insert the new entries at the right index to keep the vectors sorted
-      let idx = stops.binary_search_by(|n| n.partial_cmp(&offset).unwrap()).unwrap_or_else(|x| x);
-      match gradient{
-        Gradient::Linear{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
-        Gradient::Radial{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
-      };
-    }
+    let stops = match gradient{
+      Gradient::Linear{stops, ..} => stops,
+      Gradient::Radial{stops, ..} => stops,
+    };
+
+    // insert the new entries at the right index to keep the vectors sorted
+    let idx = stops.binary_search_by(|n| n.partial_cmp(&offset).unwrap()).unwrap_or_else(|x| x);
+    match gradient{
+      Gradient::Linear{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
+      Gradient::Radial{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
+    };
   }
 }
 
 declare_types! {
   pub class JsCanvasGradient for CanvasGradient {
-    init(_) {
-      Ok(CanvasGradient{ gradient:None })
-    }
-
-    constructor(mut cx){
-      let mut this = cx.this();
+    init(mut cx) {
       let kind = string_arg(&mut cx, 0, "gradientType")?;
-      let gradient:Option<Gradient> = match kind.to_lowercase().as_str(){
+      let gradient = match kind.to_lowercase().as_str(){
         "linear" => {
           if let [x1, y1, x2, y2] = float_args(&mut cx, 1..5)?.as_slice(){
             let start = Point::new(*x1, *y1);
             let end = Point::new(*x2, *y2);
-            Some(Gradient::Linear{ start, end, stops:vec![], colors:vec![]})
+            Gradient::Linear{ start, end, stops:vec![], colors:vec![]}
           }else{
             return cx.throw_type_error("Not enough arguments")
           }
@@ -83,18 +78,21 @@ declare_types! {
           if let [x1, y1, r1, x2, y2, r2] = float_args(&mut cx, 1..7)?.as_slice(){
             let start_point = Point::new(*x1, *y1);
             let end_point = Point::new(*x2, *y2);
-            Some(Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![]})
+            Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![]}
           }else{
             return cx.throw_type_error("Not enough arguments")
           }
         },
-        _ => None
+        _ => return cx.throw_error("Can't create new CanvasGradient objects directly \
+                                   (use CanvasRenderingContext2D's \"createLinearGradient\" \
+                                   and \"createRadialGradient\" methods instead)")
       };
 
-      cx.borrow_mut(&mut this, |mut this| { this.gradient = gradient });
+      // cx.borrow_mut(&mut this, |mut this| { this.gradient = gradient });
 
-      Ok(None)
+      Ok(CanvasGradient{ gradient:Rc::new(RefCell::new(gradient)) })
     }
+
 
     method addColorStop(mut cx){
       let mut this = cx.this();
