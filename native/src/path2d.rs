@@ -105,9 +105,9 @@ declare_types! {
     method addPath(mut cx){
       let mut this = cx.this();
 
-      let other_path = match path2d_arg(&mut cx, 0){
-        Ok(path) => path,
-        Err(_e) => return cx.throw_type_error("Argument 1 ('path') to Path2D.addPath must be an instance of Path2D")
+      let other_path = match path2d_arg_opt(&mut cx, 0){
+        Some(path) => path,
+        None => return cx.throw_type_error("Argument 1 ('path') to Path2D.addPath must be an instance of Path2D")
       };
 
       let matrix = match matrix_arg(&mut cx, 1){

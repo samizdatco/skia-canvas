@@ -724,15 +724,10 @@ declare_types! {
 
     method clip(mut cx){
       let mut this = cx.this();
-      let mut shift = 0;
 
-      let clip = match path2d_arg(&mut cx, 0){
-        Ok(path) => {
-          shift += 1;
-          Some(path)
-        },
-        Err(_e) => None
-      };
+      let mut shift = 0;
+      let clip = path2d_arg_opt(&mut cx, 0);
+      if clip.is_some() { shift += 1; }
 
       let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
       cx.borrow_mut(&mut this, |mut this| { this.clip_path(clip, rule); });
@@ -969,7 +964,7 @@ declare_types! {
     method fill(mut cx){
       let mut this = cx.this();
       let mut shift = 0;
-      if let Ok(path) = path2d_arg(&mut cx, 0){
+      if let Some(path) = path2d_arg_opt(&mut cx, 0){
         cx.borrow_mut(&mut this, |mut this| { this.path = path });
         shift += 1;
       }
@@ -987,7 +982,7 @@ declare_types! {
 
     method stroke(mut cx){
       let mut this = cx.this();
-      if let Ok(path) = path2d_arg(&mut cx, 0){
+      if let Some(path) = path2d_arg_opt(&mut cx, 0){
         cx.borrow_mut(&mut this, |mut this| { this.path = path });
       }
 

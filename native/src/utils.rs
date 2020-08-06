@@ -291,13 +291,13 @@ pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
 // Path2D
 //
 
-pub fn path2d_arg<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize) -> Result<Path, Throw> {
+pub fn path2d_arg_opt<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize) -> Option<Path> {
   if let Some(arg) = cx.argument_opt(idx as i32){
     if let Ok(arg) = arg.downcast::<JsPath2D>(){
-      return Ok(cx.borrow(&arg, |arg| arg.path.clone() ))
+      return Some(cx.borrow(&arg, |arg| arg.path.clone() ))
     }
   }
-  cx.throw_error("expected a Path2D object")
+  None
 }
 
 //
