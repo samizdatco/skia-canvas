@@ -814,7 +814,7 @@ declare_types! {
     method arc(mut cx){
       let mut this = cx.this();
       let nums = float_args(&mut cx, 0..5)?;
-      let ccw = bool_arg(&mut cx, 5, "isCCW")?;
+      let ccw = bool_arg_or(&mut cx, 5, false);
 
       if let [x, y, radius, start_angle, end_angle] = nums.as_slice(){
         cx.borrow_mut(&mut this, |mut this| {
