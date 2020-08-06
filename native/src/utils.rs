@@ -9,40 +9,6 @@ use skia_safe::{Matrix, Point, Color, Color4f};
 // use serde::{de::Error, Deserialize, Deserializer};
 
 
-
-
-
-// #[derive(Serialize, Deserialize)]
-// #[serde(remote = "Matrix")]
-// pub struct MatrixDef {
-//   #[serde(getter = "matrix_terms")]
-//   mat: [f32; 9usize],
-//   #[serde(getter = "matrix_mask")]
-//   type_mask: u32,
-// }
-
-// pub fn matrix_terms(matrix:&Matrix) -> [f32; 9]{
-//   let mut terms = [0f32; 9];
-//   matrix.get_9(&mut terms);
-//   terms
-// }
-
-// pub fn matrix_mask(matrix:&Matrix) -> u32{ 0x10 }
-
-// impl DeserializeOwned for MatrixDef{};
-
-// impl From<MatrixDef> for Matrix {
-//   fn from(def: MatrixDef) -> Matrix {
-//     let mut matrix = Matrix::new_identity();
-//     matrix.set_9(&def.mat);
-//     matrix
-//   }
-// }
-
-// #[derive(Deserialize)]
-// pub struct MatrixHelper(#[serde(with = "MatrixDef")] Matrix);
-
-
 //
 // meta-helpers
 //
