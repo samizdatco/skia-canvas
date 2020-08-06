@@ -174,6 +174,7 @@ impl Context2D{
     }
 
     let mut shadow_paint = base_paint.clone();
+    shadow_paint.set_shader(None);
     shadow_paint.set_color(shadow_color);
     let blur_filter = MaskFilter::blur(BlurStyle::Normal, shadow_blur/2.0, Some(false));
     shadow_paint.set_mask_filter(blur_filter);
