@@ -254,6 +254,26 @@ pub fn matrix_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> R
   }
 }
 
+pub fn matrix_arg<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize) -> Result<Matrix, Throw> {
+  let arg = cx.argument::<JsArray>(idx as i32)?.to_vec(cx)?;
+  let terms = floats_in(&arg);
+  match to_matrix(&terms){
+    Some(matrix) => Ok(matrix),
+    None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+  }
+}
+
+pub fn matrix_to_array<'a, T: This+Class>(cx: &mut CallContext<'a, T>, matrix:&Matrix) -> JsResult<'a, JsValue> {
+  let array = JsArray::new(cx, 9 as u32);
+  for i in 0..9 {
+    let num = cx.number(matrix[i as usize] as f64);
+    array.set(cx, i as u32, num)?;
+  }
+  Ok(array.upcast())
+}
+
+
+
 //
 // Points
 //

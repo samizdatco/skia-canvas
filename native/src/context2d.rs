@@ -325,22 +325,13 @@ declare_types! {
 
     method get_currentTransform(mut cx){
       let this = cx.this();
-      let array = JsArray::new(&mut cx, 9 as u32);
-      let mat_vec:Vec<f64> = cx.borrow(&this, |this|
-        (0..9).map(|i| this.state.transform[i as usize] as f64).collect()
-      );
-      for (i, term) in mat_vec.iter().enumerate() {
-        let num = cx.number(*term);
-        array.set(&mut cx, i as u32, num).unwrap();
-      }
-
-      Ok(array.upcast())
+      let matrix = cx.borrow(&this, |this| this.state.transform );
+      matrix_to_array(&mut cx, &matrix)
     }
 
     method set_currentTransform(mut cx){
       let mut this = cx.this();
-      let arg = cx.argument::<JsArray>(0)?.to_vec(&mut cx)?;
-      let matrix = matrix_in(&mut cx, &arg)?;
+      let matrix = matrix_arg(&mut cx, 0)?;
       cx.borrow_mut(&mut this, |mut this| this.state.transform = matrix );
       Ok(cx.undefined().upcast())
     }
@@ -788,8 +779,7 @@ declare_types! {
 
     method transform(mut cx){
       let mut this = cx.this();
-      let arg = cx.argument::<JsArray>(0)?.to_vec(&mut cx)?;
-      let matrix = matrix_in(&mut cx, &arg)?;
+      let matrix = matrix_arg(&mut cx, 0)?;
       cx.borrow_mut(&mut this, |mut this| {
         this.state.transform.pre_concat(&matrix);
       });
