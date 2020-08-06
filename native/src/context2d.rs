@@ -8,7 +8,7 @@ use neon::prelude::*;
 use neon::object::This;
 use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4f,
                 PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle, PathDirection,
-                Data, Image, EncodedImageFormat, Font, Shader, dash_path_effect,
+                Data, Image, EncodedImageFormat, Font, Shader, dash_path_effect, ClipOp,
                 utils::text_utils::Align, path::{AddPathMode, FillType}};
 
 use crate::utils::*;
@@ -106,6 +106,20 @@ impl Context2D{
     // then draw the actual path
     if let Some(surface) = &mut self.surface{
       surface.canvas().draw_path(&self.path, &paint);
+    }
+  }
+
+  pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
+    let do_aa = true;
+    let mut clip = match path{
+      Some(path) => path,
+      None => self.path.clone()
+    };
+
+    clip.set_fill_type(rule);
+    if let Some(surface) = &mut self.surface{
+      let canvas = surface.canvas();
+      canvas.clip_path(&clip, ClipOp::Intersect, do_aa);
     }
   }
 
@@ -739,9 +753,23 @@ declare_types! {
     }
 
     method clip(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let mut this = cx.this();
+      let mut shift = 0;
+
+      let clip = match cx.argument_opt(0){
+        Some(arg) => match arg.downcast::<JsPath2D>(){
+          Ok(clip) => {
+            shift += 1;
+            Some(cx.borrow(&clip, |clip| clip.path.clone()))
+          },
+          Err(_e) => None
+        },
+        None => None
+      };
+
+      let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
+      cx.borrow_mut(&mut this, |mut this| { this.clip_path(clip, rule); });
+      Ok(cx.undefined().upcast())
     }
 
     //
@@ -994,6 +1022,7 @@ declare_types! {
 
       Ok(cx.undefined().upcast())
     }
+
     method stroke(mut cx){
       let mut this = cx.this();
       if let Some(arg) = cx.argument_opt(0){
