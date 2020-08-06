@@ -703,7 +703,7 @@ declare_types! {
       let array = JsArray::new(&mut cx, dashes.len() as u32);
       for (i, interval) in dashes.iter().enumerate() {
         let num = cx.number(*interval);
-        array.set(&mut cx, i as u32, num).unwrap();
+        array.set(&mut cx, i as u32, num)?;
       }
       Ok(array.upcast())
     }
