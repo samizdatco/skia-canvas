@@ -65,6 +65,23 @@ impl Context2D{
     }
   }
 
+  pub fn push(&mut self){
+    let new_state = self.state.clone();
+    self.state_stack.push(new_state);
+    if let Some(surface) = self.surface.as_mut(){
+      surface.canvas().save();
+    }
+  }
+
+  pub fn pop(&mut self){
+    if let Some(old_state) = self.state_stack.pop(){
+      self.state = old_state;
+    }
+    if let Some(surface) = self.surface.as_mut(){
+      surface.canvas().restore();
+    }
+  }
+
   pub fn draw_path(&mut self, paint: &Paint){
     let path = &mut self.path;
 
@@ -646,22 +663,13 @@ declare_types! {
 
     method save(mut cx){
       let mut this = cx.this();
-      cx.borrow_mut(&mut this, |mut this| {
-        let new_state = this.state.clone();
-        this.state_stack.push(new_state);
-      });
+      let depth = cx.borrow_mut(&mut this, |mut this| this.push() );
       Ok(cx.undefined().upcast())
     }
 
     method restore(mut cx){
       let mut this = cx.this();
-      let success = cx.borrow_mut(&mut this, |mut this| {
-        match this.state_stack.pop(){
-          Some(old_state) =>{ this.state = old_state; true},
-          None => false
-        }
-      });
-      if !success{ return cx.throw_error("no saved state to restore") }
+      let depth = cx.borrow_mut(&mut this, |mut this| this.pop() );
       Ok(cx.undefined().upcast())
     }
 
