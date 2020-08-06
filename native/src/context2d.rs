@@ -776,7 +776,7 @@ declare_types! {
 
     method transform(mut cx){
       let mut this = cx.this();
-      let matrix = matrix_arg(&mut cx, 0)?;
+      let matrix = matrix_args(&mut cx, 0..6)?;
       cx.borrow_mut(&mut this, |mut this| {
         this.state.transform.pre_concat(&matrix);
       });
