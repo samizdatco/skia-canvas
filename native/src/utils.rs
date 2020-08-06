@@ -5,7 +5,9 @@ use core::ops::Range;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
-use skia_safe::{Matrix, Point, Color, Color4f};
+use skia_safe::{Path, Matrix, Point, Color, Color4f};
+
+use crate::path2d::{JsPath2D};
 
 
 //
@@ -283,6 +285,19 @@ pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
       .chunks(2)
       .map(|pair| Point::new(pair[0], pair[1]))
       .collect()
+}
+
+//
+// Path2D
+//
+
+pub fn path2d_arg<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize) -> Result<Path, Throw> {
+  if let Some(arg) = cx.argument_opt(idx as i32){
+    if let Ok(arg) = arg.downcast::<JsPath2D>(){
+      return Ok(cx.borrow(&arg, |arg| arg.path.clone() ))
+    }
+  }
+  cx.throw_error("expected a Path2D object")
 }
 
 //

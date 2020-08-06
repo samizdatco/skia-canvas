@@ -726,15 +726,12 @@ declare_types! {
       let mut this = cx.this();
       let mut shift = 0;
 
-      let clip = match cx.argument_opt(0){
-        Some(arg) => match arg.downcast::<JsPath2D>(){
-          Ok(clip) => {
-            shift += 1;
-            Some(cx.borrow(&clip, |clip| clip.path.clone()))
-          },
-          Err(_e) => None
+      let clip = match path2d_arg(&mut cx, 0){
+        Ok(path) => {
+          shift += 1;
+          Some(path)
         },
-        None => None
+        Err(_e) => None
       };
 
       let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
@@ -972,13 +969,9 @@ declare_types! {
     method fill(mut cx){
       let mut this = cx.this();
       let mut shift = 0;
-      if let Some(arg) = cx.argument_opt(0){
-        if let Ok(arg) = arg.downcast::<JsPath2D>(){
-          cx.borrow_mut(&mut this, |mut this| {
-            cx.borrow(&arg, |arg| this.path = arg.path.clone());
-          });
-          shift += 1;
-        }
+      if let Ok(path) = path2d_arg(&mut cx, 0){
+        cx.borrow_mut(&mut this, |mut this| { this.path = path });
+        shift += 1;
       }
 
       let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
@@ -994,12 +987,8 @@ declare_types! {
 
     method stroke(mut cx){
       let mut this = cx.this();
-      if let Some(arg) = cx.argument_opt(0){
-        if let Ok(arg) = arg.downcast::<JsPath2D>(){
-          cx.borrow_mut(&mut this, |mut this| {
-            cx.borrow(&arg, |arg| this.path = arg.path.clone());
-          });
-        }
+      if let Ok(path) = path2d_arg(&mut cx, 0){
+        cx.borrow_mut(&mut this, |mut this| { this.path = path });
       }
 
       cx.borrow_mut(&mut this, |mut this| {
