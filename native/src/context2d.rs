@@ -14,6 +14,7 @@ use crate::utils::*;
 use crate::path2d::{Path2D, JsPath2D};
 use crate::image::{Image, JsImage};
 use crate::gradient::{CanvasGradient, JsCanvasGradient};
+use crate::pattern::{CanvasPattern, JsCanvasPattern};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;
@@ -55,7 +56,8 @@ pub struct State{
 #[derive(Clone)]
 pub enum Dye{
   Color(Color),
-  Gradient(CanvasGradient)
+  Gradient(CanvasGradient),
+  Pattern(CanvasPattern)
 }
 
 impl Context2D{
@@ -155,10 +157,15 @@ impl Context2D{
   pub fn paint_for_fill(&self) -> Paint{
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Fill);
+    paint.set_filter_quality(match self.state.image_smoothing_enabled{
+      true => self.state.image_filter_quality,
+      false => FilterQuality::None
+    });
 
     match &self.state.fill_style{
       Dye::Color(color) => { paint.set_color(self.color_with_alpha(&color)); },
-      Dye::Gradient(gradient) => {paint.set_shader(gradient.shader());}
+      Dye::Gradient(gradient) => {paint.set_shader(gradient.shader());},
+      Dye::Pattern(pattern) => {paint.set_shader(pattern.shader());}
     }
 
     paint
@@ -168,10 +175,16 @@ impl Context2D{
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Stroke);
     paint.set_stroke_width(self.state.stroke_width);
+    paint.set_filter_quality(match self.state.image_smoothing_enabled{
+      true => self.state.image_filter_quality,
+      false => FilterQuality::None
+    });
+
 
     match &self.state.stroke_style{
       Dye::Color(color) => { paint.set_color(self.color_with_alpha(&color)); },
-      Dye::Gradient(gradient) => {paint.set_shader(gradient.shader());}
+      Dye::Gradient(gradient) => {paint.set_shader(gradient.shader());},
+      Dye::Pattern(pattern) => {paint.set_shader(pattern.shader());}
     }
 
     if !self.state.line_dash_list.is_empty() {
@@ -783,15 +796,7 @@ declare_types! {
     // implemented in js:
     // - createLinearGradient
     // - createRadialGradient
-
-    //
-    // Image Shader / 2D Path Effect
-    //
-    method createPattern(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
-    }
+    // - createPattern
 
     //
     // Output
@@ -857,7 +862,8 @@ declare_types! {
       let this = cx.this();
 
       match cx.borrow(&this, |this| this.state.fill_style.clone() ){
-        Dye::Gradient(gradient) => fetch_ref(&mut cx, "fillGradient"),
+        Dye::Gradient(gradient) => fetch_ref(&mut cx, "fillShader"),
+        Dye::Pattern(pattern) => fetch_ref(&mut cx, "fillShader"),
         Dye::Color(color) => color_to_rgba(&mut cx, &color)
       }
     }
@@ -865,12 +871,21 @@ declare_types! {
     method set_fillStyle(mut cx){
       let mut this = cx.this();
 
-      if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
+      let arg = cx.argument::<JsValue>(0)?;
+      if arg.is_a::<JsCanvasGradient>(){
+        stash_ref(&mut cx, "fillShader", arg)?;
         let gradient = cx.argument::<JsCanvasGradient>(0)?;
-        stash_ref(&mut cx, "fillGradient", gradient.upcast::<JsValue>())?;
         cx.borrow(&gradient, |gradient| {
           cx.borrow_mut(&mut this, |mut this| {
             this.state.fill_style = Dye::Gradient(gradient.clone());
+          });
+        });
+      }else if arg.is_a::<JsCanvasPattern>(){
+        stash_ref(&mut cx, "fillShader", arg)?;
+        let pattern = cx.argument::<JsCanvasPattern>(0)?;
+        cx.borrow(&pattern, |pattern| {
+          cx.borrow_mut(&mut this, |mut this| {
+            this.state.fill_style = Dye::Pattern(pattern.clone());
           });
         });
       }else{
@@ -887,7 +902,8 @@ declare_types! {
       let this = cx.this();
 
       match cx.borrow(&this, |this| this.state.stroke_style.clone() ){
-        Dye::Gradient(gradient) => fetch_ref(&mut cx, "strokeGradient") ,
+        Dye::Gradient(gradient) => fetch_ref(&mut cx, "strokeShader"),
+        Dye::Pattern(pattern) => fetch_ref(&mut cx, "strokeShader"),
         Dye::Color(color) => color_to_rgba(&mut cx, &color)
       }
     }
@@ -895,12 +911,21 @@ declare_types! {
     method set_strokeStyle(mut cx){
       let mut this = cx.this();
 
-      if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
+      let arg = cx.argument::<JsValue>(0)?;
+      if arg.is_a::<JsCanvasGradient>(){
         let gradient = cx.argument::<JsCanvasGradient>(0)?;
-        stash_ref(&mut cx, "strokeGradient", gradient.upcast::<JsValue>())?;
+        stash_ref(&mut cx, "strokeShader", gradient.upcast::<JsValue>())?;
         cx.borrow(&gradient, |gradient| {
           cx.borrow_mut(&mut this, |mut this| {
             this.state.stroke_style = Dye::Gradient(gradient.clone());
+          });
+        });
+      }else if arg.is_a::<JsCanvasPattern>(){
+        let pattern = cx.argument::<JsCanvasPattern>(0)?;
+        stash_ref(&mut cx, "strokeShader", pattern.upcast::<JsValue>())?;
+        cx.borrow(&pattern, |pattern| {
+          cx.borrow_mut(&mut this, |mut this| {
+            this.state.stroke_style = Dye::Pattern(pattern.clone());
           });
         });
       }else{
