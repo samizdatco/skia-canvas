@@ -88,8 +88,6 @@ impl Context2D{
     }
   }
 
-  pub fn with_shadow<F>(&mut self, paint:&Paint, f:F)
-    where F:Fn(&mut Canvas, Paint, &Path)
   {
     if let Some(shadow_paint) = self.paint_for_shadow(&paint){
       if let Some(surface) = &mut self.surface{
@@ -596,7 +594,9 @@ declare_types! {
     method set_shadowBlur(mut cx){
       let mut this = cx.this();
       let num = float_arg(&mut cx, 0, "shadowBlur")?;
-      cx.borrow_mut(&mut this, |mut this| this.state.shadow_blur = num );
+      if num >= 0.0{
+        cx.borrow_mut(&mut this, |mut this| this.state.shadow_blur = num );
+      }
       Ok(cx.undefined().upcast())
     }
 
