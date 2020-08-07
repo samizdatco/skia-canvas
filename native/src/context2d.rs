@@ -9,7 +9,7 @@ use neon::object::This;
 use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4f,
                 PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle, PathDirection,
                 Data, Image as SkImage, EncodedImageFormat, Font, Shader, dash_path_effect, ClipOp,
-                utils::text_utils::Align, path::{AddPathMode, FillType}};
+                utils::text_utils::Align, path::{AddPathMode, FillType}, canvas::SrcRectConstraint};
 
 use crate::utils::*;
 use crate::path2d::{Path2D, JsPath2D};
@@ -160,6 +160,37 @@ impl Context2D{
     }
   }
 
+  pub fn draw_image(&mut self, img:&Image, src_rect:&Rect, dst_rect:&Rect){
+    let paint = self.paint_for_image();
+
+    // TKTKTKT: image shadow needs a bit more special-handling:
+    //          its alpha-mask should be used but all the chroma values should
+    //          be replaced with shadow_color...
+    if let Some(shadow_paint) = self.paint_for_shadow(&self.state.paint){
+      if let Some(surface) = &mut self.surface{
+        let canvas = surface.canvas();
+        canvas.save();
+
+        let inverted = self.state.transform.clone().invert().unwrap();
+        let nudge = Matrix::new_trans(self.state.shadow_offset);
+        canvas.concat(&inverted);
+        canvas.concat(&nudge);
+        canvas.concat(&self.state.transform);
+        if let Some(image) = &img.image{
+          canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), &dst_rect, &paint);
+        }
+
+        canvas.restore();
+      }
+    }
+
+    if let Some(surface) = &mut self.surface{
+      if let Some(image) = &img.image{
+        surface.canvas().draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), &dst_rect, &paint);
+      }
+    }
+  }
+
   pub fn color_with_alpha(&self, src:&Color) -> Color{
     let mut color:Color4f = src.clone().into();
     color.a *= self.state.global_alpha;
@@ -213,8 +244,19 @@ impl Context2D{
     paint
   }
 
-}
+  pub fn paint_for_image(&self) -> Paint{
+    let mut paint = self.state.paint.clone();
+    paint.set_style(PaintStyle::Fill);
+    paint.set_color(self.color_with_alpha(&BLACK));
+    paint.set_filter_quality(match self.state.image_smoothing_enabled{
+      true => self.state.image_filter_quality,
+      false => FilterQuality::None
+    });
 
+    paint
+  }
+
+}
 
 pub fn stash_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str, obj:Handle<'a, JsValue>) -> JsResult<'a, JsUndefined>{
   let mut this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
@@ -1054,22 +1096,40 @@ declare_types! {
       unimplemented!();
       // Ok(cx.undefined().upcast())
     }
+
     method drawImage(mut cx){
       let mut this = cx.this();
       let img = cx.argument::<JsImage>(0)?;
+      let argc = cx.len() as usize;
+      let nums = float_args(&mut cx, 1..argc)?;
+      let dims = cx.borrow(&img, |img| {
+        match &img.image {
+          Some(image) => Some((image.width(), image.height())),
+          None => None
+        }
+      });
 
-      let x = float_arg(&mut cx, 1, "dx")?;
-      let y = float_arg(&mut cx, 2, "dy")?;
-      cx.borrow(&img, |img| {
-        cx.borrow_mut(&mut this, |mut this| {
-          if let Some(surface) = this.surface.as_mut(){
-            if let Some(image) = &img.image{
-              surface.canvas().draw_image(&image, (x, y), None);
-            }
+      let (width, height) = match dims{
+        Some((w,h)) => (w as f32, h as f32),
+        None => return cx.throw_error("Cannot draw incomplete image (has it finished loading?)")
+      };
 
-          }
+      let (src, dst) = match nums.len() {
+        2 => ( Rect::from_xywh(0.0, 0.0, width, height),
+               Rect::from_xywh(nums[0], nums[1], width, height) ),
+        4 => ( Rect::from_xywh(0.0, 0.0, width, height),
+               Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
+        8 => ( Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]),
+               Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
+        _ => return cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
+      };
+
+      cx.borrow_mut(&mut this, |mut this| {
+        cx.borrow(&img, |img| {
+          this.draw_image(&img, &src, &dst);
         });
       });
+
       Ok(cx.undefined().upcast())
     }
 
