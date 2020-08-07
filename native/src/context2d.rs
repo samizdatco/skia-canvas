@@ -84,10 +84,9 @@ impl Context2D{
     }
   }
 
-  pub fn draw_path(&mut self, paint: &Paint){
-    let path = &mut self.path;
-
-    // draw shadow if applicable
+  pub fn with_shadow<F>(&mut self, paint:&Paint, f:F)
+    where F:Fn(&mut Canvas, &Paint, &Path)
+  {
     if let Some(shadow_paint) = self.paint_for_shadow(&paint){
       if let Some(surface) = &mut self.surface{
         let canvas = surface.canvas();
@@ -98,11 +97,19 @@ impl Context2D{
         canvas.concat(&inverted);
         canvas.concat(&nudge);
         canvas.concat(&self.state.transform);
-        canvas.draw_path(&self.path, &shadow_paint);
 
-        canvas.restore();
+        f(&canvas, shadow_paint, &self.path);
+
+        surface.canvas().restore();
       }
     }
+  }
+
+  pub fn draw_path(&mut self, paint: &Paint){
+    // draw shadow if applicable
+    self.with_shadow(&paint, |canvas, shadow_paint, path|{
+      canvas.draw_path(&path, &shadow_paint);
+    });
 
     // then draw the actual path
     if let Some(surface) = &mut self.surface{
@@ -125,24 +132,10 @@ impl Context2D{
   }
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
-    let path = &mut self.path;
-
     // draw shadow if applicable
-    if let Some(shadow_paint) = self.paint_for_shadow(&paint){
-      if let Some(surface) = &mut self.surface{
-        let canvas = surface.canvas();
-        canvas.save();
-
-        let inverted = self.state.transform.clone().invert().unwrap();
-        let nudge = Matrix::new_trans(self.state.shadow_offset);
-        canvas.concat(&inverted);
-        canvas.concat(&nudge);
-        canvas.concat(&self.state.transform);
-        canvas.draw_rect(&rect, &shadow_paint);
-
-        canvas.restore();
-      }
-    }
+    self.with_shadow(&paint, |canvas, shadow_paint, path|{
+      canvas.draw_rect(&rect, &shadow_paint);
+    });
 
     // then draw the actual rect
     if let Some(surface) = &mut self.surface{
@@ -166,23 +159,12 @@ impl Context2D{
     // TKTKTKT: image shadow needs a bit more special-handling:
     //          its alpha-mask should be used but all the chroma values should
     //          be replaced with shadow_color...
-    if let Some(shadow_paint) = self.paint_for_shadow(&self.state.paint){
-      if let Some(surface) = &mut self.surface{
-        let canvas = surface.canvas();
-        canvas.save();
-
-        let inverted = self.state.transform.clone().invert().unwrap();
-        let nudge = Matrix::new_trans(self.state.shadow_offset);
-        canvas.concat(&inverted);
-        canvas.concat(&nudge);
-        canvas.concat(&self.state.transform);
-        if let Some(image) = &img.image{
-          canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), &dst_rect, &paint);
-        }
-
-        canvas.restore();
+    self.with_shadow(&paint, |canvas, shadow_paint, path|{
+      if let Some(image) = &img.image{
+        canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), &dst_rect, &paint);
       }
-    }
+    });
+
 
     if let Some(surface) = &mut self.surface{
       if let Some(image) = &img.image{
