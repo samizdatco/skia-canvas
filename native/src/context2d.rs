@@ -154,13 +154,16 @@ impl Context2D{
     color.to_color()
   }
 
-  pub fn paint_for_fill(&self) -> Paint{
-    let mut paint = self.state.paint.clone();
-    paint.set_style(PaintStyle::Fill);
-    paint.set_filter_quality(match self.state.image_smoothing_enabled{
+  pub fn update_image_quality(&mut self){
+    self.state.paint.set_filter_quality(match self.state.image_smoothing_enabled{
       true => self.state.image_filter_quality,
       false => FilterQuality::None
     });
+  }
+
+  pub fn paint_for_fill(&self) -> Paint{
+    let mut paint = self.state.paint.clone();
+    paint.set_style(PaintStyle::Fill);
 
     match &self.state.fill_style{
       Dye::Color(color) => { paint.set_color(self.color_with_alpha(&color)); },
@@ -174,11 +177,6 @@ impl Context2D{
   pub fn paint_for_stroke(&self) -> Paint{
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Stroke);
-    paint.set_stroke_width(self.state.stroke_width);
-    paint.set_filter_quality(match self.state.image_smoothing_enabled{
-      true => self.state.image_filter_quality,
-      false => FilterQuality::None
-    });
 
 
     match &self.state.stroke_style{
@@ -199,10 +197,6 @@ impl Context2D{
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Fill);
     paint.set_color(self.color_with_alpha(&BLACK));
-    paint.set_filter_quality(match self.state.image_smoothing_enabled{
-      true => self.state.image_filter_quality,
-      false => FilterQuality::None
-    });
 
     if self.has_shadow() {
       let shadow_color = self.color_with_alpha(&self.state.shadow_color);
@@ -310,6 +304,7 @@ declare_types! {
       paint.set_color(BLACK);
       paint.set_anti_alias(true);
       paint.set_stroke_width(1.0);
+      paint.set_filter_quality(FilterQuality::Low);
 
       Ok( Context2D{
         surface: None,
@@ -1060,7 +1055,10 @@ declare_types! {
     method set_imageSmoothingEnabled(mut cx){
       let mut this = cx.this();
       let flag = bool_arg(&mut cx, 0, "imageSmoothingEnabled")?;
-      cx.borrow_mut(&mut this, |mut this| this.state.image_smoothing_enabled = flag );
+      cx.borrow_mut(&mut this, |mut this| {
+        this.state.image_smoothing_enabled = flag;
+        this.update_image_quality();
+      });
       Ok(cx.undefined().upcast())
     }
 
@@ -1075,7 +1073,10 @@ declare_types! {
       let mut this = cx.this();
       let name = string_arg(&mut cx, 0, "imageSmoothingQuality")?;
       if let Some(mode) = to_filter_quality(&name){
-        cx.borrow_mut(&mut this, |mut this| this.state.image_filter_quality = mode );
+        cx.borrow_mut(&mut this, |mut this|{
+          this.state.image_filter_quality = mode;
+          this.update_image_quality();
+        });
       }
       Ok(cx.undefined().upcast())
     }
