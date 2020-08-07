@@ -2,18 +2,13 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
-use std::cmp;
 use std::f32::consts::PI;
 use neon::prelude::*;
 use neon::object::This;
 use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4f,
-                PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle, PathDirection, TileMode,
-                Data, Image as SkImage, EncodedImageFormat, Font, Shader, dash_path_effect, ClipOp,
-                canvas::SrcRectConstraint,
-                utils::text_utils::Align,
-                path::{AddPathMode, FillType},
-                image_filters,
-                image_filters::{blur, color_filter, drop_shadow, drop_shadow_only}};
+                PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle, PathDirection,
+                Data, EncodedImageFormat, Font, dash_path_effect, ClipOp, image_filters,
+                utils::text_utils::Align, path::{AddPathMode, FillType} };
 
 use crate::utils::*;
 use crate::path2d::{Path2D, JsPath2D};
@@ -88,26 +83,6 @@ impl Context2D{
     }
   }
 
-  {
-    if let Some(shadow_paint) = self.paint_for_shadow(&paint){
-      if let Some(surface) = &mut self.surface{
-        let canvas = surface.canvas();
-        canvas.save();
-
-        // position the shadow at the correct offset
-        let inverted = self.state.transform.clone().invert().unwrap();
-        let nudge = Matrix::new_trans(self.state.shadow_offset);
-        canvas.concat(&inverted);
-        canvas.concat(&nudge);
-        canvas.concat(&self.state.transform);
-
-        f(canvas, shadow_paint, &self.path);
-
-        surface.canvas().restore();
-      }
-    }
-  }
-
   pub fn draw_path(&mut self, paint: &Paint){
     // draw shadow if applicable
     self.with_shadow(&paint, |canvas, shadow_paint, path|{
@@ -177,22 +152,6 @@ impl Context2D{
     color.to_color()
   }
 
-  pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint>{
-    if !self.has_shadow() { return None }
-
-    let mut shadow_paint = base_paint.clone();
-    let shadow_color = self.color_with_alpha(&self.state.shadow_color);
-    let State {shadow_blur, shadow_offset, ..} = self.state;
-    shadow_paint.set_shader(None);
-    shadow_paint.set_color(shadow_color);
-    if shadow_blur > 0.0 {
-      let blur_filter = MaskFilter::blur(BlurStyle::Normal, shadow_blur/2.0, Some(false));
-      shadow_paint.set_mask_filter(blur_filter);
-    }
-
-    Some(shadow_paint)
-  }
-
   pub fn paint_for_fill(&self) -> Paint{
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Fill);
@@ -236,7 +195,7 @@ impl Context2D{
       let shadow_color = self.color_with_alpha(&self.state.shadow_color);
       let State {shadow_blur, shadow_offset, ..} = self.state;
       let sigma = shadow_blur / 2.0;
-      if let Some(filter) = drop_shadow(shadow_offset, (sigma, sigma), shadow_color, None, None){
+      if let Some(filter) = image_filters::drop_shadow(shadow_offset, (sigma, sigma), shadow_color, None, None){
         paint.set_image_filter(filter);
       }
     }
@@ -244,11 +203,49 @@ impl Context2D{
     paint
   }
 
+  pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint>{
+    if !self.has_shadow() { return None }
+
+    let mut shadow_paint = base_paint.clone();
+    let shadow_color = self.color_with_alpha(&self.state.shadow_color);
+    let State {shadow_blur, shadow_offset, ..} = self.state;
+    shadow_paint.set_shader(None);
+    shadow_paint.set_color(shadow_color);
+    if shadow_blur > 0.0 {
+      let blur_filter = MaskFilter::blur(BlurStyle::Normal, shadow_blur/2.0, Some(false));
+      shadow_paint.set_mask_filter(blur_filter);
+    }
+
+    Some(shadow_paint)
+  }
+
   pub fn has_shadow(&self) -> bool{
     let shadow_color = self.color_with_alpha(&self.state.shadow_color);
     let State {shadow_blur, shadow_offset, ..} = self.state;
 
     shadow_blur > 0.0 || !shadow_offset.is_zero() && shadow_color.a() != 0
+  }
+
+  pub fn with_shadow<F>(&mut self, paint:&Paint, f:F)
+    where F:Fn(&mut Canvas, Paint, &Path)
+  {
+    if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+      if let Some(surface) = &mut self.surface{
+        let canvas = surface.canvas();
+        canvas.save();
+
+        // position the shadow at the correct offset
+        let inverted = self.state.transform.clone().invert().unwrap();
+        let nudge = Matrix::new_trans(self.state.shadow_offset);
+        canvas.concat(&inverted);
+        canvas.concat(&nudge);
+        canvas.concat(&self.state.transform);
+
+        f(canvas, shadow_paint, &self.path);
+
+        surface.canvas().restore();
+      }
+    }
   }
 
 }
@@ -348,375 +345,6 @@ declare_types! {
 
       Ok(None)
     }
-
-    /* ---------------------------------------------------------------------- *
-     |                              PROPERTIES                                |
-     * ---------------------------------------------------------------------- */
-
-    method get_canvas(mut cx){
-      let this = cx.this();
-      Ok(cx.undefined().upcast())
-    }
-
-    //
-    // Geometry
-    //
-
-    method get_currentTransform(mut cx){
-      let this = cx.this();
-      let matrix = cx.borrow(&this, |this| this.state.transform );
-      matrix_to_array(&mut cx, &matrix)
-    }
-
-    method set_currentTransform(mut cx){
-      let mut this = cx.this();
-      let matrix = matrix_arg(&mut cx, 0)?;
-      cx.borrow_mut(&mut this, |mut this| this.state.transform = matrix );
-      Ok(cx.undefined().upcast())
-    }
-
-    //
-    // Color
-    //
-
-    method get_fillStyle(mut cx){
-      let this = cx.this();
-
-      match cx.borrow(&this, |this| this.state.fill_style.clone() ){
-        Dye::Gradient(gradient) => fetch_ref(&mut cx, "fillGradient"),
-        Dye::Color(color) => color_to_rgba(&mut cx, &color)
-      }
-    }
-
-    method set_fillStyle(mut cx){
-      let mut this = cx.this();
-
-      if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
-        let gradient = cx.argument::<JsCanvasGradient>(0)?;
-        stash_ref(&mut cx, "fillGradient", gradient.upcast::<JsValue>())?;
-        cx.borrow(&gradient, |gradient| {
-          cx.borrow_mut(&mut this, |mut this| {
-            this.state.fill_style = Dye::Gradient(gradient.clone());
-          });
-        });
-      }else{
-        let color = color_args(&mut cx, 0..4, "fillStyle")?;
-        cx.borrow_mut(&mut this, |mut this| {
-          this.state.fill_style = Dye::Color(color);
-        });
-      }
-
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_strokeStyle(mut cx){
-      let this = cx.this();
-
-      match cx.borrow(&this, |this| this.state.stroke_style.clone() ){
-        Dye::Gradient(gradient) => fetch_ref(&mut cx, "strokeGradient") ,
-        Dye::Color(color) => color_to_rgba(&mut cx, &color)
-      }
-    }
-
-    method set_strokeStyle(mut cx){
-      let mut this = cx.this();
-
-      if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
-        let gradient = cx.argument::<JsCanvasGradient>(0)?;
-        stash_ref(&mut cx, "strokeGradient", gradient.upcast::<JsValue>())?;
-        cx.borrow(&gradient, |gradient| {
-          cx.borrow_mut(&mut this, |mut this| {
-            this.state.stroke_style = Dye::Gradient(gradient.clone());
-          });
-        });
-      }else{
-        let color = color_args(&mut cx, 0..4, "strokeStyle")?;
-        cx.borrow_mut(&mut this, |mut this| {
-          this.state.stroke_style = Dye::Color(color);
-        });
-      }
-
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_filter(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
-    }
-
-    method set_filter(mut cx){
-      let mut this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
-    }
-
-    //
-    // Typography
-    //
-
-    method get_font(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
-    }
-
-    method set_font(mut cx){
-      let mut this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
-    }
-
-    method get_direction(mut cx){
-      let this = cx.this();
-      let name = cx.borrow(&this, |this|
-        match this.state.text_ltr{ true => "ltr", false => "rtl" }.to_string()
-      );
-      Ok(cx.string(name).upcast())
-    }
-
-    method set_direction(mut cx){
-      let mut this = cx.this();
-      let name = string_arg(&mut cx, 0, "direction")?;
-      if name=="ltr" || name=="rtl"{
-        cx.borrow_mut(&mut this, |mut this| this.state.text_ltr = name=="ltr" );
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_textAlign(mut cx){
-      let this = cx.this();
-      let mode = cx.borrow(&this, |this| this.state.text_align );
-      let name = from_text_align(mode);
-      Ok(cx.string(name).upcast())
-
-    }
-
-    method set_textAlign(mut cx){
-      let mut this = cx.this();
-      let name = string_arg(&mut cx, 0, "textAlign")?;
-      if let Some(mode) = to_text_align(&name){
-        cx.borrow_mut(&mut this, |mut this| this.state.text_align = mode );
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_textBaseline(mut cx){
-      let this = cx.this();
-      let mode = cx.borrow(&this, |this| this.state.text_baseline );
-      let name = from_text_baseline(mode);
-      Ok(cx.string(name).upcast())
-    }
-
-    method set_textBaseline(mut cx){
-      let mut this = cx.this();
-      let name = string_arg(&mut cx, 0, "textBaseline")?;
-      if let Some(mode) = to_text_baseline(&name){
-        cx.borrow_mut(&mut this, |mut this| this.state.text_baseline = mode );
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    //
-    // Compositing
-    //
-
-    method get_globalAlpha(mut cx){
-      let this = cx.this();
-      let num = cx.borrow(&this, |this| this.state.global_alpha );
-      Ok(cx.number(num as f64).upcast())
-    }
-
-    method set_globalAlpha(mut cx){
-      let mut this = cx.this();
-      let num = float_arg(&mut cx, 0, "globalAlpha")?;
-      if num <= 1.0 && num >= 0.0{
-        cx.borrow_mut(&mut this, |mut this| this.state.global_alpha = num );
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_globalCompositeOperation(mut cx){
-      let this = cx.this();
-      let mode = cx.borrow(&this, |this| this.state.global_composite_operation );
-      let name = from_blend_mode(mode);
-      Ok(cx.string(name).upcast())
-    }
-
-    method set_globalCompositeOperation(mut cx){
-      let mut this = cx.this();
-      let name = string_arg(&mut cx, 0, "globalCompositeOperation")?;
-      if let Some(mode) = to_blend_mode(&name){
-        cx.borrow_mut(&mut this, |mut this| this.state.global_composite_operation = mode );
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_imageSmoothingEnabled(mut cx){
-      let this = cx.this();
-      let flag = cx.borrow(&this, |this| this.state.image_smoothing_enabled );
-      Ok(cx.boolean(flag).upcast())
-    }
-
-    method set_imageSmoothingEnabled(mut cx){
-      let mut this = cx.this();
-      let flag = bool_arg(&mut cx, 0, "imageSmoothingEnabled")?;
-      cx.borrow_mut(&mut this, |mut this| this.state.image_smoothing_enabled = flag );
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_imageSmoothingQuality(mut cx){
-      let this = cx.this();
-      let mode = cx.borrow(&this, |this| this.state.image_filter_quality );
-      let name = from_filter_quality(mode);
-      Ok(cx.string(name).upcast())
-    }
-
-    method set_imageSmoothingQuality(mut cx){
-      let mut this = cx.this();
-      let name = string_arg(&mut cx, 0, "imageSmoothingQuality")?;
-      if let Some(mode) = to_filter_quality(&name){
-        cx.borrow_mut(&mut this, |mut this| this.state.image_filter_quality = mode );
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    //
-    // Shadow Effects
-    //
-
-    method get_shadowBlur(mut cx){
-      let this = cx.this();
-      let num = cx.borrow(&this, |this| this.state.shadow_blur );
-      Ok(cx.number(num as f64).upcast())
-    }
-
-    method set_shadowBlur(mut cx){
-      let mut this = cx.this();
-      let num = float_arg(&mut cx, 0, "shadowBlur")?;
-      if num >= 0.0{
-        cx.borrow_mut(&mut this, |mut this| this.state.shadow_blur = num );
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_shadowColor(mut cx){
-      let this = cx.this();
-      let shadow_color = cx.borrow(&this, |this| this.state.shadow_color );
-      color_to_rgba(&mut cx, &shadow_color)
-    }
-
-    method set_shadowColor(mut cx){
-      let mut this = cx.this();
-      let color = color_args(&mut cx, 0..4, "shadowColor")?;
-      cx.borrow_mut(&mut this, |mut this| { this.state.shadow_color = color; });
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_shadowOffsetX(mut cx){
-      let this = cx.this();
-      let num = cx.borrow(&this, |this| this.state.shadow_offset.x );
-      Ok(cx.number(num as f64).upcast())
-    }
-
-    method set_shadowOffsetX(mut cx){
-      let mut this = cx.this();
-      let num = float_arg(&mut cx, 0, "shadowOffsetX")?;
-      cx.borrow_mut(&mut this, |mut this| this.state.shadow_offset.x = num );
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_shadowOffsetY(mut cx){
-      let this = cx.this();
-      let num = cx.borrow(&this, |this| this.state.shadow_offset.y );
-      Ok(cx.number(num as f64).upcast())
-    }
-
-    method set_shadowOffsetY(mut cx){
-      let mut this = cx.this();
-      let num = float_arg(&mut cx, 0, "shadowOffsetY")?;
-      cx.borrow_mut(&mut this, |mut this| this.state.shadow_offset.y = num );
-      Ok(cx.undefined().upcast())
-    }
-
-    //
-    // Line Style
-    //
-
-    method get_lineCap(mut cx){
-      let this = cx.this();
-      let mode = cx.borrow(&this, |this| this.state.paint.stroke_cap() );
-      let name = from_stroke_cap(mode);
-      Ok(cx.string(name).upcast())
-    }
-
-    method set_lineCap(mut cx){
-      let mut this = cx.this();
-      let name = string_arg(&mut cx, 0, "lineCap")?;
-      if let Some(mode) = to_stroke_cap(&name){
-        cx.borrow_mut(&mut this, |mut this|{ this.state.paint.set_stroke_cap(mode); });
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_lineDashOffset(mut cx){
-      let this = cx.this();
-      let num = cx.borrow(&this, |this| this.state.line_dash_offset );
-      Ok(cx.number(num as f64).upcast())
-    }
-
-    method set_lineDashOffset(mut cx){
-      let mut this = cx.this();
-      let num = float_arg(&mut cx, 0, "lineDashOffset")?;
-      cx.borrow_mut(&mut this, |mut this| this.state.line_dash_offset = num );
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_lineJoin(mut cx){
-      let this = cx.this();
-      let mode = cx.borrow(&this, |this| this.state.paint.stroke_join() );
-      let name = from_stroke_join(mode);
-      Ok(cx.string(name).upcast())
-    }
-
-    method set_lineJoin(mut cx){
-      let mut this = cx.this();
-      let name = string_arg(&mut cx, 0, "lineJoin")?;
-      if let Some(mode) = to_stroke_join(&name){
-        cx.borrow_mut(&mut this, |mut this|{ this.state.paint.set_stroke_join(mode); });
-      }
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_lineWidth(mut cx){
-      let this = cx.this();
-      let num = cx.borrow(&this, |this| this.state.paint.stroke_width() );
-      Ok(cx.number(num as f64).upcast())
-    }
-
-    method set_lineWidth(mut cx){
-      let mut this = cx.this();
-      let num = float_arg(&mut cx, 0, "lineWidth")?;
-      cx.borrow_mut(&mut this, |mut this|{
-        this.state.paint.set_stroke_width(num);
-        this.state.stroke_width = num;
-      });
-      Ok(cx.undefined().upcast())
-    }
-
-    method get_miterLimit(mut cx){
-      let this = cx.this();
-      let num = cx.borrow(&this, |this| this.state.paint.stroke_miter() );
-      Ok(cx.number(num as f64).upcast())
-    }
-
-    method set_miterLimit(mut cx){
-      let mut this = cx.this();
-      let num = float_arg(&mut cx, 0, "miterLimit")?;
-      cx.borrow_mut(&mut this, |mut this|{ this.state.paint.set_stroke_miter(num); });
-      Ok(cx.undefined().upcast())
-    }
-
 
     /* ---------------------------------------------------------------------- *
      |                                METHODS                                 |
@@ -1192,6 +820,375 @@ declare_types! {
         },
         None => Ok(cx.undefined().upcast())
       }
+    }
+
+    /* ---------------------------------------------------------------------- *
+     |                              PROPERTIES                                |
+     * ---------------------------------------------------------------------- */
+
+     method get_canvas(mut cx){
+      let this = cx.this();
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
+    }
+
+    //
+    // Geometry
+    //
+
+    method get_currentTransform(mut cx){
+      let this = cx.this();
+      let matrix = cx.borrow(&this, |this| this.state.transform );
+      matrix_to_array(&mut cx, &matrix)
+    }
+
+    method set_currentTransform(mut cx){
+      let mut this = cx.this();
+      let matrix = matrix_arg(&mut cx, 0)?;
+      cx.borrow_mut(&mut this, |mut this| this.state.transform = matrix );
+      Ok(cx.undefined().upcast())
+    }
+
+    //
+    // Color
+    //
+
+    method get_fillStyle(mut cx){
+      let this = cx.this();
+
+      match cx.borrow(&this, |this| this.state.fill_style.clone() ){
+        Dye::Gradient(gradient) => fetch_ref(&mut cx, "fillGradient"),
+        Dye::Color(color) => color_to_rgba(&mut cx, &color)
+      }
+    }
+
+    method set_fillStyle(mut cx){
+      let mut this = cx.this();
+
+      if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
+        let gradient = cx.argument::<JsCanvasGradient>(0)?;
+        stash_ref(&mut cx, "fillGradient", gradient.upcast::<JsValue>())?;
+        cx.borrow(&gradient, |gradient| {
+          cx.borrow_mut(&mut this, |mut this| {
+            this.state.fill_style = Dye::Gradient(gradient.clone());
+          });
+        });
+      }else{
+        let color = color_args(&mut cx, 0..4, "fillStyle")?;
+        cx.borrow_mut(&mut this, |mut this| {
+          this.state.fill_style = Dye::Color(color);
+        });
+      }
+
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_strokeStyle(mut cx){
+      let this = cx.this();
+
+      match cx.borrow(&this, |this| this.state.stroke_style.clone() ){
+        Dye::Gradient(gradient) => fetch_ref(&mut cx, "strokeGradient") ,
+        Dye::Color(color) => color_to_rgba(&mut cx, &color)
+      }
+    }
+
+    method set_strokeStyle(mut cx){
+      let mut this = cx.this();
+
+      if cx.argument::<JsValue>(0)?.is_a::<JsCanvasGradient>(){
+        let gradient = cx.argument::<JsCanvasGradient>(0)?;
+        stash_ref(&mut cx, "strokeGradient", gradient.upcast::<JsValue>())?;
+        cx.borrow(&gradient, |gradient| {
+          cx.borrow_mut(&mut this, |mut this| {
+            this.state.stroke_style = Dye::Gradient(gradient.clone());
+          });
+        });
+      }else{
+        let color = color_args(&mut cx, 0..4, "strokeStyle")?;
+        cx.borrow_mut(&mut this, |mut this| {
+          this.state.stroke_style = Dye::Color(color);
+        });
+      }
+
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_filter(mut cx){
+      let this = cx.this();
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
+    }
+
+    method set_filter(mut cx){
+      let mut this = cx.this();
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
+    }
+
+    //
+    // Typography
+    //
+
+    method get_font(mut cx){
+      let this = cx.this();
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
+    }
+
+    method set_font(mut cx){
+      let mut this = cx.this();
+      unimplemented!();
+      // Ok(cx.undefined().upcast())
+    }
+
+    method get_direction(mut cx){
+      let this = cx.this();
+      let name = cx.borrow(&this, |this|
+        match this.state.text_ltr{ true => "ltr", false => "rtl" }.to_string()
+      );
+      Ok(cx.string(name).upcast())
+    }
+
+    method set_direction(mut cx){
+      let mut this = cx.this();
+      let name = string_arg(&mut cx, 0, "direction")?;
+      if name=="ltr" || name=="rtl"{
+        cx.borrow_mut(&mut this, |mut this| this.state.text_ltr = name=="ltr" );
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_textAlign(mut cx){
+      let this = cx.this();
+      let mode = cx.borrow(&this, |this| this.state.text_align );
+      let name = from_text_align(mode);
+      Ok(cx.string(name).upcast())
+
+    }
+
+    method set_textAlign(mut cx){
+      let mut this = cx.this();
+      let name = string_arg(&mut cx, 0, "textAlign")?;
+      if let Some(mode) = to_text_align(&name){
+        cx.borrow_mut(&mut this, |mut this| this.state.text_align = mode );
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_textBaseline(mut cx){
+      let this = cx.this();
+      let mode = cx.borrow(&this, |this| this.state.text_baseline );
+      let name = from_text_baseline(mode);
+      Ok(cx.string(name).upcast())
+    }
+
+    method set_textBaseline(mut cx){
+      let mut this = cx.this();
+      let name = string_arg(&mut cx, 0, "textBaseline")?;
+      if let Some(mode) = to_text_baseline(&name){
+        cx.borrow_mut(&mut this, |mut this| this.state.text_baseline = mode );
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    //
+    // Compositing
+    //
+
+    method get_globalAlpha(mut cx){
+      let this = cx.this();
+      let num = cx.borrow(&this, |this| this.state.global_alpha );
+      Ok(cx.number(num as f64).upcast())
+    }
+
+    method set_globalAlpha(mut cx){
+      let mut this = cx.this();
+      let num = float_arg(&mut cx, 0, "globalAlpha")?;
+      if num <= 1.0 && num >= 0.0{
+        cx.borrow_mut(&mut this, |mut this| this.state.global_alpha = num );
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_globalCompositeOperation(mut cx){
+      let this = cx.this();
+      let mode = cx.borrow(&this, |this| this.state.global_composite_operation );
+      let name = from_blend_mode(mode);
+      Ok(cx.string(name).upcast())
+    }
+
+    method set_globalCompositeOperation(mut cx){
+      let mut this = cx.this();
+      let name = string_arg(&mut cx, 0, "globalCompositeOperation")?;
+      if let Some(mode) = to_blend_mode(&name){
+        cx.borrow_mut(&mut this, |mut this| this.state.global_composite_operation = mode );
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_imageSmoothingEnabled(mut cx){
+      let this = cx.this();
+      let flag = cx.borrow(&this, |this| this.state.image_smoothing_enabled );
+      Ok(cx.boolean(flag).upcast())
+    }
+
+    method set_imageSmoothingEnabled(mut cx){
+      let mut this = cx.this();
+      let flag = bool_arg(&mut cx, 0, "imageSmoothingEnabled")?;
+      cx.borrow_mut(&mut this, |mut this| this.state.image_smoothing_enabled = flag );
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_imageSmoothingQuality(mut cx){
+      let this = cx.this();
+      let mode = cx.borrow(&this, |this| this.state.image_filter_quality );
+      let name = from_filter_quality(mode);
+      Ok(cx.string(name).upcast())
+    }
+
+    method set_imageSmoothingQuality(mut cx){
+      let mut this = cx.this();
+      let name = string_arg(&mut cx, 0, "imageSmoothingQuality")?;
+      if let Some(mode) = to_filter_quality(&name){
+        cx.borrow_mut(&mut this, |mut this| this.state.image_filter_quality = mode );
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    //
+    // Shadow Effects
+    //
+
+    method get_shadowBlur(mut cx){
+      let this = cx.this();
+      let num = cx.borrow(&this, |this| this.state.shadow_blur );
+      Ok(cx.number(num as f64).upcast())
+    }
+
+    method set_shadowBlur(mut cx){
+      let mut this = cx.this();
+      let num = float_arg(&mut cx, 0, "shadowBlur")?;
+      if num >= 0.0{
+        cx.borrow_mut(&mut this, |mut this| this.state.shadow_blur = num );
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_shadowColor(mut cx){
+      let this = cx.this();
+      let shadow_color = cx.borrow(&this, |this| this.state.shadow_color );
+      color_to_rgba(&mut cx, &shadow_color)
+    }
+
+    method set_shadowColor(mut cx){
+      let mut this = cx.this();
+      let color = color_args(&mut cx, 0..4, "shadowColor")?;
+      cx.borrow_mut(&mut this, |mut this| { this.state.shadow_color = color; });
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_shadowOffsetX(mut cx){
+      let this = cx.this();
+      let num = cx.borrow(&this, |this| this.state.shadow_offset.x );
+      Ok(cx.number(num as f64).upcast())
+    }
+
+    method set_shadowOffsetX(mut cx){
+      let mut this = cx.this();
+      let num = float_arg(&mut cx, 0, "shadowOffsetX")?;
+      cx.borrow_mut(&mut this, |mut this| this.state.shadow_offset.x = num );
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_shadowOffsetY(mut cx){
+      let this = cx.this();
+      let num = cx.borrow(&this, |this| this.state.shadow_offset.y );
+      Ok(cx.number(num as f64).upcast())
+    }
+
+    method set_shadowOffsetY(mut cx){
+      let mut this = cx.this();
+      let num = float_arg(&mut cx, 0, "shadowOffsetY")?;
+      cx.borrow_mut(&mut this, |mut this| this.state.shadow_offset.y = num );
+      Ok(cx.undefined().upcast())
+    }
+
+    //
+    // Line Style
+    //
+
+    method get_lineCap(mut cx){
+      let this = cx.this();
+      let mode = cx.borrow(&this, |this| this.state.paint.stroke_cap() );
+      let name = from_stroke_cap(mode);
+      Ok(cx.string(name).upcast())
+    }
+
+    method set_lineCap(mut cx){
+      let mut this = cx.this();
+      let name = string_arg(&mut cx, 0, "lineCap")?;
+      if let Some(mode) = to_stroke_cap(&name){
+        cx.borrow_mut(&mut this, |mut this|{ this.state.paint.set_stroke_cap(mode); });
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_lineDashOffset(mut cx){
+      let this = cx.this();
+      let num = cx.borrow(&this, |this| this.state.line_dash_offset );
+      Ok(cx.number(num as f64).upcast())
+    }
+
+    method set_lineDashOffset(mut cx){
+      let mut this = cx.this();
+      let num = float_arg(&mut cx, 0, "lineDashOffset")?;
+      cx.borrow_mut(&mut this, |mut this| this.state.line_dash_offset = num );
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_lineJoin(mut cx){
+      let this = cx.this();
+      let mode = cx.borrow(&this, |this| this.state.paint.stroke_join() );
+      let name = from_stroke_join(mode);
+      Ok(cx.string(name).upcast())
+    }
+
+    method set_lineJoin(mut cx){
+      let mut this = cx.this();
+      let name = string_arg(&mut cx, 0, "lineJoin")?;
+      if let Some(mode) = to_stroke_join(&name){
+        cx.borrow_mut(&mut this, |mut this|{ this.state.paint.set_stroke_join(mode); });
+      }
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_lineWidth(mut cx){
+      let this = cx.this();
+      let num = cx.borrow(&this, |this| this.state.paint.stroke_width() );
+      Ok(cx.number(num as f64).upcast())
+    }
+
+    method set_lineWidth(mut cx){
+      let mut this = cx.this();
+      let num = float_arg(&mut cx, 0, "lineWidth")?;
+      cx.borrow_mut(&mut this, |mut this|{
+        this.state.paint.set_stroke_width(num);
+        this.state.stroke_width = num;
+      });
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_miterLimit(mut cx){
+      let this = cx.this();
+      let num = cx.borrow(&this, |this| this.state.paint.stroke_miter() );
+      Ok(cx.number(num as f64).upcast())
+    }
+
+    method set_miterLimit(mut cx){
+      let mut this = cx.this();
+      let num = float_arg(&mut cx, 0, "miterLimit")?;
+      cx.borrow_mut(&mut this, |mut this|{ this.state.paint.set_stroke_miter(num); });
+      Ok(cx.undefined().upcast())
     }
 
   }
