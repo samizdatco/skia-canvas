@@ -93,15 +93,15 @@ impl Context2D{
   }
 
   pub fn draw_path(&mut self, paint: &Paint){
-    // draw shadow if applicable
-    if self.has_shadow() {
-      self.with_shadow_mask(&paint, |canvas, shadow_paint, path|{
-        canvas.draw_path(&path, &shadow_paint);
-      });
-    }
+    let shadow = self.paint_for_shadow(&paint);
 
-    // then draw the actual path
     if let Some(surface) = &mut self.surface{
+      // draw shadow if applicable
+      if let Some(shadow_paint) = shadow{
+        surface.canvas().draw_path(&self.path, &shadow_paint);
+      }
+
+      // then draw the actual path
       surface.canvas().draw_path(&self.path, &paint);
     }
   }
@@ -121,15 +121,15 @@ impl Context2D{
   }
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
-    // draw shadow if applicable
-    if self.has_shadow() {
-      self.with_shadow_mask(&paint, |canvas, shadow_paint, path|{
-        canvas.draw_rect(&rect, &shadow_paint);
-      });
-    }
+    let shadow = self.paint_for_shadow(&paint);
 
-    // then draw the actual rect
     if let Some(surface) = &mut self.surface{
+      // draw shadow if applicable
+      if let Some(shadow_paint) = shadow{
+        surface.canvas().draw_rect(&rect, &shadow_paint);
+      }
+
+      // then draw the actual rect
       surface.canvas().draw_rect(&rect, &paint);
     }
   }
@@ -149,22 +149,19 @@ impl Context2D{
     paint.set_style(PaintStyle::Fill);
     paint.set_color(self.color_with_alpha(&BLACK));
 
-    // delegate shadow-drawing to an ImageFilter on the Paint
-    if self.has_shadow() {
-      let shadow_color = self.color_with_alpha(&self.state.shadow_color);
-      let State {shadow_blur, shadow_offset, ..} = self.state;
-      let sigma = shadow_blur / 2.0;
-      if let Some(filter) = image_filters::drop_shadow(shadow_offset, (sigma, sigma), shadow_color, None, None){
-        paint.set_image_filter(filter);
-      }
-    }
-
-    // generate a cropped & scaled version of the original image then draw-to-point
+    // use an ImageFilter to generate a cropped & scaled version of the
+    // original image then draw-to-point rather than using draw_image_rect
     if let Some(image) = &img{
+      let shadow = self.paint_for_shadow(&paint);
       let bounds = image.bounds();
       if let Some(filter) = image_filters::image(image.clone(), Some(src_rect), Some(dst_rect), paint.filter_quality()){
         if let Some((image, bounds, origin)) = image.new_with_filter(&filter, bounds, bounds){
           if let Some(surface) = &mut self.surface{
+            // draw shadow if applicable
+            if let Some(shadow_paint) = shadow{
+              surface.canvas().draw_image(&image, origin, Some(&shadow_paint));
+            }
+            // then draw the actual image
             surface.canvas().draw_image(&image, origin, Some(&paint));
           }
         }
@@ -173,6 +170,10 @@ impl Context2D{
   }
 
   pub fn blit_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
+    // works just like draw_image but without transforms or shadows
+    //
+    // BUG: it shouldn't obey they canvas's clipping mask but I haven't figured
+    //      out how to cleanly remove then reapply it yet...
     let mut paint = Paint::default();
     paint.set_style(PaintStyle::Fill);
 
@@ -232,11 +233,21 @@ impl Context2D{
     paint
   }
 
-  pub fn has_shadow(&self) -> bool{
+  pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint> {
     let shadow_color = self.color_with_alpha(&self.state.shadow_color);
     let State {shadow_blur, shadow_offset, ..} = self.state;
+    let sigma = shadow_blur / 2.0;
 
-    shadow_color.a() > 0 && !(shadow_blur == 0.0 && shadow_offset.is_zero())
+    match shadow_color.a() > 0 && !(shadow_blur == 0.0 && shadow_offset.is_zero()){
+      true => {
+        let mut paint = base_paint.clone();
+        if let Some(filter) = image_filters::drop_shadow_only(shadow_offset, (sigma, sigma), shadow_color, None, None){
+          paint.set_image_filter(filter);
+        }
+        Some(paint)
+      }
+      false => None
+    }
   }
 
   pub fn with_matrix<F>(&mut self, f:F)
@@ -246,36 +257,6 @@ impl Context2D{
     f(&mut ctm);
     if let Some(surface) = &mut self.surface{
       surface.canvas().set_matrix(&ctm);
-    }
-  }
-
-  pub fn with_shadow_mask<F>(&mut self, paint:&Paint, f:F)
-    where F:Fn(&mut Canvas, Paint, &Path)
-  {
-    let mut shadow_paint = paint.clone();
-    let shadow_color = self.color_with_alpha(&self.state.shadow_color);
-    let State {shadow_blur, shadow_offset, ..} = self.state;
-    if shadow_blur > 0.0 {
-      let blur_filter = MaskFilter::blur(BlurStyle::Normal, shadow_blur/2.0, Some(false));
-      shadow_paint.set_mask_filter(blur_filter);
-    }
-    shadow_paint.set_color(shadow_color);
-    shadow_paint.set_shader(None);
-
-    let ctm = self.ctm();
-    if let Some(surface) = &mut self.surface{
-      let canvas = surface.canvas();
-      canvas.save();
-
-      // position the shadow at the correct offset
-      let nudge = Matrix::new_trans(self.state.shadow_offset);
-      canvas.concat(&ctm.invert().unwrap());
-      canvas.concat(&nudge);
-      canvas.concat(&ctm);
-
-      f(canvas, shadow_paint, &self.path);
-
-      surface.canvas().restore();
     }
   }
 
