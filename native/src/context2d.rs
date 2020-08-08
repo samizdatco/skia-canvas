@@ -5,14 +5,15 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
 use neon::object::This;
-use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4f,
+use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4f, ImageInfo,
                 PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle, PathDirection,
-                Data, EncodedImageFormat, Font, dash_path_effect, ClipOp, image_filters,
-                utils::text_utils::Align, path::{AddPathMode, FillType} };
+                Data, Image, EncodedImageFormat, Font, dash_path_effect, ClipOp, image_filters,
+                utils::text_utils::Align, path::{AddPathMode, FillType}, canvas::SrcRectConstraint,
+                ColorType, AlphaType};
 
 use crate::utils::*;
 use crate::path2d::{Path2D, JsPath2D};
-use crate::image::{Image, JsImage};
+use crate::image::{JsImage, JsImageData};
 use crate::gradient::{CanvasGradient, JsCanvasGradient};
 use crate::pattern::{CanvasPattern, JsCanvasPattern};
 
@@ -133,10 +134,10 @@ impl Context2D{
     }
   }
 
-  pub fn draw_image(&mut self, img:&Image, src_rect:&Rect, dst_rect:&Rect){
+  pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
     let mut paint = self.paint_for_image();
 
-    if let Some(image) = &img.image{
+    if let Some(image) = &img{
       let bounds = image.bounds();
       if let Some(filter) = image_filters::image(image.clone(), Some(src_rect), Some(dst_rect), paint.filter_quality()){
         if let Some((image, bounds, origin)) = image.new_with_filter(&filter, bounds, bounds){
@@ -144,6 +145,22 @@ impl Context2D{
             surface.canvas().draw_image(&image, origin, Some(&paint));
           }
         }
+      }
+    }
+  }
+
+  pub fn blit_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
+    let mut paint = Paint::default();
+    paint.set_style(PaintStyle::Fill);
+
+    if let Some(image) = img{
+      if let Some(surface) = &mut self.surface{
+        let canvas = surface.canvas();
+        canvas.save();
+        canvas.reset_matrix();
+
+        canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
+        canvas.restore();
       }
     }
   }
@@ -712,21 +729,48 @@ declare_types! {
     //
     // Imagery
     //
+    // implemented in js:
+    // - createImageData
 
-    method createImageData(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
-    }
+
     method getImageData(mut cx){
       let this = cx.this();
       unimplemented!();
       // Ok(cx.undefined().upcast())
     }
+
     method putImageData(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let mut this = cx.this();
+      let img_data = cx.argument::<JsImageData>(0)?;
+      let info = cx.borrow(&img_data, |img_data| img_data.get_info() );
+
+      // determine geometry
+      let x = float_arg(&mut cx, 1, "x")?;
+      let y = float_arg(&mut cx, 2, "y")?;
+      let dirty = opt_float_args(&mut cx, 3..7);
+      if !dirty.is_empty() && dirty.len() != 4 {
+        return cx.throw_type_error("expected either 2 or 6 numbers")
+      }
+      let (width, height) = (info.width() as f32, info.height() as f32);
+      let (src, dst) = match dirty.as_slice(){
+        [dx, dy, dw, dh] => (
+          Rect::from_xywh(*dx, *dy, *dw, *dh),
+          Rect::from_xywh(*dx + x, *dy + y, *dw, *dh) ),
+        _ => (
+          Rect::from_xywh(x, y, width, height),
+          Rect::from_xywh(0.0, 0.0, width, height)
+      )};
+
+      // convert buffer contents to image
+      let mut buf = img_data.get(&mut cx, "data")?.downcast::<JsBuffer>().or_throw(&mut cx)?;
+      let bmp_data = cx.borrow(&buf, |buf_data| Data::new_copy(&buf_data.as_slice()) );
+      let row_size = info.width() as usize * 4;
+      let image = Image::from_raster_data(&info, bmp_data, row_size);
+
+      // draw to the canvas without any shaders, effects, transforms, etc.
+      cx.borrow_mut(&mut this, |mut this| this.blit_image(&image, &src, &dst) );
+
+      Ok(cx.undefined().upcast())
     }
 
     method drawImage(mut cx){
@@ -758,7 +802,7 @@ declare_types! {
 
       cx.borrow_mut(&mut this, |mut this| {
         cx.borrow(&img, |img| {
-          this.draw_image(&img, &src, &dst);
+          this.draw_image(&img.image, &src, &dst);
         });
       });
 

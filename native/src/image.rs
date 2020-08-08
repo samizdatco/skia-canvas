@@ -5,7 +5,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::{Image as SkImage, Data, Bitmap};
+use skia_safe::{Image as SkImage, ImageInfo, ColorType, AlphaType, Data, Bitmap};
 
 use crate::utils::*;
 
@@ -86,6 +86,59 @@ declare_types! {
       let complete = cx.borrow(&this, |this| this.image.is_some() );
       Ok(cx.boolean(complete).upcast())
     }
+
+  }
+}
+
+
+pub struct ImageData{
+  pub width: f32,
+  pub height: f32
+}
+
+impl ImageData{
+  pub fn get_info(&self) -> ImageInfo {
+    let dims = (self.width as i32, self.height as i32);
+    ImageInfo::new(dims, ColorType::RGBA8888, AlphaType::Unpremul, None)
+  }
+}
+
+declare_types! {
+  pub class JsImageData for ImageData {
+    init(mut cx) {
+      let width = float_arg(&mut cx, 0, "width")?;
+      let height = float_arg(&mut cx, 1, "height")?;
+
+      if width<=0.0 || height <=0.0{
+        return cx.throw_range_error("Cannot allocate a buffer of this size")
+      }
+
+      Ok(ImageData{ width, height })
+    }
+
+    method get_width(mut cx){
+      let this = cx.this();
+      let width = cx.borrow(&this, |this| this.width );
+      Ok(cx.number(width).upcast())
+    }
+
+    method get_height(mut cx){
+      let this = cx.this();
+      let height = cx.borrow(&this, |this| this.height );
+      Ok(cx.number(height).upcast())
+    }
+
+    // setters are noops
+    method set_width(mut cx){
+      let arg = cx.argument::<JsValue>(0)?;
+      Ok(arg)
+    }
+
+    method set_height(mut cx){
+      let arg = cx.argument::<JsValue>(0)?;
+      Ok(arg)
+    }
+
 
   }
 }

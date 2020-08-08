@@ -13,5 +13,6 @@ register_module!(mut m, {
   m.export_class::<crate::pattern::JsCanvasPattern>("CanvasPattern")?;
   m.export_class::<crate::path2d::JsPath2D>("Path2D")?;
   m.export_class::<crate::image::JsImage>("Image")?;
+  m.export_class::<crate::image::JsImageData>("ImageData")?;
   Ok(())
 });
