@@ -31,15 +31,9 @@ pub struct Context2D{
 #[derive(Clone)]
 pub struct State{
   paint: Paint,
-  transform: Matrix,
 
-  font_string: String,
-  text_ltr: bool,
-  text_align: Align,
-  text_baseline: Baseline,
-
-  stroke_style: Dye,
   fill_style: Dye,
+  stroke_style: Dye,
   shadow_blur: f32,
   shadow_color: Color,
   shadow_offset: Point,
@@ -52,6 +46,11 @@ pub struct State{
   global_composite_operation: BlendMode,
   image_filter_quality: FilterQuality,
   image_smoothing_enabled: bool,
+
+  font_string: String,
+  text_ltr: bool,
+  text_align: Align,
+  text_baseline: Baseline,
 }
 
 #[derive(Clone)]
@@ -62,8 +61,15 @@ pub enum Dye{
 }
 
 impl Context2D{
-  pub fn to_local_coordinates(&self, x: f32, y: f32) -> Point{
-    match self.state.transform.clone().invert(){
+  pub fn ctm(&mut self) -> Matrix {
+    match self.surface.as_mut() {
+      Some(surface) => surface.canvas().total_matrix(),
+      None => Matrix::new_identity()
+    }
+  }
+
+  pub fn in_local_coordinates(&mut self, x: f32, y: f32) -> Point{
+    match self.ctm().invert(){
       Some(inverse) => inverse.map_point((x, y)),
       None => (x, y).into()
     }
@@ -249,20 +255,30 @@ impl Context2D{
     shadow_blur > 0.0 || !shadow_offset.is_zero() && shadow_color.a() != 0
   }
 
+  pub fn with_matrix<F>(&mut self, f:F)
+    where F:Fn(&mut Matrix) -> &Matrix
+  {
+    let mut ctm = self.ctm();
+    f(&mut ctm);
+    if let Some(surface) = &mut self.surface{
+      surface.canvas().set_matrix(&ctm);
+    }
+  }
+
   pub fn with_shadow_mask<F>(&mut self, paint:&Paint, f:F)
     where F:Fn(&mut Canvas, Paint, &Path)
   {
     if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+      let ctm = self.ctm();
       if let Some(surface) = &mut self.surface{
         let canvas = surface.canvas();
         canvas.save();
 
         // position the shadow at the correct offset
-        let inverted = self.state.transform.clone().invert().unwrap();
         let nudge = Matrix::new_trans(self.state.shadow_offset);
-        canvas.concat(&inverted);
+        canvas.concat(&ctm.invert().unwrap());
         canvas.concat(&nudge);
-        canvas.concat(&self.state.transform);
+        canvas.concat(&ctm);
 
         f(canvas, shadow_paint, &self.path);
 
@@ -328,13 +344,6 @@ declare_types! {
         font: None,
         state_stack: vec![],
         state: State {
-          transform: Matrix::new_identity(),
-
-          font_string: "10px monospace".to_string(),
-          text_ltr: true,
-          text_align: Align::Left,
-          text_baseline: Baseline::Alphabetic,
-
           paint,
           stroke_style: Dye::Color(BLACK),
           fill_style: Dye::Color(BLACK),
@@ -351,6 +360,11 @@ declare_types! {
           shadow_blur: 0.0,
           shadow_color: TRANSPARENT,
           shadow_offset: (0.0, 0.0).into(),
+
+          font_string: "10px monospace".to_string(),
+          text_ltr: true,
+          text_align: Align::Left,
+          text_baseline: Baseline::Alphabetic,
         },
       })
     }
@@ -436,18 +450,19 @@ declare_types! {
 
     method resetTransform(mut cx){
       let mut this = cx.this();
-      cx.borrow_mut(&mut this, |mut this| {
-        this.state.transform = Matrix::new_identity();
-      });
+      cx.borrow_mut(&mut this, |mut this|
+        this.with_matrix(|ctm| ctm.reset() )
+      );
+
       Ok(cx.undefined().upcast())
     }
 
     method rotate(mut cx){
       let mut this = cx.this();
       let radians = float_arg(&mut cx, 0, "angle")?;
-      let degrees = radians * PI / 180.0;
+      let degrees = radians / PI * 180.0;
       cx.borrow_mut(&mut this, |mut this| {
-        this.state.transform.pre_rotate(degrees, None);
+        this.with_matrix(|ctm| ctm.pre_rotate(degrees, None) );
       });
       Ok(cx.undefined().upcast())
     }
@@ -457,7 +472,7 @@ declare_types! {
       let x_scale = float_arg(&mut cx, 0, "xScale")?;
       let y_scale = float_arg(&mut cx, 0, "yScale")?;
       cx.borrow_mut(&mut this, |mut this| {
-        this.state.transform.pre_scale((x_scale, y_scale), None);
+        this.with_matrix(|ctm| ctm.pre_scale((x_scale, y_scale), None) );
       });
       Ok(cx.undefined().upcast())
     }
@@ -466,7 +481,7 @@ declare_types! {
       let mut this = cx.this();
       let matrix = matrix_args(&mut cx, 0..6)?;
       cx.borrow_mut(&mut this, |mut this| {
-        this.state.transform.pre_concat(&matrix);
+        this.with_matrix(|ctm| ctm.pre_concat(&matrix) );
       });
       Ok(cx.undefined().upcast())
     }
@@ -476,7 +491,7 @@ declare_types! {
       let dx = float_arg(&mut cx, 0, "deltaX")?;
       let dy = float_arg(&mut cx, 0, "deltaY")?;
       cx.borrow_mut(&mut this, |mut this| {
-        this.state.transform.pre_translate((dx, dy));
+        this.with_matrix(|ctm| ctm.pre_translate((dx, dy)) );
       });
       Ok(cx.undefined().upcast())
     }
@@ -604,7 +619,7 @@ declare_types! {
       let y = float_arg(&mut cx, shift+1, "y")?;
       let rule = fill_rule_arg_or(&mut cx, shift+2, "nonzero")?;
 
-      let point = cx.borrow(&this, |this| this.to_local_coordinates(x, y) );
+      let point = cx.borrow_mut(&mut this, |mut this| this.in_local_coordinates(x, y) );
       let contained = cx.borrow_mut(&mut container, |mut obj| {
         let prev_rule = obj.path.fill_type();
         obj.path.set_fill_type(rule);
@@ -623,7 +638,7 @@ declare_types! {
       };
       let x = float_arg(&mut cx, shift, "x")?;
       let y = float_arg(&mut cx, shift+1, "y")?;
-      let point = cx.borrow(&this, |this| this.to_local_coordinates(x, y) );
+      let point = cx.borrow_mut(&mut this, |mut this| this.in_local_coordinates(x, y) );
 
       let paint = cx.borrow(&this, |this| this.state.paint.clone() );
       let precision = 0.3; // this is what Chrome uses to compute this
@@ -880,15 +895,17 @@ declare_types! {
     //
 
     method get_currentTransform(mut cx){
-      let this = cx.this();
-      let matrix = cx.borrow(&this, |this| this.state.transform );
+      let mut this = cx.this();
+      let matrix = cx.borrow_mut(&mut this, |mut this| this.ctm() );
       matrix_to_array(&mut cx, &matrix)
     }
 
     method set_currentTransform(mut cx){
       let mut this = cx.this();
       let matrix = matrix_arg(&mut cx, 0)?;
-      cx.borrow_mut(&mut this, |mut this| this.state.transform = matrix );
+      cx.borrow_mut(&mut this, |mut this|
+        this.with_matrix(|ctm| ctm.reset().pre_concat(&matrix) )
+      );
       Ok(cx.undefined().upcast())
     }
 
