@@ -396,6 +396,18 @@ declare_types! {
       Ok(cx.undefined().upcast())
     }
 
+    method clip(mut cx){
+      let mut this = cx.this();
+
+      let mut shift = 0;
+      let clip = path2d_arg_opt(&mut cx, 0);
+      if clip.is_some() { shift += 1; }
+
+      let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
+      cx.borrow_mut(&mut this, |mut this| { this.clip_path(clip, rule); });
+      Ok(cx.undefined().upcast())
+    }
+
     method getLineDash(mut cx){
       let mut this = cx.this();
       let dashes = cx.borrow(&this, |this| this.state.line_dash_list.clone());
@@ -421,53 +433,12 @@ declare_types! {
       Ok(cx.undefined().upcast())
     }
 
-    method clip(mut cx){
-      let mut this = cx.this();
-
-      let mut shift = 0;
-      let clip = path2d_arg_opt(&mut cx, 0);
-      if clip.is_some() { shift += 1; }
-
-      let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
-      cx.borrow_mut(&mut this, |mut this| { this.clip_path(clip, rule); });
-      Ok(cx.undefined().upcast())
-    }
-
     //
     // Matrix
     //
     // Implemented in js:
     // - getTransform
     // - setTransform
-
-    method resetTransform(mut cx){
-      let mut this = cx.this();
-      cx.borrow_mut(&mut this, |mut this|
-        this.with_matrix(|ctm| ctm.reset() )
-      );
-
-      Ok(cx.undefined().upcast())
-    }
-
-    method rotate(mut cx){
-      let mut this = cx.this();
-      let radians = float_arg(&mut cx, 0, "angle")?;
-      let degrees = radians / PI * 180.0;
-      cx.borrow_mut(&mut this, |mut this| {
-        this.with_matrix(|ctm| ctm.pre_rotate(degrees, None) );
-      });
-      Ok(cx.undefined().upcast())
-    }
-
-    method scale(mut cx){
-      let mut this = cx.this();
-      let x_scale = float_arg(&mut cx, 0, "xScale")?;
-      let y_scale = float_arg(&mut cx, 0, "yScale")?;
-      cx.borrow_mut(&mut this, |mut this| {
-        this.with_matrix(|ctm| ctm.pre_scale((x_scale, y_scale), None) );
-      });
-      Ok(cx.undefined().upcast())
-    }
 
     method transform(mut cx){
       let mut this = cx.this();
@@ -488,6 +459,34 @@ declare_types! {
       Ok(cx.undefined().upcast())
     }
 
+    method scale(mut cx){
+      let mut this = cx.this();
+      let x_scale = float_arg(&mut cx, 0, "xScale")?;
+      let y_scale = float_arg(&mut cx, 0, "yScale")?;
+      cx.borrow_mut(&mut this, |mut this| {
+        this.with_matrix(|ctm| ctm.pre_scale((x_scale, y_scale), None) );
+      });
+      Ok(cx.undefined().upcast())
+    }
+
+    method rotate(mut cx){
+      let mut this = cx.this();
+      let radians = float_arg(&mut cx, 0, "angle")?;
+      let degrees = radians / PI * 180.0;
+      cx.borrow_mut(&mut this, |mut this| {
+        this.with_matrix(|ctm| ctm.pre_rotate(degrees, None) );
+      });
+      Ok(cx.undefined().upcast())
+    }
+
+    method resetTransform(mut cx){
+      let mut this = cx.this();
+      cx.borrow_mut(&mut this, |mut this|
+        this.with_matrix(|ctm| ctm.reset() )
+      );
+      Ok(cx.undefined().upcast())
+    }
+
     //
     // Paths
     //
@@ -497,6 +496,19 @@ declare_types! {
       cx.borrow_mut(&mut this, |mut this| {
         this.path = Path::new();
       });
+      Ok(cx.undefined().upcast())
+    }
+
+    method rect(mut cx){
+      let mut this = cx.this();
+      let nums = float_args(&mut cx, 0..4)?;
+      if let [x, y, w, h] = nums.as_slice(){
+        let rect = Rect::from_xywh(*x, *y, *w, *h);
+        cx.borrow_mut(&mut this, |mut this| {
+          this.path.add_rect(rect, Some((PathDirection::CW, 0)));
+        });
+      }
+
       Ok(cx.undefined().upcast())
     }
 
@@ -512,6 +524,47 @@ declare_types! {
           this.path.add_path(&arc.path, (0,0), AddPathMode::Append);
         });
       }
+      Ok(cx.undefined().upcast())
+    }
+
+    method ellipse(mut cx){
+      let mut this = cx.this();
+      let nums = float_args(&mut cx, 0..7)?;
+      let ccw = bool_arg(&mut cx, 7, "isCCW")?;
+
+      if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
+        if *x_radius < 0.0 || *y_radius < 0.0 {
+          return cx.throw_error("radii cannot be negative")
+        }
+        cx.borrow_mut(&mut this, |mut this| {
+          let mut arc = Path2D::new();
+          arc.add_ellipse((*x, *y), (*x_radius, *y_radius), *rotation, *start_angle, *end_angle, ccw);
+          this.path.add_path(&arc.path, (0,0), AddPathMode::Append);
+        });
+      }
+
+      Ok(cx.undefined().upcast())
+    }
+
+
+    method moveTo(mut cx){
+      let mut this = cx.this();
+      let x = float_arg(&mut cx, 0, "x")?;
+      let y = float_arg(&mut cx, 1, "y")?;
+      cx.borrow_mut(&mut this, |mut this| {
+        this.path.move_to((x, y));
+      });
+      Ok(cx.undefined().upcast())
+    }
+
+    method lineTo(mut cx){
+      let mut this = cx.this();
+      let x = float_arg(&mut cx, 0, "x")?;
+      let y = float_arg(&mut cx, 1, "y")?;
+      cx.borrow_mut(&mut this, |mut this| {
+        if this.path.is_empty(){ this.path.move_to((x, y)); }
+        this.path.line_to((x, y));
+      });
       Ok(cx.undefined().upcast())
     }
 
@@ -561,46 +614,6 @@ declare_types! {
       Ok(cx.undefined().upcast())
     }
 
-    method ellipse(mut cx){
-      let mut this = cx.this();
-      let nums = float_args(&mut cx, 0..7)?;
-      let ccw = bool_arg(&mut cx, 7, "isCCW")?;
-
-      if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
-        if *x_radius < 0.0 || *y_radius < 0.0 {
-          return cx.throw_error("radii cannot be negative")
-        }
-        cx.borrow_mut(&mut this, |mut this| {
-          let mut arc = Path2D::new();
-          arc.add_ellipse((*x, *y), (*x_radius, *y_radius), *rotation, *start_angle, *end_angle, ccw);
-          this.path.add_path(&arc.path, (0,0), AddPathMode::Append);
-        });
-      }
-
-      Ok(cx.undefined().upcast())
-    }
-
-    method lineTo(mut cx){
-      let mut this = cx.this();
-      let x = float_arg(&mut cx, 0, "x")?;
-      let y = float_arg(&mut cx, 1, "y")?;
-      cx.borrow_mut(&mut this, |mut this| {
-        if this.path.is_empty(){ this.path.move_to((x, y)); }
-        this.path.line_to((x, y));
-      });
-      Ok(cx.undefined().upcast())
-    }
-
-    method moveTo(mut cx){
-      let mut this = cx.this();
-      let x = float_arg(&mut cx, 0, "x")?;
-      let y = float_arg(&mut cx, 1, "y")?;
-      cx.borrow_mut(&mut this, |mut this| {
-        this.path.move_to((x, y));
-      });
-      Ok(cx.undefined().upcast())
-    }
-
     method isPointInPath(mut cx){
       let mut this = cx.this();
       let (mut container, shift) = match cx.argument::<JsValue>(0)?.is_a::<JsPath2D>(){
@@ -645,19 +658,6 @@ declare_types! {
       Ok(cx.boolean(contained).upcast())
     }
 
-    method rect(mut cx){
-      let mut this = cx.this();
-      let nums = float_args(&mut cx, 0..4)?;
-      if let [x, y, w, h] = nums.as_slice(){
-        let rect = Rect::from_xywh(*x, *y, *w, *h);
-        cx.borrow_mut(&mut this, |mut this| {
-          this.path.add_rect(rect, Some((PathDirection::CW, 0)));
-        });
-      }
-
-      Ok(cx.undefined().upcast())
-    }
-
     //
     // Drawing
     //
@@ -694,18 +694,6 @@ declare_types! {
       Ok(cx.undefined().upcast())
     }
 
-    method clearRect(mut cx){
-      let mut this = cx.this();
-      let nums = float_args(&mut cx, 0..4)?;
-      if let [x, y, w, h] = nums.as_slice() {
-        let rect = Rect::from_xywh(*x, *y, *w, *h);
-        cx.borrow_mut(&mut this, |mut this| {
-          this.clear_rect(&rect);
-        })
-      }
-      Ok(cx.undefined().upcast())
-    }
-
     method fillRect(mut cx){
       let mut this = cx.this();
       let nums = float_args(&mut cx, 0..4)?;
@@ -733,12 +721,23 @@ declare_types! {
       Ok(cx.undefined().upcast())
     }
 
+    method clearRect(mut cx){
+      let mut this = cx.this();
+      let nums = float_args(&mut cx, 0..4)?;
+      if let [x, y, w, h] = nums.as_slice() {
+        let rect = Rect::from_xywh(*x, *y, *w, *h);
+        cx.borrow_mut(&mut this, |mut this| {
+          this.clear_rect(&rect);
+        })
+      }
+      Ok(cx.undefined().upcast())
+    }
+
     //
     // Imagery
     //
     // implemented in js:
     // - createImageData
-
 
     method getImageData(mut cx){
       let mut this = cx.this();
