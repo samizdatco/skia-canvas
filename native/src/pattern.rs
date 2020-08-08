@@ -33,11 +33,11 @@ declare_types! {
       let mut this = cx.this();
 
       let img = cx.argument::<JsImage>(0)?;
-      let (tx, ty) = match string_arg_or(&mut cx, 1, "repeat").as_str() {
+      let (tx, ty) = match string_arg(&mut cx, 1, "repetition")?.as_str() {
         "repeat" => (Repeat, Repeat),
         "repeat-x" => (Repeat, Decal),
         "repeat-y" => (Decal, Repeat),
-        _ => (Decal, Decal)
+        _ => return cx.throw_error("The string did not match the expected pattern")
       };
 
       let shader = cx.borrow(&img, |img| {
