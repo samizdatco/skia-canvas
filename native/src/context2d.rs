@@ -749,9 +749,31 @@ declare_types! {
 
 
     method getImageData(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let mut this = cx.this();
+      let x = float_arg(&mut cx, 0, "x")? as i32;
+      let y = float_arg(&mut cx, 1, "y")? as i32;
+      let width = float_arg(&mut cx, 2, "width")? as i32;
+      let height = float_arg(&mut cx, 3, "height")? as i32;
+
+      let info = ImageInfo::new((width, height), ColorType::RGBA8888, AlphaType::Unpremul, None);
+      let mut buffer = JsBuffer::new(&mut cx, 4 * (width * height) as u32)?;
+
+      cx.borrow_mut(&mut buffer, |buf_data| {
+        let mut buf_slice = buf_data.as_mut_slice();
+        let row_bytes = (width * 4) as usize;
+        cx.borrow_mut(&mut this, |mut this|
+          if let Some(surface) = &mut this.surface{
+            surface.read_pixels(&info, &mut buf_slice, row_bytes, (x, y));
+          }
+        )
+      });
+
+      let args = vec![cx.number(width), cx.number(height)];
+      let img_data = JsImageData::new(&mut cx, args)?;
+      let attr = cx.string("data");
+      img_data.set(&mut cx, attr, buffer)?;
+
+      Ok(img_data.upcast())
     }
 
     method putImageData(mut cx){
