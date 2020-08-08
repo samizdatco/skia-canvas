@@ -794,8 +794,8 @@ declare_types! {
           Rect::from_xywh(*dx, *dy, *dw, *dh),
           Rect::from_xywh(*dx + x, *dy + y, *dw, *dh) ),
         _ => (
-          Rect::from_xywh(x, y, width, height),
-          Rect::from_xywh(0.0, 0.0, width, height)
+          Rect::from_xywh(0.0, 0.0, width, height),
+          Rect::from_xywh(x, y, width, height)
       )};
 
       // convert buffer contents to image
