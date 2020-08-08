@@ -105,9 +105,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "2.33.1"
+version = "2.33.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdfa80d47f954d53a35a64987ca1422f495b8d6483c0fe9f7117b36c2a792129"
+checksum = "10040cdf04294b565d9e0319955430099ec3813a64c952b86a41200ad714ae48"
 dependencies = [
  "ansi_term",
  "atty",
@@ -150,9 +150,9 @@ dependencies = [
 
 [[package]]
 name = "curl-sys"
-version = "0.4.33+curl-7.71.1"
+version = "0.4.34+curl-7.71.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e9818ea018327f79c811612f29b9834d2abddbe7db81460a2d5c7e12946b337"
+checksum = "ad4eff0be6985b7e709f64b5a541f700e9ad1407190a29f4884319eb663ed1d6"
 dependencies = [
  "cc",
  "libc",
@@ -178,9 +178,9 @@ dependencies = [
 
 [[package]]
 name = "filetime"
-version = "0.2.11"
+version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e500da2fab70bdc43f8f0e0b350a227f31c72311c56aba48f01d5cd62bb0345b"
+checksum = "3ed85775dcc68644b5c950ac06a2b23768d3bc9390464151aaf27136998dcf9e"
 dependencies = [
  "cfg-if",
  "libc",
@@ -496,9 +496,9 @@ checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 
 [[package]]
 name = "skia-bindings"
-version = "0.30.1"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cbe393496c4190c81e813b136b62530ac99fbe5dcb933b3ea63ea3412cf361b"
+checksum = "18925803abe4d925dfa7b61ec6e72b587ec98ffb38a98b56da489cca5610c258"
 dependencies = [
  "bindgen",
  "cc",
@@ -522,9 +522,9 @@ dependencies = [
 
 [[package]]
 name = "skia-safe"
-version = "0.30.1"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e85dd77aadb06173841cec124ece18fa99ffc404628df2f1a2b00ee53871dd05"
+checksum = "306aad7eb4c165c88725135bf950154f491cecaa6d482796bc81549673acf744"
 dependencies = [
  "bitflags",
  "lazy_static",
