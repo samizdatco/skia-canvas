@@ -17,6 +17,10 @@ build: $(LIB)
 run: $(LIB)
 	@node scribble.js
 
+preview: run
+	@open -a Preview.app out.png
+	@open -a "Visual Studio Code"
+
 test: $(LIB)
 	@$(JEST)
 
