@@ -88,7 +88,7 @@ impl Context2D{
 
   pub fn draw_path(&mut self, paint: &Paint){
     // draw shadow if applicable
-    self.with_shadow(&paint, |canvas, shadow_paint, path|{
+    self.with_shadow_mask(&paint, |canvas, shadow_paint, path|{
       canvas.draw_path(&path, &shadow_paint);
     });
 
@@ -114,7 +114,7 @@ impl Context2D{
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
     // draw shadow if applicable
-    self.with_shadow(&paint, |canvas, shadow_paint, path|{
+    self.with_shadow_mask(&paint, |canvas, shadow_paint, path|{
       canvas.draw_rect(&rect, &shadow_paint);
     });
 
@@ -249,7 +249,7 @@ impl Context2D{
     shadow_blur > 0.0 || !shadow_offset.is_zero() && shadow_color.a() != 0
   }
 
-  pub fn with_shadow<F>(&mut self, paint:&Paint, f:F)
+  pub fn with_shadow_mask<F>(&mut self, paint:&Paint, f:F)
     where F:Fn(&mut Canvas, Paint, &Path)
   {
     if let Some(shadow_paint) = self.paint_for_shadow(&paint){
