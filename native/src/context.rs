@@ -12,7 +12,7 @@ use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4
                 ColorType, AlphaType};
 
 use crate::utils::*;
-use crate::path2d::{Path2D, JsPath2D};
+use crate::path::{Path2D, JsPath2D};
 use crate::image::{JsImage, JsImageData};
 use crate::gradient::{CanvasGradient, JsCanvasGradient};
 use crate::pattern::{CanvasPattern, JsCanvasPattern};

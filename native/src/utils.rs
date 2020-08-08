@@ -9,7 +9,7 @@ use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB};
 use css_color::Rgba;
 
 
-use crate::path2d::{JsPath2D};
+use crate::path::{JsPath2D};
 
 
 //
