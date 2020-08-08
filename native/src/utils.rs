@@ -5,7 +5,9 @@ use core::ops::Range;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
-use skia_safe::{Path, Matrix, Point, Color, Color4f};
+use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB};
+use css_color::Rgba;
+
 
 use crate::path2d::{JsPath2D};
 
@@ -189,41 +191,30 @@ pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Re
 // Colors
 //
 
-// pub fn colors_in(vals: &[Handle<JsValue>]) -> Vec<Color>{
-//   to_colors(&floats_in(&vals))
-// }
-
-pub fn to_colors(vals:&[f32]) -> Vec<Color>{
-  vals
-    .chunks(4)
-    .map(|c| Color4f::new(c[0], c[1], c[2], c[3]).to_color())
-      .collect()
-}
-
-pub fn to_color(vals:&[f32]) -> Option<Color>{
-  let mut colors = to_colors(&vals);
-  if colors.is_empty(){ None }else{ Some(colors.remove(0)) }
-}
-
-pub fn color_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>, attr:&str) -> Result<Color, Throw>{
-  let mut nums = opt_float_args(cx, rng);
-  if nums.len() == 3{
-    nums.push(1.0 as f32);
-  }
-  match to_color(&nums){
-    Some(c4f) => Ok(c4f),
-    None => cx.throw_error(format!("expected a color (either as r/g/b or r/g/b/a) for {}", &attr))
+pub fn color_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<Color, Throw> {
+  match opt_string_arg(cx, idx){
+    Some(css) => {
+      match css.parse::<Rgba>(){
+        Ok(Rgba{red, green, blue, alpha}) => {
+          Ok(Color4f::new(red, green, blue, alpha).to_color())
+        },
+        Err(_e) => cx.throw_error("Color parse error: Invalid format")
+      }
+    },
+    None => cx.throw_type_error("Expected a css color string, CanvasGradient, or CanvasPattern)")
   }
 }
 
-pub fn color_to_rgba<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color) -> JsResult<'a, JsValue> {
-  let color = Color4f::from(*color);
-  let rgba = JsArray::new(cx, 4);
-  for (i, c) in color.as_array().iter().enumerate(){
-    let c = cx.number(*c as f64);
-    rgba.set(cx, i as u32, c)?;
-  }
-  Ok(rgba.upcast())
+pub fn color_to_css<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color) -> JsResult<'a, JsValue> {
+  let RGB {r, g, b} = color.to_rgb();
+  let css = match color.a() {
+    255 => format!("#{:02x}{:02x}{:02x}", r, g, b),
+    _ => {
+      let alpha = format!("{:.3}", color.a() as f32 / 255.0);
+      format!("rgba({},{},{},{})", r, g, b, alpha.trim_end_matches('0'))
+    }
+  };
+  Ok(cx.string(css).upcast())
 }
 
 //

@@ -5,15 +5,14 @@
   "main": "lib/index.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
-  "dependencies": {
-    "color-convert": "^2.0.1",
-    "neon-cli": "^0.4.0",
-    "simple-get": "^4.0.0"
-  },
   "scripts": {
     "install": "neon build"
   },
+  "dependencies": {
+    "simple-get": "^4.0.0"
+  },
   "devDependencies": {
+    "neon-cli": "^0.4.0",
     "jest": "^26.2.2"
   }
 }

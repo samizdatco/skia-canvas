@@ -95,7 +95,7 @@ declare_types! {
     method addColorStop(mut cx){
       let mut this = cx.this();
       let offset = float_arg(&mut cx, 0, "offset")?;
-      let color = color_args(&mut cx, 1..5, "color")?;
+      let color = color_arg(&mut cx, 1)?;
 
       if offset < 0.0 || offset > 1.0 {
         let err = JsError::range_error(&mut cx, "Color stop offsets must be between 0 and 1")?;

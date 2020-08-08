@@ -913,7 +913,7 @@ declare_types! {
       match cx.borrow(&this, |this| this.state.fill_style.clone() ){
         Dye::Gradient(gradient) => fetch_ref(&mut cx, "fillShader"),
         Dye::Pattern(pattern) => fetch_ref(&mut cx, "fillShader"),
-        Dye::Color(color) => color_to_rgba(&mut cx, &color)
+        Dye::Color(color) => color_to_css(&mut cx, &color)
       }
     }
 
@@ -932,7 +932,7 @@ declare_types! {
           cx.borrow(&pattern, |pattern| Dye::Pattern(pattern.clone()) )
         },
         _ => {
-          let color = color_args(&mut cx, 0..4, "fillStyle")?;
+          let color = color_arg(&mut cx, 0)?;
           Dye::Color(color)
         }
       };
@@ -948,7 +948,7 @@ declare_types! {
       match cx.borrow(&this, |this| this.state.stroke_style.clone() ){
         Dye::Gradient(gradient) => fetch_ref(&mut cx, "strokeShader"),
         Dye::Pattern(pattern) => fetch_ref(&mut cx, "strokeShader"),
-        Dye::Color(color) => color_to_rgba(&mut cx, &color)
+        Dye::Color(color) => color_to_css(&mut cx, &color)
       }
     }
 
@@ -967,7 +967,7 @@ declare_types! {
           cx.borrow(&pattern, |pattern| Dye::Pattern(pattern.clone()) )
         },
         _ => {
-          let color = color_args(&mut cx, 0..4, "strokeStyle")?;
+          let color = color_arg(&mut cx, 0)?;
           Dye::Color(color)
         }
       };
@@ -1147,12 +1147,12 @@ declare_types! {
     method get_shadowColor(mut cx){
       let this = cx.this();
       let shadow_color = cx.borrow(&this, |this| this.state.shadow_color );
-      color_to_rgba(&mut cx, &shadow_color)
+      color_to_css(&mut cx, &shadow_color)
     }
 
     method set_shadowColor(mut cx){
       let mut this = cx.this();
-      let color = color_args(&mut cx, 0..4, "shadowColor")?;
+      let color = color_arg(&mut cx, 0)?;
       cx.borrow_mut(&mut this, |mut this| { this.state.shadow_color = color; });
       Ok(cx.undefined().upcast())
     }
