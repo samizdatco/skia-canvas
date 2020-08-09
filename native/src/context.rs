@@ -5,11 +5,11 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
 use neon::object::This;
-use skia_safe::{Surface, Canvas, Path, Matrix, Paint, Rect, Point, Color, Color4f, ImageInfo,
-                PaintStyle, BlendMode, FilterQuality, MaskFilter, BlurStyle, PathDirection,
-                Data, Image, EncodedImageFormat, Font, dash_path_effect, ClipOp, image_filters,
+use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, Color, Color4f, ImageInfo,
+                PaintStyle, BlendMode, FilterQuality, PathDirection, ColorType, AlphaType,
+                Data, Image, EncodedImageFormat, dash_path_effect, ClipOp, image_filters,
                 utils::text_utils::Align, path::{AddPathMode, FillType}, canvas::SrcRectConstraint,
-                ColorType, AlphaType};
+                Font, Typeface, TextBlob};
 
 use crate::utils::*;
 use crate::path::{Path2D, JsPath2D};
@@ -23,7 +23,7 @@ const TRANSPARENT:Color = Color::TRANSPARENT;
 pub struct Context2D{
   surface: Option<Surface>,
   path: Path,
-  font: Option<Font>, // for now
+  font: Font, // for now
   state_stack: Vec<State>,
   state: State,
 }
@@ -198,6 +198,23 @@ impl Context2D{
     }
   }
 
+  pub fn draw_text(&mut self, text: &str, x: f32, y: f32, paint: Paint){
+    let shadow = self.paint_for_shadow(&paint);
+    let (leading, metrics) = self.font.metrics();
+    let align = self.state.text_align;
+    let at = (x, y + get_baseline_offset(&metrics, self.state.text_baseline));
+
+    if let Some(surface) = &mut self.surface{
+      // draw shadow if applicable
+      if let Some(shadow_paint) = shadow{
+        surface.canvas().draw_str_align(text, at, &self.font, &shadow_paint, align);
+      }
+
+      // then draw the actual text
+      surface.canvas().draw_str_align(text, at, &self.font, &paint, align);
+    }
+  }
+
   pub fn color_with_alpha(&self, src:&Color) -> Color{
     let mut color:Color4f = src.clone().into();
     color.a *= self.state.global_alpha;
@@ -323,7 +340,7 @@ declare_types! {
       Ok( Context2D{
         surface: None,
         path: Path::new(),
-        font: None,
+        font: Font::from_typeface(&Typeface::default(), 10.0),
         state_stack: vec![],
         state: State {
           paint,
@@ -832,18 +849,61 @@ declare_types! {
     //
     method measureText(mut cx){
       let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let text = string_arg(&mut cx, 0, "text")?;
+
+      let (width, bounds, metrics, em, bl) = cx.borrow(&this, |this| {
+        let paint = this.paint_for_fill();
+        let (width, bounds) = this.font.measure_str(&text, Some(&paint));
+        let (leading, metrics) = this.font.metrics();
+        let offset = get_baseline_offset(&metrics, this.state.text_baseline);
+        ( width, bounds, metrics, this.font.size(), offset )
+      });
+
+      let hang = bl - get_baseline_offset(&metrics, Baseline::Hanging);
+      let alph = bl - get_baseline_offset(&metrics, Baseline::Alphabetic);
+      let ideo = bl - get_baseline_offset(&metrics, Baseline::Ideographic);
+
+      let mut text_metrics = vec![
+        width, -bounds.left, bounds.right, -(bounds.top+bl), bounds.bottom+bl,
+        -(metrics.ascent+bl), metrics.descent+bl, em-alph, alph, hang, alph, ideo
+      ];
+
+      let array = JsArray::new(&mut cx, text_metrics.len() as u32);
+      for (i, val) in text_metrics.iter().enumerate() {
+        let num = cx.number(*val);
+        array.set(&mut cx, i as u32, num)?;
+      }
+      Ok(array.upcast())
     }
+
     method strokeText(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let mut this = cx.this();
+      let text = string_arg(&mut cx, 0, "text")?;
+      let x = float_arg(&mut cx, 1, "x")?;
+      let y = float_arg(&mut cx, 2, "y")?;
+      let width = opt_float_arg(&mut cx, 3);
+
+      cx.borrow_mut(&mut this, |mut this|{
+        let mut paint = this.paint_for_stroke();
+        this.draw_text(&text, x, y, paint);
+      });
+
+      Ok(cx.undefined().upcast())
     }
+
     method fillText(mut cx){
-      let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let mut this = cx.this();
+      let text = string_arg(&mut cx, 0, "text")?;
+      let x = float_arg(&mut cx, 1, "x")?;
+      let y = float_arg(&mut cx, 2, "y")?;
+      let width = opt_float_arg(&mut cx, 3);
+
+      cx.borrow_mut(&mut this, |mut this|{
+        let mut paint = this.paint_for_fill();
+        this.draw_text(&text, x, y, paint);
+      });
+
+      Ok(cx.undefined().upcast())
     }
 
     //
@@ -1004,14 +1064,20 @@ declare_types! {
 
     method get_font(mut cx){
       let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let font_str = cx.borrow(&this, |this| this.state.font_string.clone() );
+      Ok(cx.string(font_str).upcast())
     }
 
     method set_font(mut cx){
       let mut this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      if let Some(font_desc) = font_arg(&mut cx, 0)?{
+        cx.borrow_mut(&mut this, |mut this|{
+          this.state.font_string = font_desc.canonical;
+          this.font.set_size(font_desc.size);
+        });
+      }
+
+      Ok(cx.undefined().upcast())
     }
 
     method get_direction(mut cx){

@@ -5,7 +5,7 @@ use core::ops::Range;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
-use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB};
+use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB, FontMetrics};
 use css_color::Rgba;
 
 
@@ -61,6 +61,16 @@ pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> Js
 //
 // strings
 //
+
+
+pub fn strings_in(vals: &[Handle<JsValue>]) -> Vec<String>{
+  vals.iter()
+      .map(|js_val| js_val.downcast::<JsString>())
+      .filter( |r| r.is_ok() )
+      .map( |num| num.as_ref().unwrap().value() )
+      .collect()
+}
+
 
 pub fn opt_string_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<String>{
   match cx.argument_opt(idx as i32) {
@@ -265,8 +275,6 @@ pub fn matrix_to_array<'a, T: This+Class>(cx: &mut CallContext<'a, T>, matrix:&M
   Ok(array.upcast())
 }
 
-
-
 //
 // Points
 //
@@ -291,6 +299,30 @@ pub fn path2d_arg_opt<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize)
   None
 }
 
+
+//
+// Fonts
+//
+pub struct FontInfo{
+  pub families: Vec<String>,
+  pub size: f32,
+  pub leading: f32,
+  pub canonical: String
+}
+
+pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<Option<FontInfo>, Throw> {
+  let arg = cx.argument::<JsValue>(0)?;
+  if arg.is_a::<JsUndefined>(){ return Ok(None) }
+
+  let font_desc = cx.argument::<JsObject>(idx as i32)?;
+  let families = font_desc.get(cx, "family")?.downcast::<JsArray>().or_throw(cx)?.to_vec(cx)?;
+  let families = strings_in(&families);
+  let size = font_desc.get(cx, "px")?.downcast::<JsNumber>().or_throw(cx)?.value() as f32;
+  let leading = font_desc.get(cx, "leading")?.downcast::<JsNumber>().or_throw(cx)?.value() as f32;
+  let canonical = font_desc.get(cx, "canonical")?.downcast::<JsString>().or_throw(cx)?.value();
+
+  Ok(Some(FontInfo{ families, size, leading, canonical}))
+}
 //
 // Skia Enums
 //
@@ -482,6 +514,16 @@ pub fn from_text_baseline(mode:Baseline) -> String{
   }.to_string()
 }
 
+pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f32 {
+  match mode{
+    Baseline::Top => -metrics.ascent,
+    Baseline::Hanging => -metrics.ascent,
+    Baseline::Middle => metrics.cap_height / 2.0,
+    Baseline::Alphabetic => 0.0,
+    Baseline::Ideographic => -metrics.descent,
+    Baseline::Bottom => -metrics.descent,
+  }
+}
 
 use skia_safe::path::FillType;
 pub fn fill_rule_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default: &str) -> Result<FillType, Throw>{
