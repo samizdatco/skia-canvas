@@ -9,6 +9,7 @@
     "install": "neon build"
   },
   "dependencies": {
+    "css-font": "^1.2.0",
     "simple-get": "^4.0.0"
   },
   "devDependencies": {
