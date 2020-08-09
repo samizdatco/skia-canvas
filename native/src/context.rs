@@ -746,7 +746,7 @@ declare_types! {
     // implemented in js:
     // - createImageData
 
-    method getImageData(mut cx){
+    method _getImageData(mut cx){
       let mut this = cx.this();
       let x = float_arg(&mut cx, 0, "x")? as i32;
       let y = float_arg(&mut cx, 1, "y")? as i32;
@@ -847,7 +847,7 @@ declare_types! {
     //
     // Typography
     //
-    method measureText(mut cx){
+    method _measureText(mut cx){
       let this = cx.this();
       let text = string_arg(&mut cx, 0, "text")?;
 

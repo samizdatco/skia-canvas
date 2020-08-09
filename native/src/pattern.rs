@@ -51,7 +51,7 @@ declare_types! {
       Ok(None)
     }
 
-    method setTransform(mut cx){
+    method _setTransform(mut cx){
       let mut this = cx.this();
       let matrix = matrix_arg(&mut cx, 0)?;
       cx.borrow_mut(&mut this, |mut this| {
