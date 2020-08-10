@@ -529,24 +529,49 @@ pub fn from_blend_mode(mode:BlendMode) -> String{
   }.to_string()
 }
 
-use skia_safe::{utils::text_utils::Align};
-pub fn to_text_align(mode_name:&str) -> Option<Align>{
+use skia_safe::textlayout::{TextAlign, TextDirection, ParagraphStyle};
+pub fn to_text_align(mode_name:&str) -> Option<TextAlign>{
   let mode = match mode_name.to_lowercase().as_str(){
-    "left" => Align::Left,
-    "center" => Align::Center,
-    "right" => Align::Right,
+    "left" => TextAlign::Left,
+    "right" => TextAlign::Right,
+    "center" => TextAlign::Center,
+    // "justify" => TextAlign::Justify,
+    "start" => TextAlign::Start,
+    "end" => TextAlign::End,
     _ => return None
   };
   Some(mode)
 }
 
-pub fn from_text_align(mode:Align) -> String{
+pub fn from_text_align(mode:TextAlign) -> String{
   match mode{
-    Align::Left => "left",
-    Align::Center => "center",
-    Align::Right => "right",
+    TextAlign::Left => "left",
+    TextAlign::Right => "right",
+    TextAlign::Center => "center",
+    TextAlign::Justify => "justify",
+    TextAlign::Start => "start",
+    TextAlign::End => "end",
   }.to_string()
 }
+
+pub fn get_alignment_factor(graf_style:&ParagraphStyle) -> f32 {
+  match graf_style.text_direction() {
+    TextDirection::LTR => match graf_style.text_align() {
+      TextAlign::Left | TextAlign::Start => 0.0,
+      TextAlign::Right | TextAlign::End => -1.0,
+      TextAlign::Center => -0.5,
+      TextAlign::Justify => 0.0 // unsupported
+    },
+    TextDirection::RTL => match graf_style.text_align() {
+      TextAlign::Left | TextAlign::End => 0.0,
+      TextAlign::Right | TextAlign::Start => -1.0,
+      TextAlign::Center => -0.5,
+      TextAlign::Justify => 0.0 // unsupported
+    }
+  }
+}
+
+
 
 #[derive(Copy, Clone)]
 pub enum Baseline{ Top, Hanging, Middle, Alphabetic, Ideographic, Bottom }
@@ -575,16 +600,18 @@ pub fn from_text_baseline(mode:Baseline) -> String{
   }.to_string()
 }
 
-pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f32 {
+pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f64 {
   match mode{
-    Baseline::Top => -metrics.ascent,
-    Baseline::Hanging => -metrics.ascent,
-    Baseline::Middle => metrics.cap_height / 2.0,
+    Baseline::Top => -metrics.ascent as f64,
+    Baseline::Hanging => metrics.cap_height as f64,
+    Baseline::Middle => metrics.cap_height as f64 / 2.0,
     Baseline::Alphabetic => 0.0,
-    Baseline::Ideographic => -metrics.descent,
-    Baseline::Bottom => -metrics.descent,
+    Baseline::Ideographic => -metrics.descent as f64,
+    Baseline::Bottom => -metrics.descent as f64,
   }
 }
+
+
 
 use skia_safe::path::FillType;
 pub fn fill_rule_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default: &str) -> Result<FillType, Throw>{

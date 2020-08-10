@@ -5,11 +5,13 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
 use neon::object::This;
-use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, Color, Color4f, ImageInfo,
+use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, Color, Color4f, Image, ImageInfo,
                 PaintStyle, BlendMode, FilterQuality, PathDirection, ColorType, AlphaType,
-                Data, Image, EncodedImageFormat, dash_path_effect, ClipOp, image_filters,
-                utils::text_utils::Align, path::{AddPathMode, FillType}, canvas::SrcRectConstraint,
-                Font, FontStyle, FontMgr, Typeface, TextBlob, textlayout::{FontCollection}};
+                Data, EncodedImageFormat, dash_path_effect, ClipOp, image_filters, FontMgr};
+use skia_safe::canvas::SrcRectConstraint;
+use skia_safe::path::{AddPathMode, FillType};
+use skia_safe::textlayout::{FontCollection, TextStyle, TextAlign, TextDirection, TextShadow,
+                            ParagraphStyle, ParagraphBuilder, Paragraph};
 
 use crate::utils::*;
 use crate::path::{Path2D, JsPath2D};
@@ -19,11 +21,11 @@ use crate::pattern::{CanvasPattern, JsCanvasPattern};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;
+const GALLEY:f32 = 100_000.0;
 
 pub struct Context2D{
   surface: Option<Surface>,
   path: Path,
-  font: Font, // for now
   state_stack: Vec<State>,
   state: State,
 }
@@ -48,8 +50,9 @@ pub struct State{
   image_smoothing_enabled: bool,
 
   font_string: String,
-  text_ltr: bool,
-  text_align: Align,
+  font_features: Vec<String>,
+  char_style: TextStyle,
+  graf_style: ParagraphStyle,
   text_baseline: Baseline,
 }
 
@@ -69,11 +72,18 @@ impl Context2D{
     paint.set_stroke_width(1.0);
     paint.set_filter_quality(FilterQuality::Low);
 
+    let mut char_style = TextStyle::new();
+    char_style.set_font_size(10.0);
+
+    let mut graf_style = ParagraphStyle::new();
+    graf_style.set_text_align(TextAlign::Start);
+    graf_style.set_text_direction(TextDirection::LTR);
+
     Context2D{
       surface: None,
       path: Path::new(),
-      font: Font::from_typeface(&Typeface::default(), 10.0),
       state_stack: vec![],
+
       state: State {
         paint,
         stroke_style: Dye::Color(BLACK),
@@ -93,8 +103,9 @@ impl Context2D{
         shadow_offset: (0.0, 0.0).into(),
 
         font_string: "10px monospace".to_string(),
-        text_ltr: true,
-        text_align: Align::Left,
+        font_features:vec![],
+        char_style,
+        graf_style,
         text_baseline: Baseline::Alphabetic,
       },
     }
@@ -237,38 +248,71 @@ impl Context2D{
     }
   }
 
-  pub fn draw_text(&mut self, text: &str, x: f32, y: f32, paint: Paint){
-    let shadow = self.paint_for_shadow(&paint);
-    let (leading, metrics) = self.font.metrics();
-    let align = self.state.text_align;
-    let at = (x, y + get_baseline_offset(&metrics, self.state.text_baseline));
+  pub fn typeset_text(&mut self, text: &str, paint: Paint) -> Paragraph {
+    let mut font_collection = FontCollection::new();
+    font_collection.set_default_font_manager(FontMgr::new(), None);
 
-    if let Some(surface) = &mut self.surface{
-      // draw shadow if applicable
-      if let Some(shadow_paint) = shadow{
-        surface.canvas().draw_str_align(text, at, &self.font, &shadow_paint, align);
-      }
+    let mut char_style = self.state.char_style.clone();
+    char_style.set_foreground_color(Some(paint));
 
-      // then draw the actual text
-      surface.canvas().draw_str_align(text, at, &self.font, &paint, align);
+    let shadow_color = self.color_with_alpha(&self.state.shadow_color);
+    let State {shadow_blur, shadow_offset, ..} = self.state;
+    let sigma = shadow_blur as f64 / 2.0;
+    if shadow_color.a() > 0 && !(shadow_blur == 0.0 && shadow_offset.is_zero()){
+      let shadow = TextShadow::new(shadow_color, shadow_offset, sigma);
+      char_style.add_shadow(shadow);
     }
+
+    let mut graf_style = &self.state.graf_style;
+    let mut paragraph_builder = ParagraphBuilder::new(&graf_style, font_collection);
+    paragraph_builder.push_style(&char_style);
+    paragraph_builder.add_text(&text);
+
+    let mut paragraph = paragraph_builder.build();
+    paragraph.layout(GALLEY);
+    paragraph
   }
 
-  pub fn measure_text(&self, text: &str) -> Vec<f32>{
+  pub fn draw_text(&mut self, text: &str, x: f32, y: f32, paint: Paint){
+    let mut paragraph = self.typeset_text(&text, paint);
+
+    let mut point = Point::new(x, y);
+    let metrics = self.state.char_style.font_metrics();
+    let offset = get_baseline_offset(&metrics, self.state.text_baseline) as f32;
+    point.y += offset - paragraph.alphabetic_baseline();
+    point.x += GALLEY * get_alignment_factor(&self.state.graf_style);
+
+    let mut surface = self.surface.as_mut().unwrap();
+    paragraph.paint(surface.canvas(), point);
+  }
+
+  pub fn measure_text(&mut self, text: &str) -> Vec<f32>{
     let paint = self.paint_for_fill();
-    let em = self.font.size();
-    let (width, bounds) = self.font.measure_str(&text, Some(&paint));
-    let (leading, metrics) = self.font.metrics();
-    let bl = get_baseline_offset(&metrics, self.state.text_baseline);
+    let mut paragraph = self.typeset_text(&text, paint);
 
-    let hang = bl - get_baseline_offset(&metrics, Baseline::Hanging);
-    let alph = bl - get_baseline_offset(&metrics, Baseline::Alphabetic);
-    let ideo = bl - get_baseline_offset(&metrics, Baseline::Ideographic);
+    let font_metrics = self.state.char_style.font_metrics();
+    let offset = get_baseline_offset(&font_metrics, self.state.text_baseline);
+    let hang = offset - get_baseline_offset(&font_metrics, Baseline::Hanging);
+    let alph = offset - get_baseline_offset(&font_metrics, Baseline::Alphabetic);
+    let ideo = offset - get_baseline_offset(&font_metrics, Baseline::Ideographic);
 
-    vec![
-      width, -bounds.left, bounds.right, -(bounds.top+bl), bounds.bottom+bl,
-      -(metrics.ascent+bl), metrics.descent+bl, em-alph, alph, hang, alph, ideo
-    ]
+    let font_ascent = font_metrics.ascent as f64 + offset;
+    let font_descent = font_metrics.descent as f64 + offset;
+    let em = self.state.char_style.font_size() as f64;
+
+    if let Some(line) = paragraph.get_line_metrics().as_slice().first(){
+      vec![
+        line.width, line.left, line.width - line.left, line.ascent-offset, line.descent+offset,
+        -font_ascent, font_descent, em-font_descent, font_descent,
+        hang, alph, ideo
+      ].iter().map(|n| *n as f32).collect()
+    }else{
+      vec![
+        0.0, 0.0, 0.0, 0.0, 0.0,
+        -font_ascent, font_descent, em-font_descent, font_descent,
+        hang, alph, ideo
+      ].iter().map(|n| *n as f32).collect()
+    }
   }
 
   pub fn color_with_alpha(&self, src:&Color) -> Color{
@@ -864,10 +908,9 @@ declare_types! {
     // Typography
     //
     method _measureText(mut cx){
-      let this = cx.this();
+      let mut this = cx.this();
       let text = string_arg(&mut cx, 0, "text")?;
-
-      let text_metrics = cx.borrow(&this, |this| this.measure_text(&text) );
+      let text_metrics = cx.borrow_mut(&mut this, |mut this| this.measure_text(&text) );
       floats_to_array(&mut cx, &text_metrics)
     }
 
@@ -1072,10 +1115,14 @@ declare_types! {
 
         let faces = font_collection.find_typefaces(&spec.families, spec.style);
         match faces.is_empty() {
+          // BUG: doesn't handle serif/sans-serif/fantasy/etc fallbacks
           true => return cx.throw_error(format!("Could not find a font family for: {:?}", &spec.families)),
           false => cx.borrow_mut(&mut this, |mut this|{
-            this.font = Font::new(&faces[0], spec.size);
             this.state.font_string = spec.canonical;
+            this.state.char_style.set_font_style(spec.style);
+            this.state.char_style.set_font_families(&spec.families);
+            this.state.char_style.set_font_size(spec.size);
+            // TODO: add features for variant
           })
         }
       }
@@ -1086,7 +1133,10 @@ declare_types! {
     method get_direction(mut cx){
       let this = cx.this();
       let name = cx.borrow(&this, |this|
-        match this.state.text_ltr{ true => "ltr", false => "rtl" }.to_string()
+        match this.state.graf_style.text_direction(){
+          TextDirection::LTR => "ltr",
+          TextDirection::RTL => "rtl",
+        }
       );
       Ok(cx.string(name).upcast())
     }
@@ -1094,15 +1144,26 @@ declare_types! {
     method set_direction(mut cx){
       let mut this = cx.this();
       let name = string_arg(&mut cx, 0, "direction")?;
-      if name=="ltr" || name=="rtl"{
-        cx.borrow_mut(&mut this, |mut this| this.state.text_ltr = name=="ltr" );
+
+      let direction = match name.to_lowercase().as_str(){
+        "ltr" => Some(TextDirection::LTR),
+        "rtl" => Some(TextDirection::RTL),
+        _ => None
+      };
+
+      if let Some(dir) = direction{
+        cx.borrow_mut(&mut this, |mut this|{
+          this.state.graf_style.set_text_direction(dir);
+        })
       }
+
       Ok(cx.undefined().upcast())
     }
 
+
     method get_textAlign(mut cx){
       let this = cx.this();
-      let mode = cx.borrow(&this, |this| this.state.text_align );
+      let mode = cx.borrow(&this, |this| this.state.graf_style.text_align() );
       let name = from_text_align(mode);
       Ok(cx.string(name).upcast())
 
@@ -1112,7 +1173,9 @@ declare_types! {
       let mut this = cx.this();
       let name = string_arg(&mut cx, 0, "textAlign")?;
       if let Some(mode) = to_text_align(&name){
-        cx.borrow_mut(&mut this, |mut this| this.state.text_align = mode );
+        cx.borrow_mut(&mut this, |mut this|{
+          this.state.graf_style.set_text_align(mode);
+        });
       }
       Ok(cx.undefined().upcast())
     }
