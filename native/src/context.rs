@@ -254,6 +254,23 @@ impl Context2D{
     }
   }
 
+  pub fn measure_text(&self, text: &str) -> Vec<f32>{
+    let paint = self.paint_for_fill();
+    let em = self.font.size();
+    let (width, bounds) = self.font.measure_str(&text, Some(&paint));
+    let (leading, metrics) = self.font.metrics();
+    let bl = get_baseline_offset(&metrics, self.state.text_baseline);
+
+    let hang = bl - get_baseline_offset(&metrics, Baseline::Hanging);
+    let alph = bl - get_baseline_offset(&metrics, Baseline::Alphabetic);
+    let ideo = bl - get_baseline_offset(&metrics, Baseline::Ideographic);
+
+    vec![
+      width, -bounds.left, bounds.right, -(bounds.top+bl), bounds.bottom+bl,
+      -(metrics.ascent+bl), metrics.descent+bl, em-alph, alph, hang, alph, ideo
+    ]
+  }
+
   pub fn color_with_alpha(&self, src:&Color) -> Color{
     let mut color:Color4f = src.clone().into();
     color.a *= self.state.global_alpha;
@@ -850,23 +867,7 @@ declare_types! {
       let this = cx.this();
       let text = string_arg(&mut cx, 0, "text")?;
 
-      let (width, bounds, metrics, em, bl) = cx.borrow(&this, |this| {
-        let paint = this.paint_for_fill();
-        let (width, bounds) = this.font.measure_str(&text, Some(&paint));
-        let (leading, metrics) = this.font.metrics();
-        let offset = get_baseline_offset(&metrics, this.state.text_baseline);
-        ( width, bounds, metrics, this.font.size(), offset )
-      });
-
-      let hang = bl - get_baseline_offset(&metrics, Baseline::Hanging);
-      let alph = bl - get_baseline_offset(&metrics, Baseline::Alphabetic);
-      let ideo = bl - get_baseline_offset(&metrics, Baseline::Ideographic);
-
-      let mut text_metrics = vec![
-        width, -bounds.left, bounds.right, -(bounds.top+bl), bounds.bottom+bl,
-        -(metrics.ascent+bl), metrics.descent+bl, em-alph, alph, hang, alph, ideo
-      ];
-
+      let text_metrics = cx.borrow(&this, |this| this.measure_text(&text) );
       floats_to_array(&mut cx, &text_metrics)
     }
 
