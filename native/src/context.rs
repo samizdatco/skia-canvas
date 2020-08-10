@@ -61,6 +61,45 @@ pub enum Dye{
 }
 
 impl Context2D{
+  pub fn new() -> Self {
+    let mut paint = Paint::default();
+    paint.set_stroke_miter(10.0);
+    paint.set_color(BLACK);
+    paint.set_anti_alias(true);
+    paint.set_stroke_width(1.0);
+    paint.set_filter_quality(FilterQuality::Low);
+
+    Context2D{
+      surface: None,
+      path: Path::new(),
+      font: Font::from_typeface(&Typeface::default(), 10.0),
+      state_stack: vec![],
+      state: State {
+        paint,
+        stroke_style: Dye::Color(BLACK),
+        fill_style: Dye::Color(BLACK),
+
+        stroke_width: 1.0,
+        line_dash_offset: 0.0,
+        line_dash_list: vec![],
+
+        global_alpha: 1.0,
+        global_composite_operation: BlendMode::SrcOver,
+        image_filter_quality: FilterQuality::Low,
+        image_smoothing_enabled: true,
+
+        shadow_blur: 0.0,
+        shadow_color: TRANSPARENT,
+        shadow_offset: (0.0, 0.0).into(),
+
+        font_string: "10px monospace".to_string(),
+        text_ltr: true,
+        text_align: Align::Left,
+        text_baseline: Baseline::Alphabetic,
+      },
+    }
+  }
+
   pub fn ctm(&mut self) -> Matrix {
     match self.surface.as_mut() {
       Some(surface) => surface.canvas().total_matrix(),
@@ -330,42 +369,7 @@ pub fn fetch_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str
 declare_types! {
   pub class JsContext2D for Context2D {
     init(_) {
-      let mut paint = Paint::default();
-      paint.set_stroke_miter(10.0);
-      paint.set_color(BLACK);
-      paint.set_anti_alias(true);
-      paint.set_stroke_width(1.0);
-      paint.set_filter_quality(FilterQuality::Low);
-
-      Ok( Context2D{
-        surface: None,
-        path: Path::new(),
-        font: Font::from_typeface(&Typeface::default(), 10.0),
-        state_stack: vec![],
-        state: State {
-          paint,
-          stroke_style: Dye::Color(BLACK),
-          fill_style: Dye::Color(BLACK),
-
-          stroke_width: 1.0,
-          line_dash_offset: 0.0,
-          line_dash_list: vec![],
-
-          global_alpha: 1.0,
-          global_composite_operation: BlendMode::SrcOver,
-          image_filter_quality: FilterQuality::Low,
-          image_smoothing_enabled: true,
-
-          shadow_blur: 0.0,
-          shadow_color: TRANSPARENT,
-          shadow_offset: (0.0, 0.0).into(),
-
-          font_string: "10px monospace".to_string(),
-          text_ltr: true,
-          text_align: Align::Left,
-          text_baseline: Baseline::Alphabetic,
-        },
-      })
+      Ok( Context2D::new() )
     }
 
     constructor(mut cx){
