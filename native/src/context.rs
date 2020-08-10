@@ -9,7 +9,7 @@ use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, Color, Color4f, Image
                 PaintStyle, BlendMode, FilterQuality, PathDirection, ColorType, AlphaType,
                 Data, Image, EncodedImageFormat, dash_path_effect, ClipOp, image_filters,
                 utils::text_utils::Align, path::{AddPathMode, FillType}, canvas::SrcRectConstraint,
-                Font, Typeface, TextBlob};
+                Font, FontStyle, FontMgr, Typeface, TextBlob, textlayout::{FontCollection}};
 
 use crate::utils::*;
 use crate::path::{Path2D, JsPath2D};
@@ -1070,11 +1070,18 @@ declare_types! {
 
     method set_font(mut cx){
       let mut this = cx.this();
-      if let Some(font_desc) = font_arg(&mut cx, 0)?{
-        cx.borrow_mut(&mut this, |mut this|{
-          this.state.font_string = font_desc.canonical;
-          this.font.set_size(font_desc.size);
-        });
+      if let Some(spec) = font_arg(&mut cx, 0)?{
+        // TODO: probably makes sense to share this?
+        let mut font_collection = FontCollection::new();
+        font_collection.set_default_font_manager(FontMgr::new(), None);
+
+        let faces = font_collection.find_typefaces(&spec.families, spec.style);
+        match faces.is_empty() {
+          true => return cx.throw_error(format!("Could not find a font family name matching: {:?}", &spec.families)),
+          false => cx.borrow_mut(&mut this, |mut this|{
+            this.font = Font::new(&faces[0], spec.size);
+          })
+        }
       }
 
       Ok(cx.undefined().upcast())

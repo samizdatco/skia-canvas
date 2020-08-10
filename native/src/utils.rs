@@ -1,16 +1,16 @@
 #![allow(dead_code)]
+#![allow(unused_imports)]
 use std::cmp;
 use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
-use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB, FontMetrics};
+use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB};
+use skia_safe::{Font, FontMetrics, font_style::{FontStyle, Weight, Width, Slant}};
 use css_color::Rgba;
 
-
 use crate::path::{JsPath2D};
-
 
 //
 // meta-helpers
@@ -71,6 +71,18 @@ pub fn strings_in(vals: &[Handle<JsValue>]) -> Vec<String>{
       .collect()
 }
 
+pub fn strings_at_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<Vec<String>, Throw>{
+  let array = obj.get(cx, attr)?.downcast::<JsArray>().or_throw(cx)?.to_vec(cx)?;
+  Ok(strings_in(&array))
+}
+
+pub fn string_for_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<String, Throw>{
+  let key = cx.string(attr);
+  match obj.get(cx, key)?.downcast::<JsString>(){
+    Ok(s) => Ok(s.value()),
+    Err(_e) => cx.throw_error(format!("Exptected a string for \"{}\"", attr))
+  }
+}
 
 pub fn opt_string_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<String>{
   match cx.argument_opt(idx as i32) {
@@ -137,6 +149,14 @@ pub fn bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> 
 // floats
 //
 
+
+pub fn float_for_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<f32, Throw>{
+  let key = cx.string(attr);
+  match obj.get(cx, key)?.downcast::<JsNumber>(){
+    Ok(num) => Ok(num.value() as f32),
+    Err(_e) => cx.throw_error(format!("Exptected a numerical value for \"{}\"", attr))
+  }
+}
 
 pub fn floats_in(vals: &[Handle<JsValue>]) -> Vec<f32>{
   vals.iter()
@@ -303,25 +323,57 @@ pub fn path2d_arg_opt<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize)
 //
 // Fonts
 //
-pub struct FontInfo{
+
+pub struct FontSpec{
   pub families: Vec<String>,
   pub size: f32,
-  pub leading: f32,
+  pub style: FontStyle,
   pub canonical: String
 }
 
-pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<Option<FontInfo>, Throw> {
+pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<Option<FontSpec>, Throw> {
   let arg = cx.argument::<JsValue>(0)?;
   if arg.is_a::<JsUndefined>(){ return Ok(None) }
 
   let font_desc = cx.argument::<JsObject>(idx as i32)?;
-  let families = font_desc.get(cx, "family")?.downcast::<JsArray>().or_throw(cx)?.to_vec(cx)?;
-  let families = strings_in(&families);
-  let size = font_desc.get(cx, "px")?.downcast::<JsNumber>().or_throw(cx)?.value() as f32;
-  let leading = font_desc.get(cx, "leading")?.downcast::<JsNumber>().or_throw(cx)?.value() as f32;
-  let canonical = font_desc.get(cx, "canonical")?.downcast::<JsString>().or_throw(cx)?.value();
+  let families = strings_at_key(cx, &font_desc, "family")?;
+  let canonical = string_for_key(cx, &font_desc, "canonical")?;
+  let size = float_for_key(cx, &font_desc, "px")?;
 
-  Ok(Some(FontInfo{ families, size, leading, canonical}))
+  let weight = match float_for_key(cx, &font_desc, "wt")? as i32 {
+    // https://docs.microsoft.com/en-us/typography/opentype/spec/os2#usweightclass
+    wt if wt <= 100 => Weight::THIN,
+    wt if wt <= 200 => Weight::EXTRA_LIGHT,
+    wt if wt <= 300 => Weight::LIGHT,
+    wt if wt <= 400 => Weight::NORMAL,
+    wt if wt <= 500 => Weight::MEDIUM,
+    wt if wt <= 600 => Weight::SEMI_BOLD,
+    wt if wt <= 700 => Weight::BOLD,
+    wt if wt <= 800 => Weight::EXTRA_BOLD,
+    wt if wt < 950 => Weight::BLACK,
+    _ => Weight::EXTRA_BLACK,
+  };
+
+  let slant = match string_for_key(cx, &font_desc, "style")?.as_str() {
+    "italic" => Slant::Italic,
+    "oblique" => Slant::Oblique,
+    _ => Slant::Upright
+  };
+
+  let width = match string_for_key(cx, &font_desc, "stretch")?.as_str() {
+    "ultra-condensed" => Width::ULTRA_CONDENSED,
+    "extra-condensed" => Width::EXTRA_CONDENSED,
+    "condensed" => Width::CONDENSED,
+    "semi-condensed" => Width::SEMI_CONDENSED,
+    "semi-expanded" => Width::SEMI_EXPANDED,
+    "expanded" => Width::EXPANDED,
+    "extra-expanded" => Width::EXTRA_EXPANDED,
+    "ultra-expanded" => Width::ULTRA_EXPANDED,
+    _ => Width::NORMAL,
+  };
+
+  let style = FontStyle::new(weight, width, slant);
+  Ok(Some(FontSpec{ families, size, style, canonical}))
 }
 //
 // Skia Enums
