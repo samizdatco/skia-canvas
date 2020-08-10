@@ -194,6 +194,15 @@ pub fn float_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) ->
   }
 }
 
+pub fn floats_to_array<'a, T: This>(cx: &mut CallContext<'a, T>, nums: &[f32]) -> JsResult<'a, JsValue> {
+  let array = JsArray::new(cx, nums.len() as u32);
+  for (i, val) in nums.iter().enumerate() {
+    let num = cx.number(*val);
+    array.set(cx, i as u32, num)?;
+  }
+  Ok(array.upcast())
+}
+
 //
 // float spreads
 //

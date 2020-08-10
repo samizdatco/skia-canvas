@@ -422,12 +422,7 @@ declare_types! {
     method getLineDash(mut cx){
       let mut this = cx.this();
       let dashes = cx.borrow(&this, |this| this.state.line_dash_list.clone());
-      let array = JsArray::new(&mut cx, dashes.len() as u32);
-      for (i, interval) in dashes.iter().enumerate() {
-        let num = cx.number(*interval);
-        array.set(&mut cx, i as u32, num)?;
-      }
-      Ok(array.upcast())
+      floats_to_array(&mut cx, &dashes)
     }
 
     method setLineDash(mut cx){
@@ -437,7 +432,7 @@ declare_types! {
       } else {
         let list = cx.argument::<JsArray>(0)?.to_vec(&mut cx)?;
         let intervals = floats_in(&list);
-        let success = cx.borrow_mut(&mut this, |mut this| {
+        cx.borrow_mut(&mut this, |mut this| {
           this.state.line_dash_list = intervals
         });
       }
@@ -872,12 +867,7 @@ declare_types! {
         -(metrics.ascent+bl), metrics.descent+bl, em-alph, alph, hang, alph, ideo
       ];
 
-      let array = JsArray::new(&mut cx, text_metrics.len() as u32);
-      for (i, val) in text_metrics.iter().enumerate() {
-        let num = cx.number(*val);
-        array.set(&mut cx, i as u32, num)?;
-      }
-      Ok(array.upcast())
+      floats_to_array(&mut cx, &text_metrics)
     }
 
     method strokeText(mut cx){
