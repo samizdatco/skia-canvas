@@ -1072,9 +1072,10 @@ declare_types! {
 
         let faces = font_collection.find_typefaces(&spec.families, spec.style);
         match faces.is_empty() {
-          true => return cx.throw_error(format!("Could not find a font family name matching: {:?}", &spec.families)),
+          true => return cx.throw_error(format!("Could not find a font family for: {:?}", &spec.families)),
           false => cx.borrow_mut(&mut this, |mut this|{
             this.font = Font::new(&faces[0], spec.size);
+            this.state.font_string = spec.canonical;
           })
         }
       }
