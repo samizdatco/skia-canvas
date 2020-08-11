@@ -1,11 +1,7 @@
-#![allow(unused_mut)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 use std::f32::consts::PI;
 use neon::prelude::*;
 use skia_safe::{Surface, Path, Rect, Image, ImageInfo, PathDirection, ColorType, AlphaType,
-                Data, EncodedImageFormat, FontMgr};
+                Data, EncodedImageFormat, FontMgr, PaintStyle::{*}};
 use skia_safe::path::{AddPathMode, FillType};
 use skia_safe::textlayout::{FontCollection, TextDirection};
 
@@ -311,39 +307,29 @@ declare_types! {
       let x = float_arg(&mut cx, shift, "x")?;
       let y = float_arg(&mut cx, shift+1, "y")?;
       let rule = fill_rule_arg_or(&mut cx, shift+2, "nonzero")?;
-
-      let point = cx.borrow_mut(&mut this, |mut this| this.in_local_coordinates(x, y) );
-      let contained = cx.borrow_mut(&mut container, |mut obj| {
-        let prev_rule = obj.path.fill_type();
-        obj.path.set_fill_type(rule);
-        let is_in = obj.path.contains(point);
-        obj.path.set_fill_type(prev_rule);
-        is_in
+      let is_in = cx.borrow_mut(&mut container, |mut obj| {
+        cx.borrow_mut(&mut this, |mut this|
+          this.hit_test_path(&mut obj.path, (x, y), Some(rule), Fill)
+        )
       });
-      Ok(cx.boolean(contained).upcast())
+      Ok(cx.boolean(is_in).upcast())
     }
 
     method isPointInStroke(mut cx){
       let mut this = cx.this();
-      let (container, shift) = match cx.argument::<JsValue>(0)?.is_a::<JsPath2D>(){
+      let (mut container, shift) = match cx.argument::<JsValue>(0)?.is_a::<JsPath2D>(){
         true => (cx.argument(0)?, 1),
         false => (this, 0)
       };
       let x = float_arg(&mut cx, shift, "x")?;
       let y = float_arg(&mut cx, shift+1, "y")?;
-      let point = cx.borrow_mut(&mut this, |mut this| this.in_local_coordinates(x, y) );
+      let is_in = cx.borrow_mut(&mut container, |mut obj| {
+        cx.borrow_mut(&mut this, |mut this|
+          this.hit_test_path(&mut obj.path, (x, y), None, Stroke)
+        )
+      });
 
-      let paint = cx.borrow(&this, |this| this.state.paint.clone() );
-      let precision = 0.3; // this is what Chrome uses to compute this
-      let contained = match cx.borrow(&container, |obj| paint.get_fill_path(&obj.path, None, Some(precision)) ){
-        Some(mut outline) => {
-          outline.set_fill_type(FillType::Winding);
-          outline.contains(point)
-        }
-        None => false
-      };
-
-      Ok(cx.boolean(contained).upcast())
+      Ok(cx.boolean(is_in).upcast())
     }
 
     //

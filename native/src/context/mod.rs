@@ -1,3 +1,7 @@
+#![allow(unused_mut)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(dead_code)]
 use neon::prelude::*;
 use neon::object::This;
 use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, Color, Color4f, Image, PaintStyle,
@@ -168,6 +172,29 @@ impl Context2D{
       canvas.clip_path(&clip, ClipOp::Intersect, do_aa);
     }
   }
+
+  pub fn hit_test_path(&mut self, path: &mut Path, point:impl Into<Point>, rule:Option<FillType>, style: PaintStyle) -> bool {
+    let point = point.into();
+    let point = self.in_local_coordinates(point.x, point.y);
+    let rule = rule.unwrap_or(FillType::Winding);
+    let prev_rule = path.fill_type();
+    path.set_fill_type(rule);
+
+    let is_in = match style{
+      PaintStyle::Stroke => {
+        let paint = self.paint_for_stroke();
+        let precision = 0.3; // this is what Chrome uses to compute this
+        match paint.get_fill_path(&path, None, Some(precision)){
+          Some(traced_path) => traced_path.contains(point),
+          None => path.contains(point)
+        }
+      },
+      _ => path.contains(point)
+    };
+
+    path.set_fill_type(prev_rule);
+    is_in
+}
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
     let shadow = self.paint_for_shadow(&paint);
