@@ -330,7 +330,7 @@ impl Context2D{
     }
   }
 
-  pub fn typeset_text(&mut self, text: &str, paint: Paint) -> Paragraph {
+  pub fn typeset(&mut self, text: &str, paint: Paint) -> Paragraph {
     let mut font_collection = FontCollection::new();
     font_collection.set_default_font_manager(FontMgr::new(), None);
 
@@ -356,7 +356,7 @@ impl Context2D{
   }
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, paint: Paint){
-    let mut paragraph = self.typeset_text(&text, paint);
+    let mut paragraph = self.typeset(&text, paint);
 
     let mut point = Point::new(x, y);
     let metrics = self.state.char_style.font_metrics();
@@ -370,7 +370,7 @@ impl Context2D{
 
   pub fn measure_text(&mut self, text: &str) -> Vec<f32>{
     let paint = self.paint_for_fill();
-    let mut paragraph = self.typeset_text(&text, paint);
+    let mut paragraph = self.typeset(&text, paint);
 
     let font_metrics = self.state.char_style.font_metrics();
     let offset = get_baseline_offset(&font_metrics, self.state.text_baseline);
