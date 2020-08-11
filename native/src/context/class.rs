@@ -1,21 +1,19 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Surface, Path, Rect, Image, ImageInfo, PathDirection, ColorType, AlphaType,
-                Data, EncodedImageFormat, FontMgr, PaintStyle::{*}};
-use skia_safe::path::{AddPathMode, FillType};
-use skia_safe::textlayout::{FontCollection, TextDirection};
+use skia_safe::{Surface, Path, Rect, PathDirection, Data, EncodedImageFormat};
+use skia_safe::path::{AddPathMode};
+use skia_safe::textlayout::{TextDirection};
+use skia_safe::PaintStyle::{Fill, Stroke};
 
 use crate::path::{Path2D, JsPath2D};
 use crate::image::{JsImage, JsImageData};
-use crate::gradient::{JsCanvasGradient};
-use crate::pattern::{JsCanvasPattern};
 use crate::utils::*;
 
 //
 // The js interface for the Context2D struct
 //
 
-use super::{Context2D, Dye, stash_ref, fetch_ref};
+use super::{Context2D, Dye};
 
 declare_types! {
   pub class JsContext2D for Context2D {
@@ -591,17 +589,11 @@ declare_types! {
       let width = float_arg(&mut cx, 2, "width")? as i32;
       let height = float_arg(&mut cx, 3, "height")? as i32;
 
-      let info = ImageInfo::new((width, height), ColorType::RGBA8888, AlphaType::Unpremul, None);
-      let mut buffer = JsBuffer::new(&mut cx, 4 * (width * height) as u32)?;
-
-      cx.borrow_mut(&mut buffer, |buf_data| {
-        let mut buf_slice = buf_data.as_mut_slice();
-        let row_bytes = (width * 4) as usize;
-        cx.borrow_mut(&mut this, |mut this|
-          if let Some(surface) = &mut this.surface{
-            surface.read_pixels(&info, &mut buf_slice, row_bytes, (x, y));
-          }
-        )
+      let buffer = JsBuffer::new(&mut cx, 4 * (width * height) as u32)?;
+      cx.borrow(&buffer, |data| {
+        cx.borrow_mut(&mut this, |mut this|{
+          this.get_pixels(data.as_mut_slice(), (x, y), (width, height));
+        })
       });
 
       let args = vec![cx.number(width), cx.number(height)];
@@ -634,14 +626,12 @@ declare_types! {
           Rect::from_xywh(x, y, width, height)
       )};
 
-      // convert buffer contents to image
-      let buf = img_data.get(&mut cx, "data")?.downcast::<JsBuffer>().or_throw(&mut cx)?;
-      let bmp_data = cx.borrow(&buf, |buf_data| Data::new_copy(&buf_data.as_slice()) );
-      let row_size = info.width() as usize * 4;
-      let image = Image::from_raster_data(&info, bmp_data, row_size);
-
-      // draw to the canvas without any shaders, effects, transforms, etc.
-      cx.borrow_mut(&mut this, |mut this| this.blit_image(&image, &src, &dst) );
+      let buffer = img_data.get(&mut cx, "data")?.downcast_or_throw::<JsBuffer, _>(&mut cx)?;
+      cx.borrow(&buffer, |data| {
+        cx.borrow_mut(&mut this, |mut this|{
+          this.blit_pixels(data.as_slice(), &info, &src, &dst);
+        })
+      });
 
       Ok(cx.undefined().upcast())
     }
@@ -817,7 +807,7 @@ declare_types! {
       let mut this = cx.this();
       let arg = cx.argument::<JsObject>(0)?;
       let variant = string_for_key(&mut cx, &arg, "variant")?;
-      let feat_obj = arg.get(&mut cx, "features")?.downcast::<JsObject>().or_throw(&mut cx)?;
+      let feat_obj = arg.get(&mut cx, "features")?.downcast_or_throw::<JsObject, _>(&mut cx)?;
       let features = font_features(&mut cx, &feat_obj)?;
       cx.borrow_mut(&mut this, |mut this|{
         this.set_font_variant(&variant, &features);

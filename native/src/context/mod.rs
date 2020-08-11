@@ -5,12 +5,13 @@
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
-use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, Color, Color4f, Image, PaintStyle,
-                BlendMode, FilterQuality, dash_path_effect, ClipOp, image_filters, FontMgr};
-use skia_safe::canvas::SrcRectConstraint;
-use skia_safe::path::FillType;
+use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, IPoint, ISize, Color, Color4f, PaintStyle,
+                BlendMode, FilterQuality, dash_path_effect, image_filters, ClipOp, FontMgr,
+                Image, ImageInfo, ColorType, AlphaType, Data};
 use skia_safe::textlayout::{FontCollection, TextStyle, TextAlign, TextDirection, TextShadow,
                             ParagraphStyle, ParagraphBuilder, Paragraph};
+use skia_safe::canvas::SrcRectConstraint;
+use skia_safe::path::FillType;
 
 use crate::utils::*;
 use crate::gradient::{CanvasGradient, JsCanvasGradient};
@@ -239,21 +240,31 @@ impl Context2D{
     }
   }
 
-  pub fn blit_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
-    // works just like draw_image but without transforms or shadows
-    //
+  pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
+    let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
+    let mut surface = self.surface.as_mut().unwrap();
+    surface.read_pixels(&info, buffer, info.min_row_bytes(), origin);
+  }
+
+  pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect) -> bool {
+    // works just like draw_image in terms of src/dst rects, but without transforms or shadows
     // BUG: it shouldn't obey they canvas's clipping mask but I haven't figured
     //      out how to cleanly remove then reapply it yet...
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
-    let mut paint = Paint::default();
-    paint.set_style(PaintStyle::Fill);
-
-    if let Some(image) = img{
-      canvas.save();
-      canvas.reset_matrix();
-
-      canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
-      canvas.restore();
+    unsafe{
+      let data = Data::new_bytes(buffer);
+      match Image::from_raster_data(&info, data, info.min_row_bytes()){
+        Some(image) => {
+          let mut canvas = self.surface.as_mut().unwrap().canvas();
+          let mut paint = Paint::default();
+          paint.set_style(PaintStyle::Fill);
+          canvas.save();
+          canvas.reset_matrix();
+          canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
+          canvas.restore();
+          true
+        },
+        None => false
+      }
     }
   }
 
