@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 use neon::prelude::*;
 use neon::object::This;
+use neon::result::Throw;
 use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, Color, Color4f, Image, PaintStyle,
                 BlendMode, FilterQuality, dash_path_effect, ClipOp, image_filters, FontMgr};
 use skia_safe::canvas::SrcRectConstraint;
@@ -12,8 +13,8 @@ use skia_safe::textlayout::{FontCollection, TextStyle, TextAlign, TextDirection,
                             ParagraphStyle, ParagraphBuilder, Paragraph};
 
 use crate::utils::*;
-use crate::gradient::{CanvasGradient};
-use crate::pattern::{CanvasPattern};
+use crate::gradient::{CanvasGradient, JsCanvasGradient};
+use crate::pattern::{CanvasPattern, JsCanvasPattern};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;
@@ -62,6 +63,49 @@ pub enum Dye{
   Color(Color),
   Gradient(CanvasGradient),
   Pattern(CanvasPattern)
+}
+
+impl Dye{
+  pub fn new<'a, T: This+Class>(cx: &mut CallContext<'a, T>, value: Handle<'a, JsValue>, style: PaintStyle) -> Result<Self, Throw> {
+    let stash = if style == PaintStyle::Fill{ "fillShader" } else { "strokeShader" };
+    match value{
+      arg if arg.is_a::<JsCanvasGradient>() => {
+        let gradient = cx.argument::<JsCanvasGradient>(0)?;
+        stash_ref(cx, stash, arg)?;
+        Ok(cx.borrow(&gradient, |gradient| Dye::Gradient(gradient.clone()) ))
+      },
+      arg if arg.is_a::<JsCanvasPattern>() => {
+        let pattern = cx.argument::<JsCanvasPattern>(0)?;
+        stash_ref(cx, stash, arg)?;
+        Ok(cx.borrow(&pattern, |pattern| Dye::Pattern(pattern.clone()) ))
+      },
+      _ => {
+        let color = color_arg(cx, 0)?;
+        Ok(Dye::Color(color))
+      }
+    }
+  }
+
+  pub fn value<'a, T: This+Class>(&self, cx: &mut CallContext<'a, T>, style: PaintStyle) -> JsResult<'a, JsValue> {
+    let cache = if style == PaintStyle::Fill{ "fillShader" } else { "strokeShader" };
+    match self{
+      Dye::Gradient(..) => fetch_ref(cx, cache),
+      Dye::Pattern(..)  => fetch_ref(cx, cache),
+      Dye::Color(color) => color_to_css(cx, &color)
+    }
+  }
+
+  pub fn mix_into(&self, paint: &mut Paint, alpha: f32){
+    match self {
+      Dye::Color(color) => {
+        let mut color:Color4f = color.clone().into();
+        color.a *= alpha;
+        paint.set_color(color.to_color())
+      },
+      Dye::Gradient(gradient) => paint.set_shader(gradient.shader()),
+      Dye::Pattern(pattern) => paint.set_shader(pattern.shader())
+    };
+  }
 }
 
 impl Context2D{
@@ -367,27 +411,21 @@ impl Context2D{
   }
 
   pub fn paint_for_fill(&self) -> Paint{
+    let alpha = self.state.global_alpha;
+    let dye = &self.state.fill_style;
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Fill);
-
-    match &self.state.fill_style{
-      Dye::Color(color) => { paint.set_color(self.color_with_alpha(&color)); },
-      Dye::Gradient(gradient) => {paint.set_shader(gradient.shader());},
-      Dye::Pattern(pattern) => {paint.set_shader(pattern.shader());}
-    }
+    dye.mix_into(&mut paint, alpha);
 
     paint
   }
 
   pub fn paint_for_stroke(&self) -> Paint{
+    let alpha = self.state.global_alpha;
+    let dye = &self.state.stroke_style;
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Stroke);
-
-    match &self.state.stroke_style{
-      Dye::Color(color) => { paint.set_color(self.color_with_alpha(&color)); },
-      Dye::Gradient(gradient) => {paint.set_shader(gradient.shader());},
-      Dye::Pattern(pattern) => {paint.set_shader(pattern.shader());}
-    }
+    dye.mix_into(&mut paint, alpha);
 
     if !self.state.line_dash_list.is_empty() {
       let dash = dash_path_effect::new(&self.state.line_dash_list, self.state.line_dash_offset);
