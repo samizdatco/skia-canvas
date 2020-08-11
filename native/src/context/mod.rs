@@ -110,7 +110,7 @@ impl Context2D{
   }
 
   pub fn ctm(&mut self) -> Matrix {
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
     canvas.total_matrix()
   }
 
@@ -122,14 +122,14 @@ impl Context2D{
   }
 
   pub fn push(&mut self){
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
     let new_state = self.state.clone();
     self.state_stack.push(new_state);
     canvas.save();
   }
 
   pub fn pop(&mut self){
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
     if let Some(old_state) = self.state_stack.pop(){
       self.state = old_state;
     }
@@ -138,7 +138,7 @@ impl Context2D{
 
   pub fn draw_path(&mut self, paint: &Paint){
     let shadow = self.paint_for_shadow(&paint);
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
 
     // draw shadow if applicable
     if let Some(shadow_paint) = shadow{
@@ -151,7 +151,7 @@ impl Context2D{
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
     let do_aa = true;
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
 
     let mut clip = match path{
       Some(path) => path,
@@ -187,7 +187,7 @@ impl Context2D{
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
     let shadow = self.paint_for_shadow(&paint);
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
 
     // draw shadow if applicable
     if let Some(shadow_paint) = shadow{
@@ -199,7 +199,7 @@ impl Context2D{
   }
 
   pub fn clear_rect(&mut self, rect:&Rect){
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
     let mut paint = Paint::default();
     paint.set_style(PaintStyle::Fill);
     paint.set_blend_mode(BlendMode::Clear);
@@ -223,7 +223,7 @@ impl Context2D{
       // we can draw-to-point rather than using draw_image_rect (which would vignette the shadow)
       if let Some(filter) = image_filters::image(image.clone(), Some(src_rect), Some(&resize), paint.filter_quality()){
         if let Some((image, _, dxdy)) = image.new_with_filter(&filter, bounds, bounds){
-          let mut canvas = self.surface.as_mut().unwrap().canvas();
+          let canvas = self.surface.as_mut().unwrap().canvas();
 
           // add the top/left from the original dst_rect back in
           origin.offset(dxdy);
@@ -242,7 +242,7 @@ impl Context2D{
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
     let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
-    let mut surface = self.surface.as_mut().unwrap();
+    let surface = self.surface.as_mut().unwrap();
     surface.read_pixels(&info, buffer, info.min_row_bytes(), origin);
   }
 
@@ -254,7 +254,7 @@ impl Context2D{
       let data = Data::new_bytes(buffer);
       match Image::from_raster_data(&info, data, info.min_row_bytes()){
         Some(image) => {
-          let mut canvas = self.surface.as_mut().unwrap().canvas();
+          let canvas = self.surface.as_mut().unwrap().canvas();
           let mut paint = Paint::default();
           paint.set_style(PaintStyle::Fill);
           canvas.save();
@@ -325,7 +325,7 @@ impl Context2D{
     point.y += offset - paragraph.alphabetic_baseline();
     point.x += GALLEY * get_alignment_factor(&self.state.graf_style);
 
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
     paragraph.paint(canvas, point);
   }
 
@@ -418,7 +418,7 @@ impl Context2D{
   {
     let mut ctm = self.ctm();
     f(&mut ctm);
-    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    let canvas = self.surface.as_mut().unwrap().canvas();
     canvas.set_matrix(&ctm);
   }
 }

@@ -410,14 +410,12 @@ declare_types! {
 
     method get_fillStyle(mut cx){
       let this = cx.this();
-
       let dye = cx.borrow(&this, |this| this.state.fill_style.clone() );
       dye.value(&mut cx, Fill)
     }
 
     method set_fillStyle(mut cx){
       let mut this = cx.this();
-
       let arg = cx.argument::<JsValue>(0)?;
       let dye = Dye::new(&mut cx, arg, Fill)?;
       cx.borrow_mut(&mut this, |mut this|  this.state.fill_style = dye );
@@ -427,14 +425,12 @@ declare_types! {
 
     method get_strokeStyle(mut cx){
       let this = cx.this();
-
       let dye = cx.borrow(&this, |this| this.state.fill_style.clone() );
       dye.value(&mut cx, Stroke)
     }
 
     method set_strokeStyle(mut cx){
       let mut this = cx.this();
-
       let arg = cx.argument::<JsValue>(0)?;
       let dye = Dye::new(&mut cx, arg, Stroke)?;
       cx.borrow_mut(&mut this, |mut this|  this.state.stroke_style = dye );
@@ -682,6 +678,7 @@ declare_types! {
       let text = string_arg(&mut cx, 0, "text")?;
       let x = float_arg(&mut cx, 1, "x")?;
       let y = float_arg(&mut cx, 2, "y")?;
+      // TKTKTK: do something with width
       let width = opt_float_arg(&mut cx, 3);
 
       cx.borrow_mut(&mut this, |mut this|{
@@ -697,6 +694,7 @@ declare_types! {
       let text = string_arg(&mut cx, 0, "text")?;
       let x = float_arg(&mut cx, 1, "x")?;
       let y = float_arg(&mut cx, 2, "y")?;
+      // TKTKTK: do something with width
       let width = opt_float_arg(&mut cx, 3);
 
       cx.borrow_mut(&mut this, |mut this|{
