@@ -263,7 +263,7 @@ impl Context2D{
       char_style.add_shadow(shadow);
     }
 
-    let mut graf_style = &self.state.graf_style;
+    let graf_style = &self.state.graf_style;
     let mut paragraph_builder = ParagraphBuilder::new(&graf_style, font_collection);
     paragraph_builder.push_style(&char_style);
     paragraph_builder.add_text(&text);
@@ -282,7 +282,7 @@ impl Context2D{
     point.y += offset - paragraph.alphabetic_baseline();
     point.x += GALLEY * get_alignment_factor(&self.state.graf_style);
 
-    let mut surface = self.surface.as_mut().unwrap();
+    let surface = self.surface.as_mut().unwrap();
     paragraph.paint(surface.canvas(), point);
   }
 
@@ -385,11 +385,11 @@ impl Context2D{
       surface.canvas().set_matrix(&ctm);
     }
   }
-
 }
 
+
 pub fn stash_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str, obj:Handle<'a, JsValue>) -> JsResult<'a, JsUndefined>{
-  let mut this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
+  let this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
   let sym = symbol(cx, queue_name)?;
   let queue = match this.get(cx, sym)?.downcast::<JsArray>(){
     Ok(array) => array,
@@ -412,7 +412,7 @@ pub fn stash_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str
 }
 
 pub fn fetch_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str) -> JsResult<'a, JsValue>{
-  let mut this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
+  let this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
   let sym = symbol(cx, queue_name)?;
   let queue = this.get(cx, sym)?.downcast::<JsArray>().or_throw(cx)?;
 
@@ -458,13 +458,13 @@ declare_types! {
 
     method save(mut cx){
       let mut this = cx.this();
-      let depth = cx.borrow_mut(&mut this, |mut this| this.push() );
+      cx.borrow_mut(&mut this, |mut this| this.push() );
       Ok(cx.undefined().upcast())
     }
 
     method restore(mut cx){
       let mut this = cx.this();
-      let depth = cx.borrow_mut(&mut this, |mut this| this.pop() );
+      cx.borrow_mut(&mut this, |mut this| this.pop() );
       Ok(cx.undefined().upcast())
     }
 
@@ -481,7 +481,7 @@ declare_types! {
     }
 
     method getLineDash(mut cx){
-      let mut this = cx.this();
+      let this = cx.this();
       let dashes = cx.borrow(&this, |this| this.state.line_dash_list.clone());
       floats_to_array(&mut cx, &dashes)
     }
@@ -704,7 +704,7 @@ declare_types! {
 
     method isPointInStroke(mut cx){
       let mut this = cx.this();
-      let (mut container, shift) = match cx.argument::<JsValue>(0)?.is_a::<JsPath2D>(){
+      let (container, shift) = match cx.argument::<JsValue>(0)?.is_a::<JsPath2D>(){
         true => (cx.argument(0)?, 1),
         false => (this, 0)
       };
@@ -857,7 +857,7 @@ declare_types! {
       )};
 
       // convert buffer contents to image
-      let mut buf = img_data.get(&mut cx, "data")?.downcast::<JsBuffer>().or_throw(&mut cx)?;
+      let buf = img_data.get(&mut cx, "data")?.downcast::<JsBuffer>().or_throw(&mut cx)?;
       let bmp_data = cx.borrow(&buf, |buf_data| Data::new_copy(&buf_data.as_slice()) );
       let row_size = info.width() as usize * 4;
       let image = Image::from_raster_data(&info, bmp_data, row_size);
@@ -922,7 +922,7 @@ declare_types! {
       let width = opt_float_arg(&mut cx, 3);
 
       cx.borrow_mut(&mut this, |mut this|{
-        let mut paint = this.paint_for_stroke();
+        let paint = this.paint_for_stroke();
         this.draw_text(&text, x, y, paint);
       });
 
@@ -937,7 +937,7 @@ declare_types! {
       let width = opt_float_arg(&mut cx, 3);
 
       cx.borrow_mut(&mut this, |mut this|{
-        let mut paint = this.paint_for_fill();
+        let paint = this.paint_for_fill();
         this.draw_text(&text, x, y, paint);
       });
 
@@ -1018,8 +1018,8 @@ declare_types! {
       let this = cx.this();
 
       match cx.borrow(&this, |this| this.state.fill_style.clone() ){
-        Dye::Gradient(gradient) => fetch_ref(&mut cx, "fillShader"),
-        Dye::Pattern(pattern) => fetch_ref(&mut cx, "fillShader"),
+        Dye::Gradient(..) => fetch_ref(&mut cx, "fillShader"),
+        Dye::Pattern(..)  => fetch_ref(&mut cx, "fillShader"),
         Dye::Color(color) => color_to_css(&mut cx, &color)
       }
     }
@@ -1053,8 +1053,8 @@ declare_types! {
       let this = cx.this();
 
       match cx.borrow(&this, |this| this.state.stroke_style.clone() ){
-        Dye::Gradient(gradient) => fetch_ref(&mut cx, "strokeShader"),
-        Dye::Pattern(pattern) => fetch_ref(&mut cx, "strokeShader"),
+        Dye::Gradient(..) => fetch_ref(&mut cx, "strokeShader"),
+        Dye::Pattern(..)  => fetch_ref(&mut cx, "strokeShader"),
         Dye::Color(color) => color_to_css(&mut cx, &color)
       }
     }
