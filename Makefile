@@ -1,7 +1,7 @@
 NEON := $(CURDIR)/node_modules/.bin/neon
 JEST := $(CURDIR)/node_modules/.bin/jest
 LIB := $(CURDIR)/native/index.node
-SRC := $(wildcard $(CURDIR)/native/src/*)
+SRC := $(shell find $(CURDIR)/native/src -regex ".*\.rs")
 .PHONY: build run test check clean
 
 all: run
