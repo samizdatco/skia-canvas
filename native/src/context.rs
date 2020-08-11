@@ -49,11 +49,13 @@ pub struct State{
   image_filter_quality: FilterQuality,
   image_smoothing_enabled: bool,
 
-  font_string: String,
+  font: String,
+  font_variant: String,
   font_features: Vec<String>,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
   text_baseline: Baseline,
+  text_tracking: i32,
 }
 
 #[derive(Clone)]
@@ -102,11 +104,13 @@ impl Context2D{
         shadow_color: TRANSPARENT,
         shadow_offset: (0.0, 0.0).into(),
 
-        font_string: "10px monospace".to_string(),
+        font: "10px monospace".to_string(),
+        font_variant: "normal".to_string(),
         font_features:vec![],
         char_style,
         graf_style,
         text_baseline: Baseline::Alphabetic,
+        text_tracking: 0,
       },
     }
   }
@@ -245,6 +249,29 @@ impl Context2D{
         canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
         canvas.restore();
       }
+    }
+  }
+
+  pub fn choose_font(&mut self, spec: FontSpec){
+    // TODO: probably makes sense to share this?
+    let mut font_collection = FontCollection::new();
+    font_collection.set_default_font_manager(FontMgr::new(), None);
+
+    let faces = font_collection.find_typefaces(&spec.families, spec.style);
+    if !faces.is_empty() {
+      self.state.font = spec.canonical;
+      self.state.char_style.set_font_style(spec.style);
+      self.state.char_style.set_font_families(&spec.families);
+      self.state.char_style.set_font_size(spec.size);
+      self.set_font_variant(&spec.variant, &spec.features);
+    }
+  }
+
+  pub fn set_font_variant(&mut self, variant:&str, features:&[(String, i32)]){
+    self.state.font_variant = variant.to_string();
+    self.state.char_style.reset_font_features();
+    for (feat, val) in features{
+      self.state.char_style.add_font_feature(feat, *val);
     }
   }
 
@@ -1102,31 +1129,50 @@ declare_types! {
 
     method get_font(mut cx){
       let this = cx.this();
-      let font_str = cx.borrow(&this, |this| this.state.font_string.clone() );
+      let font_str = cx.borrow(&this, |this| this.state.font.clone() );
       Ok(cx.string(font_str).upcast())
     }
 
     method set_font(mut cx){
       let mut this = cx.this();
       if let Some(spec) = font_arg(&mut cx, 0)?{
-        // TODO: probably makes sense to share this?
-        let mut font_collection = FontCollection::new();
-        font_collection.set_default_font_manager(FontMgr::new(), None);
-
-        let faces = font_collection.find_typefaces(&spec.families, spec.style);
-        match faces.is_empty() {
-          // BUG: doesn't handle serif/sans-serif/fantasy/etc fallbacks
-          true => return cx.throw_error(format!("Could not find a font family for: {:?}", &spec.families)),
-          false => cx.borrow_mut(&mut this, |mut this|{
-            this.state.font_string = spec.canonical;
-            this.state.char_style.set_font_style(spec.style);
-            this.state.char_style.set_font_families(&spec.families);
-            this.state.char_style.set_font_size(spec.size);
-            // TODO: add features for variant
-          })
-        }
+        cx.borrow_mut(&mut this, |mut this|{ this.choose_font(spec) });
       }
+      Ok(cx.undefined().upcast())
+    }
 
+    method get_fontVariant(mut cx){
+      let this = cx.this();
+      let font_str = cx.borrow(&this, |this| this.state.font_variant.clone() );
+      Ok(cx.string(font_str).upcast())
+    }
+
+    method set_fontVariant(mut cx){
+      let mut this = cx.this();
+      let arg = cx.argument::<JsObject>(0)?;
+      let variant = string_for_key(&mut cx, &arg, "variant")?;
+      let feat_obj = arg.get(&mut cx, "features")?.downcast::<JsObject>().or_throw(&mut cx)?;
+      let features = font_features(&mut cx, &feat_obj)?;
+      cx.borrow_mut(&mut this, |mut this|{
+        this.set_font_variant(&variant, &features);
+      });
+      Ok(cx.undefined().upcast())
+    }
+
+    method get_textTracking(mut cx){
+      let this = cx.this();
+      let tracking = cx.borrow(&this, |this| this.state.text_tracking );
+      Ok(cx.number(tracking).upcast())
+    }
+
+    method set_textTracking(mut cx){
+      let mut this = cx.this();
+      let tracking = float_arg(&mut cx, 0, "tracking")?;
+      cx.borrow_mut(&mut this, |mut this|{
+        let em = this.state.char_style.font_size();
+        this.state.text_tracking = tracking as i32;
+        this.state.char_style.set_letter_spacing(tracking as f32 / 1000.0 * em);
+      });
       Ok(cx.undefined().upcast())
     }
 

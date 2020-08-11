@@ -337,6 +337,8 @@ pub struct FontSpec{
   pub families: Vec<String>,
   pub size: f32,
   pub style: FontStyle,
+  pub features: Vec<(String, i32)>,
+  pub variant: String,
   pub canonical: String
 }
 
@@ -347,6 +349,7 @@ pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<
   let font_desc = cx.argument::<JsObject>(idx as i32)?;
   let families = strings_at_key(cx, &font_desc, "family")?;
   let canonical = string_for_key(cx, &font_desc, "canonical")?;
+  let variant = string_for_key(cx, &font_desc, "variant")?;
   let size = float_for_key(cx, &font_desc, "px")?;
 
   let weight = match float_for_key(cx, &font_desc, "wt")? as i32 {
@@ -381,9 +384,28 @@ pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<
     _ => Width::NORMAL,
   };
 
+  let feat_obj = font_desc.get(cx, "features")?.downcast::<JsObject>().or_throw(cx)?;
+  let features = font_features(cx, &feat_obj)?;
+
   let style = FontStyle::new(weight, width, slant);
-  Ok(Some(FontSpec{ families, size, style, canonical}))
+  Ok(Some(FontSpec{ families, size, style, features, variant, canonical}))
 }
+
+pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>) -> Result<Vec<(String, i32)>, Throw>{
+  let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
+  let mut features:Vec<(String, i32)> = vec![];
+  for key in strings_in(&keys).iter() {
+    match key.as_str() {
+      "on" | "off" => strings_at_key(cx, obj, key)?.iter().for_each(|feat|{
+        features.push( (feat.to_string(), if key == "on"{ 1 } else { 0 }) );
+      }),
+      _ => features.push( (key.to_string(), float_for_key(cx, obj, key)? as i32))
+    }
+  }
+  Ok(features)
+}
+
+
 //
 // Skia Enums
 //
