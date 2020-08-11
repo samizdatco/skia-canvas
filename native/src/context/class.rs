@@ -425,7 +425,7 @@ declare_types! {
 
     method get_strokeStyle(mut cx){
       let this = cx.this();
-      let dye = cx.borrow(&this, |this| this.state.fill_style.clone() );
+      let dye = cx.borrow(&this, |this| this.state.stroke_style.clone() );
       dye.value(&mut cx, Stroke)
     }
 
@@ -433,7 +433,7 @@ declare_types! {
       let mut this = cx.this();
       let arg = cx.argument::<JsValue>(0)?;
       let dye = Dye::new(&mut cx, arg, Stroke)?;
-      cx.borrow_mut(&mut this, |mut this|  this.state.stroke_style = dye );
+      cx.borrow_mut(&mut this, |mut this| this.state.stroke_style = dye );
 
       Ok(cx.undefined().upcast())
     }
