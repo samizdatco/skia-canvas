@@ -115,10 +115,8 @@ impl Context2D{
   }
 
   pub fn ctm(&mut self) -> Matrix {
-    match self.surface.as_mut() {
-      Some(surface) => surface.canvas().total_matrix(),
-      None => Matrix::new_identity()
-    }
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    canvas.total_matrix()
   }
 
   pub fn in_local_coordinates(&mut self, x: f32, y: f32) -> Point{
@@ -129,48 +127,44 @@ impl Context2D{
   }
 
   pub fn push(&mut self){
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
     let new_state = self.state.clone();
     self.state_stack.push(new_state);
-    if let Some(surface) = self.surface.as_mut(){
-      surface.canvas().save();
-    }
+    canvas.save();
   }
 
   pub fn pop(&mut self){
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
     if let Some(old_state) = self.state_stack.pop(){
       self.state = old_state;
     }
-    if let Some(surface) = self.surface.as_mut(){
-      surface.canvas().restore();
-    }
+    canvas.restore();
   }
 
   pub fn draw_path(&mut self, paint: &Paint){
     let shadow = self.paint_for_shadow(&paint);
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
 
-    if let Some(surface) = &mut self.surface{
-      // draw shadow if applicable
-      if let Some(shadow_paint) = shadow{
-        surface.canvas().draw_path(&self.path, &shadow_paint);
-      }
-
-      // then draw the actual path
-      surface.canvas().draw_path(&self.path, &paint);
+    // draw shadow if applicable
+    if let Some(shadow_paint) = shadow{
+      canvas.draw_path(&self.path, &shadow_paint);
     }
+
+    // then draw the actual path
+    canvas.draw_path(&self.path, &paint);
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
     let do_aa = true;
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
+
     let mut clip = match path{
       Some(path) => path,
       None => self.path.clone()
     };
 
     clip.set_fill_type(rule);
-    if let Some(surface) = &mut self.surface{
-      let canvas = surface.canvas();
-      canvas.clip_path(&clip, ClipOp::Intersect, do_aa);
-    }
+    canvas.clip_path(&clip, ClipOp::Intersect, do_aa);
   }
 
   pub fn hit_test_path(&mut self, path: &mut Path, point:impl Into<Point>, rule:Option<FillType>, style: PaintStyle) -> bool {
@@ -198,26 +192,23 @@ impl Context2D{
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
     let shadow = self.paint_for_shadow(&paint);
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
 
-    if let Some(surface) = &mut self.surface{
-      // draw shadow if applicable
-      if let Some(shadow_paint) = shadow{
-        surface.canvas().draw_rect(&rect, &shadow_paint);
-      }
-
-      // then draw the actual rect
-      surface.canvas().draw_rect(&rect, &paint);
+    // draw shadow if applicable
+    if let Some(shadow_paint) = shadow{
+      canvas.draw_rect(&rect, &shadow_paint);
     }
+
+    // then draw the actual rect
+    canvas.draw_rect(&rect, &paint);
   }
 
   pub fn clear_rect(&mut self, rect:&Rect){
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
     let mut paint = Paint::default();
     paint.set_style(PaintStyle::Fill);
     paint.set_blend_mode(BlendMode::Clear);
-
-    if let Some(surface) = &mut self.surface{
-      surface.canvas().draw_rect(&rect, &paint);
-    }
+    canvas.draw_rect(&rect, &paint);
   }
 
   pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
@@ -237,18 +228,18 @@ impl Context2D{
       // we can draw-to-point rather than using draw_image_rect (which would vignette the shadow)
       if let Some(filter) = image_filters::image(image.clone(), Some(src_rect), Some(&resize), paint.filter_quality()){
         if let Some((image, _, dxdy)) = image.new_with_filter(&filter, bounds, bounds){
-          if let Some(surface) = &mut self.surface {
-            // add the top/left from the original dst_rect back in
-            origin.offset(dxdy);
+          let mut canvas = self.surface.as_mut().unwrap().canvas();
 
-            // draw shadow if applicable
-            if let Some(shadow_paint) = shadow{
-              surface.canvas().draw_image(&image, origin, Some(&shadow_paint));
-            }
+          // add the top/left from the original dst_rect back in
+          origin.offset(dxdy);
 
-            // then draw the actual image
-            surface.canvas().draw_image(&image, origin, Some(&paint));
+          // draw shadow if applicable
+          if let Some(shadow_paint) = shadow{
+            canvas.draw_image(&image, origin, Some(&shadow_paint));
           }
+
+          // then draw the actual image
+          canvas.draw_image(&image, origin, Some(&paint));
         }
       }
     }
@@ -259,18 +250,16 @@ impl Context2D{
     //
     // BUG: it shouldn't obey they canvas's clipping mask but I haven't figured
     //      out how to cleanly remove then reapply it yet...
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
     let mut paint = Paint::default();
     paint.set_style(PaintStyle::Fill);
 
     if let Some(image) = img{
-      if let Some(surface) = &mut self.surface{
-        let canvas = surface.canvas();
-        canvas.save();
-        canvas.reset_matrix();
+      canvas.save();
+      canvas.reset_matrix();
 
-        canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
-        canvas.restore();
-      }
+      canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
+      canvas.restore();
     }
   }
 
@@ -331,8 +320,8 @@ impl Context2D{
     point.y += offset - paragraph.alphabetic_baseline();
     point.x += GALLEY * get_alignment_factor(&self.state.graf_style);
 
-    let surface = self.surface.as_mut().unwrap();
-    paragraph.paint(surface.canvas(), point);
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    paragraph.paint(canvas, point);
   }
 
   pub fn measure_text(&mut self, text: &str) -> Vec<f32>{
@@ -430,9 +419,8 @@ impl Context2D{
   {
     let mut ctm = self.ctm();
     f(&mut ctm);
-    if let Some(surface) = &mut self.surface{
-      surface.canvas().set_matrix(&ctm);
-    }
+    let mut canvas = self.surface.as_mut().unwrap().canvas();
+    canvas.set_matrix(&ctm);
   }
 }
 
