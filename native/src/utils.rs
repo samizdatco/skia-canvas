@@ -343,6 +343,7 @@ pub fn path2d_arg_opt<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize)
 pub struct FontSpec{
   pub families: Vec<String>,
   pub size: f32,
+  pub leading: f32,
   pub style: FontStyle,
   pub features: Vec<(String, i32)>,
   pub variant: String,
@@ -357,9 +358,10 @@ pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<
   let families = strings_at_key(cx, &font_desc, "family")?;
   let canonical = string_for_key(cx, &font_desc, "canonical")?;
   let variant = string_for_key(cx, &font_desc, "variant")?;
-  let size = float_for_key(cx, &font_desc, "px")?;
+  let size = float_for_key(cx, &font_desc, "size")?;
+  let leading = float_for_key(cx, &font_desc, "leading")?;
 
-  let weight = match float_for_key(cx, &font_desc, "wt")? as i32 {
+  let weight = match float_for_key(cx, &font_desc, "weight")? as i32 {
     // https://docs.microsoft.com/en-us/typography/opentype/spec/os2#usweightclass
     wt if wt <= 100 => Weight::THIN,
     wt if wt <= 200 => Weight::EXTRA_LIGHT,
@@ -395,7 +397,7 @@ pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<
   let features = font_features(cx, &feat_obj)?;
 
   let style = FontStyle::new(weight, width, slant);
-  Ok(Some(FontSpec{ families, size, style, features, variant, canonical}))
+  Ok(Some(FontSpec{ families, size, leading, style, features, variant, canonical}))
 }
 
 pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>) -> Result<Vec<(String, i32)>, Throw>{
