@@ -678,12 +678,11 @@ declare_types! {
       let text = string_arg(&mut cx, 0, "text")?;
       let x = float_arg(&mut cx, 1, "x")?;
       let y = float_arg(&mut cx, 2, "y")?;
-      // TKTKTK: do something with width
       let width = opt_float_arg(&mut cx, 3);
 
       cx.borrow_mut(&mut this, |mut this|{
         let paint = this.paint_for_fill();
-        this.draw_text(&text, x, y, paint);
+        this.draw_text(&text, x, y, width, paint);
       });
 
       Ok(cx.undefined().upcast())
@@ -694,12 +693,11 @@ declare_types! {
       let text = string_arg(&mut cx, 0, "text")?;
       let x = float_arg(&mut cx, 1, "x")?;
       let y = float_arg(&mut cx, 2, "y")?;
-      // TKTKTK: do something with width
       let width = opt_float_arg(&mut cx, 3);
 
       cx.borrow_mut(&mut this, |mut this|{
         let paint = this.paint_for_stroke();
-        this.draw_text(&text, x, y, paint);
+        this.draw_text(&text, x, y, width, paint);
       });
 
       Ok(cx.undefined().upcast())

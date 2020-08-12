@@ -285,6 +285,8 @@ impl Context2D{
       self.state.char_style.set_font_style(spec.style);
       self.state.char_style.set_font_families(&spec.families);
       self.state.char_style.set_font_size(spec.size);
+      self.state.char_style.set_height(spec.leading / spec.size);
+      self.state.char_style.set_height_override(true);
       self.set_font_variant(&spec.variant, &spec.features);
     }
   }
@@ -297,7 +299,7 @@ impl Context2D{
     }
   }
 
-  pub fn typeset(&mut self, text: &str, paint: Paint) -> Paragraph {
+  pub fn typeset(&mut self, text: &str, width:f32, paint: Paint) -> Paragraph {
     let mut font_collection = FontCollection::new();
     font_collection.set_default_font_manager(FontMgr::new(), None);
 
@@ -312,24 +314,32 @@ impl Context2D{
       char_style.add_shadow(shadow);
     }
 
-    let graf_style = &self.state.graf_style;
+    let mut graf_style = self.state.graf_style.clone();
+    let text = match self.state.text_wrap{
+      true => text.to_string(),
+      false => {
+        graf_style.set_max_lines(1);
+        text.replace("\n", " ")
+      }
+    };
+
     let mut paragraph_builder = ParagraphBuilder::new(&graf_style, font_collection);
     paragraph_builder.push_style(&char_style);
     paragraph_builder.add_text(&text);
 
     let mut paragraph = paragraph_builder.build();
-    paragraph.layout(GALLEY);
+    paragraph.layout(width);
     paragraph
   }
 
-  pub fn draw_text(&mut self, text: &str, x: f32, y: f32, paint: Paint){
-    let mut paragraph = self.typeset(&text, paint);
-
+  pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, paint: Paint){
+    let width = width.unwrap_or(GALLEY);
+    let mut paragraph = self.typeset(&text, width, paint);
     let mut point = Point::new(x, y);
     let metrics = self.state.char_style.font_metrics();
     let offset = get_baseline_offset(&metrics, self.state.text_baseline) as f32;
     point.y += offset - paragraph.alphabetic_baseline();
-    point.x += GALLEY * get_alignment_factor(&self.state.graf_style);
+    point.x += width * get_alignment_factor(&self.state.graf_style);
 
     let canvas = self.surface.as_mut().unwrap().canvas();
     paragraph.paint(canvas, point);
@@ -337,7 +347,7 @@ impl Context2D{
 
   pub fn measure_text(&mut self, text: &str) -> Vec<f32>{
     let paint = self.paint_for_fill();
-    let mut paragraph = self.typeset(&text, paint);
+    let mut paragraph = self.typeset(&text, GALLEY, paint);
 
     let font_metrics = self.state.char_style.font_metrics();
     let offset = get_baseline_offset(&font_metrics, self.state.text_baseline);
