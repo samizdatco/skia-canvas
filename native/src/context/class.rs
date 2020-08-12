@@ -830,6 +830,20 @@ declare_types! {
       Ok(cx.undefined().upcast())
     }
 
+    method get_textWrap(mut cx){
+      let this = cx.this();
+      let flag = cx.borrow(&this, |this| this.state.text_wrap );
+      Ok(cx.boolean(flag).upcast())
+    }
+
+    method set_textWrap(mut cx){
+      let mut this = cx.this();
+      let flag = bool_arg(&mut cx, 0, "textWrap")?;
+      cx.borrow_mut(&mut this, |mut this| this.state.text_wrap = flag );
+      Ok(cx.undefined().upcast())
+    }
+
+
     //
     // Effects
     //

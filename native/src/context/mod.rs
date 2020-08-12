@@ -59,6 +59,7 @@ pub struct State{
   pub graf_style: ParagraphStyle,
   pub text_baseline: Baseline,
   pub text_tracking: i32,
+  pub text_wrap: bool,
 }
 
 impl Context2D{
@@ -108,6 +109,7 @@ impl Context2D{
         graf_style,
         text_baseline: Baseline::Alphabetic,
         text_tracking: 0,
+        text_wrap: false
       },
     }
   }
