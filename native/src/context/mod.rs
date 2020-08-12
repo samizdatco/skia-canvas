@@ -5,10 +5,10 @@
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
-use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, IPoint, ISize, Color, Color4f, PaintStyle,
-                BlendMode, FilterQuality, dash_path_effect, image_filters, ClipOp, FontMgr,
-                Image, ImageInfo, ColorType, AlphaType, Data,
-                RGB, ImageFilter, TileMode, color_filters, table_color_filter};
+use skia_safe::{Surface, Paint, Path, FontMgr, Image, ImageInfo, Data,
+                Matrix, Rect, Point, IPoint, ISize, Color, Color4f, ColorType,
+                PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
+                image_filters, color_filters, table_color_filter, dash_path_effect};
 use skia_safe::textlayout::{FontCollection, TextStyle, TextAlign, TextDirection, TextShadow,
                             ParagraphStyle, ParagraphBuilder, Paragraph};
 use skia_safe::canvas::SrcRectConstraint;
@@ -419,20 +419,20 @@ impl Context2D{
           "opacity" => {
             let amt = value.max(0.0).min(1.0);
             let color_matrix = color_filters::matrix_row_major(&[
-              1.0,  0.0,  0.0,  0.0, 0.0,
-              0.0,  1.0,  0.0,  0.0, 0.0,
-              0.0,  0.0,  1.0,  0.0, 0.0,
-              0.0,  0.0,  0.0,  amt, 0.0
+              1.0,  0.0,  0.0,  0.0,  0.0,
+              0.0,  1.0,  0.0,  0.0,  0.0,
+              0.0,  0.0,  1.0,  0.0,  0.0,
+              0.0,  0.0,  0.0,  amt,  0.0
             ]);
             image_filters::color_filter(color_matrix, chain, None)
           },
           "saturate" => {
             let amt = value.max(0.0);
             let color_matrix = color_filters::matrix_row_major(&[
-              (0.2126 + 0.7874 * amt), (0.7152 - 0.7152  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
-              (0.2126 - 0.2126 * amt), (0.7152 + 0.2848  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
-              (0.2126 - 0.2126 * amt), (0.7152 - 0.7152  * amt), (0.0722 + 0.9278 * amt), 0.0, 0.0,
-               0.0,                     0.0,                      0.0,                    1.0, 0.0
+              (0.2126 + 0.7874 * amt), (0.7152 - 0.7152 * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
+              (0.2126 - 0.2126 * amt), (0.7152 + 0.2848 * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
+              (0.2126 - 0.2126 * amt), (0.7152 - 0.7152 * amt), (0.0722 + 0.9278 * amt), 0.0, 0.0,
+               0.0,                     0.0,                     0.0,                    1.0, 0.0
             ]);
             image_filters::color_filter(color_matrix, chain, None)
           },
@@ -447,7 +447,6 @@ impl Context2D{
             image_filters::color_filter(color_matrix, chain, None)
           },
           "hue-rotate" => {
-            let amt = 1.0 - value.max(0.0).min(1.0);
             let cos = to_radians(*value).cos();
             let sin = to_radians(*value).sin();
             let color_matrix = color_filters::matrix_row_major(&[
