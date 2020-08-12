@@ -838,14 +838,18 @@ declare_types! {
 
     method get_filter(mut cx){
       let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let filter = cx.borrow(&this, |this| this.state.filter.clone() );
+      Ok(cx.string(filter).upcast())
     }
 
     method set_filter(mut cx){
       let mut this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let (filter_text, filters) = filter_arg(&mut cx, 0)?;
+      cx.borrow_mut(&mut this, |mut this|{
+        this.set_filter(&filter_text, &filters);
+      });
+
+      Ok(cx.undefined().upcast())
     }
 
     // -- compositing properties --------------------------------------------------------

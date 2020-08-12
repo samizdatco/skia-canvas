@@ -43,6 +43,10 @@ pub fn to_degrees(radians: f32) -> f32{
   radians / PI * 180.0
 }
 
+pub fn to_radians(degrees: f32) -> f32{
+  degrees / 180.0 * PI
+}
+
 pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> JsResult<'a, JsValue> {
   let global = cx.global();
   let symbol_ctor = global
@@ -230,16 +234,19 @@ pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Re
 // Colors
 //
 
+
+pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Result<Color, Throw> {
+  match css.parse::<Rgba>(){
+    Ok(Rgba{red, green, blue, alpha}) => {
+      Ok(Color4f::new(red, green, blue, alpha).to_color())
+    },
+    Err(_e) => cx.throw_error("Color parse error: Invalid format")
+  }
+}
+
 pub fn color_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<Color, Throw> {
   match opt_string_arg(cx, idx){
-    Some(css) => {
-      match css.parse::<Rgba>(){
-        Ok(Rgba{red, green, blue, alpha}) => {
-          Ok(Color4f::new(red, green, blue, alpha).to_color())
-        },
-        Err(_e) => cx.throw_error("Color parse error: Invalid format")
-      }
-    },
+    Some(css) => color_in(cx, &css),
     None => cx.throw_type_error("Expected a css color string, CanvasGradient, or CanvasPattern)")
   }
 }
@@ -405,6 +412,42 @@ pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject
   Ok(features)
 }
 
+//
+// Filters
+//
+
+pub enum FilterSpec{
+  Plain{name:String, value:f32},
+  Shadow{offset:Point, blur:f32, color:Color},
+}
+
+pub fn filter_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<(String, Vec<FilterSpec>), Throw> {
+  let arg = cx.argument::<JsObject>(idx as i32)?;
+  let canonical = string_for_key(cx, &arg, "canonical")?;
+
+  let obj = arg.get(cx, "filters")?.downcast_or_throw::<JsObject, _>(cx)?;
+  let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
+  let mut filters = vec![];
+  for (name, key) in strings_in(&keys).iter().zip(keys) {
+    match name.as_str() {
+      "drop-shadow" => {
+        let values = obj.get(cx, key)?.downcast_or_throw::<JsArray, _>(cx)?;
+        let dims = floats_in(&values.to_vec(cx)?);
+        let color = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value();
+        filters.push(FilterSpec::Shadow{
+          offset: Point::new(dims[0], dims[1]), blur: dims[2], color:color_in(cx, &color)?
+        });
+      },
+      _ => {
+        let value = obj.get(cx, key)?.downcast_or_throw::<JsNumber, _>(cx)?.value();
+        filters.push(FilterSpec::Plain{
+          name:name.to_string(), value:value as f32
+        })
+      }
+    }
+  }
+  Ok( (canonical, filters) )
+}
 
 //
 // Skia Enums

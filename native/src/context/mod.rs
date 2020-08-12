@@ -7,7 +7,8 @@ use neon::object::This;
 use neon::result::Throw;
 use skia_safe::{Surface, Path, Matrix, Paint, Rect, Point, IPoint, ISize, Color, Color4f, PaintStyle,
                 BlendMode, FilterQuality, dash_path_effect, image_filters, ClipOp, FontMgr,
-                Image, ImageInfo, ColorType, AlphaType, Data};
+                Image, ImageInfo, ColorType, AlphaType, Data,
+                RGB, ImageFilter, TileMode, color_filters, table_color_filter};
 use skia_safe::textlayout::{FontCollection, TextStyle, TextAlign, TextDirection, TextShadow,
                             ParagraphStyle, ParagraphBuilder, Paragraph};
 use skia_safe::canvas::SrcRectConstraint;
@@ -41,14 +42,15 @@ pub struct State{
   pub shadow_color: Color,
   pub shadow_offset: Point,
 
-  pub global_alpha: f32,
   pub stroke_width: f32,
   pub line_dash_offset: f32,
   pub line_dash_list: Vec<f32>,
 
+  pub global_alpha: f32,
   pub global_composite_operation: BlendMode,
   pub image_filter_quality: FilterQuality,
   pub image_smoothing_enabled: bool,
+  pub filter:String,
 
   pub font: String,
   pub font_variant: String,
@@ -93,6 +95,7 @@ impl Context2D{
         global_composite_operation: BlendMode::SrcOver,
         image_filter_quality: FilterQuality::Low,
         image_smoothing_enabled: true,
+        filter: "none".to_string(),
 
         shadow_blur: 0.0,
         shadow_color: TRANSPARENT,
@@ -210,6 +213,7 @@ impl Context2D{
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Fill);
     paint.set_color(self.color_with_alpha(&BLACK));
+
     let shadow = self.paint_for_shadow(&paint);
 
     if let Some(image) = &img {
@@ -358,10 +362,109 @@ impl Context2D{
     }
   }
 
-  pub fn color_with_alpha(&self, src:&Color) -> Color{
-    let mut color:Color4f = src.clone().into();
-    color.a *= self.state.global_alpha;
-    color.to_color()
+  pub fn set_filter(&mut self, filter_text:&str, specs:&[FilterSpec]){
+    // matrices and formulæ taken from: https://www.w3.org/TR/filter-effects-1/
+    let filter = specs.iter().fold(None, |chain, next_filter|
+      match next_filter {
+        FilterSpec::Shadow{ offset, blur, color } => {
+          let sigma = *blur / 2.0;
+          image_filters::drop_shadow(*offset, (sigma, sigma), *color, chain, None)
+        },
+        FilterSpec::Plain{ name, value } => match name.as_ref() {
+          "blur" => {
+            image_filters::blur((*value, *value), TileMode::Repeat, chain, None)
+          },
+          "brightness" => {
+            let amt = value.max(0.0);
+            let color_matrix = color_filters::matrix_row_major(&[
+              amt,  0.0,  0.0,  0.0, 0.0,
+              0.0,  amt,  0.0,  0.0, 0.0,
+              0.0,  0.0,  amt,  0.0, 0.0,
+              0.0,  0.0,  0.0,  1.0, 0.0
+            ]);
+            image_filters::color_filter(color_matrix, chain, None)
+          },
+          "contrast" => {
+            let amt = value.max(0.0);
+            let mut ramp = [0u8; 256];
+            for (i, val) in ramp.iter_mut().take(256).enumerate() {
+              let orig = i as f32;
+              *val = (127.0 + amt * orig - (127.0 * amt )) as u8;
+            }
+            let table = Some(&ramp);
+            let color_table = table_color_filter::from_argb(None, table, table, table);
+            image_filters::color_filter(color_table, chain, None)
+          },
+          "grayscale" => {
+            let amt = 1.0 - value.max(0.0).min(1.0);
+            let color_matrix = color_filters::matrix_row_major(&[
+              (0.2126 + 0.7874 * amt), (0.7152 - 0.7152  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
+              (0.2126 - 0.2126 * amt), (0.7152 + 0.2848  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
+              (0.2126 - 0.2126 * amt), (0.7152 - 0.7152  * amt), (0.0722 + 0.9278 * amt), 0.0, 0.0,
+               0.0,                     0.0,                      0.0,                    1.0, 0.0
+            ]);
+            image_filters::color_filter(color_matrix, chain, None)
+          },
+          "invert" => {
+            let amt = value.max(0.0).min(1.0);
+            let mut ramp = [0u8; 256];
+            for (i, val) in ramp.iter_mut().take(256).enumerate().map(|(i,v)| (i as f32, v)) {
+              let (orig, inv) = (i, 255.0-i);
+              *val = (orig * (1.0 - amt) + inv * amt) as u8;
+            }
+            let table = Some(&ramp);
+            let color_table = table_color_filter::from_argb(None, table, table, table);
+            image_filters::color_filter(color_table, chain, None)
+          },
+          "opacity" => {
+            let amt = value.max(0.0).min(1.0);
+            let color_matrix = color_filters::matrix_row_major(&[
+              1.0,  0.0,  0.0,  0.0, 0.0,
+              0.0,  1.0,  0.0,  0.0, 0.0,
+              0.0,  0.0,  1.0,  0.0, 0.0,
+              0.0,  0.0,  0.0,  amt, 0.0
+            ]);
+            image_filters::color_filter(color_matrix, chain, None)
+          },
+          "saturate" => {
+            let amt = value.max(0.0);
+            let color_matrix = color_filters::matrix_row_major(&[
+              (0.2126 + 0.7874 * amt), (0.7152 - 0.7152  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
+              (0.2126 - 0.2126 * amt), (0.7152 + 0.2848  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
+              (0.2126 - 0.2126 * amt), (0.7152 - 0.7152  * amt), (0.0722 + 0.9278 * amt), 0.0, 0.0,
+               0.0,                     0.0,                      0.0,                    1.0, 0.0
+            ]);
+            image_filters::color_filter(color_matrix, chain, None)
+          },
+          "sepia" => {
+            let amt = 1.0 - value.max(0.0).min(1.0);
+            let color_matrix = color_filters::matrix_row_major(&[
+              (0.393 + 0.607 * amt), (0.769 - 0.769 * amt), (0.189 - 0.189 * amt), 0.0, 0.0,
+              (0.349 - 0.349 * amt), (0.686 + 0.314 * amt), (0.168 - 0.168 * amt), 0.0, 0.0,
+              (0.272 - 0.272 * amt), (0.534 - 0.534 * amt), (0.131 + 0.869 * amt), 0.0, 0.0,
+               0.0,                   0.0,                   0.0,                  1.0, 0.0
+            ]);
+            image_filters::color_filter(color_matrix, chain, None)
+          },
+          "hue-rotate" => {
+            let amt = 1.0 - value.max(0.0).min(1.0);
+            let cos = to_radians(*value).cos();
+            let sin = to_radians(*value).sin();
+            let color_matrix = color_filters::matrix_row_major(&[
+              (0.213 + cos*0.787 - sin*0.213), (0.715 - cos*0.715 - sin*0.715), (0.072 - cos*0.072 + sin*0.928), 0.0, 0.0,
+              (0.213 - cos*0.213 + sin*0.143), (0.715 + cos*0.285 + sin*0.140), (0.072 - cos*0.072 - sin*0.283), 0.0, 0.0,
+              (0.213 - cos*0.213 - sin*0.787), (0.715 - cos*0.715 + sin*0.715), (0.072 + cos*0.928 + sin*0.072), 0.0, 0.0,
+               0.0,                             0.0,                             0.0,                            1.0, 0.0
+            ]);
+            image_filters::color_filter(color_matrix, chain, None)
+          },
+          _ => chain
+        }
+      }
+    );
+
+    self.state.paint.set_image_filter(filter);
+    self.state.filter = filter_text.to_string();
   }
 
   pub fn update_image_quality(&mut self){
@@ -371,21 +474,29 @@ impl Context2D{
     });
   }
 
+  pub fn color_with_alpha(&self, src:&Color) -> Color{
+    let mut color:Color4f = src.clone().into();
+    color.a *= self.state.global_alpha;
+    color.to_color()
+  }
+
   pub fn paint_for_fill(&self) -> Paint{
-    let alpha = self.state.global_alpha;
-    let dye = &self.state.fill_style;
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Fill);
+
+    let dye = &self.state.fill_style;
+    let alpha = self.state.global_alpha;
     dye.mix_into(&mut paint, alpha);
 
     paint
   }
 
   pub fn paint_for_stroke(&self) -> Paint{
-    let alpha = self.state.global_alpha;
-    let dye = &self.state.stroke_style;
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Stroke);
+
+    let dye = &self.state.stroke_style;
+    let alpha = self.state.global_alpha;
     dye.mix_into(&mut paint, alpha);
 
     if !self.state.line_dash_list.is_empty() {
@@ -405,7 +516,7 @@ impl Context2D{
       true => {
         let mut paint = base_paint.clone();
         if let Some(filter) = image_filters::drop_shadow_only(shadow_offset, (sigma, sigma), shadow_color, None, None){
-          paint.set_image_filter(filter);
+          paint.set_image_filter(filter); // this also knocks out any ctx.filter settings as a side-effect
         }
         Some(paint)
       }
@@ -421,6 +532,7 @@ impl Context2D{
     let canvas = self.surface.as_mut().unwrap().canvas();
     canvas.set_matrix(&ctm);
   }
+
 }
 
 //
