@@ -844,10 +844,13 @@ declare_types! {
 
     method set_filter(mut cx){
       let mut this = cx.this();
-      let (filter_text, filters) = filter_arg(&mut cx, 0)?;
-      cx.borrow_mut(&mut this, |mut this|{
-        this.set_filter(&filter_text, &filters);
-      });
+      if !cx.argument::<JsValue>(0)?.is_a::<JsNull>() {
+        let (filter_text, filters) = filter_arg(&mut cx, 0)?;
+        cx.borrow_mut(&mut this, |mut this|{
+          this.set_filter(&filter_text, &filters);
+        });
+      }
+
 
       Ok(cx.undefined().upcast())
     }
