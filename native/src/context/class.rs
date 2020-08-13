@@ -32,14 +32,6 @@ declare_types! {
       cx.throw_type_error("function is not a constructor")
     }
 
-    constructor(mut cx){
-      let this = cx.this();
-      let canvas = cx.argument::<JsCanvas>(0)?;
-      let attr = cx.string("canvas");
-      this.set(&mut cx, attr, canvas)?;
-      Ok(None)
-    }
-
     //
     // Grid State (see js for getTransform & setTransform)
     //
