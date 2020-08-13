@@ -257,7 +257,7 @@ pub fn color_to_css<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color
     255 => format!("#{:02x}{:02x}{:02x}", r, g, b),
     _ => {
       let alpha = format!("{:.3}", color.a() as f32 / 255.0);
-      format!("rgba({},{},{},{})", r, g, b, alpha.trim_end_matches('0'))
+      format!("rgba({},{},{},{})", r, g, b, alpha.trim_end_matches('0').replace("0.", "0"))
     }
   };
   Ok(cx.string(css).upcast())
