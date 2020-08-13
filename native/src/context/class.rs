@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Surface, Path, Rect, PathDirection, Data, EncodedImageFormat};
+use skia_safe::{Path, Rect, PathDirection};
 use skia_safe::path::{AddPathMode};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
@@ -14,63 +14,30 @@ use crate::utils::*;
 //
 
 use super::{Context2D, Dye};
+use crate::canvas::{JsCanvas};
 
 declare_types! {
   pub class JsContext2D for Context2D {
-    init(_) {
-      Ok( Context2D::new() )
+    init(mut cx) {
+      if let Some(arg) = cx.argument_opt(0){
+        if arg.is_a::<JsCanvas>(){
+          let canvas = cx.argument::<JsCanvas>(0)?;
+          return cx.borrow(&canvas, |canvas|
+            Ok(Context2D::new(&canvas.surface))
+          )
+        }
+      }
+
+      // we really don't want to encourage direct use of this anyway...
+      cx.throw_type_error("function is not a constructor")
     }
 
     constructor(mut cx){
-      let mut this = cx.this();
-      let width = float_arg(&mut cx, 0, "width")?;
-      let height = float_arg(&mut cx, 1, "height")?;
-      if width > 0.0 && height > 0.0 {
-        cx.borrow_mut(&mut this, |mut this| {
-          this.surface = Some(Surface::new_raster_n32_premul((width as i32, height as i32)).expect("no surface!"));
-        });
-      }else{
-        return cx.throw_error("width and height must be greater than zero")
-      }
-
-      Ok(None)
-    }
-
-    //
-    // Output
-    //
-
-    method toBuffer(mut cx){
-      let mut this = cx.this();
-      let raster:Option<Data> = cx.borrow_mut(&mut this, |mut this|
-        match &mut this.surface{
-          Some(surface) => {
-            let img = surface.image_snapshot();
-            let data = img.encode_to_data(EncodedImageFormat::PNG).unwrap();
-            Some(data)
-          },
-          None => None
-        }
-      );
-
-      match raster{
-        Some(data) => {
-          let mut buffer = JsBuffer::new(&mut cx, data.len() as u32)?;
-          cx.borrow_mut(&mut buffer, |buf_data| {
-            buf_data.as_mut_slice().copy_from_slice(&data);
-          });
-          Ok(buffer.upcast())
-        },
-        None => Ok(cx.undefined().upcast())
-      }
-    }
-
-    // -- reference to the parent canvas ------------------------------------------------
-
-    method get_canvas(mut cx){
       let this = cx.this();
-      unimplemented!();
-      // Ok(cx.undefined().upcast())
+      let canvas = cx.argument::<JsCanvas>(0)?;
+      let attr = cx.string("canvas");
+      this.set(&mut cx, attr, canvas)?;
+      Ok(None)
     }
 
     //

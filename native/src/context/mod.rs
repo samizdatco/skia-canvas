@@ -2,10 +2,12 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+use std::rc::Rc;
+use std::cell::RefCell;
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
-use skia_safe::{Surface, Paint, Path, FontMgr, Image, ImageInfo, Data,
+use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, FontMgr, Image, ImageInfo, Data,
                 Matrix, Rect, Point, IPoint, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
                 image_filters, color_filters, table_color_filter, dash_path_effect};
@@ -26,7 +28,7 @@ pub mod class;
 pub use class::JsContext2D;
 
 pub struct Context2D{
-  pub surface: Option<Surface>,
+  pub surface: Rc<RefCell<Surface>>,
   pub path: Path,
   pub state_stack: Vec<State>,
   pub state: State,
@@ -62,8 +64,8 @@ pub struct State{
   pub text_wrap: bool,
 }
 
-impl Context2D{
-  pub fn new() -> Self {
+impl Default for State {
+  fn default() -> Self {
     let mut paint = Paint::default();
     paint.set_stroke_miter(10.0);
     paint.set_color(BLACK);
@@ -71,51 +73,54 @@ impl Context2D{
     paint.set_stroke_width(1.0);
     paint.set_filter_quality(FilterQuality::Low);
 
+    let mut graf_style = ParagraphStyle::new();
     let mut char_style = TextStyle::new();
     char_style.set_font_size(10.0);
 
-    let mut graf_style = ParagraphStyle::new();
-    graf_style.set_text_align(TextAlign::Start);
-    graf_style.set_text_direction(TextDirection::LTR);
+    State {
+      paint,
+      stroke_style: Dye::Color(BLACK),
+      fill_style: Dye::Color(BLACK),
 
+      stroke_width: 1.0,
+      line_dash_offset: 0.0,
+      line_dash_list: vec![],
+
+      global_alpha: 1.0,
+      global_composite_operation: BlendMode::SrcOver,
+      image_filter_quality: FilterQuality::Low,
+      image_smoothing_enabled: true,
+      filter: "none".to_string(),
+
+      shadow_blur: 0.0,
+      shadow_color: TRANSPARENT,
+      shadow_offset: (0.0, 0.0).into(),
+
+      font: "10px monospace".to_string(),
+      font_variant: "normal".to_string(),
+      font_features:vec![],
+      char_style,
+      graf_style,
+      text_baseline: Baseline::Alphabetic,
+      text_tracking: 0,
+      text_wrap: false
+    }
+  }
+}
+
+impl Context2D{
+  pub fn new(surface: &Rc<RefCell<Surface>>) -> Self {
     Context2D{
-      surface: None,
+      surface: Rc::clone(&surface),
       path: Path::new(),
       state_stack: vec![],
-
-      state: State {
-        paint,
-        stroke_style: Dye::Color(BLACK),
-        fill_style: Dye::Color(BLACK),
-
-        stroke_width: 1.0,
-        line_dash_offset: 0.0,
-        line_dash_list: vec![],
-
-        global_alpha: 1.0,
-        global_composite_operation: BlendMode::SrcOver,
-        image_filter_quality: FilterQuality::Low,
-        image_smoothing_enabled: true,
-        filter: "none".to_string(),
-
-        shadow_blur: 0.0,
-        shadow_color: TRANSPARENT,
-        shadow_offset: (0.0, 0.0).into(),
-
-        font: "10px monospace".to_string(),
-        font_variant: "normal".to_string(),
-        font_features:vec![],
-        char_style,
-        graf_style,
-        text_baseline: Baseline::Alphabetic,
-        text_tracking: 0,
-        text_wrap: false
-      },
+      state: State::default(),
     }
   }
 
   pub fn ctm(&mut self) -> Matrix {
-    let canvas = self.surface.as_mut().unwrap().canvas();
+    let mut surface = self.surface.borrow_mut();
+    let canvas = surface.canvas();
     canvas.total_matrix()
   }
 
@@ -126,45 +131,68 @@ impl Context2D{
     }
   }
 
+  pub fn with_canvas<F>(&self, f:F)
+    where F:FnOnce(&mut SkCanvas)
+  {
+    let mut surface = self.surface.borrow_mut();
+    f(surface.canvas());
+  }
+
+  pub fn with_matrix<F>(&mut self, f:F)
+    where F:FnOnce(&mut Matrix) -> &Matrix
+  {
+    let mut ctm = self.ctm();
+    f(&mut ctm);
+    self.with_canvas(|canvas| {
+      canvas.set_matrix(&ctm);
+    });
+  }
+
+  pub fn reset_state(&mut self) {
+    // called when the canvas gets resized
+    self.path = Path::new();
+    self.state_stack = vec![];
+    self.state = State::default();
+  }
+
   pub fn push(&mut self){
-    let canvas = self.surface.as_mut().unwrap().canvas();
     let new_state = self.state.clone();
     self.state_stack.push(new_state);
-    canvas.save();
+    self.with_canvas(|canvas|{ canvas.save(); });
   }
 
   pub fn pop(&mut self){
-    let canvas = self.surface.as_mut().unwrap().canvas();
     if let Some(old_state) = self.state_stack.pop(){
       self.state = old_state;
     }
-    canvas.restore();
+    self.with_canvas(|canvas|{ canvas.restore(); });
   }
 
   pub fn draw_path(&mut self, paint: &Paint){
-    let shadow = self.paint_for_shadow(&paint);
-    let canvas = self.surface.as_mut().unwrap().canvas();
+    self.with_canvas(|canvas|{
+      // draw shadow if applicable
+      let shadow = self.paint_for_shadow(&paint);
+      if let Some(shadow_paint) = shadow{
+        canvas.draw_path(&self.path, &shadow_paint);
+      }
 
-    // draw shadow if applicable
-    if let Some(shadow_paint) = shadow{
-      canvas.draw_path(&self.path, &shadow_paint);
-    }
-
-    // then draw the actual path
-    canvas.draw_path(&self.path, &paint);
+      // then draw the actual path
+      canvas.draw_path(&self.path, &paint);
+    });
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
-    let do_aa = true;
-    let canvas = self.surface.as_mut().unwrap().canvas();
+    self.with_canvas(|canvas| {
+      let do_aa = true;
 
-    let mut clip = match path{
-      Some(path) => path,
-      None => self.path.clone()
-    };
+      let mut clip = match path{
+        Some(path) => path,
+        None => self.path.clone()
+      };
 
-    clip.set_fill_type(rule);
-    canvas.clip_path(&clip, ClipOp::Intersect, do_aa);
+      clip.set_fill_type(rule);
+      canvas.clip_path(&clip, ClipOp::Intersect, do_aa);
+    });
   }
 
   pub fn hit_test_path(&mut self, path: &mut Path, point:impl Into<Point>, rule:Option<FillType>, style: PaintStyle) -> bool {
@@ -191,24 +219,26 @@ impl Context2D{
 }
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
-    let shadow = self.paint_for_shadow(&paint);
-    let canvas = self.surface.as_mut().unwrap().canvas();
+    self.with_canvas(|canvas| {
+      let shadow = self.paint_for_shadow(&paint);
 
-    // draw shadow if applicable
-    if let Some(shadow_paint) = shadow{
-      canvas.draw_rect(&rect, &shadow_paint);
-    }
+      // draw shadow if applicable
+      if let Some(shadow_paint) = shadow{
+        canvas.draw_rect(&rect, &shadow_paint);
+      }
 
-    // then draw the actual rect
-    canvas.draw_rect(&rect, &paint);
+      // then draw the actual rect
+      canvas.draw_rect(&rect, &paint);
+    });
   }
 
   pub fn clear_rect(&mut self, rect:&Rect){
-    let canvas = self.surface.as_mut().unwrap().canvas();
-    let mut paint = Paint::default();
-    paint.set_style(PaintStyle::Fill);
-    paint.set_blend_mode(BlendMode::Clear);
-    canvas.draw_rect(&rect, &paint);
+    self.with_canvas(|canvas| {
+      let mut paint = Paint::default();
+      paint.set_style(PaintStyle::Fill);
+      paint.set_blend_mode(BlendMode::Clear);
+      canvas.draw_rect(&rect, &paint);
+    });
   }
 
   pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
@@ -229,18 +259,18 @@ impl Context2D{
       // we can draw-to-point rather than using draw_image_rect (which would vignette the shadow)
       if let Some(filter) = image_filters::image(image.clone(), Some(src_rect), Some(&resize), paint.filter_quality()){
         if let Some((image, _, dxdy)) = image.new_with_filter(&filter, bounds, bounds){
-          let canvas = self.surface.as_mut().unwrap().canvas();
+          self.with_canvas(|canvas| {
+            // add the top/left from the original dst_rect back in
+            origin.offset(dxdy);
 
-          // add the top/left from the original dst_rect back in
-          origin.offset(dxdy);
+            // draw shadow if applicable
+            if let Some(shadow_paint) = shadow{
+              canvas.draw_image(&image, origin, Some(&shadow_paint));
+            }
 
-          // draw shadow if applicable
-          if let Some(shadow_paint) = shadow{
-            canvas.draw_image(&image, origin, Some(&shadow_paint));
-          }
-
-          // then draw the actual image
-          canvas.draw_image(&image, origin, Some(&paint));
+            // then draw the actual image
+            canvas.draw_image(&image, origin, Some(&paint));
+          });
         }
       }
     }
@@ -248,7 +278,7 @@ impl Context2D{
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
     let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
-    let surface = self.surface.as_mut().unwrap();
+    let mut surface = self.surface.borrow_mut();
     surface.read_pixels(&info, buffer, info.min_row_bytes(), origin);
   }
 
@@ -260,13 +290,14 @@ impl Context2D{
       let data = Data::new_bytes(buffer);
       match Image::from_raster_data(&info, data, info.min_row_bytes()){
         Some(image) => {
-          let canvas = self.surface.as_mut().unwrap().canvas();
-          let mut paint = Paint::default();
-          paint.set_style(PaintStyle::Fill);
-          canvas.save();
-          canvas.reset_matrix();
-          canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
-          canvas.restore();
+          self.with_canvas(|canvas| {
+            let mut paint = Paint::default();
+            paint.set_style(PaintStyle::Fill);
+            canvas.save();
+            canvas.reset_matrix();
+            canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
+            canvas.restore();
+          });
           true
         },
         None => false
@@ -341,8 +372,9 @@ impl Context2D{
     point.y += offset - paragraph.alphabetic_baseline();
     point.x += width * get_alignment_factor(&self.state.graf_style);
 
-    let canvas = self.surface.as_mut().unwrap().canvas();
-    paragraph.paint(canvas, point);
+    self.with_canvas(|canvas| {
+      paragraph.paint(canvas, point);
+    });
   }
 
   pub fn measure_text(&mut self, text: &str) -> Vec<f32>{
@@ -533,15 +565,6 @@ impl Context2D{
       }
       false => None
     }
-  }
-
-  pub fn with_matrix<F>(&mut self, f:F)
-    where F:Fn(&mut Matrix) -> &Matrix
-  {
-    let mut ctm = self.ctm();
-    f(&mut ctm);
-    let canvas = self.surface.as_mut().unwrap().canvas();
-    canvas.set_matrix(&ctm);
   }
 
 }
