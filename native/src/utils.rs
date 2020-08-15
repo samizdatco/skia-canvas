@@ -7,7 +7,11 @@ use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
 use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB};
-use skia_safe::{Font, FontMetrics, font_style::{FontStyle, Weight, Width, Slant}};
+use skia_safe::{
+  Font, FontMetrics, FontArguments,
+  font_style::{FontStyle, Weight, Width, Slant},
+  font_arguments::{VariationPosition, variation_position::{Coordinate}}
+};
 use css_color::Rgba;
 
 use crate::path::{JsPath2D};
@@ -115,6 +119,15 @@ pub fn string_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize, attr:&st
       else { format!("missing argument: expected a string for {} ({} arg)", attr, arg_num(idx)) }
     )
   }
+}
+
+pub fn strings_to_array<'a, T: This>(cx: &mut CallContext<'a, T>, strings: &[String]) -> JsResult<'a, JsValue> {
+  let array = JsArray::new(cx, strings.len() as u32);
+  for (i, val) in strings.iter().enumerate() {
+    let num = cx.string(val.as_str());
+    array.set(cx, i as u32, num)?;
+  }
+  Ok(array.upcast())
 }
 
 //
@@ -359,21 +372,8 @@ pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<
   let canonical = string_for_key(cx, &font_desc, "canonical")?;
   let variant = string_for_key(cx, &font_desc, "variant")?;
   let size = float_for_key(cx, &font_desc, "size")?;
-  let leading = float_for_key(cx, &font_desc, "leading")?;
-
-  let weight = match float_for_key(cx, &font_desc, "weight")? as i32 {
-    // https://docs.microsoft.com/en-us/typography/opentype/spec/os2#usweightclass
-    wt if wt <= 100 => Weight::THIN,
-    wt if wt <= 200 => Weight::EXTRA_LIGHT,
-    wt if wt <= 300 => Weight::LIGHT,
-    wt if wt <= 400 => Weight::NORMAL,
-    wt if wt <= 500 => Weight::MEDIUM,
-    wt if wt <= 600 => Weight::SEMI_BOLD,
-    wt if wt <= 700 => Weight::BOLD,
-    wt if wt <= 800 => Weight::EXTRA_BOLD,
-    wt if wt < 950 => Weight::BLACK,
-    _ => Weight::EXTRA_BLACK,
-  };
+  let leading = float_for_key(cx, &font_desc, "lineHeight")?;
+  let weight = Weight::from(float_for_key(cx, &font_desc, "weight")? as i32);
 
   let slant = match string_for_key(cx, &font_desc, "style")?.as_str() {
     "italic" => Slant::Italic,
@@ -412,6 +412,102 @@ pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject
     }
   }
   Ok(features)
+}
+
+use std::rc::Rc;
+use std::cell::RefCell;
+use skia_safe::{FontMgr, Typeface, Data, textlayout::{FontCollection, TypefaceFontProvider}};
+
+pub struct FontLibrary{
+  pub library: Rc<RefCell<FontCollection>>,
+  pub fonts: Vec<Typeface>,
+  pub dyn_fonts: Vec<Typeface>,
+}
+
+impl Default for FontLibrary{
+  fn default() -> Self{
+    let mut library = FontCollection::new();
+    library.set_default_font_manager(FontMgr::new(), None);
+    FontLibrary{ library: Rc::new(RefCell::new(library)), fonts:vec![], dyn_fonts:vec![] }
+  }
+}
+
+impl FontLibrary{
+  fn families(&self) -> Vec<String>{
+    let font_mgr = FontMgr::new();
+    let count = font_mgr.count_families();
+    let mut names:Vec<String> = (0..count).map(|i| font_mgr.family_name(i)).collect();
+    for font in &self.fonts {
+      names.push(font.family_name());
+    }
+    names.sort();
+    names
+  }
+
+  fn weights(&self, family: &str) -> Vec<f32> {
+    let mut library = self.library.borrow_mut();
+    let font_mgr = FontMgr::new();
+    let mut style_set = font_mgr.match_family(&family);
+
+    let mut weights:Vec<i32> = (0..style_set.count()).map(|i| {
+      let (style, style_name) = style_set.style(i);
+      *style.weight()
+    }).collect();
+    weights.sort();
+    weights.dedup();
+    weights.iter().map(|w| *w as f32 ).collect()
+  }
+
+  fn add_typeface(&mut self, font:Typeface){
+    if let Some(params) = font.variation_design_parameters(){
+      self.dyn_fonts.push(font);
+    }else{
+      self.fonts.push(font);
+      let mut assets = TypefaceFontProvider::new();
+      for font in &self.fonts {
+        let alias = font.family_name();
+        assets.register_typeface(font.clone(), Some(&alias));
+      }
+
+      let mut library = self.library.borrow_mut();
+      library.set_asset_font_manager(Some(assets.into()));
+    }
+  }
+
+declare_types! {
+  pub class JsFontLibrary for FontLibrary {
+    init(_) {
+      Ok( FontLibrary::default() )
+    }
+
+    method get_families(mut cx){
+      let mut this = cx.this();
+      let families = cx.borrow_mut(&mut this, |mut this| this.families() );
+      Ok(strings_to_array(&mut cx, &families)?)
+    }
+
+    method family(mut cx){
+      let mut this = cx.this();
+      let family = cx.argument::<JsString>(0)?.value();
+      let weights = cx.borrow_mut(&mut this, |mut this| this.weights(&family) );
+      Ok(floats_to_array(&mut cx, &weights)?)
+    }
+
+    method useFont(mut cx){
+      let mut this = cx.this();
+      let buffer = cx.argument::<JsBuffer>(0)?;
+      match cx.borrow(&buffer, |buf_data| {
+        Typeface::from_data(Data::new_copy(buf_data.as_slice()), None)
+      }){
+        Some(font) => {
+          cx.borrow_mut(&mut this, |mut this|{ this.add_typeface(font) });
+          Ok(cx.undefined().upcast())
+        },
+        None => cx.throw_error("Could not decode font data")
+      }
+    }
+
+  }
 }
 
 //

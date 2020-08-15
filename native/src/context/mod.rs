@@ -10,9 +10,14 @@ use neon::result::Throw;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, FontMgr, Image, ImageInfo, Data,
                 Matrix, Rect, Point, IPoint, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
-                image_filters, color_filters, table_color_filter, dash_path_effect};
+                image_filters, color_filters, table_color_filter, dash_path_effect,
+  font_style::{FontStyle, Weight, Width, Slant},
+  font_arguments::{VariationPosition, variation_position::{Coordinate}},
+  Font, FontMetrics, FontArguments,
+};
 use skia_safe::textlayout::{FontCollection, TextStyle, TextAlign, TextDirection, TextShadow,
                             ParagraphStyle, ParagraphBuilder, Paragraph};
+
 use skia_safe::canvas::SrcRectConstraint;
 use skia_safe::path::FillType;
 
@@ -29,6 +34,7 @@ pub use class::JsContext2D;
 
 pub struct Context2D{
   pub surface: Rc<RefCell<Surface>>,
+  pub library: Rc<RefCell<FontCollection>>,
   pub path: Path,
   pub state_stack: Vec<State>,
   pub state: State,
@@ -109,9 +115,10 @@ impl Default for State {
 }
 
 impl Context2D{
-  pub fn new(surface: &Rc<RefCell<Surface>>) -> Self {
+  pub fn new(surface: &Rc<RefCell<Surface>>, library: &Rc<RefCell<FontCollection>>) -> Self {
     Context2D{
       surface: Rc::clone(&surface),
+      library: Rc::clone(&library),
       path: Path::new(),
       state_stack: vec![],
       state: State::default(),
@@ -306,12 +313,12 @@ impl Context2D{
   }
 
   pub fn choose_font(&mut self, spec: FontSpec){
-    // TODO: probably makes sense to share this?
-    let mut font_collection = FontCollection::new();
-    font_collection.set_default_font_manager(FontMgr::new(), None);
+    let faces = {
+      let mut library = self.library.borrow_mut();
+      library.find_typefaces(&spec.families, spec.style)
+    };
 
-    let faces = font_collection.find_typefaces(&spec.families, spec.style);
-    if !faces.is_empty() {
+    if let Some(face) = faces.first() {
       self.state.font = spec.canonical;
       self.state.char_style.set_font_style(spec.style);
       self.state.char_style.set_font_families(&spec.families);
@@ -330,10 +337,8 @@ impl Context2D{
     }
   }
 
-  pub fn typeset(&mut self, text: &str, width:f32, paint: Paint) -> Paragraph {
-    let mut font_collection = FontCollection::new();
-    font_collection.set_default_font_manager(FontMgr::new(), None);
 
+  pub fn typeset(&mut self, text: &str, width:f32, paint: Paint) -> Paragraph {
     let mut char_style = self.state.char_style.clone();
     char_style.set_foreground_color(Some(paint));
 
@@ -354,7 +359,8 @@ impl Context2D{
       }
     };
 
-    let mut paragraph_builder = ParagraphBuilder::new(&graf_style, font_collection);
+    let library = self.library.borrow().clone();
+    let mut paragraph_builder = ParagraphBuilder::new(&graf_style, library);
     paragraph_builder.push_style(&char_style);
     paragraph_builder.add_text(&text);
 

@@ -16,5 +16,6 @@ register_module!(mut m, {
   m.export_class::<crate::path::JsPath2D>("Path2D")?;
   m.export_class::<crate::image::JsImage>("Image")?;
   m.export_class::<crate::image::JsImageData>("ImageData")?;
+  m.export_class::<crate::utils::JsFontLibrary>("FontLibrary")?;
   Ok(())
 });

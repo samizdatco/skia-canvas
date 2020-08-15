@@ -19,13 +19,14 @@ use crate::canvas::{JsCanvas};
 declare_types! {
   pub class JsContext2D for Context2D {
     init(mut cx) {
-      if let Some(arg) = cx.argument_opt(0){
-        if arg.is_a::<JsCanvas>(){
-          let canvas = cx.argument::<JsCanvas>(0)?;
-          return cx.borrow(&canvas, |canvas|
-            Ok(Context2D::new(&canvas.surface))
+      if cx.len() == 2 {
+        let canvas = cx.argument::<JsCanvas>(0)?;
+        let fonts = cx.argument::<JsFontLibrary>(1)?;
+        return cx.borrow(&canvas, |canvas|
+          cx.borrow(&fonts, |fonts|
+            Ok(Context2D::new(&canvas.surface, &fonts.library))
           )
-        }
+        )
       }
 
       // we really don't want to encourage direct use of this anyway...
