@@ -425,14 +425,13 @@ use skia_safe::{FontMgr, Typeface, Data, textlayout::{FontCollection, TypefaceFo
 pub struct FontLibrary{
   pub collection: FontCollection,
   pub fonts: Vec<Typeface>,
-  pub dyn_fonts: HashMap<String, Typeface>,
 }
 
 impl Default for FontLibrary{
   fn default() -> Self{
     let mut library = FontCollection::new();
     library.set_default_font_manager(FontMgr::new(), None);
-    FontLibrary{ collection: library, fonts:vec![], dyn_fonts:HashMap::new() }
+    FontLibrary{ collection: library, fonts:vec![] }
   }
 }
 
@@ -449,7 +448,7 @@ impl FontLibrary{
   }
 
   fn weights(&self, family: &str) -> Vec<f32> {
-    // TKTK: look through self.fonts/dyn_fonts as well
+    // TKTK: look through self.fonts as well
     let font_mgr = FontMgr::new();
     let mut style_set = font_mgr.match_family(&family);
 
@@ -463,9 +462,6 @@ impl FontLibrary{
   }
 
   fn add_typeface(&mut self, font:Typeface){
-    if font.variation_design_parameters().is_some() {
-      self.dyn_fonts.insert(font.family_name(), font.clone());
-    }
     self.fonts.push(font);
 
     let mut assets = TypefaceFontProvider::new();
@@ -486,35 +482,34 @@ impl FontLibrary{
       let family = font.family_name();
 
       // if the matched typeface is a variable font, create an instance that matches
-      // the current weight settings and return a new FontCollection containing that
-      // font alone
-      if let Some(font) = self.dyn_fonts.get(&family) {
-        let mut dynamic = TypefaceFontProvider::new();
-        if let Some(params) = font.variation_design_parameters(){
-          for param in params {
-            let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-            let tag = String::from_utf8(chars).unwrap();
-            if tag == "wght"{
-              // NB: currently setting the value to *one less* than what was requested
-              //     to work around weird Skia behavior that returns something too light
-              //     in many cases (but not for ±1 of that value). This makes it so that
-              //     n × 100 values will render correctly (and the bug will manifest at
-              //     n × 100 + 1 instead)
-              let weight = *style.font_style().weight() - 1;
-              let value = (weight as f32).max(param.min).min(param.max);
-              let coords = [ Coordinate { axis: param.tag, value } ];
-              let v_pos = VariationPosition { coordinates: &coords };
-              let args = FontArguments::new().set_variation_design_position(v_pos);
-              let face = font.clone_with_arguments(&args).unwrap();
-              dynamic.register_typeface(face, Some(&family));
-            }
+      // the current weight settings and return early with a new FontCollection that
+      // contains just that single font instance
+      if let Some(params) = font.variation_design_parameters(){
+        for param in params {
+          let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
+          let tag = String::from_utf8(chars).unwrap();
+          if tag == "wght"{
+            // NB: currently setting the value to *one less* than what was requested
+            //     to work around weird Skia behavior that returns something too light
+            //     in many cases (but not for ±1 of that value). This makes it so that
+            //     n × 100 values will render correctly (and the bug will manifest at
+            //     n × 100 + 1 instead)
+            let weight = *style.font_style().weight() - 1;
+            let value = (weight as f32).max(param.min).min(param.max);
+            let coords = [ Coordinate { axis: param.tag, value } ];
+            let v_pos = VariationPosition { coordinates: &coords };
+            let args = FontArguments::new().set_variation_design_position(v_pos);
+            let face = font.clone_with_arguments(&args).unwrap();
+
+            let mut dynamic = TypefaceFontProvider::new();
+            dynamic.register_typeface(face, Some(&family));
+
+            let mut collection = FontCollection::new();
+            collection.set_default_font_manager(FontMgr::new(), None);
+            collection.set_asset_font_manager(Some(dynamic.into()));
+            return collection
           }
         }
-
-        let mut collection = FontCollection::new();
-        collection.set_default_font_manager(FontMgr::new(), None);
-        collection.set_asset_font_manager(Some(dynamic.into()));
-        return collection
       }
     }else{
       // TKTKTKTK: do something in the no-matches case
