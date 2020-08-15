@@ -34,7 +34,7 @@ pub use class::JsContext2D;
 
 pub struct Context2D{
   pub surface: Rc<RefCell<Surface>>,
-  pub library: Rc<RefCell<FontCollection>>,
+  pub library: Rc<RefCell<FontLibrary>>,
   pub path: Path,
   pub state_stack: Vec<State>,
   pub state: State,
@@ -115,7 +115,7 @@ impl Default for State {
 }
 
 impl Context2D{
-  pub fn new(surface: &Rc<RefCell<Surface>>, library: &Rc<RefCell<FontCollection>>) -> Self {
+  pub fn new(surface: &Rc<RefCell<Surface>>, library: &Rc<RefCell<FontLibrary>>) -> Self {
     Context2D{
       surface: Rc::clone(&surface),
       library: Rc::clone(&library),
@@ -315,7 +315,7 @@ impl Context2D{
   pub fn choose_font(&mut self, spec: FontSpec){
     let faces = {
       let mut library = self.library.borrow_mut();
-      library.find_typefaces(&spec.families, spec.style)
+      library.collection.find_typefaces(&spec.families, spec.style)
     };
 
     if let Some(face) = faces.first() {
@@ -336,7 +336,6 @@ impl Context2D{
       self.state.char_style.add_font_feature(feat, *val);
     }
   }
-
 
   pub fn typeset(&mut self, text: &str, width:f32, paint: Paint) -> Paragraph {
     let mut char_style = self.state.char_style.clone();
@@ -359,8 +358,9 @@ impl Context2D{
       }
     };
 
-    let library = self.library.borrow().clone();
-    let mut paragraph_builder = ParagraphBuilder::new(&graf_style, library);
+    let mut library = self.library.borrow_mut();
+    let collection = library.with_style(&char_style);
+    let mut paragraph_builder = ParagraphBuilder::new(&graf_style, collection);
     paragraph_builder.push_style(&char_style);
     paragraph_builder.add_text(&text);
 

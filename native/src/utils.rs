@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+#![allow(unused_mut)]
 #![allow(dead_code)]
 #![allow(unused_imports)]
 use std::cmp;
@@ -8,7 +10,7 @@ use neon::result::Throw;
 use neon::object::This;
 use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB};
 use skia_safe::{
-  Font, FontMetrics, FontArguments,
+  FontMetrics, FontArguments,
   font_style::{FontStyle, Weight, Width, Slant},
   font_arguments::{VariationPosition, variation_position::{Coordinate}}
 };
@@ -66,6 +68,7 @@ pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> Js
   Ok(sym)
 }
 
+
 //
 // strings
 //
@@ -108,7 +111,6 @@ pub fn string_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default:&
     None => String::from(default)
   }
 }
-
 
 pub fn string_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize, attr:&str) -> Result<String, Throw> {
   let exists = cx.len() > idx as i32;
@@ -416,19 +418,21 @@ pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject
 
 use std::rc::Rc;
 use std::cell::RefCell;
-use skia_safe::{FontMgr, Typeface, Data, textlayout::{FontCollection, TypefaceFontProvider}};
+use std::collections::HashMap;
+use skia_safe::{FontMgr, Typeface, Data, textlayout::{FontCollection, TypefaceFontProvider, TextStyle}};
+
 
 pub struct FontLibrary{
-  pub library: Rc<RefCell<FontCollection>>,
+  pub collection: FontCollection,
   pub fonts: Vec<Typeface>,
-  pub dyn_fonts: Vec<Typeface>,
+  pub dyn_fonts: HashMap<String, Typeface>,
 }
 
 impl Default for FontLibrary{
   fn default() -> Self{
     let mut library = FontCollection::new();
     library.set_default_font_manager(FontMgr::new(), None);
-    FontLibrary{ library: Rc::new(RefCell::new(library)), fonts:vec![], dyn_fonts:vec![] }
+    FontLibrary{ collection: library, fonts:vec![], dyn_fonts:HashMap::new() }
   }
 }
 
@@ -445,7 +449,7 @@ impl FontLibrary{
   }
 
   fn weights(&self, family: &str) -> Vec<f32> {
-    let mut library = self.library.borrow_mut();
+    // TKTK: look through self.fonts/dyn_fonts as well
     let font_mgr = FontMgr::new();
     let mut style_set = font_mgr.match_family(&family);
 
@@ -459,37 +463,106 @@ impl FontLibrary{
   }
 
   fn add_typeface(&mut self, font:Typeface){
-    if let Some(params) = font.variation_design_parameters(){
-      self.dyn_fonts.push(font);
-    }else{
-      self.fonts.push(font);
-      let mut assets = TypefaceFontProvider::new();
-      for font in &self.fonts {
-        let alias = font.family_name();
-        assets.register_typeface(font.clone(), Some(&alias));
-      }
-
-      let mut library = self.library.borrow_mut();
-      library.set_asset_font_manager(Some(assets.into()));
+    if font.variation_design_parameters().is_some() {
+      self.dyn_fonts.insert(font.family_name(), font.clone());
     }
+    self.fonts.push(font);
+
+    let mut assets = TypefaceFontProvider::new();
+    for font in &self.fonts {
+      let alias = font.family_name();
+      assets.register_typeface(font.clone(), Some(&alias));
+    }
+
+    self.collection.set_asset_font_manager(Some(assets.into()));
   }
 
+  pub fn with_style(&mut self, style: &TextStyle) -> FontCollection {
+    let families = style.font_families();
+    let families:Vec<&str> = families.iter().collect();
+    let matches = self.collection.find_typefaces(&families, style.font_style());
+
+    if let Some(font) = matches.first() {
+      let family = font.family_name();
+
+      // if the matched typeface is a variable font, create an instance that matches
+      // the current weight settings and return a new FontCollection containing that
+      // font alone
+      if let Some(font) = self.dyn_fonts.get(&family) {
+        let mut dynamic = TypefaceFontProvider::new();
+        if let Some(params) = font.variation_design_parameters(){
+          for param in params {
+            let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
+            let tag = String::from_utf8(chars).unwrap();
+            if tag == "wght"{
+              // NB: currently setting the value to *one less* than what was requested
+              //     to work around weird Skia behavior that returns something too light
+              //     in many cases (but not for ±1 of that value). This makes it so that
+              //     n × 100 values will render correctly (and the bug will manifest at
+              //     n × 100 + 1 instead)
+              let weight = *style.font_style().weight() - 1;
+              let value = (weight as f32).max(param.min).min(param.max);
+              let coords = [ Coordinate { axis: param.tag, value } ];
+              let v_pos = VariationPosition { coordinates: &coords };
+              let args = FontArguments::new().set_variation_design_position(v_pos);
+              let face = font.clone_with_arguments(&args).unwrap();
+              dynamic.register_typeface(face, Some(&family));
+            }
+          }
+        }
+
+        let mut collection = FontCollection::new();
+        collection.set_default_font_manager(FontMgr::new(), None);
+        collection.set_asset_font_manager(Some(dynamic.into()));
+        return collection
+      }
+    }else{
+      // TKTKTKTK: do something in the no-matches case
+      // (maybe try subbing in concrete family names for the generic names?)
+    }
+
+    // if the matched font wasn't variable, then just return the standard collection
+    self.collection.clone()
+  }
+
+}
+
+// in practice the FontLibrary will always be a singleton, so base the js object
+// on a refcell that can be borrowed by all the Context2Ds
+
+pub struct SharedFontLibrary{
+  pub library:Rc<RefCell<FontLibrary>>
+}
+
+impl Default for SharedFontLibrary{
+  fn default() -> Self{
+    SharedFontLibrary{ library: Rc::new(RefCell::new(FontLibrary::default())) }
+  }
+}
+
 declare_types! {
-  pub class JsFontLibrary for FontLibrary {
+  pub class JsFontLibrary for SharedFontLibrary {
     init(_) {
-      Ok( FontLibrary::default() )
+      Ok( SharedFontLibrary::default() )
     }
 
     method get_families(mut cx){
       let mut this = cx.this();
-      let families = cx.borrow_mut(&mut this, |mut this| this.families() );
+      let families = cx.borrow_mut(&mut this, |mut this| {
+        let library = this.library.borrow_mut();
+        library.families()
+      });
       Ok(strings_to_array(&mut cx, &families)?)
     }
 
     method family(mut cx){
       let mut this = cx.this();
       let family = cx.argument::<JsString>(0)?.value();
-      let weights = cx.borrow_mut(&mut this, |mut this| this.weights(&family) );
+      let weights = cx.borrow_mut(&mut this, |mut this| {
+        let library = this.library.borrow_mut();
+        library.weights(&family)
+      });
+
       Ok(floats_to_array(&mut cx, &weights)?)
     }
 
@@ -500,7 +573,10 @@ declare_types! {
         Typeface::from_data(Data::new_copy(buf_data.as_slice()), None)
       }){
         Some(font) => {
-          cx.borrow_mut(&mut this, |mut this|{ this.add_typeface(font) });
+          cx.borrow_mut(&mut this, |mut this| {
+            let mut library = this.library.borrow_mut();
+            library.add_typeface(font);
+          });
           Ok(cx.undefined().upcast())
         },
         None => cx.throw_error("Could not decode font data")
