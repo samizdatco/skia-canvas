@@ -15,6 +15,7 @@ use crate::utils::*;
 
 use super::{Context2D, Dye};
 use crate::canvas::{JsCanvas};
+use crate::typography::*;
 
 declare_types! {
   pub class JsContext2D for Context2D {
@@ -681,7 +682,7 @@ declare_types! {
     method set_font(mut cx){
       let mut this = cx.this();
       if let Some(spec) = font_arg(&mut cx, 0)?{
-        cx.borrow_mut(&mut this, |mut this|{ this.choose_font(spec) });
+        cx.borrow_mut(&mut this, |mut this|{ this.set_font(spec) });
       }
       Ok(cx.undefined().upcast())
     }

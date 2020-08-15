@@ -22,6 +22,7 @@ use skia_safe::canvas::SrcRectConstraint;
 use skia_safe::path::FillType;
 
 use crate::utils::*;
+use crate::typography::*;
 use crate::gradient::{CanvasGradient, JsCanvasGradient};
 use crate::pattern::{CanvasPattern, JsCanvasPattern};
 
@@ -312,29 +313,20 @@ impl Context2D{
     }
   }
 
-  pub fn choose_font(&mut self, spec: FontSpec){
-    let faces = {
-      let mut library = self.library.borrow_mut();
-      library.collection.find_typefaces(&spec.families, spec.style)
-    };
-
-    if let Some(face) = faces.first() {
+  pub fn set_font(&mut self, spec: FontSpec){
+    let mut library = self.library.borrow_mut();
+    if let Some(new_style) = library.update_style(&self.state.char_style, &spec){
       self.state.font = spec.canonical;
-      self.state.char_style.set_font_style(spec.style);
-      self.state.char_style.set_font_families(&spec.families);
-      self.state.char_style.set_font_size(spec.size);
-      self.state.char_style.set_height(spec.leading / spec.size);
-      self.state.char_style.set_height_override(true);
-      self.set_font_variant(&spec.variant, &spec.features);
+      self.state.font_variant = spec.variant.to_string();
+      self.state.char_style = new_style;
     }
   }
 
   pub fn set_font_variant(&mut self, variant:&str, features:&[(String, i32)]){
+    let mut library = self.library.borrow_mut();
+    let new_style = library.update_features(&self.state.char_style, features);
     self.state.font_variant = variant.to_string();
-    self.state.char_style.reset_font_features();
-    for (feat, val) in features{
-      self.state.char_style.add_font_feature(feat, *val);
-    }
+    self.state.char_style = new_style;
   }
 
   pub fn typeset(&mut self, text: &str, width:f32, paint: Paint) -> Paragraph {
