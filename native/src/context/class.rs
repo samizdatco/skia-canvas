@@ -73,7 +73,7 @@ declare_types! {
     method translate(mut cx){
       let mut this = cx.this();
       let dx = float_arg(&mut cx, 0, "deltaX")?;
-      let dy = float_arg(&mut cx, 0, "deltaY")?;
+      let dy = float_arg(&mut cx, 1, "deltaY")?;
       cx.borrow_mut(&mut this, |mut this| {
         this.with_matrix(|ctm| ctm.pre_translate((dx, dy)) );
       });
@@ -83,7 +83,7 @@ declare_types! {
     method scale(mut cx){
       let mut this = cx.this();
       let x_scale = float_arg(&mut cx, 0, "xScale")?;
-      let y_scale = float_arg(&mut cx, 0, "yScale")?;
+      let y_scale = float_arg(&mut cx, 1, "yScale")?;
       cx.borrow_mut(&mut this, |mut this| {
         this.with_matrix(|ctm| ctm.pre_scale((x_scale, y_scale), None) );
       });
