@@ -43,25 +43,10 @@ pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<
   let variant = string_for_key(cx, &font_desc, "variant")?;
   let size = float_for_key(cx, &font_desc, "size")?;
   let leading = float_for_key(cx, &font_desc, "lineHeight")?;
+
   let weight = Weight::from(float_for_key(cx, &font_desc, "weight")? as i32);
-
-  let slant = match string_for_key(cx, &font_desc, "style")?.as_str() {
-    "italic" => Slant::Italic,
-    "oblique" => Slant::Oblique,
-    _ => Slant::Upright
-  };
-
-  let width = match string_for_key(cx, &font_desc, "stretch")?.as_str() {
-    "ultra-condensed" => Width::ULTRA_CONDENSED,
-    "extra-condensed" => Width::EXTRA_CONDENSED,
-    "condensed" => Width::CONDENSED,
-    "semi-condensed" => Width::SEMI_CONDENSED,
-    "semi-expanded" => Width::SEMI_EXPANDED,
-    "expanded" => Width::EXPANDED,
-    "extra-expanded" => Width::EXTRA_EXPANDED,
-    "ultra-expanded" => Width::ULTRA_EXPANDED,
-    _ => Width::NORMAL,
-  };
+  let slant = to_slant(string_for_key(cx, &font_desc, "style")?.as_str());
+  let width = to_width(string_for_key(cx, &font_desc, "stretch")?.as_str());
 
   let feat_obj = font_desc.get(cx, "features")?.downcast::<JsObject>().or_throw(cx)?;
   let features = font_features(cx, &feat_obj)?;
@@ -83,6 +68,73 @@ pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject
   }
   Ok(features)
 }
+
+pub fn typeface_details<'a, T: This>(cx: &mut CallContext<'a, T>, filename:&str, font: &Typeface, alias:Option<String>) -> JsResult<'a, JsObject> {
+  let style = font.font_style();
+
+  let filename = cx.string(filename);
+  let family = cx.string(match alias{
+    Some(name) => name,
+    None => font.family_name()
+  });
+  let weight = cx.number(*style.weight() as f64);
+  let slant = cx.string(from_slant(style.slant()));
+  let width = cx.string(from_width(style.width()));
+
+  let dict = JsObject::new(cx);
+  let attr = cx.string("family"); dict.set(cx, attr, family)?;
+  let attr = cx.string("weight"); dict.set(cx, attr, weight)?;
+  let attr = cx.string("style");  dict.set(cx, attr, slant)?;
+  let attr = cx.string("width");  dict.set(cx, attr, width)?;
+  let attr = cx.string("file");   dict.set(cx, attr, filename)?;
+  Ok(dict)
+}
+
+pub fn to_slant(slant_name:&str) -> Slant{
+  match slant_name.to_lowercase().as_str(){
+    "italic" => Slant::Italic,
+    "oblique" => Slant::Oblique,
+    _ => Slant::Upright
+  }
+}
+
+pub fn from_slant(slant:Slant) -> String{
+  match slant {
+    Slant::Upright => "normal",
+    Slant::Italic => "italic",
+    Slant::Oblique => "oblique",
+  }.to_string()
+}
+
+pub fn to_width(width_name:&str) -> Width{
+  match width_name.to_lowercase().as_str(){
+    "ultra-condensed" => Width::ULTRA_CONDENSED,
+    "extra-condensed" => Width::EXTRA_CONDENSED,
+    "condensed" => Width::CONDENSED,
+    "semi-condensed" => Width::SEMI_CONDENSED,
+    "semi-expanded" => Width::SEMI_EXPANDED,
+    "expanded" => Width::EXPANDED,
+    "extra-expanded" => Width::EXTRA_EXPANDED,
+    "ultra-expanded" => Width::ULTRA_EXPANDED,
+    _ => Width::NORMAL,
+  }
+}
+
+pub fn from_width(width:Width) -> String{
+  match width {
+    w if w == Width::ULTRA_CONDENSED => "ultra-condensed",
+    w if w == Width::EXTRA_CONDENSED => "extra-condensed",
+    w if w == Width::CONDENSED => "condensed",
+    w if w == Width::SEMI_CONDENSED => "semi-condensed",
+    w if w == Width::SEMI_EXPANDED => "semi-expanded",
+    w if w == Width::EXPANDED => "expanded",
+    w if w == Width::EXTRA_EXPANDED => "extra-expanded",
+    w if w == Width::ULTRA_EXPANDED => "ultra-expanded",
+    _ => "normal"
+  }.to_string()
+}
+
+
 
 pub fn to_text_align(mode_name:&str) -> Option<TextAlign>{
   let mode = match mode_name.to_lowercase().as_str(){
@@ -358,8 +410,9 @@ declare_types! {
       let this = cx.this();
       let alias = opt_string_arg(&mut cx, 0);
       let filenames = cx.argument::<JsArray>(1)?.to_vec(&mut cx)?;
+      let results = JsArray::new(&mut cx, filenames.len() as u32);
 
-      for filename in strings_in(&filenames){
+      for (i, filename) in strings_in(&filenames).iter().enumerate(){
         let path = Path::new(&filename);
         let typeface = match fs::read(path){
           Err(why) => {
@@ -370,6 +423,11 @@ declare_types! {
 
         match typeface {
           Some(font) => {
+            // add family/weight/width/slant details to return value
+            let details = typeface_details(&mut cx, &filename, &font, alias.clone())?;
+            results.set(&mut cx, i as u32, details)?;
+
+            // register the typeface
             cx.borrow(&this, |this| {
               let mut library = this.library.borrow_mut();
               library.add_typeface(font, alias.clone());
@@ -381,7 +439,7 @@ declare_types! {
         }
       }
 
-      Ok(cx.undefined().upcast())
+      Ok(results.upcast())
     }
 
   }
