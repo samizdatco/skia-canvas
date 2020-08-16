@@ -5,17 +5,16 @@ use skia_safe::path::{AddPathMode};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
+use super::{Context2D, Dye};
+use crate::canvas::{JsCanvas};
 use crate::path::{Path2D, JsPath2D};
 use crate::image::{JsImage, JsImageData};
+use crate::typography::*;
 use crate::utils::*;
 
 //
 // The js interface for the Context2D struct
 //
-
-use super::{Context2D, Dye};
-use crate::canvas::{JsCanvas};
-use crate::typography::*;
 
 declare_types! {
   pub class JsContext2D for Context2D {

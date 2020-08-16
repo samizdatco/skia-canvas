@@ -5,21 +5,17 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fs;
-use std::fs::File;
-use std::io::prelude::*;
 use std::path::Path;
+use std::collections::HashMap;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
-use skia_safe::{
-  FontMetrics, FontArguments,
-  font_style::{FontStyle, Weight, Width, Slant},
-  font_arguments::{VariationPosition, variation_position::{Coordinate}}
-};
 
-use skia_safe::{FontMgr, Typeface, Data, textlayout::{FontCollection, TypefaceFontProvider, TextStyle}};
-use skia_safe::textlayout::{TextAlign, TextDirection, ParagraphStyle};
-use std::collections::HashMap;
+use skia_safe::{FontMgr, FontMetrics, FontArguments, Typeface, Data};
+use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
+use skia_safe::font_arguments::{VariationPosition, variation_position::{Coordinate}};
+use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
+                            TextDirection, ParagraphStyle};
 
 use crate::utils::*;
 
@@ -156,8 +152,6 @@ pub fn from_width(width:Width) -> String{
   }.to_string()
 }
 
-
-
 pub fn to_text_align(mode_name:&str) -> Option<TextAlign>{
   let mode = match mode_name.to_lowercase().as_str(){
     "left" => TextAlign::Left,
@@ -269,7 +263,7 @@ impl FontLibrary{
     let font_mgr = FontMgr::new();
     let count = font_mgr.count_families();
     let mut names:Vec<String> = (0..count).map(|i| font_mgr.family_name(i)).collect();
-    for (font, alias) in &self.fonts {
+    for (font, _alias) in &self.fonts {
       names.push(font.family_name());
     }
     names.sort();
@@ -421,10 +415,10 @@ impl FontLibrary{
 
 }
 
-// in practice the FontLibrary will always be a singleton, so base the js object
-// on a refcell that can be borrowed by all the Context2Ds
 
 pub struct SharedFontLibrary{
+  // in practice the FontLibrary will always be a singleton, so base the js object
+  // on a refcell that can be borrowed by all the Context2Ds
   pub library:Rc<RefCell<FontLibrary>>
 }
 

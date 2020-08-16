@@ -7,17 +7,11 @@ use std::cell::RefCell;
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
-use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, FontMgr, Image, ImageInfo, Data,
+use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, Image, ImageInfo, Data,
                 Matrix, Rect, Point, IPoint, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
-                image_filters, color_filters, table_color_filter, dash_path_effect,
-  font_style::{FontStyle, Weight, Width, Slant},
-  font_arguments::{VariationPosition, variation_position::{Coordinate}},
-  Font, FontMetrics, FontArguments,
-};
-use skia_safe::textlayout::{FontCollection, TextStyle, TextAlign, TextDirection, TextShadow,
-                            ParagraphStyle, ParagraphBuilder, Paragraph};
-
+                image_filters, color_filters, table_color_filter, dash_path_effect};
+use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow};
 use skia_safe::canvas::SrcRectConstraint;
 use skia_safe::path::FillType;
 
@@ -80,7 +74,7 @@ impl Default for State {
     paint.set_stroke_width(1.0);
     paint.set_filter_quality(FilterQuality::Low);
 
-    let mut graf_style = ParagraphStyle::new();
+    let graf_style = ParagraphStyle::new();
     let mut char_style = TextStyle::new();
     char_style.set_font_size(10.0);
 
