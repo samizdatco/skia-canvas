@@ -448,6 +448,17 @@ declare_types! {
       Ok(strings_to_array(&mut cx, &families)?)
     }
 
+    method has(mut cx){
+      let this = cx.this();
+      let family = string_arg(&mut cx, 0, "familyName")?;
+      let found = cx.borrow(&this, |this| {
+        let library = this.library.borrow_mut();
+        library.families().contains(&family)
+      });
+
+      Ok(cx.boolean(found).upcast())
+    }
+
     method family(mut cx){
       let this = cx.this();
       let family = cx.argument::<JsString>(0)?.value();
