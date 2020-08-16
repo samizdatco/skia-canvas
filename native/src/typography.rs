@@ -215,6 +215,28 @@ pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f64 {
   }
 }
 
+pub fn wght_range_for_typeface(font:&Typeface) -> Vec<i32>{
+  let mut wghts = vec![];
+  if let Some(params) = font.variation_design_parameters(){
+    for param in params {
+      let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
+      let tag = String::from_utf8(chars).unwrap();
+      let (min, max) = (param.min as i32, param.max as i32);
+      if tag == "wght"{
+        let mut val = min;
+        while val <= max {
+          wghts.push(val);
+          val = val + 100 - (val % 100);
+        }
+        if !wghts.contains(&max){
+          wghts.push(max);
+        }
+      }
+    }
+  }
+  wghts
+}
+
 #[derive(PartialEq, Eq, Hash)]
 struct CollectionKey{ families:String, weight:i32, slant:Slant }
 
@@ -254,18 +276,49 @@ impl FontLibrary{
     names
   }
 
-  fn weights(&self, family: &str) -> Vec<f32> {
-    // TKTK: look through self.fonts as well
-    let font_mgr = FontMgr::new();
-    let mut style_set = font_mgr.match_family(&family);
+  fn family_details(&self, family:&str) -> (Vec<f32>, Vec<String>, Vec<String>){
+    // merge the system fonts and our dynamically added fonts into one list of FontStyles
+    let mut dynamic = TypefaceFontProvider::new();
+    for (font, alias) in &self.fonts{
+      dynamic.register_typeface(font.clone(), alias.clone());
+    }
+    let std_mgr = FontMgr::new();
+    let dyn_mgr:FontMgr = dynamic.into();
+    let mut std_set = std_mgr.match_family(&family);
+    let mut dyn_set = dyn_mgr.match_family(&family);
+    let std_styles = (0..std_set.count()).map(|i| std_set.style(i));
+    let dyn_styles = (0..dyn_set.count()).map(|i| dyn_set.style(i));
+    let all_styles = std_styles.chain(dyn_styles);
 
-    let mut weights:Vec<i32> = (0..style_set.count()).map(|i| {
-      let (style, _name) = style_set.style(i);
-      *style.weight()
-    }).collect();
+    // set up a collection to query for variable fonts who specify their weights
+    // via the 'wght' axis rather than through distinct files with different FontStyles
+    let mut var_fc = FontCollection::new();
+    var_fc.set_default_font_manager(FontMgr::new(), None);
+    var_fc.set_asset_font_manager(Some(dyn_mgr));
+
+    // pull style values out of each matching font
+    let mut weights:Vec<i32> = vec![];
+    let mut widths:Vec<String> = vec![];
+    let mut styles:Vec<String> = vec![];
+    all_styles.for_each(|(style, _name)| {
+      widths.push(from_width(style.width()));
+      styles.push(from_slant(style.slant()));
+      weights.push(*style.weight());
+      if let Some(font) = var_fc.find_typefaces(&[&family], style).first(){
+        // for variable fonts, report all the 100× sizes they support within their wght range
+        weights.append(&mut wght_range_for_typeface(&font));
+      }
+    });
+
+    // repackage collected values
+    widths.sort_by(|a, b| a.replace("normal", "_").partial_cmp(&b.replace("normal", "_")).unwrap());
+    widths.dedup();
+    styles.sort_by(|a, b| a.replace("normal", "_").partial_cmp(&b.replace("normal", "_")).unwrap());
+    styles.dedup();
     weights.sort();
     weights.dedup();
-    weights.iter().map(|w| *w as f32 ).collect()
+    let weights = weights.iter().map(|w| *w as f32 ).collect();
+    (weights, widths, styles)
   }
 
   fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
@@ -398,12 +451,23 @@ declare_types! {
     method family(mut cx){
       let this = cx.this();
       let family = cx.argument::<JsString>(0)?.value();
-      let weights = cx.borrow(&this, |this| {
+      let (weights, widths, styles) = cx.borrow(&this, |this| {
         let library = this.library.borrow_mut();
-        library.weights(&family)
+        library.family_details(&family)
       });
 
-      Ok(floats_to_array(&mut cx, &weights)?)
+      let name = cx.string(family);
+      let weights = floats_to_array(&mut cx, &weights)?;
+      let widths = strings_to_array(&mut cx, &widths)?;
+      let styles = strings_to_array(&mut cx, &styles)?;
+
+      let details = JsObject::new(&mut cx);
+      let attr = cx.string("family"); details.set(&mut cx, attr, name)?;
+      let attr = cx.string("weights"); details.set(&mut cx, attr, weights)?;
+      let attr = cx.string("widths"); details.set(&mut cx, attr, widths)?;
+      let attr = cx.string("styles"); details.set(&mut cx, attr, styles)?;
+
+      Ok(details.upcast())
     }
 
     method _addFamily(mut cx){
