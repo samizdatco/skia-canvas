@@ -90,6 +90,28 @@ pub fn typeface_details<'a, T: This>(cx: &mut CallContext<'a, T>, filename:&str,
   Ok(dict)
 }
 
+pub fn typeface_wght_range(font:&Typeface) -> Vec<i32>{
+  let mut wghts = vec![];
+  if let Some(params) = font.variation_design_parameters(){
+    for param in params {
+      let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
+      let tag = String::from_utf8(chars).unwrap();
+      let (min, max) = (param.min as i32, param.max as i32);
+      if tag == "wght"{
+        let mut val = min;
+        while val <= max {
+          wghts.push(val);
+          val = val + 100 - (val % 100);
+        }
+        if !wghts.contains(&max){
+          wghts.push(max);
+        }
+      }
+    }
+  }
+  wghts
+}
+
 pub fn to_slant(slant_name:&str) -> Slant{
   match slant_name.to_lowercase().as_str(){
     "italic" => Slant::Italic,
@@ -215,28 +237,6 @@ pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f64 {
   }
 }
 
-pub fn wght_range_for_typeface(font:&Typeface) -> Vec<i32>{
-  let mut wghts = vec![];
-  if let Some(params) = font.variation_design_parameters(){
-    for param in params {
-      let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-      let tag = String::from_utf8(chars).unwrap();
-      let (min, max) = (param.min as i32, param.max as i32);
-      if tag == "wght"{
-        let mut val = min;
-        while val <= max {
-          wghts.push(val);
-          val = val + 100 - (val % 100);
-        }
-        if !wghts.contains(&max){
-          wghts.push(max);
-        }
-      }
-    }
-  }
-  wghts
-}
-
 #[derive(PartialEq, Eq, Hash)]
 struct CollectionKey{ families:String, weight:i32, slant:Slant }
 
@@ -273,6 +273,7 @@ impl FontLibrary{
       names.push(font.family_name());
     }
     names.sort();
+    names.dedup();
     names
   }
 
@@ -306,7 +307,7 @@ impl FontLibrary{
       weights.push(*style.weight());
       if let Some(font) = var_fc.find_typefaces(&[&family], style).first(){
         // for variable fonts, report all the 100× sizes they support within their wght range
-        weights.append(&mut wght_range_for_typeface(&font));
+        weights.append(&mut typeface_wght_range(&font));
       }
     });
 
