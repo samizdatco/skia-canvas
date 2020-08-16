@@ -1,7 +1,7 @@
-// #![allow(unused_variables)]
-// #![allow(unused_mut)]
-// #![allow(dead_code)]
-// #![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(unused_mut)]
+#![allow(dead_code)]
+#![allow(unused_imports)]
 use std::rc::Rc;
 use std::cell::RefCell;
 use neon::prelude::*;
@@ -160,7 +160,17 @@ pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f64 {
 }
 
 #[derive(PartialEq, Eq, Hash)]
-struct CollectionKey{ families:String, weight:i32 }
+struct CollectionKey{ families:String, weight:i32, slant:Slant }
+
+impl CollectionKey{
+  pub fn new(style: &TextStyle) -> Self {
+    let families = style.font_families();
+    let families = families.iter().collect::<Vec<&str>>().join(", ");
+    let weight = *style.font_style().weight();
+    let slant = style.font_style().slant();
+    CollectionKey{ families, weight, slant }
+  }
+}
 
 pub struct FontLibrary{
   pub fonts: Vec<Typeface>,
@@ -244,12 +254,12 @@ impl FontLibrary{
     style
   }
 
-  pub fn with_style(&mut self, style: &TextStyle) -> FontCollection {
+  pub fn collect_fonts(&mut self, style: &TextStyle) -> FontCollection {
     let families = style.font_families();
     let families:Vec<&str> = families.iter().collect();
 
     // memoize the generation of single-weight FontCollections for variable fonts
-    let key = CollectionKey{ families:families.join(", "), weight: *style.font_style().weight() };
+    let key = CollectionKey::new(&style);
     if let Some(collection) = self.collection_cache.get(&key){
       return collection.clone()
     }

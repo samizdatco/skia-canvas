@@ -351,7 +351,7 @@ impl Context2D{
     };
 
     let mut library = self.library.borrow_mut();
-    let collection = library.with_style(&char_style);
+    let collection = library.collect_fonts(&char_style);
     let mut paragraph_builder = ParagraphBuilder::new(&graf_style, collection);
     paragraph_builder.push_style(&char_style);
     paragraph_builder.add_text(&text);
