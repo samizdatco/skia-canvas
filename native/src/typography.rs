@@ -4,6 +4,10 @@
 #![allow(unused_imports)]
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::fs;
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
@@ -173,7 +177,7 @@ impl CollectionKey{
 }
 
 pub struct FontLibrary{
-  pub fonts: Vec<Typeface>,
+  pub fonts: Vec<(Typeface, Option<String>)>,
   pub collection: FontCollection,
   collection_cache: HashMap<CollectionKey, FontCollection>,
 }
@@ -191,7 +195,7 @@ impl FontLibrary{
     let font_mgr = FontMgr::new();
     let count = font_mgr.count_families();
     let mut names:Vec<String> = (0..count).map(|i| font_mgr.family_name(i)).collect();
-    for font in &self.fonts {
+    for (font, alias) in &self.fonts {
       names.push(font.family_name());
     }
     names.sort();
@@ -212,17 +216,16 @@ impl FontLibrary{
     weights.iter().map(|w| *w as f32 ).collect()
   }
 
-  fn add_typeface(&mut self, font:Typeface){
-    self.fonts.push(font);
+  fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
+    self.fonts.push((font, alias));
 
     let mut assets = TypefaceFontProvider::new();
-    for font in &self.fonts {
-      let alias = font.family_name();
-      assets.register_typeface(font.clone(), Some(&alias));
+    for (font, alias) in &self.fonts {
+      assets.register_typeface(font.clone(), alias.as_ref());
     }
 
     self.collection.set_asset_font_manager(Some(assets.into()));
-    self.collection_cache = HashMap::new()
+    self.collection_cache.drain();
   }
 
   pub fn update_style(&mut self, orig_style:&TextStyle, spec: &FontSpec) -> Option<TextStyle>{
@@ -231,6 +234,7 @@ impl FontLibrary{
     // don't update the style if no usable family names were specified
     let matches = self.collection.find_typefaces(&spec.families, spec.style);
     if matches.is_empty(){
+      // TKTKTK: check again for generic families
       return None
     }
 
@@ -266,7 +270,9 @@ impl FontLibrary{
 
     let matches = self.collection.find_typefaces(&families, style.font_style());
     if let Some(font) = matches.first() {
-      let family = font.family_name();
+      let alias = self.fonts.iter().find_map(|(face, alias)|
+        if Typeface::equal(font, face){ alias.clone() }else{ None }
+      );
 
       // if the matched typeface is a variable font, create an instance that matches
       // the current weight settings and return early with a new FontCollection that
@@ -289,7 +295,7 @@ impl FontLibrary{
             let face = font.clone_with_arguments(&args).unwrap();
 
             let mut dynamic = TypefaceFontProvider::new();
-            dynamic.register_typeface(face, Some(&family));
+            dynamic.register_typeface(face, alias);
 
             let mut collection = FontCollection::new();
             collection.set_default_font_manager(FontMgr::new(), None);
@@ -349,21 +355,34 @@ declare_types! {
       Ok(floats_to_array(&mut cx, &weights)?)
     }
 
-    method useFont(mut cx){
+    method _addFamily(mut cx){
       let this = cx.this();
-      let buffer = cx.argument::<JsBuffer>(0)?;
-      match cx.borrow(&buffer, |buf_data| {
-        Typeface::from_data(Data::new_copy(buf_data.as_slice()), None)
-      }){
-        Some(font) => {
-          cx.borrow(&this, |this| {
-            let mut library = this.library.borrow_mut();
-            library.add_typeface(font);
-          });
-          Ok(cx.undefined().upcast())
-        },
-        None => cx.throw_error("Could not decode font data")
+      let alias = opt_string_arg(&mut cx, 0);
+      let filenames = cx.argument::<JsArray>(1)?.to_vec(&mut cx)?;
+
+      for filename in strings_in(&filenames){
+        let path = Path::new(&filename);
+        let typeface = match fs::read(path){
+          Err(why) => {
+            return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
+          },
+          Ok(bytes) => Typeface::from_data(Data::new_copy(&bytes), None)
+        };
+
+        match typeface {
+          Some(font) => {
+            cx.borrow(&this, |this| {
+              let mut library = this.library.borrow_mut();
+              library.add_typeface(font, alias.clone());
+            });
+          },
+          None => {
+            return cx.throw_error(format!("Could not decode font data in {}", path.display()))
+          }
+        }
       }
+
+      Ok(cx.undefined().upcast())
     }
 
   }
