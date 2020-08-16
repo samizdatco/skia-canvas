@@ -261,31 +261,33 @@ impl FontLibrary{
   pub fn collect_fonts(&mut self, style: &TextStyle) -> FontCollection {
     let families = style.font_families();
     let families:Vec<&str> = families.iter().collect();
-
-    // memoize the generation of single-weight FontCollections for variable fonts
-    let key = CollectionKey::new(&style);
-    if let Some(collection) = self.collection_cache.get(&key){
-      return collection.clone()
-    }
-
     let matches = self.collection.find_typefaces(&families, style.font_style());
-    if let Some(font) = matches.first() {
-      let alias = self.fonts.iter().find_map(|(face, alias)|
-        if Typeface::equal(font, face){ alias.clone() }else{ None }
-      );
 
-      // if the matched typeface is a variable font, create an instance that matches
-      // the current weight settings and return early with a new FontCollection that
-      // contains just that single font instance
+    // if the matched typeface is a variable font, create an instance that matches
+    // the current weight settings and return early with a new FontCollection that
+    // contains just that single font instance
+    if let Some(font) = matches.first() {
       if let Some(params) = font.variation_design_parameters(){
+
+        // memoize the generation of single-weight FontCollections for variable fonts
+        let key = CollectionKey::new(&style);
+        if let Some(collection) = self.collection_cache.get(&key){
+          return collection.clone()
+        }
+
+        // reconnect to the user-specified family name (if provided)
+        let alias = self.fonts.iter().find_map(|(face, alias)|
+          if Typeface::equal(font, face){ alias.clone() }else{ None }
+        );
+
         for param in params {
           let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
           let tag = String::from_utf8(chars).unwrap();
           if tag == "wght"{
             // NB: currently setting the value to *one less* than what was requested
-            //     to work around weird Skia behavior that returns something too light
-            //     in many cases (but not for ±1 of that value). This makes it so that
-            //     n × 100 values will render correctly (and the bug will manifest at
+            //     to work around weird Skia behavior that returns something nonlinearly
+            //     weighted in many cases (but not for ±1 of that value). This makes it so
+            //     that n × 100 values will render correctly (and the bug will manifest at
             //     n × 100 + 1 instead)
             let weight = *style.font_style().weight() - 1;
             let value = (weight as f32).max(param.min).min(param.max);
@@ -305,9 +307,6 @@ impl FontLibrary{
           }
         }
       }
-    }else{
-      // TKTKTKTK: do something in the no-matches case
-      // (maybe try subbing in concrete family names for the generic names?)
     }
 
     // if the matched font wasn't variable, then just return the standard collection
