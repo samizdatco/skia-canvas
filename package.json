@@ -9,6 +9,7 @@
     "install": "neon build"
   },
   "dependencies": {
+    "glob": "^7.1.6",
     "simple-get": "^4.0.0",
     "string-split-by": "^1.0.0"
   },
