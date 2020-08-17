@@ -372,29 +372,24 @@ impl Context2D{
   pub fn measure_text(&mut self, text: &str) -> Vec<f32>{
     let paint = self.paint_for_fill();
     let mut paragraph = self.typeset(&text, GALLEY, paint);
-
     let font_metrics = self.state.char_style.font_metrics();
     let offset = get_baseline_offset(&font_metrics, self.state.text_baseline);
+    let ascent = offset - font_metrics.ascent as f64;
+    let descent = offset + font_metrics.descent as f64;
 
-    let font_ascent = -font_metrics.ascent as f64 + offset;
-    let font_descent = font_metrics.descent as f64 + offset;
+    let mut line_metrics = match paragraph.get_line_metrics().as_slice().first(){
+      Some(line) => vec![line.width, line.left, line.width - line.left, line.ascent-offset, line.descent+offset],
+      None => vec![0.0, 0.0, 0.0, 0.0, 0.0]
+    };
 
-    if let Some(line) = paragraph.get_line_metrics().as_slice().first(){
-      vec![
-        line.width, line.left, line.width - line.left, line.ascent-offset, line.descent+offset,
-        font_ascent, font_descent, font_ascent, font_descent,
-        hang, alph, ideo
-      ].iter().map(|n| *n as f32).collect()
-    }else{
-      vec![
-        0.0, 0.0, 0.0, 0.0, 0.0,
-        font_ascent, font_descent, font_ascent, font_descent,
-        hang, alph, ideo
-      ].iter().map(|n| *n as f32).collect()
-    }
-    let hang = get_baseline_offset(&font_metrics, Baseline::Hanging) - offset;
-    let alph = get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset;
-    let ideo = get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset;
+    let text_metrics = vec![
+      ascent, descent, ascent, descent,
+      get_baseline_offset(&font_metrics, Baseline::Hanging) - offset,
+      get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset,
+      get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset,
+    ];
+
+    line_metrics.iter().chain(text_metrics.iter()).map(|n| *n as f32).collect()
   }
 
   pub fn set_filter(&mut self, filter_text:&str, specs:&[FilterSpec]){
