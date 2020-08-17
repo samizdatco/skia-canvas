@@ -28,41 +28,41 @@ pub mod class;
 pub use class::JsContext2D;
 
 pub struct Context2D{
-  pub surface: Rc<RefCell<Surface>>,
-  pub library: Rc<RefCell<FontLibrary>>,
-  pub path: Path,
-  pub state_stack: Vec<State>,
-  pub state: State,
+  surface: Rc<RefCell<Surface>>,
+  library: Rc<RefCell<FontLibrary>>,
+  path: Path,
+  state_stack: Vec<State>,
+  state: State,
 }
 
 #[derive(Clone)]
 pub struct State{
-  pub paint: Paint,
+  paint: Paint,
 
-  pub fill_style: Dye,
-  pub stroke_style: Dye,
-  pub shadow_blur: f32,
-  pub shadow_color: Color,
-  pub shadow_offset: Point,
+  fill_style: Dye,
+  stroke_style: Dye,
+  shadow_blur: f32,
+  shadow_color: Color,
+  shadow_offset: Point,
 
-  pub stroke_width: f32,
-  pub line_dash_offset: f32,
-  pub line_dash_list: Vec<f32>,
+  stroke_width: f32,
+  line_dash_offset: f32,
+  line_dash_list: Vec<f32>,
 
-  pub global_alpha: f32,
-  pub global_composite_operation: BlendMode,
-  pub image_filter_quality: FilterQuality,
-  pub image_smoothing_enabled: bool,
-  pub filter:String,
+  global_alpha: f32,
+  global_composite_operation: BlendMode,
+  image_filter_quality: FilterQuality,
+  image_smoothing_enabled: bool,
+  filter:String,
 
-  pub font: String,
-  pub font_variant: String,
-  pub font_features: Vec<String>,
-  pub char_style: TextStyle,
-  pub graf_style: ParagraphStyle,
-  pub text_baseline: Baseline,
-  pub text_tracking: i32,
-  pub text_wrap: bool,
+  font: String,
+  font_variant: String,
+  font_features: Vec<String>,
+  char_style: TextStyle,
+  graf_style: ParagraphStyle,
+  text_baseline: Baseline,
+  text_tracking: i32,
+  text_wrap: bool,
 }
 
 impl Default for State {
