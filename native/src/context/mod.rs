@@ -375,9 +375,6 @@ impl Context2D{
 
     let font_metrics = self.state.char_style.font_metrics();
     let offset = get_baseline_offset(&font_metrics, self.state.text_baseline);
-    let hang = offset - get_baseline_offset(&font_metrics, Baseline::Hanging);
-    let alph = offset - get_baseline_offset(&font_metrics, Baseline::Alphabetic);
-    let ideo = offset - get_baseline_offset(&font_metrics, Baseline::Ideographic);
 
     let font_ascent = -font_metrics.ascent as f64 + offset;
     let font_descent = font_metrics.descent as f64 + offset;
@@ -395,6 +392,9 @@ impl Context2D{
         hang, alph, ideo
       ].iter().map(|n| *n as f32).collect()
     }
+    let hang = get_baseline_offset(&font_metrics, Baseline::Hanging) - offset;
+    let alph = get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset;
+    let ideo = get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset;
   }
 
   pub fn set_filter(&mut self, filter_text:&str, specs:&[FilterSpec]){
