@@ -4,6 +4,7 @@
 #![allow(dead_code)]
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::ops::Range;
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
@@ -360,7 +361,7 @@ impl Context2D{
     let mut paragraph = self.typeset(&text, width, paint);
     let mut point = Point::new(x, y);
     let metrics = self.state.char_style.font_metrics();
-    let offset = get_baseline_offset(&metrics, self.state.text_baseline) as f32;
+    let offset = get_baseline_offset(&metrics, self.state.text_baseline);
     point.y += offset - paragraph.alphabetic_baseline();
     point.x += width * get_alignment_factor(&self.state.graf_style);
 
@@ -369,27 +370,49 @@ impl Context2D{
     });
   }
 
-  pub fn measure_text(&mut self, text: &str) -> Vec<f32>{
+  pub fn measure_text(&mut self, text: &str, width:Option<f32>) -> Vec<Vec<f32>>{
     let paint = self.paint_for_fill();
-    let mut paragraph = self.typeset(&text, GALLEY, paint);
+    let mut paragraph = self.typeset(&text, width.unwrap_or(GALLEY), paint);
+
     let font_metrics = self.state.char_style.font_metrics();
     let offset = get_baseline_offset(&font_metrics, self.state.text_baseline);
-    let ascent = offset - font_metrics.ascent as f64;
-    let descent = offset + font_metrics.descent as f64;
+    let hang = get_baseline_offset(&font_metrics, Baseline::Hanging) - offset;
+    let norm = get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset;
+    let ideo = get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset;
+    let ascent = norm - font_metrics.ascent;
+    let descent = font_metrics.descent - norm;
+    let alignment = get_alignment_factor(&self.state.graf_style);
 
-    let mut line_metrics = match paragraph.get_line_metrics().as_slice().first(){
-      Some(line) => vec![line.width, line.left, line.width - line.left, line.ascent-offset, line.descent+offset],
-      None => vec![0.0, 0.0, 0.0, 0.0, 0.0]
-    };
+    if paragraph.line_number() == 0 {
+      return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, ascent, descent, hang, norm, ideo]]
+    }
 
-    let text_metrics = vec![
-      ascent, descent, ascent, descent,
-      get_baseline_offset(&font_metrics, Baseline::Hanging) - offset,
-      get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset,
-      get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset,
-    ];
+    // find the bounds and text-range for each individual line
+    let origin = paragraph.get_line_metrics()[0].baseline;
+    let line_rects:Vec<(Rect, Range<usize>, f32)> = paragraph.get_line_metrics().iter().map(|line|{
+      let baseline = line.baseline - origin;
+      let rect = Rect::new(line.left as f32, (baseline - line.ascent) as f32,
+                          (line.width - line.left) as f32, (baseline + line.descent) as f32);
+      let range = string_idx_range(text, line.start_index, line.end_excluding_whitespaces);
+      (rect.with_offset((alignment*rect.width(), offset)), range, baseline as f32)
+    }).collect();
 
-    line_metrics.iter().chain(text_metrics.iter()).map(|n| *n as f32).collect()
+    // take their union to find the bounds for the whole text run
+    let (bounds, chars) = line_rects.iter().fold((Rect::new_empty(), 0), |(union, indices), (rect, range, _)|
+      (Rect::join2(union, rect), range.end)
+    );
+
+    // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
+    // line-rect/range values (with the js side responsible for restructuring the whole bundle)
+    let mut results = vec![vec![
+      bounds.width(), bounds.left, bounds.right, -bounds.top, bounds.bottom,
+      ascent, descent, ascent, descent, hang, norm, ideo
+    ]];
+    line_rects.iter().for_each(|(rect, range, baseline)|{
+      results.push(vec![rect.left, rect.top, rect.width(), rect.height(),
+                        *baseline, range.start as f32, range.end as f32])
+    });
+    results
   }
 
   pub fn set_filter(&mut self, filter_text:&str, specs:&[FilterSpec]){

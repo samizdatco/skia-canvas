@@ -220,14 +220,14 @@ pub fn from_text_baseline(mode:Baseline) -> String{
   }.to_string()
 }
 
-pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f64 {
+pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f32 {
   match mode{
-    Baseline::Top => -metrics.ascent as f64,
-    Baseline::Hanging => metrics.cap_height as f64,
-    Baseline::Middle => metrics.cap_height as f64 / 2.0,
+    Baseline::Top => -metrics.ascent,
+    Baseline::Hanging => metrics.cap_height,
+    Baseline::Middle => metrics.cap_height / 2.0,
     Baseline::Alphabetic => 0.0,
-    Baseline::Ideographic => -metrics.descent as f64,
-    Baseline::Bottom => -metrics.descent as f64,
+    Baseline::Ideographic => -metrics.descent,
+    Baseline::Bottom => -metrics.descent,
   }
 }
 

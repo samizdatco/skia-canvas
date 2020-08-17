@@ -666,8 +666,15 @@ declare_types! {
     method _measureText(mut cx){
       let mut this = cx.this();
       let text = string_arg(&mut cx, 0, "text")?;
-      let text_metrics = cx.borrow_mut(&mut this, |mut this| this.measure_text(&text) );
-      floats_to_array(&mut cx, &text_metrics)
+      let width = opt_float_arg(&mut cx, 1);
+      let text_metrics = cx.borrow_mut(&mut this, |mut this| this.measure_text(&text, width) );
+
+      let results = JsArray::new(&mut cx, text_metrics.len() as u32);
+      for (i, info) in text_metrics.iter().enumerate(){
+        let line = floats_to_array(&mut cx, &info)?;
+        results.set(&mut cx, i as u32, line)?;
+      }
+      Ok(results.upcast())
     }
 
     // -- type properties ---------------------------------------------------------------
