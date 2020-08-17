@@ -379,20 +379,19 @@ impl Context2D{
     let alph = offset - get_baseline_offset(&font_metrics, Baseline::Alphabetic);
     let ideo = offset - get_baseline_offset(&font_metrics, Baseline::Ideographic);
 
-    let font_ascent = font_metrics.ascent as f64 + offset;
+    let font_ascent = -font_metrics.ascent as f64 + offset;
     let font_descent = font_metrics.descent as f64 + offset;
-    let em = self.state.char_style.font_size() as f64;
 
     if let Some(line) = paragraph.get_line_metrics().as_slice().first(){
       vec![
         line.width, line.left, line.width - line.left, line.ascent-offset, line.descent+offset,
-        -font_ascent, font_descent, em-font_descent, font_descent,
+        font_ascent, font_descent, font_ascent, font_descent,
         hang, alph, ideo
       ].iter().map(|n| *n as f32).collect()
     }else{
       vec![
         0.0, 0.0, 0.0, 0.0, 0.0,
-        -font_ascent, font_descent, em-font_descent, font_descent,
+        font_ascent, font_descent, font_ascent, font_descent,
         hang, alph, ideo
       ].iter().map(|n| *n as f32).collect()
     }
