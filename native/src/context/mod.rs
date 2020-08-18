@@ -8,10 +8,11 @@ use std::ops::Range;
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
-use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo, Data,
-                Matrix, Rect, Point, IPoint, ISize, Color, Color4f, ColorType,
+use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo,
+                Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
-                image_filters, color_filters, table_color_filter, dash_path_effect};
+                image_filters, color_filters, table_color_filter, dash_path_effect,
+                Data, PictureRecorder};
 use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow};
 use skia_safe::canvas::SrcRectConstraint;
 use skia_safe::path::FillType;
@@ -29,11 +30,12 @@ pub mod class;
 pub use class::JsContext2D;
 
 pub struct Context2D{
-  surface: Rc<RefCell<Surface>>,
+  bounds: Rect,
+  recorder: Rc<RefCell<PictureRecorder>>,
   library: Rc<RefCell<FontLibrary>>,
-  path: Path,
-  state_stack: Vec<State>,
   state: State,
+  state_stack: Vec<State>,
+  path: Path,
 }
 
 #[derive(Clone)]
@@ -115,14 +117,14 @@ impl Default for State {
 }
 
 impl Context2D{
-  pub fn new(surface: &Rc<RefCell<Surface>>, library: &Rc<RefCell<FontLibrary>>) -> Self {
-    Context2D{
+  pub fn new(recorder: &Rc<RefCell<PictureRecorder>>, library: &Rc<RefCell<FontLibrary>>, bounds: Rect) -> Self {
     let mut ctx = Context2D{
-      surface: Rc::clone(&surface),
+      recorder: Rc::clone(&recorder),
       library: Rc::clone(&library),
       path: Path::new(),
       state_stack: vec![],
       state: State::default(),
+      bounds,
     };
     ctx.reset_canvas();
     ctx
@@ -138,8 +140,8 @@ impl Context2D{
   pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
-    let mut surface = self.surface.borrow_mut();
-    f(surface.canvas());
+    let mut recorder = self.recorder.borrow_mut();
+    f(&mut recorder.recording_canvas());
   }
 
   pub fn with_matrix<F>(&mut self, f:F)
@@ -159,8 +161,9 @@ impl Context2D{
     });
   }
 
-  pub fn reset_state(&mut self) {
-    // called when the canvas gets resized
+  pub fn resize(&mut self, dims: impl Into<Size>) {
+    // called by the canvas when .width or .height are assigned to
+    self.bounds = Rect::from_size(dims);
     self.path = Path::new();
     self.state_stack = vec![];
     self.state = State::default();
@@ -302,9 +305,26 @@ impl Context2D{
   }
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
+    let origin = origin.into();
+    let size = size.into();
     let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
-    let mut surface = self.surface.borrow_mut();
-    surface.read_pixels(&info, buffer, info.min_row_bytes(), origin);
+
+    self.push();
+    {
+      let mut recorder = self.recorder.borrow_mut();
+      if let Some(palimpsest) = recorder.finish_recording_as_picture(None){
+        recorder.begin_recording(self.bounds, None, None);
+        recorder.recording_canvas().draw_picture(&palimpsest, None, None);
+
+        if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(size){
+          let shift = Matrix::new_trans((-origin.x as f32, -origin.y as f32));
+          bitmap_surface.canvas().draw_picture(&palimpsest, Some(&shift), None);
+          bitmap_surface.read_pixels(&info, buffer, info.min_row_bytes(), (0,0));
+        }
+      }
+    }
+    self.reset_canvas();
+    self.pop();
   }
 
   pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect){

@@ -22,10 +22,12 @@ declare_types! {
       if cx.len() == 2 {
         let canvas = cx.argument::<JsCanvas>(0)?;
         let fonts = cx.argument::<JsFontLibrary>(1)?;
+
         return cx.borrow(&canvas, |canvas|
-          cx.borrow(&fonts, |fonts|
-            Ok(Context2D::new(&canvas.surface, &fonts.library))
-          )
+          cx.borrow(&fonts, |fonts|{
+            let bounds = Rect::from_wh(canvas.width, canvas.height);
+            Ok(Context2D::new(&canvas.recorder, &fonts.library, bounds))
+          })
         )
       }
 
@@ -111,7 +113,7 @@ declare_types! {
     // -- ctm property --------------------------------------------------------------------
 
     method get_currentTransform(mut cx){
-      let mut this = cx.this();
+      let this = cx.this();
       let matrix = cx.borrow(&this, |this| this.state.matrix );
       matrix_to_array(&mut cx, &matrix)
     }

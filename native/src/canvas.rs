@@ -5,25 +5,16 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::{Surface, PictureRecorder, EncodedImageFormat};
+use skia_safe::{Surface, Rect, PictureRecorder, EncodedImageFormat};
 
 use crate::utils::*;
 use crate::context::JsContext2D;
 
 pub struct Canvas{
-  pub surface: Rc<RefCell<Surface>>,
-  width: i32,
-  height: i32,
+  pub recorder: Rc<RefCell<PictureRecorder>>,
+  pub width: f32,
+  pub height: f32,
   density: f32,
-}
-
-impl Canvas{
-  fn resize(&mut self){
-    let size = (self.width, self.height);
-    if let Some(bitmap_surface) = Surface::new_raster_n32_premul(size){
-      self.surface.replace(bitmap_surface);
-    }
-  }
 }
 
 declare_types! {
@@ -35,31 +26,27 @@ declare_types! {
 
       let width = if width < 0.0 { 300.0 } else { width };
       let height = if height < 0.0 { 150.0 } else { height };
-      let dims = ((width * density) as i32, (height * density) as i32);
+      let bounds = Rect::from_wh(width * density, height * density);
 
-      if let Some(bitmap_surface) = Surface::new_raster_n32_premul(dims){
-        let surface = Rc::new(RefCell::new(bitmap_surface));
-        let (width, height) = dims;
-        Ok(Canvas{ width, height, density, surface })
-      }else{
-        cx.throw_error(format!("Could not create a canvas of that size ({}×{})", width, height))
-      }
+      let recorder = Rc::new(RefCell::new(PictureRecorder::new()));
+      recorder.borrow_mut().begin_recording(bounds, None, None);
+      Ok(Canvas{ width, height, density, recorder})
     }
 
     method set_width(mut cx){
       let mut this = cx.this();
       let width = float_arg(&mut cx, 0, "size")?.floor();
       if width >= 0.0 {
-        cx.borrow_mut(&mut this, |mut this| {
-          this.width = width as i32;
-          this.resize();
+        let dims = cx.borrow_mut(&mut this, |mut this| {
+          this.width = width;
+          (this.width, this.height)
         });
 
         let sym = symbol(&mut cx, "ctx")?;
         let ctx = this.get(&mut cx, sym)?;
         if ctx.is_a::<JsContext2D>(){
           if let Ok(mut ctx) = ctx.downcast::<JsContext2D>(){
-            cx.borrow_mut(&mut ctx, |mut ctx| ctx.reset_state() )
+            cx.borrow_mut(&mut ctx, |mut ctx| ctx.resize(dims) )
           }
         }
       }
@@ -76,16 +63,16 @@ declare_types! {
       let mut this = cx.this();
       let height = float_arg(&mut cx, 0, "size")?.floor();
       if height >= 0.0 {
-        cx.borrow_mut(&mut this, |mut this| {
-          this.height = height as i32;
-          this.resize();
+        let dims = cx.borrow_mut(&mut this, |mut this| {
+          this.height = height;
+          (this.width, this.height)
         });
 
         let sym = symbol(&mut cx, "ctx")?;
         let ctx = this.get(&mut cx, sym)?;
         if ctx.is_a::<JsContext2D>(){
           if let Ok(mut ctx) = ctx.downcast::<JsContext2D>(){
-            cx.borrow_mut(&mut ctx, |mut ctx| ctx.reset_state() )
+            cx.borrow_mut(&mut ctx, |mut ctx| ctx.resize(dims) )
           }
         }
       }
@@ -104,9 +91,18 @@ declare_types! {
 
     method toBuffer(mut cx){
       let this = cx.this();
+
       let raster = cx.borrow(&this, |this|{
-        let img = this.surface.borrow_mut().image_snapshot();
-        img.encode_to_data(EncodedImageFormat::PNG)
+        let mut recorder = this.recorder.borrow_mut();
+        if let Some(picture) = recorder.finish_recording_as_picture(None){
+          let img_dims = (this.width as i32, this.height as i32);
+          if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(img_dims){
+            bitmap_surface.canvas().draw_picture(&picture, None, None);
+            let img = bitmap_surface.image_snapshot();
+            return img.encode_to_data(EncodedImageFormat::PNG)
+          }
+        }
+        None
       });
 
       if let Some(data) = raster{
