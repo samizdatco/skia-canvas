@@ -310,26 +310,20 @@ impl Context2D{
     surface.read_pixels(&info, buffer, info.min_row_bytes(), origin);
   }
 
-  pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect) -> bool {
-    // works just like draw_image in terms of src/dst rects, but without transforms or shadows
-    // BUG: it shouldn't obey they canvas's clipping mask but I haven't figured
-    //      out how to cleanly remove then reapply it yet...
-    unsafe{
-      let data = Data::new_bytes(buffer);
-      match Image::from_raster_data(&info, data, info.min_row_bytes()){
-        Some(image) => {
-          self.with_canvas(|canvas| {
-            let mut paint = Paint::default();
-            paint.set_style(PaintStyle::Fill);
-            canvas.save();
-            canvas.reset_matrix();
-            canvas.draw_image_rect(&image, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
-            canvas.restore();
-          });
-          true
-        },
-        None => false
-      }
+  pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect){
+    // works just like draw_image in terms of src/dst rects, but without the clips, transforms, or shadows
+    let data = unsafe{ Data::new_bytes(buffer) };
+
+    if let Some(bitmap) = Image::from_raster_data(&info, data, info.min_row_bytes()) {
+      let mut paint = Paint::default();
+      paint.set_style(PaintStyle::Fill);
+
+      self.push();
+      self.reset_canvas();
+      self.with_canvas(|canvas| {
+        canvas.draw_image_rect(&bitmap, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
+      });
+      self.pop();
     }
   }
 
