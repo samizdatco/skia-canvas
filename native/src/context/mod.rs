@@ -117,18 +117,15 @@ impl Default for State {
 impl Context2D{
   pub fn new(surface: &Rc<RefCell<Surface>>, library: &Rc<RefCell<FontLibrary>>) -> Self {
     Context2D{
+    let mut ctx = Context2D{
       surface: Rc::clone(&surface),
       library: Rc::clone(&library),
       path: Path::new(),
       state_stack: vec![],
       state: State::default(),
-    }
-  }
-
-  pub fn ctm(&mut self) -> Matrix {
-    let mut surface = self.surface.borrow_mut();
-    let canvas = surface.canvas();
-    canvas.total_matrix()
+    };
+    ctx.reset_canvas();
+    ctx
   }
 
   pub fn in_local_coordinates(&mut self, x: f32, y: f32) -> Point{
