@@ -112,7 +112,7 @@ declare_types! {
 
     method get_currentTransform(mut cx){
       let mut this = cx.this();
-      let matrix = cx.borrow_mut(&mut this, |mut this| this.ctm() );
+      let matrix = cx.borrow(&this, |this| this.state.matrix );
       matrix_to_array(&mut cx, &matrix)
     }
 

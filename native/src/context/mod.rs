@@ -8,7 +8,7 @@ use std::ops::Range;
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
-use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, Image, ImageInfo, Data,
+use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo, Data,
                 Matrix, Rect, Point, IPoint, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
                 image_filters, color_filters, table_color_filter, dash_path_effect};
@@ -38,6 +38,8 @@ pub struct Context2D{
 
 #[derive(Clone)]
 pub struct State{
+  clip: Path,
+  matrix: Matrix,
   paint: Paint,
 
   fill_style: Dye,
@@ -81,6 +83,8 @@ impl Default for State {
 
     State {
       paint,
+      clip: Path::new(),
+      matrix: Matrix::new_identity(),
       stroke_style: Dye::Color(BLACK),
       fill_style: Dye::Color(BLACK),
 
@@ -128,7 +132,7 @@ impl Context2D{
   }
 
   pub fn in_local_coordinates(&mut self, x: f32, y: f32) -> Point{
-    match self.ctm().invert(){
+    match self.state.matrix.invert(){
       Some(inverse) => inverse.map_point((x, y)),
       None => (x, y).into()
     }
@@ -144,10 +148,17 @@ impl Context2D{
   pub fn with_matrix<F>(&mut self, f:F)
     where F:FnOnce(&mut Matrix) -> &Matrix
   {
-    let mut ctm = self.ctm();
-    f(&mut ctm);
+    f(&mut self.state.matrix);
     self.with_canvas(|canvas| {
-      canvas.set_matrix(&ctm);
+      canvas.set_matrix(&self.state.matrix);
+    });
+  }
+
+  pub fn reset_canvas(&mut self){
+    // clears the active clip and transform from the canvas (but not from the state struct)
+    self.with_canvas(|canvas|{
+      canvas.restore_to_count(1);
+      canvas.save();
     });
   }
 
@@ -156,19 +167,28 @@ impl Context2D{
     self.path = Path::new();
     self.state_stack = vec![];
     self.state = State::default();
+    self.reset_canvas();
   }
 
   pub fn push(&mut self){
     let new_state = self.state.clone();
     self.state_stack.push(new_state);
-    self.with_canvas(|canvas|{ canvas.save(); });
   }
 
   pub fn pop(&mut self){
+    // don't do anything if we're already back at the initial stack frame
     if let Some(old_state) = self.state_stack.pop(){
       self.state = old_state;
+
+      self.reset_canvas();
+      self.with_canvas(|canvas|{
+        canvas.set_matrix(&self.state.matrix);
+        if !self.state.clip.is_empty(){
+          canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
+        }
+      });
     }
-    self.with_canvas(|canvas|{ canvas.restore(); });
+
   }
 
   pub fn draw_path(&mut self, paint: &Paint){
@@ -185,15 +205,20 @@ impl Context2D{
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
+    let mut clip = match path{
+      Some(path) => path,
+      None => self.path.clone()
+    };
+
+    clip.set_fill_type(rule);
+    if self.state.clip.is_empty(){
+      self.state.clip = clip.clone();
+    }else if let Some(new_clip) = self.state.clip.op(&clip, PathOp::Intersect){
+      self.state.clip = new_clip;
+    }
+
+    let do_aa = true;
     self.with_canvas(|canvas| {
-      let do_aa = true;
-
-      let mut clip = match path{
-        Some(path) => path,
-        None => self.path.clone()
-      };
-
-      clip.set_fill_type(rule);
       canvas.clip_path(&clip, ClipOp::Intersect, do_aa);
     });
   }
