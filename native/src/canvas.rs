@@ -56,7 +56,7 @@ impl Canvas{
   }
 }
 
-fn with_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<JsCanvas>, f:F)->Result<U, Throw> where
+pub fn canvas_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<JsCanvas>, f:F)->Result<U, Throw> where
   T: This,
   F:FnOnce(&mut Context2D) -> U
 {
@@ -107,7 +107,7 @@ declare_types! {
           (this.width, this.height)
         });
 
-        with_context(&mut cx, &this, |ctx|{
+        canvas_context(&mut cx, &this, |ctx|{
           ctx.resize(dims)
         })?;
       }
@@ -129,7 +129,7 @@ declare_types! {
           (this.width, this.height)
         });
 
-        with_context(&mut cx, &this, |ctx|{
+        canvas_context(&mut cx, &this, |ctx|{
           ctx.resize(dims)
         })?;
       }
@@ -157,7 +157,7 @@ declare_types! {
           .to_string()
           .to_lowercase();
 
-      let data = match with_context(&mut cx, &this, |ctx| ctx.get_picture() )?{
+      let data = match canvas_context(&mut cx, &this, |ctx| ctx.get_picture() )?{
         Some(pic) => cx.borrow(&this, |this|
           this.encode_image(&pic, &extension)
         ),
@@ -192,7 +192,7 @@ declare_types! {
         _ => return cx.throw_error(format!("Unrecognized format: {:?}", extension))
       };
 
-      let data = match with_context(&mut cx, &this, |ctx| ctx.get_picture() )?{
+      let data = match canvas_context(&mut cx, &this, |ctx| ctx.get_picture() )?{
         Some(pic) => cx.borrow(&this, |this|
           this.encode_image(&pic, &extension.to_lowercase())
         ),

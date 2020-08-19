@@ -6,7 +6,7 @@ use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
 use super::{Context2D, Dye};
-use crate::canvas::{JsCanvas};
+use crate::canvas::{JsCanvas, canvas_context};
 use crate::path::{Path2D, JsPath2D};
 use crate::image::{JsImage, JsImageData};
 use crate::typography::*;
@@ -505,21 +505,29 @@ declare_types! {
 
     method drawImage(mut cx){
       let mut this = cx.this();
-      let img = cx.argument::<JsImage>(0)?;
-      let argc = cx.len() as usize;
-      let nums = float_args(&mut cx, 1..argc)?;
-      let dims = cx.borrow(&img, |img| {
-        match &img.image {
-          Some(image) => Some((image.width(), image.height())),
-          None => None
-        }
-      });
+      let arg = cx.argument::<JsObject>(0)?;
+      let canvas = arg.downcast::<JsCanvas>().ok();
+      let image = arg.downcast::<JsImage>().ok();
+
+      let dims = if let Some(canvas) = canvas{
+        cx.borrow(&canvas, |canvas| Some(
+          (canvas.width as i32, canvas.height as i32)
+        ))
+      }else if let Some(image) = image{
+        cx.borrow(&image, |img| img.image.as_ref().map(|img|
+          (img.width(), img.height())
+        ))
+      }else{
+        return cx.throw_type_error("Expected an Image or a Canvas argument")
+      };
 
       let (width, height) = match dims{
         Some((w,h)) => (w as f32, h as f32),
         None => return cx.throw_error("Cannot draw incomplete image (has it finished loading?)")
       };
 
+      let argc = cx.len() as usize;
+      let nums = float_args(&mut cx, 1..argc)?;
       let (src, dst) = match nums.len() {
         2 => ( Rect::from_xywh(0.0, 0.0, width, height),
                Rect::from_xywh(nums[0], nums[1], width, height) ),
@@ -530,11 +538,18 @@ declare_types! {
         _ => return cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
       };
 
-      cx.borrow_mut(&mut this, |mut this| {
-        cx.borrow(&img, |img| {
-          this.draw_image(&img.image, &src, &dst);
+      if let Some(img) = image {
+        cx.borrow_mut(&mut this, |mut this| {
+          cx.borrow(&img, |img| {
+            this.draw_image(&img.image, &src, &dst);
+          });
         });
-      });
+      }else if let Some(canvas) = canvas {
+        let picture = canvas_context(&mut cx, &canvas, |ctx| ctx.get_picture() )?;
+        cx.borrow_mut(&mut this, |mut this| {
+            this.draw_picture(&picture, &src, &dst);
+        });
+      }
 
       Ok(cx.undefined().upcast())
     }

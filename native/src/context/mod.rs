@@ -270,12 +270,39 @@ impl Context2D{
     });
   }
 
+  pub fn draw_picture(&mut self, picture:&Option<Picture>, src_rect:&Rect, dst_rect:&Rect){
+    let mut paint = self.state.paint.clone();
+    paint.set_style(PaintStyle::Fill)
+         .set_color(self.color_with_alpha(&BLACK));
+
+    if let Some(picture) = picture{
+      self.push();
+      self.with_canvas(|canvas| {
+        let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
+        let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
+        let mut matrix = Matrix::new_identity();
+        matrix.pre_scale( (mag.x, mag.y), None )
+              .pre_translate((-src_rect.x(), -src_rect.y()));
+
+        if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+          if let Some(mut surface) = Surface::new_raster_n32_premul(size){
+            surface.canvas().draw_picture(&picture, Some(&matrix), None);
+            canvas.draw_image(&surface.image_snapshot(), (dst_rect.x(), dst_rect.y()), Some(&shadow_paint));
+          }
+        }
+
+        matrix.pre_translate((dst_rect.x()/mag.x, dst_rect.y()/mag.y));
+        canvas.clip_rect(dst_rect, ClipOp::Intersect, true)
+              .draw_picture(&picture, Some(&matrix), Some(&paint));
+      });
+      self.pop();
+    }
+  }
+
   pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
     let mut paint = self.state.paint.clone();
-    paint.set_style(PaintStyle::Fill);
-    paint.set_color(self.color_with_alpha(&BLACK));
-
-    let shadow = self.paint_for_shadow(&paint);
+    paint.set_style(PaintStyle::Fill)
+         .set_color(self.color_with_alpha(&BLACK));
 
     if let Some(image) = &img {
       // remove the positioning from the destination since image_filters.image will return
@@ -293,7 +320,7 @@ impl Context2D{
             origin.offset(dxdy);
 
             // draw shadow if applicable
-            if let Some(shadow_paint) = shadow{
+            if let Some(shadow_paint) = self.paint_for_shadow(&paint){
               canvas.draw_image(&image, origin, Some(&shadow_paint));
             }
 
