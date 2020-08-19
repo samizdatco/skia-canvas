@@ -2,19 +2,81 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
-use std::rc::Rc;
-use std::cell::RefCell;
+use std::fs;
+use std::ffi::OsStr;
+use std::path::Path;
 use neon::prelude::*;
-use skia_safe::{Surface, Rect, PictureRecorder, EncodedImageFormat};
+use neon::result::Throw;
+use neon::object::This;
+use skia_safe::{Surface, Rect, Picture, EncodedImageFormat, Data, pdf, svg};
 
 use crate::utils::*;
-use crate::context::JsContext2D;
+use crate::context::{JsContext2D, Context2D};
 
 pub struct Canvas{
-  pub recorder: Rc<RefCell<PictureRecorder>>,
   pub width: f32,
   pub height: f32,
-  density: f32,
+  pub density: f32,
+}
+
+impl Canvas{
+  fn encode_image(&self, picture: &Picture, format:&str) -> Option<Data> {
+    let img_format = match format {
+      "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
+      "png" => Some(EncodedImageFormat::PNG),
+      "webp" => Some(EncodedImageFormat::WEBP),
+      "gif" => Some(EncodedImageFormat::GIF),
+      "heic" => Some(EncodedImageFormat::HEIF),
+      _ => None
+    };
+
+    if let Some(format) = img_format{
+      let img_dims = (self.width as i32, self.height as i32);
+      if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
+        surface.canvas().draw_picture(&picture, None, None);
+        let img = surface.image_snapshot();
+        img.encode_to_data_with_quality(format, 100 /* quality */)
+      }else{
+        None
+      }
+    }else if format == "pdf"{
+      let img_dims = (self.width as i32, self.height as i32);
+      let mut document = pdf::new_document(None).begin_page(img_dims, None);
+      let canvas = document.canvas();
+      canvas.draw_picture(&picture, None, None);
+      Some(document.end_page().close())
+    }else if format == "svg"{
+      let img_dims = (self.width as i32, self.height as i32);
+      let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), None);
+      canvas.draw_picture(&picture, None, None);
+      Some(canvas.end())
+    }else{
+      None
+    }
+  }
+}
+
+fn with_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<JsCanvas>, f:F)->Result<U, Throw> where
+  T: This,
+  F:FnOnce(&mut Context2D) -> U
+{
+  let context_map = this
+      .get(cx, "constructor")?
+      .downcast::<JsFunction>().or_throw(cx)?
+      .get(cx, "context")?
+      .downcast::<JsObject>().or_throw(cx)?;
+
+  let map_getter = context_map
+      .get(cx, "get")?
+      .downcast::<JsFunction>().or_throw(cx)?;
+
+  let mut context = map_getter
+      .call(cx, context_map, vec![this.upcast::<JsObject>()])?
+      .downcast::<JsContext2D>().or_throw(cx)?;
+
+  cx.borrow_mut(&mut context, |mut ctx|
+    Ok(f(&mut ctx))
+  )
 }
 
 declare_types! {
@@ -26,11 +88,14 @@ declare_types! {
 
       let width = if width < 0.0 { 300.0 } else { width };
       let height = if height < 0.0 { 150.0 } else { height };
-      let bounds = Rect::from_wh(width * density, height * density);
 
-      let recorder = Rc::new(RefCell::new(PictureRecorder::new()));
-      recorder.borrow_mut().begin_recording(bounds, None, None);
-      Ok(Canvas{ width, height, density, recorder})
+      Ok(Canvas{ width, height, density })
+    }
+
+    method get_density(mut cx){
+      let this = cx.this();
+      let size = cx.borrow(&this, |this| this.density );
+      Ok(cx.number(size).upcast())
     }
 
     method set_width(mut cx){
@@ -42,13 +107,9 @@ declare_types! {
           (this.width, this.height)
         });
 
-        let sym = symbol(&mut cx, "ctx")?;
-        let ctx = this.get(&mut cx, sym)?;
-        if ctx.is_a::<JsContext2D>(){
-          if let Ok(mut ctx) = ctx.downcast::<JsContext2D>(){
-            cx.borrow_mut(&mut ctx, |mut ctx| ctx.resize(dims) )
-          }
-        }
+        with_context(&mut cx, &this, |ctx|{
+          ctx.resize(dims)
+        })?;
       }
       Ok(cx.undefined().upcast())
     }
@@ -68,13 +129,9 @@ declare_types! {
           (this.width, this.height)
         });
 
-        let sym = symbol(&mut cx, "ctx")?;
-        let ctx = this.get(&mut cx, sym)?;
-        if ctx.is_a::<JsContext2D>(){
-          if let Ok(mut ctx) = ctx.downcast::<JsContext2D>(){
-            cx.borrow_mut(&mut ctx, |mut ctx| ctx.resize(dims) )
-          }
-        }
+        with_context(&mut cx, &this, |ctx|{
+          ctx.resize(dims)
+        })?;
       }
       Ok(cx.undefined().upcast())
     }
@@ -89,30 +146,68 @@ declare_types! {
     // Output
     //
 
-    method toBuffer(mut cx){
+    method saveAs(mut cx){
       let this = cx.this();
+      let filename = string_arg(&mut cx, 0, "filePath")?;
+      let path = Path::new(&filename);
+      let extension = path
+          .extension()
+          .and_then(OsStr::to_str)
+          .unwrap_or_default()
+          .to_string()
+          .to_lowercase();
 
-      let raster = cx.borrow(&this, |this|{
-        let mut recorder = this.recorder.borrow_mut();
-        if let Some(picture) = recorder.finish_recording_as_picture(None){
-          let img_dims = (this.width as i32, this.height as i32);
-          if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(img_dims){
-            bitmap_surface.canvas().draw_picture(&picture, None, None);
-            let img = bitmap_surface.image_snapshot();
-            return img.encode_to_data(EncodedImageFormat::PNG)
+      let data = match with_context(&mut cx, &this, |ctx| ctx.get_picture() )?{
+        Some(pic) => cx.borrow(&this, |this|
+          this.encode_image(&pic, &extension)
+        ),
+        None => None
+      };
+
+      match data {
+        Some(data) => {
+          match fs::write(path, data.as_bytes()){
+            Err(why) => cx.throw_error(format!("{}: \"{}\"", why, path.display())),
+            Ok(()) => Ok(cx.undefined().upcast())
+          }
+        },
+        None => {
+          if cx.borrow(&this, |this| this.width==0.0 || this.height==0.0 ){
+            cx.throw_error("Width and height must be non-zero to generate an image")
+          }else if extension.is_empty() {
+            cx.throw_error("Could not determine format from file name")
+          }else{
+            cx.throw_error(format!("Unsupported file format: {:?}", extension))
           }
         }
-        None
-      });
+      }
+    }
 
-      if let Some(data) = raster{
-        let mut buffer = JsBuffer::new(&mut cx, data.len() as u32)?;
-        cx.borrow_mut(&mut buffer, |buf_data| {
-          buf_data.as_mut_slice().copy_from_slice(&data);
-        });
-        Ok(buffer.upcast())
-      }else{
-        Ok(cx.undefined().upcast())
+    method toBuffer(mut cx){
+      let this = cx.this();
+      let extension = string_arg_or(&mut cx, 0, "png");
+
+      match extension.to_lowercase().as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "heic" | "webp" | "svg" | "pdf" => {},
+        _ => return cx.throw_error(format!("Unrecognized format: {:?}", extension))
+      };
+
+      let data = match with_context(&mut cx, &this, |ctx| ctx.get_picture() )?{
+        Some(pic) => cx.borrow(&this, |this|
+          this.encode_image(&pic, &extension.to_lowercase())
+        ),
+        None => None
+      };
+
+      match data{
+        Some(data) => {
+          let mut buffer = JsBuffer::new(&mut cx, data.len() as u32)?;
+          cx.borrow_mut(&mut buffer, |buf_data| {
+            buf_data.as_mut_slice().copy_from_slice(&data);
+          });
+          Ok(buffer.upcast())
+        },
+        None => cx.throw_error(format!("Unsupported image format: {:?}", extension))
       }
     }
 

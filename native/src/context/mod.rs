@@ -12,7 +12,7 @@ use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageIn
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
                 image_filters, color_filters, table_color_filter, dash_path_effect,
-                Data, PictureRecorder};
+                Data, PictureRecorder, Picture};
 use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow};
 use skia_safe::canvas::SrcRectConstraint;
 use skia_safe::path::FillType;
@@ -31,7 +31,7 @@ pub use class::JsContext2D;
 
 pub struct Context2D{
   bounds: Rect,
-  recorder: Rc<RefCell<PictureRecorder>>,
+  recorder: RefCell<PictureRecorder>,
   library: Rc<RefCell<FontLibrary>>,
   state: State,
   stack: Vec<State>,
@@ -84,12 +84,12 @@ impl Default for State {
     char_style.set_font_size(10.0);
 
     State {
-      paint,
       clip: Path::new(),
       matrix: Matrix::new_identity(),
+
+      paint,
       stroke_style: Dye::Color(BLACK),
       fill_style: Dye::Color(BLACK),
-
       stroke_width: 1.0,
       line_dash_offset: 0.0,
       line_dash_list: vec![],
@@ -117,17 +117,19 @@ impl Default for State {
 }
 
 impl Context2D{
-  pub fn new(recorder: &Rc<RefCell<PictureRecorder>>, library: &Rc<RefCell<FontLibrary>>, bounds: Rect) -> Self {
-    let mut ctx = Context2D{
-      recorder: Rc::clone(&recorder),
+  pub fn new(bounds: Rect, library: &Rc<RefCell<FontLibrary>>) -> Self {
+    let mut recorder = PictureRecorder::new();
+    recorder.begin_recording(bounds, None, None);
+    recorder.recording_canvas().save(); // start at depth 2
+
+    Context2D{
+      bounds,
+      recorder: RefCell::new(recorder),
       library: Rc::clone(&library),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
-      bounds,
-    };
-    ctx.reset_canvas();
-    ctx
+    }
   }
 
   pub fn in_local_coordinates(&mut self, x: f32, y: f32) -> Point{
@@ -188,7 +190,6 @@ impl Context2D{
         }
       });
     }
-
   }
 
   pub fn draw_path(&mut self, paint: &Paint){
@@ -304,27 +305,33 @@ impl Context2D{
     }
   }
 
+  pub fn get_picture(&mut self) -> Option<Picture> {
+    self.push();
+    let picture = {
+      let mut recorder = self.recorder.borrow_mut();
+      let snapshot = recorder.finish_recording_as_picture(Some(&self.bounds));
+      recorder.begin_recording(self.bounds, None, None);
+      if let Some(palimpsest) = &snapshot {
+        recorder.recording_canvas().draw_picture(&palimpsest, None, None);
+      }
+      snapshot
+    };
+    self.pop(); // apply our current matrix & clip onto the newly recreated canvas
+    picture
+  }
+
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
     let origin = origin.into();
     let size = size.into();
     let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
 
-    self.push();
-    {
-      let mut recorder = self.recorder.borrow_mut();
-      if let Some(palimpsest) = recorder.finish_recording_as_picture(None){
-        recorder.begin_recording(self.bounds, None, None);
-        recorder.recording_canvas().draw_picture(&palimpsest, None, None);
-
-        if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(size){
-          let shift = Matrix::new_trans((-origin.x as f32, -origin.y as f32));
-          bitmap_surface.canvas().draw_picture(&palimpsest, Some(&shift), None);
-          bitmap_surface.read_pixels(&info, buffer, info.min_row_bytes(), (0,0));
-        }
+    if let Some(pict) = self.get_picture() {
+      if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(size){
+        let shift = Matrix::new_trans((-origin.x as f32, -origin.y as f32));
+        bitmap_surface.canvas().draw_picture(&pict, Some(&shift), None);
+        bitmap_surface.read_pixels(&info, buffer, info.min_row_bytes(), (0,0));
       }
     }
-    self.reset_canvas();
-    self.pop();
   }
 
   pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect){

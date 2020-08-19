@@ -19,19 +19,18 @@ use crate::utils::*;
 declare_types! {
   pub class JsContext2D for Context2D {
     init(mut cx) {
-      if cx.len() == 2 {
-        let canvas = cx.argument::<JsCanvas>(0)?;
-        let fonts = cx.argument::<JsFontLibrary>(1)?;
+      if cx.len() == 3 {
+        let dims = float_args(&mut cx, 0..2)?;
+        let fonts = cx.argument::<JsFontLibrary>(2)?;
 
-        return cx.borrow(&canvas, |canvas|
-          cx.borrow(&fonts, |fonts|{
-            let bounds = Rect::from_wh(canvas.width, canvas.height);
-            Ok(Context2D::new(&canvas.recorder, &fonts.library, bounds))
-          })
-        )
+        return cx.borrow(&fonts, |fonts|{
+          let bounds = Rect::from_wh(dims[0], dims[1]);
+          Ok(Context2D::new(bounds, &fonts.library))
+        })
       }
 
-      // we really don't want to encourage direct use of this anyway...
+      // direct use of this is nonstandard in any case, so we can at least
+      // pretend not to exist
       cx.throw_type_error("function is not a constructor")
     }
 
