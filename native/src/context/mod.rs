@@ -104,7 +104,7 @@ impl Default for State {
       shadow_color: TRANSPARENT,
       shadow_offset: (0.0, 0.0).into(),
 
-      font: "10px monospace".to_string(),
+      font: "10px sans-serif".to_string(),
       font_variant: "normal".to_string(),
       font_features:vec![],
       char_style,
