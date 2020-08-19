@@ -306,18 +306,25 @@ impl Context2D{
   }
 
   pub fn get_picture(&mut self) -> Option<Picture> {
-    self.push();
-    let picture = {
-      let mut recorder = self.recorder.borrow_mut();
-      let snapshot = recorder.finish_recording_as_picture(Some(&self.bounds));
-      recorder.begin_recording(self.bounds, None, None);
-      if let Some(palimpsest) = &snapshot {
-        recorder.recording_canvas().draw_picture(&palimpsest, None, None);
-      }
-      snapshot
-    };
-    self.pop(); // apply our current matrix & clip onto the newly recreated canvas
-    picture
+    // stop the recorder to take a snapshot then restart it again
+    let mut recorder = self.recorder.borrow_mut();
+    let snapshot = recorder.finish_recording_as_picture(Some(&self.bounds));
+    recorder.begin_recording(self.bounds, None, None);
+
+    // fill the newly restarted recorder with the snapshot content...
+    let canvas = recorder.recording_canvas();
+    if let Some(palimpsest) = &snapshot {
+      canvas.draw_picture(&palimpsest, None, None);
+    }
+
+    // ...and the current ctm/clip state
+    canvas.save();
+    canvas.set_matrix(&self.state.matrix);
+    if !self.state.clip.is_empty(){
+      canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
+    }
+
+    snapshot
   }
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
