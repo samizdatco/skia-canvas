@@ -34,7 +34,7 @@ pub struct Context2D{
   recorder: Rc<RefCell<PictureRecorder>>,
   library: Rc<RefCell<FontLibrary>>,
   state: State,
-  state_stack: Vec<State>,
+  stack: Vec<State>,
   path: Path,
 }
 
@@ -122,7 +122,7 @@ impl Context2D{
       recorder: Rc::clone(&recorder),
       library: Rc::clone(&library),
       path: Path::new(),
-      state_stack: vec![],
+      stack: vec![],
       state: State::default(),
       bounds,
     };
@@ -165,19 +165,19 @@ impl Context2D{
     // called by the canvas when .width or .height are assigned to
     self.bounds = Rect::from_size(dims);
     self.path = Path::new();
-    self.state_stack = vec![];
+    self.stack = vec![];
     self.state = State::default();
     self.reset_canvas();
   }
 
   pub fn push(&mut self){
     let new_state = self.state.clone();
-    self.state_stack.push(new_state);
+    self.stack.push(new_state);
   }
 
   pub fn pop(&mut self){
     // don't do anything if we're already back at the initial stack frame
-    if let Some(old_state) = self.state_stack.pop(){
+    if let Some(old_state) = self.stack.pop(){
       self.state = old_state;
 
       self.reset_canvas();
@@ -683,7 +683,7 @@ pub fn stash_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str
     }
   };
 
-  let depth = cx.borrow(&this, |this| this.state_stack.len() as f64);
+  let depth = cx.borrow(&this, |this| this.stack.len() as f64);
   let len = cx.number(depth + 1.0);
   let idx = cx.number(depth);
   let length = cx.string("length");
@@ -700,7 +700,7 @@ pub fn fetch_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str
 
   let length = cx.string("length");
   let len = queue.get(cx, length)?.downcast::<JsNumber>().or_throw(cx)?.value() as f64;
-  let depth = cx.borrow(&this, |this| this.state_stack.len() as f64);
+  let depth = cx.borrow(&this, |this| this.stack.len() as f64);
   let idx = cx.number(depth.min(len - 1.0));
 
   match queue.get(cx, idx){
