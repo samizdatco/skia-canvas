@@ -545,7 +545,7 @@ declare_types! {
           });
         });
       }else if let Some(canvas) = canvas {
-        let picture = canvas_context(&mut cx, &canvas, |ctx| ctx.get_picture() )?;
+        let picture = canvas_context(&mut cx, &canvas, 0, |ctx| ctx.get_picture(Some(&src)) )?;
         cx.borrow_mut(&mut this, |mut this| {
             this.draw_picture(&picture, &src, &dst);
         });

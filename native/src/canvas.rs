@@ -157,7 +157,7 @@ declare_types! {
           .to_string()
           .to_lowercase();
 
-      let data = match canvas_context(&mut cx, &this, |ctx| ctx.get_picture() )?{
+      let data = match canvas_context(&mut cx, &this, 0, |ctx| ctx.get_picture(None) )?{
         Some(pic) => cx.borrow(&this, |this|
           this.encode_image(&pic, &extension)
         ),
@@ -192,7 +192,7 @@ declare_types! {
         _ => return cx.throw_error(format!("Unrecognized format: {:?}", extension))
       };
 
-      let data = match canvas_context(&mut cx, &this, |ctx| ctx.get_picture() )?{
+      let data = match canvas_context(&mut cx, &this, 0, |ctx| ctx.get_picture(None) )?{
         Some(pic) => cx.borrow(&this, |this|
           this.encode_image(&pic, &extension.to_lowercase())
         ),
