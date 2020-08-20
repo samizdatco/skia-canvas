@@ -25,24 +25,24 @@ impl Path2D{
     let Point{x:x_radius, y:y_radius} = radii.into();
 
     // based off of CanonicalizeAngle in Chrome
-    let tao = 2.0 * PI;
-    let mut new_start_angle = start_angle % tao;
+    let tau = 2.0 * PI;
+    let mut new_start_angle = start_angle % tau;
     if new_start_angle < 0.0 {
-      new_start_angle += tao;
+      new_start_angle += tau;
     }
     let delta = new_start_angle - start_angle;
     let start_angle = new_start_angle;
     let mut end_angle = end_angle + delta;
 
     // Based off of AdjustEndAngle in Chrome.
-    if !ccw && (end_angle - start_angle) >= tao {
-      end_angle = start_angle + tao; // Draw complete ellipse
-    } else if ccw && (start_angle - end_angle) >= tao {
-      end_angle = start_angle - tao; // Draw complete ellipse
+    if !ccw && (end_angle - start_angle) >= tau {
+      end_angle = start_angle + tau; // Draw complete ellipse
+    } else if ccw && (start_angle - end_angle) >= tau {
+      end_angle = start_angle - tau; // Draw complete ellipse
     } else if !ccw && start_angle > end_angle {
-      end_angle = start_angle + (tao - (start_angle - end_angle) % tao);
+      end_angle = start_angle + (tau - (start_angle - end_angle) % tau);
     } else if ccw && start_angle < end_angle {
-      end_angle = start_angle - (tao - (end_angle - start_angle) % tao);
+      end_angle = start_angle - (tau - (end_angle - start_angle) % tau);
     }
 
     // Based off of Chrome's implementation in
