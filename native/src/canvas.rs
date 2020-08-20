@@ -251,7 +251,8 @@ declare_types! {
       let this = cx.this();
       let file_format = string_arg(&mut cx, 0, "format")?;
       let quality = float_arg(&mut cx, 1, "quality")?;
-      let mut page = canvas_pages(&mut cx, &this)?[0];
+      let page_idx = float_arg(&mut cx, 2, "pageIdx")? as usize;
+      let mut page = canvas_pages(&mut cx, &this)?[page_idx];
 
       let data = cx.borrow(&this, |this|
         cx.borrow_mut(&mut page, |mut page|{
