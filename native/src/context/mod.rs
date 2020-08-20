@@ -139,6 +139,14 @@ impl Context2D{
     }
   }
 
+  pub fn width(&self) -> f32{
+    self.bounds.width()
+  }
+
+  pub fn height(&self) -> f32{
+    self.bounds.height()
+  }
+
   pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
