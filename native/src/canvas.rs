@@ -2,13 +2,14 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+#![allow(clippy::needless_range_loop)]
 use std::fs;
-use std::ffi::OsStr;
 use std::path::Path;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
 use skia_safe::{Surface, Rect, Picture, EncodedImageFormat, Data, pdf, svg};
+
 
 use crate::utils::*;
 use crate::context::{JsContext2D, Context2D};
@@ -20,7 +21,8 @@ pub struct Canvas{
 }
 
 impl Canvas{
-  fn encode_image(&self, picture: &Picture, format:&str) -> Option<Data> {
+
+  fn encode_image(&self, picture: &Picture, format:&str, width: f32, height: f32, quality: f32) -> Option<Data> {
     let img_format = match format {
       "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
       "png" => Some(EncodedImageFormat::PNG),
@@ -31,16 +33,16 @@ impl Canvas{
     };
 
     if let Some(format) = img_format{
-      let img_dims = (self.width as i32, self.height as i32);
+      let img_dims = (width as i32, height as i32);
       if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
         surface.canvas().draw_picture(&picture, None, None);
         let img = surface.image_snapshot();
-        img.encode_to_data_with_quality(format, 100 /* quality */)
+        img.encode_to_data_with_quality(format, quality as i32)
       }else{
         None
       }
     }else if format == "pdf"{
-      let img_dims = (self.width as i32, self.height as i32);
+      let img_dims = (width as i32, height as i32);
       let mut document = pdf::new_document(None).begin_page(img_dims, None);
       let canvas = document.canvas();
       canvas.draw_picture(&picture, None, None);
@@ -54,12 +56,29 @@ impl Canvas{
       None
     }
   }
+
+  fn write_page(&self, page: &mut Context2D, filename: &str, file_format:&str, quality: f32) -> Result<(), String> {
+    let path = Path::new(&filename);
+    if page.width() == 0.0 || page.height() == 0.0 {
+      return Err("Width and height must be non-zero to generate an image".to_string())
+    }
+
+    let data = match page.get_picture(None) {
+      Some(picture) => self.encode_image(&picture, &file_format, page.width(), page.height(), quality),
+      None => None
+    };
+
+    match data {
+      Some(data) => fs::write(path, data.as_bytes()).map_err(|why|
+        format!("{}: \"{}\"", why, path.display())
+      ),
+      None => Err(format!("Unsupported file format: {:?}", file_format))
+    }
+  }
+
 }
 
-pub fn canvas_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<JsCanvas>, f:F)->Result<U, Throw> where
-  T: This,
-  F:FnOnce(&mut Context2D) -> U
-{
+pub fn canvas_pages<'a, T:This>(cx: &mut CallContext<'a, T>, this: &Handle<JsCanvas>)->Result<Vec<Handle<'a, JsContext2D>>, Throw>{
   let context_map = this
       .get(cx, "constructor")?
       .downcast::<JsFunction>().or_throw(cx)?
@@ -70,11 +89,26 @@ pub fn canvas_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<J
       .get(cx, "get")?
       .downcast::<JsFunction>().or_throw(cx)?;
 
-  let mut context = map_getter
+  let contexts = map_getter
       .call(cx, context_map, vec![this.upcast::<JsObject>()])?
-      .downcast::<JsContext2D>().or_throw(cx)?;
+      .downcast::<JsArray>().or_throw(cx)?
+      .to_vec(cx)?
+      .iter()
+      .map(|obj| obj.downcast::<JsContext2D>())
+      .filter( |ctx| ctx.is_ok() )
+      .map(|obj| obj.unwrap())
+      .collect::<Vec<Handle<JsContext2D>>>();
 
-  cx.borrow_mut(&mut context, |mut ctx|
+    Ok(contexts)
+}
+
+
+pub fn canvas_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<JsCanvas>, f:F)->Result<U, Throw> where
+  T: This,
+  F:FnOnce(&mut Context2D) -> U
+{
+  let mut contexts = canvas_pages(cx, &this)?;
+  cx.borrow_mut(&mut contexts[0], |mut ctx|
     Ok(f(&mut ctx))
   )
 }
@@ -146,58 +180,87 @@ declare_types! {
     // Output
     //
 
-    method saveAs(mut cx){
+    method _saveAs(mut cx){
       let this = cx.this();
-      let filename = string_arg(&mut cx, 0, "filePath")?;
-      let path = Path::new(&filename);
-      let extension = path
-          .extension()
-          .and_then(OsStr::to_str)
-          .unwrap_or_default()
-          .to_string()
-          .to_lowercase();
+      let name_pattern = string_arg(&mut cx, 0, "filePath")?;
+      let sequence = !cx.argument::<JsValue>(1)?.is_a::<JsUndefined>();
+      let file_format = string_arg(&mut cx, 2, "format")?;
+      let quality = float_arg(&mut cx, 3, "quality")?;
 
-      let data = match canvas_context(&mut cx, &this, 0, |ctx| ctx.get_picture(None) )?{
-        Some(pic) => cx.borrow(&this, |this|
-          this.encode_image(&pic, &extension)
-        ),
-        None => None
-      };
+      if sequence {
+        let mut pages = canvas_pages(&mut cx, &this)?;
+        pages.reverse();
 
-      match data {
-        Some(data) => {
-          match fs::write(path, data.as_bytes()){
-            Err(why) => cx.throw_error(format!("{}: \"{}\"", why, path.display())),
-            Ok(()) => Ok(cx.undefined().upcast())
-          }
-        },
-        None => {
-          if cx.borrow(&this, |this| this.width==0.0 || this.height==0.0 ){
-            cx.throw_error("Width and height must be non-zero to generate an image")
-          }else if extension.is_empty() {
-            cx.throw_error("Could not determine format from file name")
-          }else{
-            cx.throw_error(format!("Unsupported file format: {:?}", extension))
+        let padding = float_arg(&mut cx, 1, "padding")? as i32;
+        let padding = match padding {
+          -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
+          _ => padding as usize
+        };
+
+        for pp in 0..pages.len() {
+          let mut page = &mut pages[pp];
+          let filename = name_pattern.replace("{}", format!("{:0width$}", pp+1, width=padding).as_str());
+          let io = cx.borrow(&this, |this|
+            cx.borrow_mut(&mut page, |mut page|{
+              this.write_page(&mut page, &filename, &file_format, quality)
+            })
+          );
+
+          if let Err(why) = io{
+            return cx.throw_error(why)
           }
         }
+      } else if file_format == "pdf" {
+        let mut pages = canvas_pages(&mut cx, &this)?;
+        pages.reverse();
+
+        let document = pages.iter_mut().fold(pdf::new_document(None), |doc, page|{
+          cx.borrow_mut(page, |mut page| {
+            let dims = (page.width() as i32, page.height() as i32);
+            let mut doc = doc.begin_page(dims, None);
+            let canvas = doc.canvas();
+            if let Some(picture) = page.get_picture(None){
+              canvas.draw_picture(&picture, None, None);
+            }
+            doc.end_page()
+          })
+        });
+
+        let path = Path::new(&name_pattern);
+        return match fs::write(path, document.close().as_bytes()){
+          Err(why) => cx.throw_error(format!("{}: \"{}\"", why, path.display())),
+          Ok(()) => Ok(cx.undefined().upcast())
+        }
+      } else {
+        let mut page = canvas_pages(&mut cx, &this)?[0];
+        let io = cx.borrow(&this, |this|
+          cx.borrow_mut(&mut page, |mut page|{
+            this.write_page(&mut page, &name_pattern, &file_format, quality)
+          })
+        );
+
+        if let Err(why) = io{
+          return cx.throw_error(why)
+        }
       }
+
+      Ok(cx.undefined().upcast())
     }
 
-    method toBuffer(mut cx){
+    method _toBuffer(mut cx){
       let this = cx.this();
-      let extension = string_arg_or(&mut cx, 0, "png");
+      let file_format = string_arg(&mut cx, 0, "format")?;
+      let quality = float_arg(&mut cx, 1, "quality")?;
+      let mut page = canvas_pages(&mut cx, &this)?[0];
 
-      match extension.to_lowercase().as_str() {
-        "png" | "jpg" | "jpeg" | "gif" | "heic" | "webp" | "svg" | "pdf" => {},
-        _ => return cx.throw_error(format!("Unrecognized format: {:?}", extension))
-      };
-
-      let data = match canvas_context(&mut cx, &this, 0, |ctx| ctx.get_picture(None) )?{
-        Some(pic) => cx.borrow(&this, |this|
-          this.encode_image(&pic, &extension.to_lowercase())
-        ),
-        None => None
-      };
+      let data = cx.borrow(&this, |this|
+        cx.borrow_mut(&mut page, |mut page|{
+          match page.get_picture(None) {
+            Some(picture) => this.encode_image(&picture, &file_format, page.width(), page.height(), quality),
+            None => None
+          }
+        })
+      );
 
       match data{
         Some(data) => {
@@ -207,7 +270,7 @@ declare_types! {
           });
           Ok(buffer.upcast())
         },
-        None => cx.throw_error(format!("Unsupported image format: {:?}", extension))
+        None => cx.throw_error(format!("Unsupported image format: {:?}", file_format))
       }
     }
 
