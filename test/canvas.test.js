@@ -1,11 +1,12 @@
 const _ = require('lodash'),
       fs = require('fs'),
-      {CanvasRenderingContext2D} = require('../lib');
+      {Canvas} = require('../lib');
 
 describe("Context2D", ()=>{
-  let ctx
+  let canvas, ctx
   beforeEach(()=>{
-    ctx = new CanvasRenderingContext2D(512, 512)
+    canvas = new Canvas(512, 512)
+    ctx = canvas.getContext("2d")
   })
 
   describe("can get & set", ()=>{
