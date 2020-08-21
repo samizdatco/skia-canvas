@@ -52,7 +52,10 @@ impl Path2D{
     // This throws off points being in/out of the arc.
     let oval = Rect::new(x - x_radius, y - y_radius, x + x_radius, y + y_radius);
     let mut rotated = Matrix::new_identity();
-    rotated.pre_rotate(to_degrees(rotation), None);
+    rotated
+      .pre_translate((x, y))
+      .pre_rotate(to_degrees(rotation), None)
+      .pre_translate((-x, -y));
     let unrotated = rotated.invert().unwrap();
 
     self.path.transform(&unrotated);
