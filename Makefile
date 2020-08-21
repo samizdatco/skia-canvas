@@ -1,3 +1,4 @@
+NODEMON := $(CURDIR)/node_modules/.bin/nodemon
 NEON := $(CURDIR)/node_modules/.bin/neon
 JEST := $(CURDIR)/node_modules/.bin/jest
 LIB := $(CURDIR)/native/index.node
@@ -23,6 +24,9 @@ preview: run
 
 test: $(LIB)
 	@$(JEST)
+
+diff: $(LIB)
+	@$(NODEMON) test/visual -w native/index.node -w test/visual -e js,html
 
 check:
 	@cd native; cargo check
