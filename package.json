@@ -14,7 +14,9 @@
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
+    "express": "^4.17.1",
+    "jest": "^26.2.2",
     "neon-cli": "^0.4.0",
-    "jest": "^26.2.2"
+    "nodemon": "^2.0.4"
   }
 }
