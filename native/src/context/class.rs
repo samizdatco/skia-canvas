@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Rect, PathDirection};
+use skia_safe::{Path, Matrix, Rect, PathDirection};
 use skia_safe::path::{AddPathMode};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
@@ -64,7 +64,9 @@ declare_types! {
 
     method transform(mut cx){
       let mut this = cx.this();
-      let matrix = matrix_args(&mut cx, 0..6)?;
+      let t = float_args(&mut cx, 0..6)?;
+      let matrix = Matrix::new_all(t[0], t[2], t[4], t[1], t[3], t[5], 0.0 as f32, 0.0 as f32, 1.0 as f32);
+
       cx.borrow_mut(&mut this, |mut this| {
         this.with_matrix(|ctm| ctm.pre_concat(&matrix) );
       });
