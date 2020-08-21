@@ -29,18 +29,18 @@ pub struct CanvasGradient{
 
 impl CanvasGradient{
   pub fn shader(&self) -> Option<Shader>{
-      match &*self.gradient.borrow(){
-        Gradient::Linear{start, end, stops, colors} => {
-          gradient_shader::linear((*start, *end), Colors(&colors), Some(stops.as_slice()), TileMode::Clamp, None, None)
-        },
-        Gradient::Radial{start_point, start_radius, end_point, end_radius, stops, colors} => {
-          gradient_shader::two_point_conical(
-            *start_point, *start_radius,
-            *end_point, *end_radius,
-            Colors(&colors), Some(stops.as_slice()),
-            TileMode::Clamp, None, None)
-        }
+    match &*self.gradient.borrow(){
+      Gradient::Linear{start, end, stops, colors} => {
+        gradient_shader::linear((*start, *end), Colors(&colors), Some(stops.as_slice()), TileMode::Clamp, None, None)
+      },
+      Gradient::Radial{start_point, start_radius, end_point, end_radius, stops, colors} => {
+        gradient_shader::two_point_conical(
+          *start_point, *start_radius,
+          *end_point, *end_radius,
+          Colors(&colors), Some(stops.as_slice()),
+          TileMode::Clamp, None, None)
       }
+    }
   }
 
   pub fn add_color_stop(&mut self, offset: f32, color:Color){
@@ -83,14 +83,13 @@ declare_types! {
             return cx.throw_type_error("Not enough arguments")
           }
         },
-        _ => return cx.throw_error("Can't create new CanvasGradient objects directly \
+        _ => return cx.throw_error("Function is not a constructor \
                                    (use CanvasRenderingContext2D's \"createLinearGradient\" \
                                    and \"createRadialGradient\" methods instead)")
       };
 
       Ok(CanvasGradient{ gradient:Rc::new(RefCell::new(gradient)) })
     }
-
 
     method addColorStop(mut cx){
       let mut this = cx.this();
