@@ -170,7 +170,7 @@ declare_types! {
     method ellipse(mut cx){
       let mut this = cx.this();
       let nums = float_args(&mut cx, 0..7)?;
-      let ccw = bool_arg(&mut cx, 7, "isCCW")?;
+      let ccw = bool_arg_or(&mut cx, 7, false);
 
       if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
         if *x_radius < 0.0 || *y_radius < 0.0 {
