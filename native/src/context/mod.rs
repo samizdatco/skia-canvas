@@ -706,14 +706,11 @@ impl Dye{
 
   pub fn mix_into(&self, paint: &mut Paint, alpha: f32){
     match self {
-      Dye::Color(color) => {
-        let mut color:Color4f = color.clone().into();
-        color.a *= alpha;
-        paint.set_color(color.to_color())
-      },
-      Dye::Gradient(gradient) => paint.set_shader(gradient.shader()),
-      Dye::Pattern(pattern) => paint.set_shader(pattern.shader())
+      Dye::Color(color) => { paint.set_color(*color) },
+      Dye::Gradient(gradient) =>{ paint.set_shader(gradient.shader()) },
+      Dye::Pattern(pattern) =>{ paint.set_shader(pattern.shader()) }
     };
+    paint.set_alpha_f(alpha);
   }
 }
 
