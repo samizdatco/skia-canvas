@@ -40,7 +40,6 @@
       }
 
       td a{
-        margin-right:.5em;
         font-weight:bold;
       }
 
@@ -49,13 +48,20 @@
         margin-top: 35px;
       }
 
-      table tr td:nth-child(1),
+      table thead th:nth-child(1),
+      table tr td:nth-child(1){
+        width: 160px;
+        text-align:left;
+      }
+
+
       table tr td:nth-child(2),
-      table tr td:nth-child(3) {
+      table tr td:nth-child(3),
+      table tr td:nth-child(4) {
         width: 200px;
       }
 
-      table tr td:nth-child(4) {
+      table tr td:nth-child(5) {
         padding: 0 45px;
       }
 
@@ -143,10 +149,11 @@
 
         var table = create('table', { id: 'tests' }, [
           create('thead', {}, [
+            create('th', { textContent: '' }),
             create('th', { textContent: 'skia-canvas' }),
-            create('th', { textContent: 'browser canvas' }),
-            create('th', { textContent: 'visual diffs' }),
-            create('th', { textContent: '' })
+            create('th', { textContent: 'Browser canvas' }),
+            create('th', { textContent: 'Pixel differences' }),
+
           ]),
           create('tbody', {}, testNames.filter(name => name.match(/./i)).map(function (name) {
             var img = create('img')
@@ -158,10 +165,12 @@
               img.src = '/render?name=' + encodeURIComponent(name)
             })
             return create('tr', {}, [
+              create('td', {}, [create('h3', { textContent: name }),
+                                create('br') ,pdfLink(name) ]),
               create('td', {}, [img]),
               create('td', {}, [canvas]),
               create('td', {}, [canvasOuput]),
-              create('td', {}, [pdfLink(name), create('h3', { textContent: name })])
+
             ])
           }))
         ])
