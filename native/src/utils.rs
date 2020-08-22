@@ -193,6 +193,7 @@ pub fn floats_in(vals: &[Handle<JsValue>]) -> Vec<f32>{
       .map(|js_val| js_val.downcast::<JsNumber>())
       .filter( |r| r.is_ok() )
       .map( |num| num.as_ref().unwrap().value() as f32 )
+      .filter( |num| num.is_finite() && !num.is_nan() )
       .collect()
 }
 
