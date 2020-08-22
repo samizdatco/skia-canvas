@@ -31,7 +31,7 @@ pub struct FontSpec{
 
 pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<Option<FontSpec>, Throw> {
   let arg = cx.argument::<JsValue>(0)?;
-  if arg.is_a::<JsUndefined>(){ return Ok(None) }
+  if arg.is_a::<JsNull>(){ return Ok(None) }
 
   let font_desc = cx.argument::<JsObject>(idx as i32)?;
   let families = strings_at_key(cx, &font_desc, "family")?;
