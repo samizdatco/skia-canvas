@@ -378,16 +378,15 @@ impl Context2D{
   }
 
   pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect){
-    // works just like draw_image in terms of src/dst rects, but without the clips, transforms, or shadows
+    // works just like draw_image in terms of src/dst rects, but clears the dst_rect and then draws
+    // without clips, transforms, alpha, blend, or shadows
     let data = unsafe{ Data::new_bytes(buffer) };
-
     if let Some(bitmap) = Image::from_raster_data(&info, data, info.min_row_bytes()) {
-      let mut paint = Paint::default();
-      paint.set_style(PaintStyle::Fill);
-
       self.push();
       self.reset_canvas();
       self.with_canvas(|canvas| {
+        let mut paint = Paint::default();
+        canvas.draw_rect(&dst_rect, Paint::default().set_blend_mode(BlendMode::Clear));
         canvas.draw_image_rect(&bitmap, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
       });
       self.pop();
