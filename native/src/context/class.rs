@@ -896,7 +896,10 @@ declare_types! {
       let mut this = cx.this();
       let name = string_arg(&mut cx, 0, "globalCompositeOperation")?;
       if let Some(mode) = to_blend_mode(&name){
-        cx.borrow_mut(&mut this, |mut this| this.state.global_composite_operation = mode );
+        cx.borrow_mut(&mut this, |mut this| {
+          this.state.global_composite_operation = mode;
+          this.state.paint.set_blend_mode(mode);
+        });
       }
       Ok(cx.undefined().upcast())
     }
