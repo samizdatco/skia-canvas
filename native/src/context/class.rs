@@ -419,14 +419,22 @@ declare_types! {
 
     method setLineDash(mut cx){
       let mut this = cx.this();
-      if !cx.argument::<JsValue>(0)?.is_a::<JsArray>(){
-        return cx.throw_type_error("Value is not a sequence")
-      } else {
+      let arg = cx.argument::<JsValue>(0)?;
+      if arg.is_a::<JsArray>() {
         let list = cx.argument::<JsArray>(0)?.to_vec(&mut cx)?;
-        let intervals = floats_in(&list);
-        cx.borrow_mut(&mut this, |mut this| {
-          this.state.line_dash_list = intervals
-        });
+        let mut intervals = floats_in(&list).iter().cloned()
+          .filter(|n| *n >= 0.0)
+          .collect::<Vec<f32>>();
+
+        if list.len() == intervals.len(){
+          if intervals.len() % 2 == 1{
+            intervals.append(&mut intervals.clone());
+          }
+
+          cx.borrow_mut(&mut this, |mut this| {
+            this.state.line_dash_list = intervals
+          });
+        }
       }
       Ok(cx.undefined().upcast())
     }
