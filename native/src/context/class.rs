@@ -1,7 +1,7 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
 use skia_safe::{Path, Matrix, Rect, PathDirection};
-use skia_safe::path::{AddPathMode};
+use skia_safe::path::AddPathMode::Append;
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
@@ -148,7 +148,10 @@ declare_types! {
       if let [x, y, w, h] = nums.as_slice(){
         let rect = Rect::from_xywh(*x, *y, *w, *h);
         cx.borrow_mut(&mut this, |mut this| {
-          this.path.add_rect(rect, Some((PathDirection::CW, 0)));
+          let matrix = this.state.matrix;
+          let mut rect_path = Path::new();
+          rect_path.add_rect(&rect, Some((PathDirection::CW, 0)));
+          this.path.add_path(&rect_path.with_transform(&matrix), (0, 0), Append);
         });
       }
       Ok(cx.undefined().upcast())
@@ -161,9 +164,10 @@ declare_types! {
 
       if let [x, y, radius, start_angle, end_angle] = nums.as_slice(){
         cx.borrow_mut(&mut this, |mut this| {
+          let matrix = this.state.matrix;
           let mut arc = Path2D::new();
           arc.add_ellipse((*x, *y), (*radius, *radius), 0.0, *start_angle, *end_angle, ccw);
-          this.path.add_path(&arc.path, (0,0), AddPathMode::Append);
+          this.path.add_path(&arc.path.with_transform(&matrix), (0,0), Append);
         });
       }
       Ok(cx.undefined().upcast())
@@ -179,9 +183,10 @@ declare_types! {
           return cx.throw_error("radii cannot be negative")
         }
         cx.borrow_mut(&mut this, |mut this| {
+          let matrix = this.state.matrix;
           let mut arc = Path2D::new();
           arc.add_ellipse((*x, *y), (*x_radius, *y_radius), *rotation, *start_angle, *end_angle, ccw);
-          this.path.add_path(&arc.path, (0,0), AddPathMode::Append);
+          this.path.add_path(&arc.path.with_transform(&matrix), (0,0), Append);
         });
       }
 
@@ -195,7 +200,9 @@ declare_types! {
       let x = float_arg(&mut cx, 0, "x")?;
       let y = float_arg(&mut cx, 1, "y")?;
       cx.borrow_mut(&mut this, |mut this| {
-        this.path.move_to((x, y));
+        if let [dst] = this.map_points(&[x, y])[..1]{
+          this.path.move_to(dst);
+        }
       });
       Ok(cx.undefined().upcast())
     }
@@ -205,8 +212,10 @@ declare_types! {
       let x = float_arg(&mut cx, 0, "x")?;
       let y = float_arg(&mut cx, 1, "y")?;
       cx.borrow_mut(&mut this, |mut this| {
-        if this.path.is_empty(){ this.path.move_to((x, y)); }
-        this.path.line_to((x, y));
+        if let [dst] = this.map_points(&[x, y])[..1]{
+          if this.path.is_empty(){ this.path.move_to(dst); }
+          this.path.line_to(dst);
+        }
       });
       Ok(cx.undefined().upcast())
     }
@@ -216,36 +225,38 @@ declare_types! {
       let coords = float_args(&mut cx, 0..4)?;
       let radius = float_arg(&mut cx, 4, "radius")?;
 
-      if let [x1, y1, x2, y2] = coords.as_slice(){
-        cx.borrow_mut(&mut this, |mut this| {
-          if this.path.is_empty(){ this.path.move_to((*x1, *y1)); }
-          this.path.arc_to_tangent((*x1, *y1), (*x2, *y2), radius);
-        });
-      }
+      cx.borrow_mut(&mut this, |mut this| {
+        if let [src, dst] = this.map_points(&coords)[..2]{
+          if this.path.is_empty(){ this.path.move_to(src); }
+          this.path.arc_to_tangent(src, dst, radius);
+        }
+      });
+
       Ok(cx.undefined().upcast())
     }
 
     method bezierCurveTo(mut cx){
       let mut this = cx.this();
-      let nums = float_args(&mut cx, 0..6)?;
-      if let [cp1x, cp1y, cp2x, cp2y, x, y] = nums.as_slice(){
-        cx.borrow_mut(&mut this, |mut this| {
-          if this.path.is_empty(){ this.path.move_to((*cp1x, *cp1y)); }
-          this.path.cubic_to((*cp1x, *cp1y), (*cp2x, *cp2y), (*x, *y));
-        });
-      }
+      let coords = float_args(&mut cx, 0..6)?;
+      cx.borrow_mut(&mut this, |mut this| {
+        if let [cp1, cp2, dst] = this.map_points(&coords)[..3]{
+          if this.path.is_empty(){ this.path.move_to(cp1); }
+          this.path.cubic_to(cp1, cp2, dst);
+        }
+      });
       Ok(cx.undefined().upcast())
     }
 
     method quadraticCurveTo(mut cx){
       let mut this = cx.this();
-      let nums = float_args(&mut cx, 0..4)?;
-      if let [cpx, cpy, x, y] = nums.as_slice(){
-        cx.borrow_mut(&mut this, |mut this| {
-          if this.path.is_empty(){ this.path.move_to((*cpx, *cpy)); }
-          this.path.quad_to((*cpx, *cpy), (*x, *y));
-        });
-      }
+      let coords = float_args(&mut cx, 0..4)?;
+
+      cx.borrow_mut(&mut this, |mut this| {
+        if let [cp, dst] = this.map_points(&coords)[..2]{
+          if this.path.is_empty(){ this.path.move_to(cp); }
+          this.path.quad_to(cp, dst);
+        }
+      });
       Ok(cx.undefined().upcast())
     }
 
@@ -302,7 +313,9 @@ declare_types! {
 
       let mut shift = 0;
       if let Some(path) = path2d_arg_opt(&mut cx, 0){
-        cx.borrow_mut(&mut this, |mut this| { this.path = path });
+        cx.borrow_mut(&mut this, |mut this| {
+          this.path = path.with_transform(&this.state.matrix)
+        });
         shift += 1;
       }
       let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
@@ -319,7 +332,9 @@ declare_types! {
     method stroke(mut cx){
       let mut this = cx.this();
       if let Some(path) = path2d_arg_opt(&mut cx, 0){
-        cx.borrow_mut(&mut this, |mut this| { this.path = path });
+        cx.borrow_mut(&mut this, |mut this| {
+          this.path = path.with_transform(&this.state.matrix)
+        });
       }
 
       cx.borrow_mut(&mut this, |mut this| {
@@ -338,7 +353,6 @@ declare_types! {
         cx.borrow_mut(&mut this, |mut this| {
           let paint =  this.paint_for_fill();
           this.draw_rect(&rect, &paint);
-
         })
       }
       Ok(cx.undefined().upcast())

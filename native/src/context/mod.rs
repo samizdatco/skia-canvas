@@ -163,6 +163,12 @@ impl Context2D{
     });
   }
 
+  pub fn map_points(&self, coords:&[f32]) -> Vec<Point>{
+    coords.chunks(2)
+          .map(|pair| self.state.matrix.map_xy(pair[0], pair[1]))
+          .collect()
+  }
+
   pub fn reset_canvas(&mut self){
     // clears the active clip and transform from the canvas (but not from the state struct)
     self.with_canvas(|canvas|{
@@ -202,21 +208,29 @@ impl Context2D{
 
   pub fn draw_path(&mut self, paint: &Paint){
     self.with_canvas(|canvas|{
-      // draw shadow if applicable
-      let shadow = self.paint_for_shadow(&paint);
-      if let Some(shadow_paint) = shadow{
-        canvas.draw_path(&self.path, &shadow_paint);
-      }
+      if let Some(inverse) = self.state.matrix.invert(){
+        // the current path already incorporates its transform state
+        let path = self.path.with_transform(&inverse);
 
-      // then draw the actual path
-      canvas.draw_path(&self.path, &paint);
+        // draw shadow if applicable
+        let shadow = self.paint_for_shadow(&paint);
+        if let Some(shadow_paint) = shadow{
+          canvas.draw_path(&path, &shadow_paint);
+        }
+
+        // then draw the actual path
+        canvas.draw_path(&path, &paint);
+      }
     });
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
     let mut clip = match path{
       Some(path) => path,
-      None => self.path.clone()
+      None => {
+        let inverse = self.state.matrix.invert().unwrap();
+        self.path.with_transform(&inverse)
+      }
     };
 
     clip.set_fill_type(rule);
