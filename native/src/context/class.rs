@@ -600,15 +600,17 @@ declare_types! {
       // determine geometry
       let x = float_arg(&mut cx, 1, "x")?;
       let y = float_arg(&mut cx, 2, "y")?;
-      let dirty = opt_float_args(&mut cx, 3..7);
+      let mut dirty = opt_float_args(&mut cx, 3..7);
       if !dirty.is_empty() && dirty.len() != 4 {
         return cx.throw_type_error("expected either 2 or 6 numbers")
       }
       let (width, height) = (info.width() as f32, info.height() as f32);
-      let (src, dst) = match dirty.as_slice(){
-        [dx, dy, dw, dh] => (
-          Rect::from_xywh(*dx, *dy, *dw, *dh),
-          Rect::from_xywh(*dx + x, *dy + y, *dw, *dh) ),
+      let (mut src, mut dst) = match dirty.as_mut_slice(){
+        [dx, dy, dw, dh] => {
+          if *dw < 0.0 { *dw *= -1.0; *dx -= *dw; }
+          if *dh < 0.0 { *dh *= -1.0; *dy -= *dh; }
+          (Rect::from_xywh(*dx, *dy, *dw, *dh), Rect::from_xywh(*dx + x, *dy + y, *dw, *dh))
+        },
         _ => (
           Rect::from_xywh(0.0, 0.0, width, height),
           Rect::from_xywh(x, y, width, height)
