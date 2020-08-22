@@ -52,7 +52,7 @@ impl CanvasGradient{
     };
 
     // insert the new entries at the right index to keep the vectors sorted
-    let idx = stops.binary_search_by(|n| n.partial_cmp(&offset).unwrap()).unwrap_or_else(|x| x);
+    let idx = stops.binary_search_by(|n| (n-f32::EPSILON).partial_cmp(&offset).unwrap()).unwrap_or_else(|x| x);
     match gradient{
       Gradient::Linear{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
       Gradient::Radial{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
