@@ -676,22 +676,21 @@ pub enum Dye{
 }
 
 impl Dye{
-  pub fn new<'a, T: This+Class>(cx: &mut CallContext<'a, T>, value: Handle<'a, JsValue>, style: PaintStyle) -> Result<Self, Throw> {
+  pub fn new<'a, T: This+Class>(cx: &mut CallContext<'a, T>, value: Handle<'a, JsValue>, style: PaintStyle) -> Result<Option<Self>, Throw> {
     let stash = if style == PaintStyle::Fill{ "fillShader" } else { "strokeShader" };
     match value{
       arg if arg.is_a::<JsCanvasGradient>() => {
         let gradient = cx.argument::<JsCanvasGradient>(0)?;
         stash_ref(cx, stash, arg)?;
-        Ok(cx.borrow(&gradient, |gradient| Dye::Gradient(gradient.clone()) ))
+        Ok(Some(cx.borrow(&gradient, |gradient| Dye::Gradient(gradient.clone()) )))
       },
       arg if arg.is_a::<JsCanvasPattern>() => {
         let pattern = cx.argument::<JsCanvasPattern>(0)?;
         stash_ref(cx, stash, arg)?;
-        Ok(cx.borrow(&pattern, |pattern| Dye::Pattern(pattern.clone()) ))
+        Ok(Some(cx.borrow(&pattern, |pattern| Dye::Pattern(pattern.clone()) )))
       },
       _ => {
-        let color = color_arg(cx, 0)?;
-        Ok(Dye::Color(color))
+        Ok(color_arg(cx, 0).map(Dye::Color))
       }
     }
   }

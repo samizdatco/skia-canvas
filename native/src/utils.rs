@@ -261,19 +261,16 @@ pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Re
 //
 
 
-pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Result<Color, Throw> {
-  match css.parse::<Rgba>(){
-    Ok(Rgba{red, green, blue, alpha}) => {
-      Ok(Color4f::new(red, green, blue, alpha).to_color())
-    },
-    Err(_e) => cx.throw_error("Color parse error: Invalid format")
-  }
+pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Color> {
+  css.parse::<Rgba>().ok().map(|Rgba{red, green, blue, alpha}|
+    Color4f::new(red, green, blue, alpha).to_color()
+  )
 }
 
-pub fn color_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<Color, Throw> {
+pub fn color_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Option<Color> {
   match opt_string_arg(cx, idx){
     Some(css) => color_in(cx, &css),
-    None => cx.throw_type_error("Expected a css color string, CanvasGradient, or CanvasPattern)")
+    None => None
   }
 }
 
@@ -382,10 +379,12 @@ pub fn filter_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Resul
       "drop-shadow" => {
         let values = obj.get(cx, key)?.downcast_or_throw::<JsArray, _>(cx)?;
         let dims = floats_in(&values.to_vec(cx)?);
-        let color = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value();
-        filters.push(FilterSpec::Shadow{
-          offset: Point::new(dims[0], dims[1]), blur: dims[2], color:color_in(cx, &color)?
-        });
+        let color_str = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value();
+        if let Some(color) = color_in(cx, &color_str) {
+          filters.push(FilterSpec::Shadow{
+            offset: Point::new(dims[0], dims[1]), blur: dims[2], color
+          });
+        }
       },
       _ => {
         let value = obj.get(cx, key)?.downcast_or_throw::<JsNumber, _>(cx)?.value();
