@@ -467,7 +467,7 @@ tests['createPattern() with globalAlpha'] = function (ctx, done) {
   img.src = imageSrc('globe.jpg')
 }
 
-tests['createPattern() no-repeat'] = function (ctx, done) {
+tests['createPattern() repeats'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.scale(0.1, 0.1)
@@ -476,6 +476,15 @@ tests['createPattern() no-repeat'] = function (ctx, done) {
     ctx.fillStyle = ctx.createPattern(img, 'no-repeat')
     ctx.fillRect(0, 0, 900, 900)
     ctx.strokeRect(0, 0, 900, 900)
+
+    ctx.fillStyle = ctx.createPattern(img, 'repeat-x')
+    ctx.fillRect(1000, 0, 900, 900)
+    ctx.strokeRect(1000, 0, 900, 900)
+
+    ctx.fillStyle = ctx.createPattern(img, 'repeat-y')
+    ctx.fillRect(0, 1000, 900, 900)
+    ctx.strokeRect(0, 1000, 900, 900)
+
     ctx.fillStyle = ctx.createPattern(img, 'repeat')
     ctx.fillRect(1000, 1000, 900, 900)
     ctx.strokeRect(1000, 1000, 900, 900)
