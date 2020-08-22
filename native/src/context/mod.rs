@@ -14,7 +14,7 @@ use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageIn
                 image_filters, color_filters, table_color_filter, dash_path_effect,
                 Data, PictureRecorder, Picture};
 use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow};
-use skia_safe::canvas::SrcRectConstraint;
+use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
 
 use crate::utils::*;
@@ -386,8 +386,10 @@ impl Context2D{
       self.reset_canvas();
       self.with_canvas(|canvas| {
         let mut paint = Paint::default();
-        canvas.draw_rect(&dst_rect, Paint::default().set_blend_mode(BlendMode::Clear));
-        canvas.draw_image_rect(&bitmap, Some((src_rect, SrcRectConstraint::Strict)), dst_rect, &paint);
+        let mut eraser = Paint::default();
+        eraser.set_blend_mode(BlendMode::Clear);
+        canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &eraser);
+        canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &paint);
       });
       self.pop();
     }
