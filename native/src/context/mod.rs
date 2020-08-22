@@ -309,8 +309,9 @@ impl Context2D{
 
   pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
     let mut paint = self.state.paint.clone();
-    paint.set_style(PaintStyle::Fill)
-         .set_color(self.color_with_alpha(&BLACK));
+    paint
+      .set_style(PaintStyle::Fill)
+      .set_alpha_f(self.state.global_alpha);
 
     if let Some(image) = &img {
       // remove the positioning from the destination since image_filters.image will return
