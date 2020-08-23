@@ -14,6 +14,7 @@ $(LIB): $(NEON) $(SRC)
 	@$(NEON) build
 
 build: $(LIB)
+	@echo build complete
 
 run: $(LIB)
 	@node scribble.js
