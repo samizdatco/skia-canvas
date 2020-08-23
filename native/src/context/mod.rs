@@ -154,6 +154,22 @@ impl Context2D{
     f(&mut recorder.recording_canvas());
   }
 
+  pub fn with_shadow_canvas<F>(&self, paint:&Paint, f:F)
+    where F:FnOnce(&mut SkCanvas, &Paint)
+  {
+    let mut recorder = self.recorder.borrow_mut();
+    let mut canvas = recorder.recording_canvas();
+
+    // only call the closure if there's an active drop shadow
+    if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+      canvas.save();
+      canvas.set_matrix(&Matrix::new_trans(self.state.shadow_offset));
+      canvas.concat(&self.state.matrix);
+      f(&mut canvas, &shadow_paint);
+      canvas.restore();
+    }
+  }
+
   pub fn with_matrix<F>(&mut self, f:F)
     where F:FnOnce(&mut Matrix) -> &Matrix
   {
@@ -207,20 +223,18 @@ impl Context2D{
   }
 
   pub fn draw_path(&mut self, paint: &Paint){
+    // the current path has already incorporated its transform state
+    let inverse = self.state.matrix.invert().unwrap();
+    let path = self.path.with_transform(&inverse);
+
+    // draw shadow if applicable
+    self.with_shadow_canvas(&paint, |canvas, shadow_paint| {
+      canvas.draw_path(&path, &shadow_paint);
+    });
+
+    // then draw the actual path
     self.with_canvas(|canvas|{
-      if let Some(inverse) = self.state.matrix.invert(){
-        // the current path already incorporates its transform state
-        let path = self.path.with_transform(&inverse);
-
-        // draw shadow if applicable
-        let shadow = self.paint_for_shadow(&paint);
-        if let Some(shadow_paint) = shadow{
-          canvas.draw_path(&path, &shadow_paint);
-        }
-
-        // then draw the actual path
-        canvas.draw_path(&path, &paint);
-      }
+      canvas.draw_path(&path, &paint);
     });
   }
 
@@ -267,18 +281,17 @@ impl Context2D{
 
     path.set_fill_type(prev_rule);
     is_in
-}
+  }
+
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
+    // draw shadow if applicable
+    self.with_shadow_canvas(&paint, |canvas, shadow_paint| {
+      canvas.draw_rect(&rect, &shadow_paint);
+    });
+
+    // then draw the actual rect
     self.with_canvas(|canvas| {
-      let shadow = self.paint_for_shadow(&paint);
-
-      // draw shadow if applicable
-      if let Some(shadow_paint) = shadow{
-        canvas.draw_rect(&rect, &shadow_paint);
-      }
-
-      // then draw the actual rect
       canvas.draw_rect(&rect, &paint);
     });
   }
