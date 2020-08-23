@@ -370,30 +370,28 @@ impl Context2D{
       .set_alpha_f(self.state.global_alpha);
 
     if let Some(image) = &img {
-      // remove the positioning from the destination since image_filters.image will return
-      // None if the destination left/top is not within the bounds of the original image(!?)
-      let mut origin:Point = (dst_rect.left, dst_rect.top).into();
-      let resize = Rect::from_size(dst_rect.size());
-      let bounds = image.bounds();
+      // draw shadow if applicable
+      self.with_shadow_canvas(&paint, |canvas, shadow_paint| {
+        // remove the positioning from the destination since image_filters.image will return
+        // None if the destination left/top is not within the bounds of the original image(!?)
+        let mut origin:Point = (dst_rect.left, dst_rect.top).into();
+        let resize = Rect::from_size(dst_rect.size());
+        let bounds = image.bounds();
 
-      // use an ImageFilter to generate a cropped & scaled version of the original image so
-      // we can draw-to-point rather than using draw_image_rect (which would vignette the shadow)
-      if let Some(filter) = image_filters::image(image.clone(), Some(src_rect), Some(&resize), paint.filter_quality()){
-        if let Some((image, _, dxdy)) = image.new_with_filter(&filter, bounds, bounds){
-          self.with_canvas(|canvas| {
-            // add the top/left from the original dst_rect back in
-            origin.offset(dxdy);
-
-            // draw shadow if applicable
-            if let Some(shadow_paint) = self.paint_for_shadow(&paint){
-              canvas.draw_image(&image, origin, Some(&shadow_paint));
-            }
-
-            // then draw the actual image
-            canvas.draw_image(&image, origin, Some(&paint));
-          });
+        // use an ImageFilter to generate a cropped & scaled version of the original image so
+        // we can draw-to-point rather than using draw_image_rect (which would vignette the shadow)
+        if let Some(filter) = image_filters::image(image.clone(), Some(src_rect), Some(&resize), paint.filter_quality()){
+          if let Some((image, _, dxdy)) = image.new_with_filter(&filter, bounds, bounds){
+            origin.offset(dxdy); // add the top/left from the original dst_rect back in
+            canvas.draw_image(&image, origin, Some(&shadow_paint));
+          }
         }
-      }
+      });
+
+      // draw the actual image
+      self.with_canvas(|canvas| {
+        canvas.draw_image_rect(&image, Some((src_rect, Strict)), dst_rect, &paint);
+      });
     }
   }
 
