@@ -714,14 +714,13 @@ impl Context2D{
   }
 
   pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint> {
-    let shadow_color = self.color_with_alpha(&self.state.shadow_color);
-    let State {shadow_blur, shadow_offset, ..} = self.state;
+    let State {shadow_color, shadow_blur, shadow_offset, ..} = self.state;
     let sigma = shadow_blur / 2.0;
 
     match shadow_color.a() > 0 && !(shadow_blur == 0.0 && shadow_offset.is_zero()){
       true => {
         let mut paint = base_paint.clone();
-        if let Some(filter) = image_filters::drop_shadow_only(shadow_offset, (sigma, sigma), shadow_color, None, None){
+        if let Some(filter) = image_filters::drop_shadow_only((0.0, 0.0), (sigma, sigma), shadow_color, None, None){
           paint.set_image_filter(filter); // this also knocks out any ctx.filter settings as a side-effect
         }
         Some(paint)
