@@ -73,11 +73,13 @@ pub struct State{
 impl Default for State {
   fn default() -> Self {
     let mut paint = Paint::default();
-    paint.set_stroke_miter(10.0);
-    paint.set_color(BLACK);
-    paint.set_anti_alias(true);
-    paint.set_stroke_width(1.0);
-    paint.set_filter_quality(FilterQuality::Low);
+    paint
+      .set_stroke_miter(10.0)
+      .set_color(BLACK)
+      .set_anti_alias(true)
+      .set_stroke_width(1.0)
+      .set_style(PaintStyle::Fill)
+      .set_filter_quality(FilterQuality::Low);
 
     let graf_style = ParagraphStyle::new();
     let mut char_style = TextStyle::new();
@@ -154,20 +156,64 @@ impl Context2D{
     f(&mut recorder.recording_canvas());
   }
 
-  pub fn with_shadow_canvas<F>(&self, paint:&Paint, f:F)
-    where F:FnOnce(&mut SkCanvas, &Paint)
+  pub fn render_to_canvas<F>(&self, paint:&Paint, f:F)
+    where F:Fn(&mut SkCanvas, &Paint)
   {
-    let mut recorder = self.recorder.borrow_mut();
-    let mut canvas = recorder.recording_canvas();
+    match self.state.global_composite_operation{
+      BlendMode::SrcIn | BlendMode::SrcOut |
+      BlendMode::DstIn | BlendMode::DstOut |
+      BlendMode::DstATop | BlendMode::Src =>{
+        // for blend modes that affect regions of the canvas outside of the bounds of the object
+        // being drawn, create an intermediate picture before drawing to the canvas
+        let mut layer_paint = self.state.paint.clone();
+        layer_paint.set_blend_mode(BlendMode::SrcOver);
+        let mut layer_recorder = PictureRecorder::new();
+        layer_recorder.begin_recording(self.bounds, None, None);
+        let mut layer = layer_recorder.recording_canvas();
 
-    // only call the closure if there's an active drop shadow
-    if let Some(shadow_paint) = self.paint_for_shadow(&paint){
-      canvas.save();
-      canvas.set_matrix(&Matrix::new_trans(self.state.shadow_offset));
-      canvas.concat(&self.state.matrix);
-      f(&mut canvas, &shadow_paint);
-      canvas.restore();
-    }
+        // draw the dropshadow (if applicable)
+        if let Some(shadow_paint) = self.paint_for_shadow(&layer_paint){
+          layer.save();
+          layer.set_matrix(&Matrix::new_trans(self.state.shadow_offset));
+          layer.concat(&self.state.matrix);
+          f(&mut layer, &shadow_paint);
+          layer.restore();
+        }
+
+        // draw normally
+        layer.set_matrix(&self.state.matrix);
+        f(&mut layer, &layer_paint);
+
+        // transfer the picture contents to the canvas in a single operation, applying the blend
+        // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
+        if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
+          let mut recorder = self.recorder.borrow_mut();
+          let mut canvas = recorder.recording_canvas();
+          canvas.save();
+          canvas.set_matrix(&Matrix::new_identity());
+          canvas.draw_picture(&pict, None, Some(&paint));
+          canvas.restore();
+        }
+
+      },
+      _ => {
+        let mut recorder = self.recorder.borrow_mut();
+        let mut canvas = recorder.recording_canvas();
+
+        // only call the closure if there's an active dropshadow
+        if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+          canvas.save();
+          canvas.set_matrix(&Matrix::new_trans(self.state.shadow_offset));
+          canvas.concat(&self.state.matrix);
+          f(&mut canvas, &shadow_paint);
+          canvas.restore();
+        }
+
+        // draw with the normal paint
+        f(&mut canvas, &paint);
+      }
+    };
+
   }
 
   pub fn with_matrix<F>(&mut self, f:F)
@@ -227,13 +273,7 @@ impl Context2D{
     let inverse = self.state.matrix.invert().unwrap();
     let path = self.path.with_transform(&inverse);
 
-    // draw shadow if applicable
-    self.with_shadow_canvas(&paint, |canvas, shadow_paint| {
-      canvas.draw_path(&path, &shadow_paint);
-    });
-
-    // then draw the actual path
-    self.with_canvas(|canvas|{
+    self.render_to_canvas(&paint, |canvas, paint| {
       canvas.draw_path(&path, &paint);
     });
   }
@@ -285,13 +325,7 @@ impl Context2D{
 
 
   pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
-    // draw shadow if applicable
-    self.with_shadow_canvas(&paint, |canvas, shadow_paint| {
-      canvas.draw_rect(&rect, &shadow_paint);
-    });
-
-    // then draw the actual rect
-    self.with_canvas(|canvas| {
+    self.render_to_canvas(&paint, |canvas, paint| {
       canvas.draw_rect(&rect, &paint);
     });
   }
@@ -307,8 +341,7 @@ impl Context2D{
 
   pub fn draw_drawable(&mut self, drobble:&mut Option<Drawable>, src_rect:&Rect, dst_rect:&Rect){
     let mut paint = self.state.paint.clone();
-    paint.set_style(PaintStyle::Fill)
-         .set_color(self.color_with_alpha(&BLACK));
+    paint.set_color(self.color_with_alpha(&BLACK));
 
     if let Some(mut drobble) = drobble.as_mut(){
       self.push();
@@ -334,62 +367,13 @@ impl Context2D{
     }
   }
 
-  pub fn draw_picture(&mut self, picture:&Option<Picture>, src_rect:&Rect, dst_rect:&Rect){
-    let mut paint = self.state.paint.clone();
-    paint.set_style(PaintStyle::Fill)
-         .set_color(self.color_with_alpha(&BLACK));
-
-    if let Some(picture) = picture{
-      self.push();
-      self.with_canvas(|canvas| {
-        let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
-        let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
-        let mut matrix = Matrix::new_identity();
-        matrix.pre_scale( (mag.x, mag.y), None )
-              .pre_translate((-src_rect.x(), -src_rect.y()));
-
-        if let Some(shadow_paint) = self.paint_for_shadow(&paint){
-          if let Some(mut surface) = Surface::new_raster_n32_premul(size){
-            surface.canvas().draw_picture(&picture, Some(&matrix), None);
-            canvas.draw_image(&surface.image_snapshot(), (dst_rect.x(), dst_rect.y()), Some(&shadow_paint));
-          }
-        }
-
-        matrix.pre_translate((dst_rect.x()/mag.x, dst_rect.y()/mag.y));
-        canvas.clip_rect(dst_rect, ClipOp::Intersect, true)
-              .draw_picture(&picture, Some(&matrix), Some(&paint));
-      });
-      self.pop();
-    }
-  }
-
   pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
-    let mut paint = self.state.paint.clone();
-    paint
-      .set_style(PaintStyle::Fill)
+    let mut canvas_paint = self.state.paint.clone();
+    canvas_paint
       .set_alpha_f(self.state.global_alpha);
 
     if let Some(image) = &img {
-      // draw shadow if applicable
-      self.with_shadow_canvas(&paint, |canvas, shadow_paint| {
-        // remove the positioning from the destination since image_filters.image will return
-        // None if the destination left/top is not within the bounds of the original image(!?)
-        let mut origin:Point = (dst_rect.left, dst_rect.top).into();
-        let resize = Rect::from_size(dst_rect.size());
-        let bounds = image.bounds();
-
-        // use an ImageFilter to generate a cropped & scaled version of the original image so
-        // we can draw-to-point rather than using draw_image_rect (which would vignette the shadow)
-        if let Some(filter) = image_filters::image(image.clone(), Some(src_rect), Some(&resize), paint.filter_quality()){
-          if let Some((image, _, dxdy)) = image.new_with_filter(&filter, bounds, bounds){
-            origin.offset(dxdy); // add the top/left from the original dst_rect back in
-            canvas.draw_image(&image, origin, Some(&shadow_paint));
-          }
-        }
-      });
-
-      // draw the actual image
-      self.with_canvas(|canvas| {
+      self.render_to_canvas(&canvas_paint, |canvas, paint| {
         canvas.draw_image_rect(&image, Some((src_rect, Strict)), dst_rect, &paint);
       });
     }
@@ -515,7 +499,11 @@ impl Context2D{
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, paint: Paint){
     let width = width.unwrap_or(GALLEY);
-    let mut paragraph = self.typeset(&text, width, paint.clone());
+
+    let mut text_paint = paint.clone();
+    text_paint.set_blend_mode(BlendMode::SrcOver);
+
+    let mut paragraph = self.typeset(&text, width, text_paint);
     let mut point = Point::new(x, y);
     let metrics = self.state.char_style.font_metrics();
     let offset = get_baseline_offset(&metrics, self.state.text_baseline);
@@ -534,15 +522,8 @@ impl Context2D{
 
     if let Some(pict) = recorder.finish_recording_as_picture(Some(&bounds)){
       let position = Matrix::new_trans(point);
-
-      // draw shadow if applicable
-      self.with_shadow_canvas(&paint, |canvas, shadow_paint| {
-        canvas.draw_picture(&pict, Some(&position), Some(&shadow_paint));
-      });
-
-      // draw the actual text
-      self.with_canvas(|canvas| {
-        canvas.draw_picture(&pict, Some(&position), None);
+      self.render_to_canvas(&paint, |canvas, paint| {
+        canvas.draw_picture(&pict, Some(&position), Some(&paint));
       });
     }
   }
@@ -711,7 +692,6 @@ impl Context2D{
 
   pub fn paint_for_fill(&self) -> Paint{
     let mut paint = self.state.paint.clone();
-    paint.set_style(PaintStyle::Fill);
 
     let dye = &self.state.fill_style;
     let alpha = self.state.global_alpha;
