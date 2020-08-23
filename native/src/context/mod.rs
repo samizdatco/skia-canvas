@@ -13,7 +13,7 @@ use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageIn
                 PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
                 image_filters, color_filters, table_color_filter, dash_path_effect,
                 Data, PictureRecorder, Picture, Drawable};
-use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow};
+use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow, RectHeightStyle, RectWidthStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
 
@@ -493,14 +493,6 @@ impl Context2D{
     let mut char_style = self.state.char_style.clone();
     char_style.set_foreground_color(Some(paint));
 
-    let shadow_color = self.color_with_alpha(&self.state.shadow_color);
-    let State {shadow_blur, shadow_offset, ..} = self.state;
-    let sigma = shadow_blur as f64 / 2.0;
-    if shadow_color.a() > 0 && !(shadow_blur == 0.0 && shadow_offset.is_zero()){
-      let shadow = TextShadow::new(shadow_color, shadow_offset, sigma);
-      char_style.add_shadow(shadow);
-    }
-
     let mut graf_style = self.state.graf_style.clone();
     let text = match self.state.text_wrap{
       true => text.to_string(),
@@ -523,16 +515,36 @@ impl Context2D{
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, paint: Paint){
     let width = width.unwrap_or(GALLEY);
-    let mut paragraph = self.typeset(&text, width, paint);
+    let mut paragraph = self.typeset(&text, width, paint.clone());
     let mut point = Point::new(x, y);
     let metrics = self.state.char_style.font_metrics();
     let offset = get_baseline_offset(&metrics, self.state.text_baseline);
     point.y += offset - paragraph.alphabetic_baseline();
     point.x += width * get_alignment_factor(&self.state.graf_style);
 
-    self.with_canvas(|canvas| {
-      paragraph.paint(canvas, point);
-    });
+    let mut bounds = paragraph.get_rects_for_range(0..text.len(), RectHeightStyle::Tight, RectWidthStyle::Tight)
+      .iter().map(|textbox| textbox.rect)
+      .fold(Rect::new_empty(), Rect::join2);
+    bounds.outset((paint.stroke_width(), paint.stroke_width()));
+
+    // render the text once into a picture we can use for the shadow as well
+    let mut recorder = PictureRecorder::new();
+    recorder.begin_recording(bounds, None, None);
+    paragraph.paint(recorder.recording_canvas(), (0.0,0.0));
+
+    if let Some(pict) = recorder.finish_recording_as_picture(Some(&bounds)){
+      let position = Matrix::new_trans(point);
+
+      // draw shadow if applicable
+      self.with_shadow_canvas(&paint, |canvas, shadow_paint| {
+        canvas.draw_picture(&pict, Some(&position), Some(&shadow_paint));
+      });
+
+      // draw the actual text
+      self.with_canvas(|canvas| {
+        canvas.draw_picture(&pict, Some(&position), None);
+      });
+    }
   }
 
   pub fn measure_text(&mut self, text: &str, width:Option<f32>) -> Vec<Vec<f32>>{
