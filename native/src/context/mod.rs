@@ -12,7 +12,7 @@ use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageIn
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
                 image_filters, color_filters, table_color_filter, dash_path_effect,
-                Data, PictureRecorder, Picture};
+                Data, PictureRecorder, Picture, Drawable};
 use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
@@ -292,6 +292,35 @@ impl Context2D{
     });
   }
 
+  pub fn draw_drawable(&mut self, drobble:&mut Option<Drawable>, src_rect:&Rect, dst_rect:&Rect){
+    let mut paint = self.state.paint.clone();
+    paint.set_style(PaintStyle::Fill)
+         .set_color(self.color_with_alpha(&BLACK));
+
+    if let Some(mut drobble) = drobble.as_mut(){
+      self.push();
+      self.with_canvas(|canvas| {
+        let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
+        let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
+        let mut matrix = Matrix::new_identity();
+        matrix.pre_scale( (mag.x, mag.y), None )
+              .pre_translate((-src_rect.x(), -src_rect.y()));
+
+        if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+          if let Some(mut surface) = Surface::new_raster_n32_premul(size){
+            surface.canvas().draw_drawable(&mut drobble, Some(&matrix));
+            canvas.draw_image(&surface.image_snapshot(), (dst_rect.x(), dst_rect.y()), Some(&shadow_paint));
+          }
+        }
+
+        matrix.pre_translate((dst_rect.x()/mag.x, dst_rect.y()/mag.y));
+        canvas.clip_rect(dst_rect, ClipOp::Intersect, true)
+              .draw_drawable(&mut drobble, Some(&matrix));
+      });
+      self.pop();
+    }
+  }
+
   pub fn draw_picture(&mut self, picture:&Option<Picture>, src_rect:&Rect, dst_rect:&Rect){
     let mut paint = self.state.paint.clone();
     paint.set_style(PaintStyle::Fill)
@@ -354,6 +383,29 @@ impl Context2D{
       }
     }
   }
+
+  pub fn get_drawable(&mut self) -> Option<Drawable> {
+    // stop the recorder to take a snapshot then restart it again
+    let mut recorder = self.recorder.borrow_mut();
+    let mut drobble = recorder.finish_recording_as_drawable();
+    recorder.begin_recording(self.bounds, None, None);
+
+    // fill the newly restarted recorder with the snapshot content...
+    let canvas = recorder.recording_canvas();
+    if let Some(mut palimpsest) = drobble.as_mut() {
+      canvas.draw_drawable(&mut palimpsest, None);
+    }
+
+    // ...and the current ctm/clip state
+    canvas.save();
+    canvas.set_matrix(&self.state.matrix);
+    if !self.state.clip.is_empty(){
+      canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
+    }
+
+    drobble
+  }
+
 
   pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
     // stop the recorder to take a snapshot then restart it again
