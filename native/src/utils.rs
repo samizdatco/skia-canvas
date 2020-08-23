@@ -8,13 +8,12 @@ use core::ops::Range;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
-use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB, Rect};
+use css_color::Rgba;
 use skia_safe::{
-  FontMetrics, FontArguments,
+  Path, Matrix, Point, Color, Color4f, RGB, Rect, FontArguments,
   font_style::{FontStyle, Weight, Width, Slant},
   font_arguments::{VariationPosition, variation_position::{Coordinate}}
 };
-use css_color::Rgba;
 
 use crate::path::{JsPath2D};
 
@@ -263,7 +262,12 @@ pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Re
 
 pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Color> {
   css.parse::<Rgba>().ok().map(|Rgba{red, green, blue, alpha}|
-    Color4f::new(red, green, blue, alpha).to_color()
+    Color::from_argb(
+      (alpha*255.0).round() as u8,
+      (red*255.0).round() as u8,
+      (green*255.0).round() as u8,
+      (blue*255.0).round() as u8,
+    )
   )
 }
 
@@ -280,7 +284,8 @@ pub fn color_to_css<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color
     255 => format!("#{:02x}{:02x}{:02x}", r, g, b),
     _ => {
       let alpha = format!("{:.3}", color.a() as f32 / 255.0);
-      format!("rgba({},{},{},{})", r, g, b, alpha.trim_end_matches('0').replace("0.", "0"))
+      let alpha = alpha.trim_end_matches('0');
+      format!("rgba({}, {}, {}, {})", r, g, b, if alpha=="0."{ "0" } else{ alpha })
     }
   };
   Ok(cx.string(css).upcast())
