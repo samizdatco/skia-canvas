@@ -8,7 +8,7 @@ use core::ops::Range;
 use neon::prelude::*;
 use neon::result::Throw;
 use neon::object::This;
-use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB};
+use skia_safe::{Path, Matrix, Point, Color, Color4f, RGB, Rect};
 use skia_safe::{
   FontMetrics, FontArguments,
   font_style::{FontStyle, Weight, Width, Slant},
@@ -67,7 +67,6 @@ pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> Js
   let sym = symbol_ctor.call(cx, global, vec![symbol_label])?;
   Ok(sym)
 }
-
 
 //
 // strings
@@ -566,3 +565,38 @@ pub fn blend_mode_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr: &s
                             Exclusion, Hue, Saturation, Color, Luminosity, or Modulate")
   }
 }
+
+
+//
+// Image Rects
+//
+
+pub fn fit_bounds(width: f32, height: f32, src: Rect, dst: Rect) -> (Rect, Rect) {
+  let mut src = src;
+  let mut dst = dst;
+  let scale_x = dst.width() / src.width();
+  let scale_y = dst.height() / src.height();
+
+  if src.left < 0.0 {
+    dst.left += -src.left * scale_x;
+    src.left = 0.0;
+  }
+
+  if src.top < 0.0 {
+    dst.top += -src.top * scale_y;
+    src.top = 0.0;
+  }
+
+  if src.right > width{
+    dst.right -= (src.right - width) * scale_x;
+    src.right = width;
+  }
+
+  if src.bottom > height{
+    dst.bottom -= (src.bottom - height) * scale_y;
+    src.bottom = height;
+  }
+
+  (src, dst)
+}
+

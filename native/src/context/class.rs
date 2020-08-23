@@ -568,6 +568,9 @@ declare_types! {
         _ => return cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
       };
 
+      // shrink src to lie within the image bounds and adjust dst proportionately
+      let (src, dst) = fit_bounds(width, height, src, dst);
+
       if let Some(img) = image {
         cx.borrow_mut(&mut this, |mut this| {
           cx.borrow(&img, |img| {
