@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "A canvas environment for Node",
   "main": "lib/index.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
@@ -18,7 +18,7 @@
     "image", "images", "compositing", "render", "pdf", "svg", "rust"
   ],
   "scripts": {
-    "install": "neon build"
+    "install": "neon build --release"
   },
   "dependencies": {
     "glob": "^7.1.6",
