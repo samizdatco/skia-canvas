@@ -162,14 +162,14 @@ The tracking value defaults to `0` and settings will persist across changes to t
 
 ##### `.textWrap`
 
-The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `drawText()` and `measureText()` methods as described below.
+The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()` methods as described below.
 
 ##### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 
 The text-drawing methods’ behavior is mostly standard unless `.textWrap` has been set to `true`, in which case there are 3 main effects:
 
   1. Manual line breaking via `"\n"` escapes will be honored rather than converted to spaces
-  2. The optional `width` argument accepted by `drawText` and `measureText` will be interpreted as a ‘column width’ and used to word-wrap long lines
+  2. The optional `width` argument accepted by `fillText`, `strokeText` and `measureText` will be interpreted as a ‘column width’ and used to word-wrap long lines
   3. The line-height setting in the `.font` value will be used to set the inter-line leading rather than simply being ignored.
 
 Even when `.textWrap` is `false`, the text-drawing methods will never choose a more-condensed weight or otherwise attempt to squeeze your entire string into the measure specified by `width`. Instead the text will be typeset up through the last word that fits and the rest will be omitted. This can be used in conjunction with the `.lines` property of the object returned by `measureText()` to incrementally lay out a long string into, for example, a multi-column layout with an even number of lines in each.
