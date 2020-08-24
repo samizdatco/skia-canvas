@@ -1,7 +1,7 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.2",
-  "description": "An offscreen canvas for Node",
+  "version": "0.9.3",
+  "description": "A canvas environment for Node",
   "main": "lib/index.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
@@ -13,6 +13,10 @@
     "url": "https://github.com/samizdatco/skia-canvas/issues"
   },
   "homepage": "https://github.com/samizdatco/skia-canvas#readme",
+  "keywords":[
+    "skia", "canvas", "offscreen", "headless", "graphic", "graphics",
+    "image", "images", "compositing", "render", "pdf", "svg", "rust"
+  ],
   "scripts": {
     "install": "neon build"
   },
