@@ -510,7 +510,7 @@ impl Context2D{
     point.y += offset - paragraph.alphabetic_baseline();
     point.x += width * get_alignment_factor(&self.state.graf_style);
 
-    let mut bounds = paragraph.get_rects_for_range(0..text.len(), RectHeightStyle::Tight, RectWidthStyle::Tight)
+    let mut bounds = paragraph.get_rects_for_range(0..text.len(), RectHeightStyle::IncludeLineSpacingBottom, RectWidthStyle::Tight)
       .iter().map(|textbox| textbox.rect)
       .fold(Rect::new_empty(), Rect::join2);
     bounds.outset((paint.stroke_width(), paint.stroke_width()));
