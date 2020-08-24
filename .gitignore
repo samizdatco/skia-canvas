@@ -1,11 +1,10 @@
+_arc
 .vscode
 native/artifacts.json
 native/target
 native/*.node
 
 test/assets
-test/client.js
-test/server.js
 
 scr[ia]bble.*
 /*.png
