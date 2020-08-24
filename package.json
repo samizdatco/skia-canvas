@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "An offscreen canvas for Node",
   "main": "lib/index.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
