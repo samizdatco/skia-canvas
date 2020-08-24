@@ -5,7 +5,7 @@ LIB := $(CURDIR)/native/index.node
 SRC := $(shell find $(CURDIR)/native/src -regex ".*\.rs")
 .PHONY: build run test check clean
 
-all: run
+all: build
 
 $(NEON):
 	npm install
@@ -15,13 +15,6 @@ $(LIB): $(NEON) $(SRC)
 
 build: $(LIB)
 	@echo build complete
-
-run: $(LIB)
-	@node scribble.js
-
-preview: run
-	@open -a Preview.app out.png
-	@open -a "Visual Studio Code"
 
 test: $(LIB)
 	@$(JEST)
@@ -35,3 +28,10 @@ check:
 clean:
 	rm -rf native/target/debug
 	rm -rf native/target/release
+
+run: $(LIB)
+	@node scribble.js
+
+preview: run
+	@open -a Preview.app out.png
+	@open -a "Visual Studio Code"

@@ -33,11 +33,14 @@ On the agenda for subsequent updates are:
 Until prebuilt binaries can be provided you’ll need to compile the portions of this library that directly interface with Skia. For this you’ll need to install:
 
   1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using `rustup`
-  2. Python 2.7 (Python 3 is not suported by [neon](https://neon-bindings.com/docs/getting-started#install-node-build-tools))
-  3. `make`
-  4. A C compiler toolchain like LLVM/Clang, GCC, or MSVS
+  2. Python 2.7 (Python 3 is not supported by [neon](https://neon-bindings.com/docs/getting-started#install-node-build-tools))
+  3. The GNU `make` tool
+  4. A C compiler toolchain like LLVM/Clang, GCC, or MSVC
 
-Once these are all in place, typing `make` at the root of the library will compile the skia bindings, after which you can use the library by importing its `lib/index.js` file.
+Once these are all in place, installation *should* be as simple as:
+```console
+$ npm install skia-canvas
+```
 
 > Development of this library has taken place entirely on macOS, so reports from users of other platforms on the specifics of getting everything to compile properly would be appreciated.
 
