@@ -7,7 +7,6 @@
     <script src="/tests.js"></script>
     <style>
       body {
-        padding: 40px 50px;
         font: 13px/1.4 "Raleway", Helvetica, Arial, sans-serif;
       }
 
@@ -43,9 +42,16 @@
         font-weight:bold;
       }
 
+      header {
+        box-sizing:border-box;
+        width:1000px;
+        padding-left:280px;
+        margin:80px auto 40px auto;
+      }
+
       #tests {
-        width: 100%;
-        margin-top: 35px;
+        width:1000px;
+        margin:35px auto;
       }
 
       table thead th:nth-child(1),
@@ -78,11 +84,15 @@
     </style>
   </head>
   <body>
-    <h1>Skia Canvas</h1>
+    <header>
+      <h1>Visual Tests</h1>
 
-    <p class="msg">
-      The tests below compare rendering with <a href="https://www.npmjs.com/package/skia-canvas">skia-canvas</a> to the browser’s HTMLCanvas implementation.
-    </p>
+      <p class="msg">
+        The tests below compare rendering with <a href="https://www.npmjs.com/package/skia-canvas">skia-canvas</a> to the browser’s HTMLCanvas implementation.
+      </p>
+    </header>
+
+    <main></main>
 
     <script>
       window.addEventListener('load', runTests)
@@ -175,7 +185,7 @@
           }))
         ])
 
-        document.body.appendChild(table)
+        document.querySelector("main").appendChild(table)
       }
     </script>
 

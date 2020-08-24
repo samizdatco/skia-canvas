@@ -163,7 +163,7 @@ tests['arcTo()'] = function (ctx) {
 
   ctx.font = 'bold 25px Arial'
   ctx.fillStyle = '#fff'
-  ctx.fillText('node', 120, 155)
+  ctx.fillText('skia', 125, 157)
 }
 
 tests['ellipse() 1'] = function (ctx) {
@@ -620,15 +620,11 @@ tests['createLinearGradient() and transforms'] = function (ctx) {
   lingrad.addColorStop(0.66, '#0000FF')
   lingrad.addColorStop(1, '#00FFFF')
   ctx.fillStyle = lingrad
+  ctx.globalAlpha = 0.5
   ctx.translate(100, 100)
   ctx.beginPath()
-  ctx.moveTo(-100, -100)
-  ctx.lineTo(100, -100)
-  ctx.lineTo(100, 100)
-  ctx.lineTo(-100, 100)
-  ctx.closePath()
-  ctx.globalAlpha = 0.5
-  ctx.rotate(1.570795)
+  ctx.rect(-100,-100, 200, 200)
+  ctx.rotate(Math.PI/2)
   ctx.scale(0.6, 0.6)
   ctx.fill()
 }
@@ -882,7 +878,6 @@ tests['path through fillRect/strokeRect/clearRect'] = function (ctx) {
 }
 
 tests['invalid stroke/fill styles'] = function (ctx) {
-  console.log('invalid stroke/fill styles')
   ctx.fillStyle = 'red'
   ctx.strokeStyle = 'yellow'
   ctx.rect(50, 50, 50, 50)
@@ -1342,10 +1337,10 @@ gco.forEach(op => {
         ctx.globalAlpha = 0.7
         ctx.drawImage(img1, 0, 0)
         ctx.globalCompositeOperation = op
-        ctx.rotate(0.1)
-        ctx.scale(0.8, 1.2)
-        ctx.translate(5, -5)
-        ctx.drawImage(img2, -80, -50, 400, 400, 10, 10, 180, 180)
+        ctx.translate(92, 12)
+        ctx.rotate(Math.PI/4)
+        ctx.scale(0.8, .8)
+        ctx.drawImage(img2, 0, 0, 125, 125, 10, 10, 125, 125)
         done()
       }
       img2.src = imageSrc('blend-fg.png')
@@ -1370,34 +1365,56 @@ tests['drawImage with negative source rect origin'] = function (ctx, done) {
   img1.src = imageSrc('pentagon.png')
 }
 
+tests['composite with text'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0)
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.save()
+    ctx.fillStyle = 'red'
+    ctx.font='900 80px Arial'
+    ctx.fillText('XXXX', 10, 100)
+
+    ctx.restore()
+    done()
+  }
+  img.src = imageSrc('blend-bg.png')
+}
+
+tests['composite with path'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0)
+    ctx.globalCompositeOperation = 'destination-in'
+    ctx.save()
+    ctx.fillStyle = 'red'
+    ctx.beginPath()
+    ctx.arc(50, 50, 30, 0, 2*Math.PI)
+    ctx.fill()
+
+    ctx.restore()
+    done()
+  }
+  img.src = imageSrc('blend-bg.png')
+}
 
 
-
-
-
-//
-// Major Crasher
-//
-
-
-// tests['drawImage 9 arguments big numbers'] = function (ctx, done) {
-//   var img = new Image()
-//   ctx.imageSmoothingEnabled = false
-//   img.onload = function () {
-//     // we use big numbers because is over the max canvas allowed
-//     ctx.drawImage(img, -90000, -90000, 90080, 90080, -180000, -18000, 180160, 18016)
-//     ctx.drawImage(img, -90000, -90000, 90040, 90040, -179930, -179930, 180060, 180060)
-//     ctx.drawImage(img, -90000, -90000, 90080, 90080, -18000, -180000, 18016, 180160)
-//     ctx.drawImage(img, 475, 380, 90000, 90000, 20, 20, 180000, 720000)
-//     done(null)
-//   }
-//   img.onerror = function () {
-//     done(new Error('Failed to load image'))
-//   }
-//   img.src = imageSrc('globe.jpg')
-// }
-
-
+tests['drawImage 9 arguments big numbers'] = function (ctx, done) {
+  var img = new Image()
+  ctx.imageSmoothingEnabled = false
+  img.onload = function () {
+    // we use big numbers because is over the max canvas allowed
+    ctx.drawImage(img, -90000, -90000, 90080, 90080, -180000, -18000, 180160, 18016)
+    ctx.drawImage(img, -90000, -90000, 90040, 90040, -179930, -179930, 180060, 180060)
+    ctx.drawImage(img, -90000, -90000, 90080, 90080, -18000, -180000, 18016, 180160)
+    ctx.drawImage(img, 475, 380, 90000, 90000, 20, 20, 180000, 720000)
+    done(null)
+  }
+  img.onerror = function () {
+    done(new Error('Failed to load image'))
+  }
+  img.src = imageSrc('globe.jpg')
+}
 
 
 tests['known bug #416'] = function (ctx, done) {
@@ -1737,7 +1754,55 @@ tests['shadow strokeText()'] = function (ctx) {
   ctx.shadowOffsetY = 8
   ctx.textAlign = 'center'
   ctx.font = '35px Arial'
+  ctx.lineWidth = 2
   ctx.strokeText('Shadow', 100, 100)
+}
+
+tests['shadow gradient fill'] = function (ctx) {
+  ctx.shadowColor = '#c00'
+  ctx.shadowBlur = 2
+  ctx.shadowOffsetX = 8
+  ctx.shadowOffsetY = 8
+
+  let grad = ctx.createLinearGradient(20,20, 120,120)
+  grad.addColorStop(0, 'yellow')
+  grad.addColorStop(0.25, 'red')
+  grad.addColorStop(0.25, 'rgba(0,0,0,0)')
+  grad.addColorStop(0.75, 'rgba(0,0,0,0)')
+  grad.addColorStop(0.75, 'blue')
+  grad.addColorStop(1, 'limegreen')
+
+  ctx.fillStyle = grad
+  ctx.translate(100,0)
+  ctx.rotate(Math.PI/4)
+  ctx.fillRect(20,20, 100,100)
+}
+
+tests['shadow low opacity fill'] = function (ctx) {
+  ctx.shadowColor = '#c00'
+  ctx.shadowBlur = 2
+  ctx.shadowOffsetX = 8
+  ctx.shadowOffsetY = 8
+
+  ctx.fillStyle = 'rgba(0,0,0, .2)'
+  ctx.fillRect(20,20, 100,100)
+}
+
+tests['shadow low opacity drawImage'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+
+    ctx.shadowColor = '#000'
+    ctx.shadowBlur = 4
+    ctx.shadowOffsetX = 12
+    ctx.shadowOffsetY = 12
+    ctx.globalAlpha = .4
+
+    ctx.drawImage(img, 0,0)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('blend-fg.png')
 }
 
 tests['shadow transform text'] = function (ctx) {
@@ -2051,21 +2116,21 @@ tests['drawImage(img,x,y,w,h) scale down in a scaled up context'] = function (ct
   var img = new Image()
   img.onload = function () {
     ctx.scale(20, 20)
-    ctx.drawImage(img, 0, 0, 10, 10)
+    ctx.drawImage(img, -2.25, 0, 15, 10)
     done(null)
   }
   img.onerror = done
-  img.src = imageSrc('state.png')
+  img.src = imageSrc('globe.jpg')
 }
 
 tests['drawImage(img,x,y,w,h) scale up'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
-    ctx.drawImage(img, 0, 0, 200, 200)
+    ctx.drawImage(img, -45, 0, 300, 200)
     done(null)
   }
   img.onerror = done
-  img.src = imageSrc('state.png')
+  img.src = imageSrc('globe.jpg')
 }
 
 tests['drawImage(img,x,y,w,h) scale vertical'] = function (ctx, done) {
@@ -2205,8 +2270,8 @@ tests['putImageData() 7'] = function (ctx) {
   }
   ctx.strokeRect(60, 60, 50, 30)
   ctx.translate(20, 20)
-  var data = ctx.getImageData(0, 0, 50, 50)
-  ctx.putImageData(data, 60, 60, 10, 20, 35, -10)
+  var data = ctx.getImageData(75, 35, 50, 50)
+  ctx.putImageData(data, 60, 60 , 10, 20, 35, -10)
 }
 
 tests['putImageData() 8'] = function (ctx) {
@@ -2293,6 +2358,7 @@ tests['putImageData() png data'] = function (ctx, done) {
       for (var i = 0, len = data.length; i < len; i += 4) {
         data[i + 3] = 80
       }
+      console.log(data.slice(-40))
     }
     ctx.putImageData(imageData, 50, 50)
     done(null)
@@ -2597,7 +2663,7 @@ tests['drawImage reflection bug with skewing'] = function (ctx, done) {
 tests['transformed drawimage'] = function (ctx) {
   ctx.fillStyle = 'white'
   ctx.fillRect(0, 0, 200, 200)
-  ctx.fillStyle = 'black'
+  ctx.fillStyle = '#999'
   ctx.fillRect(5, 5, 50, 50)
   ctx.transform(1.2, 1, 1.8, 1.3, 0, 0)
   ctx.drawImage(ctx.canvas, 0, 0)
