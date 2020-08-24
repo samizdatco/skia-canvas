@@ -462,6 +462,10 @@ declare_types! {
         library.family_details(&family)
       });
 
+      if weights.is_empty() {
+        return Ok(cx.undefined().upcast())
+      }
+
       let name = cx.string(family);
       let weights = floats_to_array(&mut cx, &weights)?;
       let widths = strings_to_array(&mut cx, &widths)?;
