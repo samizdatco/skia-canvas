@@ -2,7 +2,7 @@
 
 Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and as a result produces very similar results to Chrome’s `<canvas>` element.
 
-While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas that are relevant to the generation of static graphics file rather that ‘live’ display in a browser.
+While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas that are relevant to the generation of static graphics files rather than ‘live’ display in a browser.
 
 In particular, Skia Canvas:
 
@@ -134,9 +134,9 @@ The `saveAs` method takes a file path and writes the canvas’s current contents
 
 The `quality` option is a number between 0 and 100 that controls the level of JPEG compression both when making JPEG files directly and when embedding them in a PDF. If omitted, quality will default to 100 (lossless).
 
-The way multi-page documents are handled depends on the filename argument. If the filename contains the string `{}`, it will be used as template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formats it will contain only the most recently added page.
+The way multi-page documents are handled depends on the filename argument. If the filename contains the string `"{}"`, it will be used as template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formats it will contain only the most recently added page.
 
-An integer can optionally be placed between the braces to indicate the number of padding characters to use for numbering. For instance `page-{}.png` will generate files of the form `page-1.svg` whereas `frame-{4}.png` will generate files like `frame-0001.png`.
+An integer can optionally be placed between the braces to indicate the number of padding characters to use for numbering. For instance `"page-{}.svg"` will generate files of the form `page-1.svg` whereas `"frame-{4}.png"` will generate files like `frame-0001.png`.
 
 ##### `toBuffer(format, {quality, page})`
 
@@ -263,14 +263,14 @@ FontLibrary.use("Grizwald", [
 // with default family name
 FontLibrary.use(['fonts/Crimson_Pro/*.ttf'])
 
-// with default family name
+// with an alias
 FontLibrary.use("Stinson", ['fonts/Crimson_Pro/*.ttf'])
 ```
 
 ###### multiple families with aliases
 ```js
 FontLibrary.use({
-  Nieuwveen: 'fonts/AmstelvarAlpha-VF.ttf',
+  Nieuwveen: ['fonts/AmstelvarAlpha-VF.ttf', 'fonts/AmstelvarAlphaItalic-VF.ttf'],
   Fairway: 'fonts/Raleway/*.ttf'
 })
 ```
