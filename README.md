@@ -9,7 +9,8 @@ In particular, Skia Canvas:
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can create multiple ‘pages’ on a given canvas and then output them as a single, multi-page PDF or an image-sequence saved to multiple files
   - fully supports the new [CSS filter effects](https://drafts.fxtf.org/filter-effects/#FilterProperty) image processing operators
-  - offers rich typographic control including
+  - offers rich typographic control including:
+
     - multi-line, word-wrapped text
     - line-by-line text metrics
     - small-caps, ligatures, and other opentype features accessible using standard [font-variant][font-variant] syntax
@@ -21,7 +22,7 @@ In particular, Skia Canvas:
 ## Roadmap
 This project is newly-hatched and still has some obvious gaps to fill (feel free to pitch in!).
 
-On the agenda for subequent updates are:
+On the agenda for subsequent updates are:
   - Prebuilt binaries (coming soon)
   - Use neon [Tasks](https://neon-bindings.com/docs/async) to provide asynchronous file i/o
   - Add SVG image loading using the [µsvg](https://crates.io/crates/usvg) parser
@@ -76,11 +77,11 @@ canvas.saveAs("foo.pdf")
 
 ## API Documentation
 
-Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporing object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method. Documentation for each of the context’s attributes is linked below—properties are printed in italics and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a ⚡ symbol (see the next section for details).
+Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method. Documentation for each of the context’s attributes is linked below—properties are printed in italics and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a ⚡ symbol (see the next section for details).
 
 | Canvas State                           | Drawing Primitives                          | Stroke & Fill                      | Effects                                                |
 |----------------------------------------|---------------------------------------------|------------------------------------|--------------------------------------------------------|
-| [*canvas*](#canvas) ⚡                 | [clearRect()][clearRect()]                  | [*fillStyle*][fillStyle]           | [*filter*][filter]                                     |
+| [*canvas*](#canvas) [⚡](#canvas)      | [clearRect()][clearRect()]                  | [*fillStyle*][fillStyle]           | [*filter*][filter]                                     |
 | [beginPath()][beginPath()]             | [drawImage()][drawImage()]                  | [*lineCap*][lineCap]               | [*globalAlpha*][globalAlpha]                           |
 | [clip()][clip()]                       | [fill()][fill()]                            | [*lineDashOffset*][lineDashOffset] | [*globalCompositeOperation*][globalCompositeOperation] |
 | [isPointInPath()][isPointInPath()]     | [fillRect()][fillRect()]                    | [*lineJoin*][lineJoin]             | [*shadowBlur*][shadowBlur]                             |
@@ -91,17 +92,17 @@ Most of your interaction with the canvas will actually be directed toward its �
 |                                        |                                             | [setLineDash()][setLineDash()]     |                                                        |
 
 
-| Bezier Paths                             | Typography                         | Pattern & Image                                    | Transform                              |
-|------------------------------------------|------------------------------------|----------------------------------------------------|----------------------------------------|
-| [arc()][arc()]                           | [*direction*][direction]           | [*imageSmoothingEnabled*][imageSmoothingEnabled]   | [*currentTransform*][currentTransform] |
-| [arcTo()][arcTo()]                       | [*font*][font]                     | [*imageSmoothingQuality*][imageSmoothingQuality]   | [getTransform()][getTransform()]       |
-| [bezierCurveTo()][bezierCurveTo()]       | [*fontVariant* ⚡](#fontvariant)   | [createImageData()][createImageData()]             | [resetTransform()][resetTransform()]   |
-| [closePath()][closePath()]               | [*textAlign*][textAlign]           | [createLinearGradient()][createLinearGradient()]   | [rotate()][rotate()]                   |
-| [ellipse()][ellipse()]                   | [*textBaseline*][textBaseline]     | [createPattern()][createPattern()]                 | [scale()][scale()]                     |
-| [lineTo()][lineTo()]                     | [*textTracking* ⚡](#texttracking) | [createRadialGradient()][createRadialGradient()]   | [setTransform()][setTransform()]       |
-| [moveTo()][moveTo()]                     | [*textWrap* ⚡](#textwrap)         | [getImageData()][getImageData()]                   | [transform()][transform()]             |
-| [quadraticCurveTo()][quadraticCurveTo()] | [measureText() ⚡][measureText()]  | [putImageData()][putImageData()]                   | [translate()][translate()]             |
-| [rect()][rect()]                         |                                    |                                                    |                                        |
+| Bezier Paths                             | Typography                                                  | Pattern & Image                                    | Transform                              |
+|------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|----------------------------------------|
+| [arc()][arc()]                           | [*direction*][direction]                                    | [*imageSmoothingEnabled*][imageSmoothingEnabled]   | [*currentTransform*][currentTransform] |
+| [arcTo()][arcTo()]                       | [*font*][font]                                              | [*imageSmoothingQuality*][imageSmoothingQuality]   | [getTransform()][getTransform()]       |
+| [bezierCurveTo()][bezierCurveTo()]       | [*fontVariant* ⚡](#fontvariant)                            | [createImageData()][createImageData()]             | [resetTransform()][resetTransform()]   |
+| [closePath()][closePath()]               | [*textAlign*][textAlign]                                    | [createLinearGradient()][createLinearGradient()]   | [rotate()][rotate()]                   |
+| [ellipse()][ellipse()]                   | [*textBaseline*][textBaseline]                              | [createPattern()][createPattern()]                 | [scale()][scale()]                     |
+| [lineTo()][lineTo()]                     | [*textTracking* ⚡](#texttracking)                          | [createRadialGradient()][createRadialGradient()]   | [setTransform()][setTransform()]       |
+| [moveTo()][moveTo()]                     | [*textWrap* ⚡](#textwrap)                                  | [getImageData()][getImageData()]                   | [transform()][transform()]             |
+| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] [⚡](#measuretextstr-width)  | [putImageData()][putImageData()]                   | [translate()][translate()]             |
+| [rect()][rect()]                         |                                                             |                                                    |                                        |
 
 
 
@@ -120,7 +121,9 @@ These properties are syntactic sugar for calling the `toBuffer()` method. Each r
 
 ##### `newPage(width, height)`
 
-This method allows for the creation of additional drawing contexts that are fully independent of one another but will be part of the same output batch. It is primarily useful in the context of creating a multi-page PDF but can be used to create mutli-file image-sequences in other formats as well. Creating a new page with a different size than the previous one will update the parent Canvas object’s `.width` and `.height` attributes but will not affect any other pages that have been created previously.
+This method allows for the creation of additional drawing contexts that are fully independent of one another but will be part of the same output batch. It is primarily useful in the context of creating a multi-page PDF but can be used to create multi-file image-sequences in other formats as well. Creating a new page with a different size than the previous one will update the parent Canvas object’s `.width` and `.height` attributes but will not affect any other pages that have been created previously.
+
+The method’s return value is a `CanvasRenderingContext2D` object which you can either save a reference to or recover later from the `.pages` array.
 
 ##### `saveAs(filename, {format, quality})`
 
@@ -128,7 +131,7 @@ The `saveAs` method takes a file path and writes the canvas’s current contents
 
 The `quality` option is a number between 0 and 100 that controls the level of JPEG compression both when making JPEG files directly and when embedding them in a PDF. If omitted, quality will default to 100 (lossless).
 
-The way multi-page documents are handled depends on the filename argument. If the filename contains the string `{}`, it will be used as template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formates it will contain only the most recently added page.
+The way multi-page documents are handled depends on the filename argument. If the filename contains the string `{}`, it will be used as template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formats it will contain only the most recently added page.
 
 An integer can optionally be placed between the braces to indicate the number of padding characters to use for numbering. For instance `page-{}.png` will generate files of the form `page-1.svg` whereas `frame-{4}.png` will generate files like `frame-0001.png`.
 
