@@ -1,0 +1,38 @@
+os:
+  - osx
+  - linux
+language: node_js
+node_js:
+  - lts/*
+  - node
+cache:
+  - cargo
+  - npm
+before_install:
+  # Install Rust and Cargo
+  - curl https://sh.rustup.rs -sSf > /tmp/rustup.sh
+  - sh /tmp/rustup.sh -y
+  - export PATH="$HOME/.cargo/bin:$PATH"
+  - source "$HOME/.cargo/env"
+  - rustc --version
+  - cargo --version
+  # Install NPM packages
+  - node -v
+  - npm -v
+  - npm install
+script:
+  - npm test
+  - rm -rf native/target
+  - rm -rf native/artifacts.json
+  - npm run package
+
+deploy:
+  draft: true
+  provider: releases
+  skip_cleanup: true
+  on:
+    tags: true
+  api_key: "$GITHUB_TOKEN"
+  file_glob: true
+  file:
+    - "build/stage/${TRAVIS_TAG}/*"

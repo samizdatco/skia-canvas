@@ -9,6 +9,14 @@
     "type": "git",
     "url": "git+https://github.com/samizdatco/skia-canvas.git"
   },
+  "files": [
+    "lib",
+    "native/build.rs",
+    "native/Cargo.*",
+    "native/src",
+    "native/index.node",
+    "README.md"
+  ],
   "bugs": {
     "url": "https://github.com/samizdatco/skia-canvas/issues"
   },
@@ -29,7 +37,16 @@
     "rust"
   ],
   "scripts": {
-    "install": "neon build --release"
+    "install": "node-pre-gyp install --fallback-to-build=false || neon build --release",
+    "package": "node-pre-gyp package",
+    "upload-binary": "node-pre-gyp package && node-pre-gyp-github publish"
+  },
+  "binary": {
+    "module_name": "index",
+    "host": "https://github.com/samizdatco/skia-canvas/releases/download/",
+    "remote_path": "{version}",
+    "package_name": "{node_abi}-{platform}-{arch}.tar.gz",
+    "module_path": "./native"
   },
   "dependencies": {
     "glob": "^7.1.6",
