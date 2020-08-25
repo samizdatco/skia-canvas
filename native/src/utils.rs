@@ -198,7 +198,7 @@ pub fn floats_in(vals: &[Handle<JsValue>]) -> Vec<f32>{
 pub fn opt_float_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<f32>{
   match cx.argument_opt(idx as i32) {
     Some(arg) => match arg.downcast::<JsNumber>() {
-      Ok(v) => Some(v.value() as f32),
+      Ok(v) => if v.value().is_finite(){ Some(v.value() as f32) }else{ None },
       Err(_e) => None
     },
     None => None
