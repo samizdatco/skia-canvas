@@ -30,7 +30,7 @@ deploy:
   draft: true
   provider: releases
   api_key:
-    secure: "$GITHUB_TOKEN"
+    secure: CtbcF0gDNTG32Fpq1FavUT6BGWLKF9jm1UolM6mu4z9yul8teKBTnBTsG/7Oj3AyYQAkBYEfen8nUUzq9UnJqVn/+/cYXVfWNePkt+6l55FdWDc3UZZE02xsNzUv59Gl2cQDpFOTdNbIYS5jJLlB6aFoQclhSwt9LxmQwP3jovp1JwKwCp54wLu0bLU+VBo2n72vrtVwv78fJP6BI9n0NsKBadgFW2X26kJypaFA/GqijKDI1OgPueFEwU/YzG4bzT94dr5i00WNPEHL23t2yy+mEGVwKOYrWQp2h0u812z/o5/9UAuN2ienuUZ/3WOBbAsPj053e3Iok2PTD6wNyj2DrI+Wo1sCQfYN2gxVX1bCcQUFWUindCWNoFEwaT5WHHFemle7uzeIIDaZzqhZel35rRvhJ/6TuSj/idosLnHsKUaunKbRiUp4HVz1f2GQNpwciJPKF0vc9Oe4ZmjA+odMTgo0FfRLetP6jWPFbjlzDkpelVzq7kkK7/1dad2rxrjmwPkVvsfX+/enz1luQBAE1Y7eLr7QPwzUDKcs119fybWKBivdf1fe6hWGvhOwmobjOqjV6jXvc2Z8JL62QbI9m5Pqv2HgWUq79wOyiSQyssT82/7sJeQDHKl7rYwp1Na/BJmc5uUczvWmV/99Zh36NIJE4fbtf6/CuWFipC4=
   file_glob: true
   file: build/stage/${TRAVIS_TAG}/*
   on:
