@@ -432,10 +432,9 @@ impl Context2D{
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
     let origin = origin.into();
     let size = size.into();
-    let cull = Rect::from_point_and_size(origin, size);
     let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
 
-    if let Some(pict) = self.get_picture(Some(&cull)) {
+    if let Some(pict) = self.get_picture(None) {
       if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(size){
         let shift = Matrix::new_trans((-origin.x as f32, -origin.y as f32));
         bitmap_surface.canvas().draw_picture(&pict, Some(&shift), None);
