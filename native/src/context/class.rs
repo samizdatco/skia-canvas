@@ -397,7 +397,7 @@ declare_types! {
       if let Some(dye) = Dye::new(&mut cx, arg, Fill)? {
         cx.borrow_mut(&mut this, |mut this|  this.state.fill_style = dye );
       }else{
-        println!("Warning: Invalid fill style (expected a css color string, CanvasGradient, or CanvasPattern)");
+        eprintln!("Warning: Invalid fill style (expected a css color string, CanvasGradient, or CanvasPattern)");
       }
 
       Ok(cx.undefined().upcast())
@@ -415,7 +415,7 @@ declare_types! {
       if let Some(dye) = Dye::new(&mut cx, arg, Stroke)? {
         cx.borrow_mut(&mut this, |mut this| this.state.stroke_style = dye );
       }else{
-        println!("Warning: Invalid stroke style (expected a css color string, CanvasGradient, or CanvasPattern)");
+        eprintln!("Warning: Invalid stroke style (expected a css color string, CanvasGradient, or CanvasPattern)");
       }
 
       Ok(cx.undefined().upcast())
@@ -952,7 +952,7 @@ declare_types! {
       if let Some(color) = color_arg(&mut cx, 0){
         cx.borrow_mut(&mut this, |mut this| { this.state.shadow_color = color; });
       }else{
-        println!("Warning: Invalid shadow color (expected a css color string)");
+        eprintln!("Warning: Invalid shadow color (expected a css color string)");
       }
 
       Ok(cx.undefined().upcast())
