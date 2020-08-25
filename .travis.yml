@@ -29,10 +29,11 @@ script:
 deploy:
   draft: true
   provider: releases
-  skip_cleanup: true
-  on:
-    tags: true
-  api_key: "$GITHUB_TOKEN"
+  api_key:
+    secure: "$GITHUB_TOKEN"
   file_glob: true
-  file:
-    - "build/stage/${TRAVIS_TAG}/*"
+  file: build/stage/${TRAVIS_TAG}/*
+  on:
+    repo: samizdatco/skia-canvas
+    tags: true
+  skip_cleanup: 'true'
