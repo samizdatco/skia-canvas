@@ -245,6 +245,11 @@ impl Context2D{
     self.path = Path::new();
     self.stack = vec![];
     self.state = State::default();
+
+    // erase any existing content
+    let mut new_recorder = PictureRecorder::new();
+    new_recorder.begin_recording(self.bounds, None, None);
+    self.recorder.replace(new_recorder);
     self.reset_canvas();
   }
 
