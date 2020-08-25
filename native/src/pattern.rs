@@ -6,6 +6,7 @@ use skia_safe::{shaders, Shader, Matrix, TileMode::{Decal, Repeat}};
 
 use crate::utils::*;
 use crate::image::{Image, JsImage};
+use crate::canvas::{Canvas, JsCanvas, canvas_pages};
 
 #[derive(Clone)]
 pub struct CanvasPattern{
@@ -21,16 +22,8 @@ impl CanvasPattern{
 
 declare_types! {
   pub class JsCanvasPattern for CanvasPattern {
-    init(_) {
-      Ok(CanvasPattern{
-        stamp: shaders::empty(),
-        shader: Rc::new(RefCell::new(shaders::empty()))
-      })
-    }
-
-    constructor(mut cx){
-      let mut this = cx.this();
-      let img = cx.argument::<JsImage>(0)?;
+    init(mut cx) {
+      let src = cx.argument::<JsValue>(0)?;
       let repetition = if cx.len() > 1 && cx.argument::<JsValue>(1)?.is_a::<JsNull>(){
         "".to_string() // null is a valid synonym for "repeat" (as is "")
       }else{
@@ -45,16 +38,31 @@ declare_types! {
         _ => return cx.throw_error("Unknown pattern repeat style")
       };
 
-      cx.borrow_mut(&mut this, |mut this|{
-        cx.borrow(&img, |img| {
-          if let Some(image) = &img.image {
-            this.stamp = image.to_shader((tile_x, tile_y), None);
-            this.shader.replace(this.stamp.clone());
-          }
-        });
-      });
+      let shader = match src {
+        src if src.is_a::<JsImage>() => {
+          let src = cx.argument::<JsImage>(0)?;
+          cx.borrow(&src, |src| {
+            src.image.as_ref().map(|image| image.to_shader((tile_x, tile_y), None))
+          })
+        }
+        src if src.is_a::<JsCanvas>() => {
+          let src = cx.argument::<JsCanvas>(0)?;
+          let mut context = canvas_pages(&mut cx, &src)?[0];
+          cx.borrow_mut(&mut context, |mut ctx| {
+            ctx.get_picture(None).map(|pict|
+              pict.to_shader((tile_x, tile_y), None, None)
+            )
+          })
+        }
+        _ => None
+      };
 
-      Ok(None)
+      match shader {
+        Some(stamp) => Ok(CanvasPattern{
+          shader: Rc::new(RefCell::new(stamp.clone())), stamp
+        }),
+        None => cx.throw_type_error("CanvasPatterns require a source Image or a Canvas")
+      }
     }
 
     method _setTransform(mut cx){
