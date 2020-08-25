@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "A canvas environment for Node",
   "main": "lib/index.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
@@ -13,22 +13,34 @@
     "url": "https://github.com/samizdatco/skia-canvas/issues"
   },
   "homepage": "https://github.com/samizdatco/skia-canvas#readme",
-  "keywords":[
-    "skia", "canvas", "offscreen", "headless", "graphic", "graphics",
-    "image", "images", "compositing", "render", "pdf", "svg", "rust"
+  "keywords": [
+    "skia",
+    "canvas",
+    "offscreen",
+    "headless",
+    "graphic",
+    "graphics",
+    "image",
+    "images",
+    "compositing",
+    "render",
+    "pdf",
+    "svg",
+    "rust"
   ],
   "scripts": {
     "install": "neon build --release"
   },
   "dependencies": {
     "glob": "^7.1.6",
+    "neon-cli": "^0.4.0",
     "simple-get": "^4.0.0",
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
     "express": "^4.17.1",
     "jest": "^26.2.2",
-    "neon-cli": "^0.4.0",
+    "lodash": "^4.17.20",
     "nodemon": "^2.0.4"
   }
 }
