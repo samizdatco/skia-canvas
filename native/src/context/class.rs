@@ -508,11 +508,14 @@ declare_types! {
 
     method set_lineWidth(mut cx){
       let mut this = cx.this();
-      let num = float_arg(&mut cx, 0, "lineWidth")?;
-      cx.borrow_mut(&mut this, |mut this|{
-        this.state.paint.set_stroke_width(num);
-        this.state.stroke_width = num;
-      });
+      if let Some(num) = opt_float_arg(&mut cx, 0){
+        if num > 0.0 {
+          cx.borrow_mut(&mut this, |mut this|{
+            this.state.paint.set_stroke_width(num);
+            this.state.stroke_width = num;
+          });
+        }
+      }
       Ok(cx.undefined().upcast())
     }
 
