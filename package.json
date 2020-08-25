@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.5",
+  "version": "0.9.6",
   "description": "A canvas environment for Node",
   "main": "lib/index.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
@@ -34,6 +34,7 @@
   "dependencies": {
     "glob": "^7.1.6",
     "neon-cli": "^0.4.0",
+    "node-pre-gyp": "^0.15.0",
     "simple-get": "^4.0.0",
     "string-split-by": "^1.0.0"
   },
@@ -41,6 +42,7 @@
     "express": "^4.17.1",
     "jest": "^26.2.2",
     "lodash": "^4.17.20",
+    "node-pre-gyp-github": "^1.4.3",
     "nodemon": "^2.0.4"
   }
 }
