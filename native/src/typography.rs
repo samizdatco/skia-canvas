@@ -263,8 +263,11 @@ impl FontLibrary{
     let font_mgr = FontMgr::new();
     let count = font_mgr.count_families();
     let mut names:Vec<String> = (0..count).map(|i| font_mgr.family_name(i)).collect();
-    for (font, _alias) in &self.fonts {
-      names.push(font.family_name());
+    for (font, alias) in &self.fonts {
+      names.push(match alias{
+        Some(name) => name.clone(),
+        None => font.family_name()
+      })
     }
     names.sort();
     names.dedup();
@@ -334,7 +337,7 @@ impl FontLibrary{
     // don't update the style if no usable family names were specified
     let matches = self.collection.find_typefaces(&spec.families, spec.style);
     if matches.is_empty(){
-      println!("Warning: No matching font families found for {:?}", spec.families);
+      eprintln!("Warning: No matching font families found for {:?}", spec.families);
       return None
     }
 
