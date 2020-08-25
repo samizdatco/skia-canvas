@@ -694,6 +694,11 @@ declare_types! {
       let y = float_arg(&mut cx, 2, "y")?;
       let width = opt_float_arg(&mut cx, 3);
 
+      if width.is_none() && cx.len() > 3 && !cx.argument::<JsValue>(3)?.is_a::<JsUndefined>(){
+        // it's fine to include an ignored `undefined` but anything else is invalid
+        return Ok(cx.undefined().upcast())
+      }
+
       cx.borrow_mut(&mut this, |mut this|{
         let paint = this.paint_for_fill();
         this.draw_text(&text, x, y, width, paint);
@@ -708,6 +713,11 @@ declare_types! {
       let x = float_arg(&mut cx, 1, "x")?;
       let y = float_arg(&mut cx, 2, "y")?;
       let width = opt_float_arg(&mut cx, 3);
+
+      if width.is_none() && cx.len() > 3 && !cx.argument::<JsValue>(3)?.is_a::<JsUndefined>(){
+        // it's fine to include an ignored `undefined` but anything else is invalid
+        return Ok(cx.undefined().upcast())
+      }
 
       cx.borrow_mut(&mut this, |mut this|{
         let paint = this.paint_for_stroke();
