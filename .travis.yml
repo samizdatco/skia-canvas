@@ -1,6 +1,7 @@
 os:
   - osx
   - linux
+  - windows
 language: node_js
 node_js:
   - lts/*
@@ -11,6 +12,7 @@ cache:
 before_install:
   # Install Rust and Cargo
   - curl https://sh.rustup.rs -sSf > /tmp/rustup.sh
+  - if [ "$TRAVIS_OS_NAME" = "windows" ]; then export RUSTUP_OPTIONS="--default-host x86_64-pc-windows-msvc --default-toolchain stable-x86_64-pc-windows-msvc"; fi
   - sh /tmp/rustup.sh -y
   - export PATH="$HOME/.cargo/bin:$PATH"
   - source "$HOME/.cargo/env"
@@ -21,6 +23,6 @@ before_install:
   - npm -v
   - npm install
 script:
-  - npm test
   - npm run package
+  - npm test
   - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
