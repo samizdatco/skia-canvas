@@ -23,7 +23,17 @@ before_install:
   - node -v
   - npm -v
   - npm install
-script:
-  - npm run package
-  - npm test
-  - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
+# script:
+#   - npm run package
+#   - npm test
+#   - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
+deploy:
+  draft: true
+  provider: releases
+  api_key: "$API_KEY"
+  file_glob: true
+  file: build/stage/${TRAVIS_TAG}/*
+  on:
+    repo: samizdatco/skia-canvas
+    tags: true
+  skip_cleanup: true
