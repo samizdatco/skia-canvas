@@ -1,0 +1,48 @@
+name: Upload Release Asset
+
+on:
+  push:
+    # Sequence of patterns matched against refs/tags
+    tags:
+    - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
+jobs:
+  macOS:
+    strategy:
+      matrix:
+        node: [8, 9, 10, 11, 12, 13, 14]
+    name: ${{ matrix.node }}, macOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build project # This would actually build your project, using zip for an example artifact
+        run: |
+          curl https://sh.rustup.rs -sSf > /tmp/rustup.sh
+          sh /tmp/rustup.sh -y
+          export PATH="$HOME/.cargo/bin:$PATH"
+          source "$HOME/.cargo/env" || true
+          rustc --version
+          cargo --version
+          node -v
+          npm -v
+          npm install
+          npm run package
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: true
+          prerelease: false
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/*/*
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
