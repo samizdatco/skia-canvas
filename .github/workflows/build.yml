@@ -10,7 +10,7 @@ jobs:
   macOS:
     strategy:
       matrix:
-        node: [8, 9, 10, 11, 12, 13, 14]
+        node: [14]
     name: ${{ matrix.node }}, macOS
     runs-on: macos-latest
     steps:
