@@ -22,9 +22,5 @@ before_install:
   - npm install
 script:
   - npm test
-  - rm -rf native/target
-  - rm -rf native/artifacts.json
   - npm run package
-  # Publish when using '[publish binary]' keywords
-  - COMMIT_MESSAGE=$(git log --format=%B --no-merges -n 1 | tr -d '\n')
-  - if [[ ${COMMIT_MESSAGE} =~ "[publish binary]" ]]; then npm run upload-binary || exit 0; fi;
+  - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi

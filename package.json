@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "A canvas environment for Node",
   "main": "lib/index.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
@@ -37,9 +37,10 @@
     "rust"
   ],
   "scripts": {
-    "install": "node-pre-gyp install --fallback-to-build=false || neon build --release",
-    "package": "node-pre-gyp package",
-    "upload-binary": "node-pre-gyp package && node-pre-gyp-github publish",
+    "build": "neon build --release",
+    "install": "node-pre-gyp install --fallback-to-build=false || npm run build",
+    "package": "npm run build && rm -rf native/target && node-pre-gyp package",
+    "upload-binary": "node-pre-gyp-github publish",
     "test": "jest"
   },
   "binary": {
