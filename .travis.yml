@@ -23,9 +23,9 @@ before_install:
   - node -v
   - npm -v
   - npm install
-# script:
-#   - npm run package
-#   - npm test
+script:
+  - npm run package
+  - npm test
 #   - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
 deploy:
   draft: true
