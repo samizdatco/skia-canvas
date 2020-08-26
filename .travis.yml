@@ -15,7 +15,7 @@ before_install:
   - if [ "$TRAVIS_OS_NAME" = "windows" ]; then export RUSTUP_OPTIONS="--default-host x86_64-pc-windows-msvc --default-toolchain stable-x86_64-pc-windows-msvc"; fi
   - sh /tmp/rustup.sh -y
   - export PATH="$HOME/.cargo/bin:$PATH"
-  - source "$HOME/.cargo/env"
+  - source "$HOME/.cargo/env" || true
   - rustc --version
   - cargo --version
   # Install NPM packages
