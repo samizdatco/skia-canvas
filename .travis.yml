@@ -1,6 +1,6 @@
 env:
   - RUST_SKIA_TAG="0.33.0"
-# if: tag IS present
+if: tag IS present
 os:
   - osx
   - linux
@@ -27,7 +27,9 @@ before_install:
   # Clone the rust-skia repo with the proper tag
   - git clone --depth 1 --branch $RUST_SKIA_TAG https://github.com/rust-skia/rust-skia.git ../rust-skia
   - npm install -g neon-cli
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then sed -i.bak 's/^skia-safe.*/skia-safe = { path = "..\/..\/rust-skia\/skia-safe", features = ["textlayout"] }/' native/Cargo.toml; travis_wait 25 npm run build; fi
+  # Build rust-skia from source on linux (use downloaded binaries on mac)
+  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then sed -i.bak 's/^skia-safe.*/skia-safe = { path = "..\/..\/rust-skia\/skia-safe", features = ["textlayout"] }/' native/Cargo.toml; fi
+  - travis_wait 25 npm run build
 script:
   - npm test
   - npm run package
