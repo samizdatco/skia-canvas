@@ -1,12 +1,13 @@
-branches:
-  only:
-    - /^v.*$/
+# branches:
+#   only:
+#     - /^v.*$/
 env:
   - RUST_SKIA_TAG="0.33.0"
+  - SSL_CERT_FILE="$HOME/cacert.pem"
 os:
   - osx
   - linux
-  # - windows
+  - windows
 dist: bionic
 language: node_js
 node_js:
@@ -31,6 +32,7 @@ before_install:
   - npm install -g neon-cli
   # Build rust-skia from source on linux (use downloaded binaries on mac)
   - if [ "$TRAVIS_OS_NAME" != "osx" ]; then sed -i.bak 's/^skia-safe.*/skia-safe = { path = "..\/..\/rust-skia\/skia-safe", features = ["textlayout"] }/' native/Cargo.toml; fi
+  - curl https://curl.haxx.se/ca/cacert.pem -o $HOME/cacert.pem
 install:
   - travis_wait 25 npm ci
 script:
