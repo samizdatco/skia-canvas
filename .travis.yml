@@ -29,7 +29,7 @@ before_install:
   - sed -i.bak 's/^skia-safe.*/skia-safe = { path = "..\/..\/rust-skia\/skia-safe", features = ["textlayout"] }/' native/Cargo.toml
 # if: tag IS present
 script:
-  - npm install
+  - travis_wait 45 npm install
   - npm test
   - npm run package
   - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
