@@ -37,6 +37,7 @@ clean:
 	rm -rf native/target/release
 
 package:
+	@if [[ `git cherry -v` != "" ]]; then echo "Unpushed commits:"; git --no-pager log --branches --not --remotes; exit 1; fi
 	@if [ $(GIT_TAG) = "v$(PACKAGE_VERSION)" ]; then echo "Already published $(GIT_TAG)"; exit 1; fi
 	@echo "Current release: $(GIT_TAG)"
 	@echo Skia Canvas: $(PACKAGE_VERSION)
