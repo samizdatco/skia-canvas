@@ -1,8 +1,9 @@
+env:
+  - RUST_SKIA_TAG="0.33.0"
 os:
   - osx
   - linux
-  - windows
-dist: focal
+dist: bionic
 language: node_js
 node_js:
   - lts/*
@@ -22,8 +23,13 @@ before_install:
   # Install NPM packages
   - node -v
   - npm -v
-  - npm install
+  - npm install -g neon-cli
+  # Clone the rust-skia repo with the proper tag
+  - git clone --depth 1 --branch $RUST_SKIA_TAG https://github.com/rust-skia/rust-skia.git ../rust-skia
+  - sed -i 's/^skia-safe.*/skia-safe = { path = "..\/..\/rust-skia\/skia-safe", features = ["textlayout"] }/' native/Cargo.toml
+# if: tag IS present
 script:
-  - npm run package
+  - npm install
   - npm test
+  - npm run package
   - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi

@@ -122,7 +122,10 @@ impl Context2D{
   pub fn new(bounds: Rect, library: &Rc<RefCell<FontLibrary>>) -> Self {
     let mut recorder = PictureRecorder::new();
     recorder.begin_recording(bounds, None, None);
-    recorder.recording_canvas().save(); // start at depth 2
+    if let Some(canvas) = recorder.recording_canvas() {
+      canvas.save(); // start at depth 2
+    }
+
 
     Context2D{
       bounds,
@@ -153,7 +156,9 @@ impl Context2D{
     where F:FnOnce(&mut SkCanvas)
   {
     let mut recorder = self.recorder.borrow_mut();
-    f(&mut recorder.recording_canvas());
+    if let Some(canvas) = recorder.recording_canvas() {
+      f(canvas);
+    }
   }
 
   pub fn render_to_canvas<F>(&self, paint:&Paint, f:F)
@@ -169,48 +174,51 @@ impl Context2D{
         layer_paint.set_blend_mode(BlendMode::SrcOver);
         let mut layer_recorder = PictureRecorder::new();
         layer_recorder.begin_recording(self.bounds, None, None);
-        let mut layer = layer_recorder.recording_canvas();
+        if let Some(layer) = layer_recorder.recording_canvas() {
+          // draw the dropshadow (if applicable)
+          if let Some(shadow_paint) = self.paint_for_shadow(&layer_paint){
+            layer.save();
+            layer.set_matrix(&Matrix::translate(self.state.shadow_offset));
+            layer.concat(&self.state.matrix);
+            f(layer, &shadow_paint);
+            layer.restore();
+          }
 
-        // draw the dropshadow (if applicable)
-        if let Some(shadow_paint) = self.paint_for_shadow(&layer_paint){
-          layer.save();
-          layer.set_matrix(&Matrix::new_trans(self.state.shadow_offset));
-          layer.concat(&self.state.matrix);
-          f(&mut layer, &shadow_paint);
-          layer.restore();
+          // draw normally
+          layer.set_matrix(&self.state.matrix);
+          f(layer, &layer_paint);
         }
 
-        // draw normally
-        layer.set_matrix(&self.state.matrix);
-        f(&mut layer, &layer_paint);
 
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
         if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
           let mut recorder = self.recorder.borrow_mut();
-          let mut canvas = recorder.recording_canvas();
-          canvas.save();
-          canvas.set_matrix(&Matrix::new_identity());
-          canvas.draw_picture(&pict, None, Some(&paint));
-          canvas.restore();
+          if let Some(canvas) = recorder.recording_canvas() {
+            canvas.save();
+            canvas.set_matrix(&Matrix::new_identity());
+            canvas.draw_picture(&pict, None, Some(&paint));
+            canvas.restore();
+          }
         }
 
       },
       _ => {
         let mut recorder = self.recorder.borrow_mut();
-        let mut canvas = recorder.recording_canvas();
+        if let Some(canvas) = recorder.recording_canvas() {
+          // only call the closure if there's an active dropshadow
+          if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+            canvas.save();
+            canvas.set_matrix(&Matrix::translate(self.state.shadow_offset));
+            canvas.concat(&self.state.matrix);
+            f(canvas, &shadow_paint);
+            canvas.restore();
+          }
 
-        // only call the closure if there's an active dropshadow
-        if let Some(shadow_paint) = self.paint_for_shadow(&paint){
-          canvas.save();
-          canvas.set_matrix(&Matrix::new_trans(self.state.shadow_offset));
-          canvas.concat(&self.state.matrix);
-          f(&mut canvas, &shadow_paint);
-          canvas.restore();
+          // draw with the normal paint
+          f(canvas, &paint);
         }
 
-        // draw with the normal paint
-        f(&mut canvas, &paint);
       }
     };
 
@@ -390,18 +398,20 @@ impl Context2D{
     let mut drobble = recorder.finish_recording_as_drawable();
     recorder.begin_recording(self.bounds, None, None);
 
-    // fill the newly restarted recorder with the snapshot content...
-    let canvas = recorder.recording_canvas();
-    if let Some(mut palimpsest) = drobble.as_mut() {
-      canvas.draw_drawable(&mut palimpsest, None);
+    if let Some(canvas) = recorder.recording_canvas() {
+      // fill the newly restarted recorder with the snapshot content...
+      if let Some(mut palimpsest) = drobble.as_mut() {
+        canvas.draw_drawable(&mut palimpsest, None);
+      }
+
+      // ...and the current ctm/clip state
+      canvas.save();
+      canvas.set_matrix(&self.state.matrix);
+      if !self.state.clip.is_empty(){
+        canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
+      }
     }
 
-    // ...and the current ctm/clip state
-    canvas.save();
-    canvas.set_matrix(&self.state.matrix);
-    if !self.state.clip.is_empty(){
-      canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
-    }
 
     drobble
   }
@@ -413,19 +423,19 @@ impl Context2D{
     let snapshot = recorder.finish_recording_as_picture(cull.or(Some(&self.bounds)));
     recorder.begin_recording(self.bounds, None, None);
 
-    // fill the newly restarted recorder with the snapshot content...
-    let canvas = recorder.recording_canvas();
-    if let Some(palimpsest) = &snapshot {
-      canvas.draw_picture(&palimpsest, None, None);
-    }
+    if let Some(canvas) = recorder.recording_canvas() {
+      // fill the newly restarted recorder with the snapshot content...
+      if let Some(palimpsest) = &snapshot {
+        canvas.draw_picture(&palimpsest, None, None);
+      }
 
-    // ...and the current ctm/clip state
-    canvas.save();
-    canvas.set_matrix(&self.state.matrix);
-    if !self.state.clip.is_empty(){
-      canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
+      // ...and the current ctm/clip state
+      canvas.save();
+      canvas.set_matrix(&self.state.matrix);
+      if !self.state.clip.is_empty(){
+        canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
+      }
     }
-
     snapshot
   }
 
@@ -436,7 +446,7 @@ impl Context2D{
 
     if let Some(pict) = self.get_picture(None) {
       if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(size){
-        let shift = Matrix::new_trans((-origin.x as f32, -origin.y as f32));
+        let shift = Matrix::translate((-origin.x as f32, -origin.y as f32));
         bitmap_surface.canvas().draw_picture(&pict, Some(&shift), None);
         bitmap_surface.read_pixels(&info, buffer, info.min_row_bytes(), (0,0));
       }
@@ -522,14 +532,17 @@ impl Context2D{
     // render the text once into a picture we can use for the shadow as well
     let mut recorder = PictureRecorder::new();
     recorder.begin_recording(bounds, None, None);
-    paragraph.paint(recorder.recording_canvas(), (0.0,0.0));
+    if let Some(canvas) = recorder.recording_canvas() {
+      paragraph.paint(canvas, (0.0,0.0));
 
-    if let Some(pict) = recorder.finish_recording_as_picture(Some(&bounds)){
-      let position = Matrix::new_trans(point);
-      self.render_to_canvas(&paint, |canvas, paint| {
-        canvas.draw_picture(&pict, Some(&position), Some(&paint));
-      });
+      if let Some(pict) = recorder.finish_recording_as_picture(Some(&bounds)){
+        let position = Matrix::translate(point);
+        self.render_to_canvas(&paint, |canvas, paint| {
+          canvas.draw_picture(&pict, Some(&position), Some(&paint));
+        });
+      }
     }
+
   }
 
   pub fn measure_text(&mut self, text: &str, width:Option<f32>) -> Vec<Vec<f32>>{
