@@ -1,6 +1,6 @@
 env:
   - RUST_SKIA_TAG="0.33.0"
-if: tag IS present
+# if: tag IS present
 os:
   - osx
   - linux
@@ -33,4 +33,4 @@ before_install:
 script:
   - npm test
   - npm run package
-  - npm run upload-binary
+  - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
