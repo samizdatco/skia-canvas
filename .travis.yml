@@ -6,6 +6,7 @@ env:
 os:
   - osx
   - linux
+  - windows
 dist: bionic
 language: node_js
 node_js:
@@ -30,7 +31,7 @@ before_install:
   - git clone --depth 1 --branch $RUST_SKIA_TAG https://github.com/rust-skia/rust-skia.git ../rust-skia
   - npm install -g neon-cli
   # Build rust-skia from source on linux (use downloaded binaries on mac)
-  - if [ "$TRAVIS_OS_NAME" = "linux" ]; then sed -i.bak 's/^skia-safe.*/skia-safe = { path = "..\/..\/rust-skia\/skia-safe", features = ["textlayout"] }/' native/Cargo.toml; fi
+  - if [ "$TRAVIS_OS_NAME" != "osx" ]; then sed -i.bak 's/^skia-safe.*/skia-safe = { path = "..\/..\/rust-skia\/skia-safe", features = ["textlayout"] }/' native/Cargo.toml; fi
 install:
   - travis_wait 25 npm install
 script:
