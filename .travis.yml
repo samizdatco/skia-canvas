@@ -2,8 +2,7 @@
 #   only:
 #     - /^v.*$/
 env:
-  - RUST_SKIA_TAG="0.33.0"
-  - SSL_CERT_FILE="$HOME/cacert.pem"
+  - RUST_SKIA_TAG="0.33.0" SSL_CERT_FILE="$HOME/cacert.pem"
 os:
   - osx
   - linux
