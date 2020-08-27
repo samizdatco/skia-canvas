@@ -36,15 +36,4 @@ install:
 script:
   - npm test
   - npm run package
-
-jobs:
-  include:
-    - os: osx
-      if: tag IS present
-      script:
-        - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
-    - os: linux
-      if: tag IS present
-      dist: bionic
-      script:
-        - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
+  - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
