@@ -24,7 +24,6 @@ before_install:
   - source "$HOME/.cargo/env" || true
   - rustc --version
   - cargo --version
-  # Install NPM packages
   - node -v
   - npm -v
   # Clone the rust-skia repo with the proper tag
@@ -36,5 +35,5 @@ install:
   - travis_wait 25 npm ci
 script:
   - npm test
-  - travis_wait 25 npm run package
+  - npm run package
   - if [ -n "$TRAVIS_TAG" ]; then npm run upload-binary || exit 0; fi
