@@ -14,7 +14,6 @@
     "native/build.rs",
     "native/Cargo.*",
     "native/src",
-    "native/index.node",
     "README.md"
   ],
   "bugs": {
@@ -52,7 +51,6 @@
   },
   "dependencies": {
     "glob": "^7.1.6",
-    "neon-cli": "^0.4.0",
     "node-pre-gyp": "^0.15.0",
     "simple-get": "^4.0.0",
     "string-split-by": "^1.0.0"
@@ -61,6 +59,7 @@
     "express": "^4.17.1",
     "jest": "^26.2.2",
     "lodash": "^4.17.20",
+    "neon-cli": "^0.4.0",
     "node-pre-gyp-github": "^1.4.3",
     "nodemon": "^2.0.4"
   }
