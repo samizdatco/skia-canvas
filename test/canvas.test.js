@@ -420,6 +420,9 @@ describe("Context2D", ()=>{
         [['A', 10, 10, undefined], true],
         [['A', 10, 10, NaN], false],
         [['A', 10, 10, Infinity], false],
+        [[1234, 10, 10], true],
+        [[false, 10, 10], true],
+        [[{}, 10, 10], true],
       ]
 
       _.each(argsets, ([args, shouldDraw]) => {

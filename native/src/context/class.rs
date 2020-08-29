@@ -687,7 +687,7 @@ declare_types! {
     // Typography
     //
 
-    method fillText(mut cx){
+    method _fillText(mut cx){
       let mut this = cx.this();
       let text = string_arg(&mut cx, 0, "text")?;
       let x = float_arg(&mut cx, 1, "x")?;
@@ -707,7 +707,7 @@ declare_types! {
       Ok(cx.undefined().upcast())
     }
 
-    method strokeText(mut cx){
+    method _strokeText(mut cx){
       let mut this = cx.this();
       let text = string_arg(&mut cx, 0, "text")?;
       let x = float_arg(&mut cx, 1, "x")?;
