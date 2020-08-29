@@ -17,5 +17,5 @@ neon-build = "0.4.0"
 [dependencies]
 neon = "0.4.0"
 css-color = "0.1.1"
-skia-safe = {version = "0", features = ["textlayout"]} # { git = "https://github.com/rust-skia/rust-skia" }
+skia-safe = {version = "0", features = ["textlayout"]}
 # usvg = "0.11.0"
