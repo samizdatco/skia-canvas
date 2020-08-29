@@ -251,17 +251,34 @@ declare_types! {
       let this = cx.this();
       let file_format = string_arg(&mut cx, 0, "format")?;
       let quality = float_arg(&mut cx, 1, "quality")?;
-      let page_idx = float_arg(&mut cx, 2, "pageIdx")? as usize;
-      let mut page = canvas_pages(&mut cx, &this)?[page_idx];
+      let page_idx = opt_float_arg(&mut cx, 2);
 
-      let data = cx.borrow(&this, |this|
-        cx.borrow_mut(&mut page, |mut page|{
-          match page.get_picture(None) {
-            Some(picture) => this.encode_image(&picture, &file_format, page.width(), page.height(), quality),
-            None => None
-          }
-        })
-      );
+      let mut pages = canvas_pages(&mut cx, &this)?;
+      let data = {
+        if file_format=="pdf" && page_idx.is_none() {
+          Some(pages.iter_mut().rev().fold(pdf::new_document(None), |doc, page|{
+            cx.borrow_mut(page, |mut page| {
+              let dims = (page.width() as i32, page.height() as i32);
+              let mut doc = doc.begin_page(dims, None);
+              let canvas = doc.canvas();
+              if let Some(picture) = page.get_picture(None){
+                canvas.draw_picture(&picture, None, None);
+              }
+              doc.end_page()
+            })
+          }).close())
+        }else{
+          let page_idx = page_idx.unwrap_or(0.0);
+          cx.borrow(&this, |this|
+            cx.borrow_mut(&mut pages[page_idx as usize], |mut page|
+              match page.get_picture(None) {
+                Some(picture) => this.encode_image(&picture, &file_format, page.width(), page.height(), quality),
+                None => None
+              }
+            )
+          )
+        }
+      };
 
       match data{
         Some(data) => {
