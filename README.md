@@ -2,28 +2,30 @@
 
 Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and as a result produces very similar results to Chrome’s `<canvas>` element.
 
-While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas that are relevant to the generation of static graphics files rather than ‘live’ display in a browser.
+While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas that are more relevant to the generation of static graphics files rather than ‘live’ display in a browser.
 
 In particular, Skia Canvas:
 
+  - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
-  - can create multiple ‘pages’ on a given canvas and then output them as a single, multi-page PDF or an image-sequence saved to multiple files
-  - fully supports the new [CSS filter effects](https://drafts.fxtf.org/filter-effects/#FilterProperty) image processing operators
+  - can save images to [files](#saveasfilename-format-quality), return them as [Buffers](#tobufferformat-quality-page), or encode [dataURL](#todataurlformat-quality-page) strings
+  - can create [multiple ‘pages’](#newpagewidth-height) on a given canvas and then [output](#saveasfilename-format-quality) them as a single, multi-page PDF or an image-sequence saved to multiple files
+  - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
 
-    - multi-line, word-wrapped text
-    - line-by-line text metrics
-    - small-caps, ligatures, and other opentype features accessible using standard [font-variant][font-variant] syntax
-    - proportional letter-spacing (a.k.a. ‘tracking’) and leading
+    - multi-line, [word-wrapped](#textwrap) text
+    - line-by-line [text metrics](#measuretextstr-width)
+    - small-caps, ligatures, and other opentype features accessible using standard [font-variant](#fontvariant) syntax
+    - proportional letter-spacing (a.k.a. [‘tracking’](#texttracking)) and leading
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
-    - use of non-system fonts loaded from local files
+    - use of non-system fonts [loaded](#usefamilyname-fontpaths) from local files
 
 
 ## Roadmap
 This project is newly-hatched and still has some obvious gaps to fill (feel free to pitch in!).
 
 On the agenda for subsequent updates are:
-  - Prebuilt binaries (coming soon)
+  - Windows support & prebuilt binaries
   - Use neon [Tasks](https://neon-bindings.com/docs/async) to provide asynchronous file i/o
   - Add SVG image loading using the [µsvg](https://crates.io/crates/usvg) parser
   - Add a `density` argument to Canvas and/or the output methods to allow for scaling to other device-pixel-ratios
@@ -67,43 +69,69 @@ In addition, the module contains:
 
 ### Basic Usage
 ```js
-const {Canvas, loadImage} = require('skia-canvas')
+const {Canvas, loadImage} = require('skia-canvas'),
+      rand = n => Math.floor(n * Math.random());
 
-let canvas = new Canvas(512, 512),
-    ctx = canvas.getContext("2d");
+let canvas = new Canvas(600, 600),
+    ctx = canvas.getContext("2d"),
+    {width, height} = canvas;
 
-ctx.fillStyle = 'red'
-ctx.fillRect(100,100, 200,200)
-// ...
-canvas.saveAs("foo.pdf")
+// draw a sea of blurred dots filling the canvas
+ctx.filter = 'blur(12px) hue-rotate(20deg)'
+for (let i=0; i<800; i++){
+  ctx.fillStyle = `hsl(${rand(40)}deg, 80%, 50%)`
+  ctx.beginPath()
+  ctx.arc(rand(width), rand(height), rand(20)+5, 0, 2*Math.PI)
+  ctx.fill()
+}
+
+// mask all of the dots that don't overlap with the text
+ctx.filter = 'none'
+ctx.globalCompositeOperation = 'destination-in'
+ctx.font='italic 480px Times, DejaVu Serif'
+ctx.textAlign = 'center'
+ctx.textBaseline = 'top'
+ctx.fillText('¶', width/2, 0)
+
+// draw a background behind the clipped text
+ctx.globalCompositeOperation = 'destination-over'
+ctx.fillStyle = '#182927'
+ctx.fillRect(0,0, width,height)
+
+// save the graphic...
+canvas.saveAs("pilcrow.png")
+// ...or use a shorthand for canvas.toBuffer("png")
+fs.writeFileSync("pilcrow.png", canvas.png)
+// ...or embed it in a string
+console.log(`<img src="${canvas.toDataURL("png")}">`)
 ```
 
 ## API Documentation
 
-Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method. Documentation for each of the context’s attributes is linked below—properties are printed in italics and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a ⚡ symbol (see the next section for details).
+Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method. Documentation for each of the context’s attributes is linked below—properties are printed in **bold** and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a ⚡ symbol (see the next section for details).
 
-| Canvas State                           | Drawing Primitives                          | Stroke & Fill                      | Effects                                                |
-|----------------------------------------|---------------------------------------------|------------------------------------|--------------------------------------------------------|
-| [*canvas*](#canvas) [⚡](#canvas)      | [clearRect()][clearRect()]                  | [*fillStyle*][fillStyle]           | [*filter*][filter]                                     |
-| [beginPath()][beginPath()]             | [drawImage()][drawImage()]                  | [*lineCap*][lineCap]               | [*globalAlpha*][globalAlpha]                           |
-| [clip()][clip()]                       | [fill()][fill()]                            | [*lineDashOffset*][lineDashOffset] | [*globalCompositeOperation*][globalCompositeOperation] |
-| [isPointInPath()][isPointInPath()]     | [fillRect()][fillRect()]                    | [*lineJoin*][lineJoin]             | [*shadowBlur*][shadowBlur]                             |
-| [isPointInStroke()][isPointInStroke()] | [fillText()][fillText()] [⚡][drawText]     | [*lineWidth*][lineWidth]           | [*shadowColor*][shadowColor]                           |
-| [restore()][restore()]                 | [stroke()][stroke()]                        | [*miterLimit*][miterLimit]         | [*shadowOffsetX*][shadowOffsetX]                       |
-| [save()][save()]                       | [strokeRect()][strokeRect()]                | [*strokeStyle*][strokeStyle]       | [*shadowOffsetY*][shadowOffsetY]                       |
-|                                        | [strokeText()][strokeText()] [⚡][drawText] | [getLineDash()][getLineDash()]     |                                                        |
-|                                        |                                             | [setLineDash()][setLineDash()]     |                                                        |
+| Canvas State                           | Drawing Primitives                          | Stroke & Fill Style                  | Compositing Effects                                      |
+|----------------------------------------|---------------------------------------------|--------------------------------------|----------------------------------------------------------|
+| [**canvas**](#canvas) [⚡](#canvas)    | [clearRect()][clearRect()]                  | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
+| [**globalAlpha**][globalAlpha]         | [drawImage()][drawImage()]                  | [**lineCap**][lineCap]               | [**globalCompositeOperation**][globalCompositeOperation] |
+| [beginPath()][beginPath()]             | [fill()][fill()]                            | [**lineDashOffset**][lineDashOffset] | [**shadowBlur**][shadowBlur]                             |
+| [clip()][clip()]                       | [fillRect()][fillRect()]                    | [**lineJoin**][lineJoin]             | [**shadowColor**][shadowColor]                           |
+| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] [⚡][drawText]     | [**lineWidth**][lineWidth]           | [**shadowOffsetX**][shadowOffsetX]                       |
+| [isPointInStroke()][isPointInStroke()] | [stroke()][stroke()]                        | [**miterLimit**][miterLimit]         | [**shadowOffsetY**][shadowOffsetY]                       |
+| [restore()][restore()]                 | [strokeRect()][strokeRect()]                | [**strokeStyle**][strokeStyle]       |                                                          |
+| [save()][save()]                       | [strokeText()][strokeText()] [⚡][drawText] | [getLineDash()][getLineDash()]       |                                                          |
+|                                        |                                             | [setLineDash()][setLineDash()]       |                                                          |
 
 
 | Bezier Paths                             | Typography                                                  | Pattern & Image                                    | Transform                              |
 |------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|----------------------------------------|
-| [arc()][arc()]                           | [*direction*][direction]                                    | [*imageSmoothingEnabled*][imageSmoothingEnabled]   | [*currentTransform*][currentTransform] |
-| [arcTo()][arcTo()]                       | [*font*][font]                                              | [*imageSmoothingQuality*][imageSmoothingQuality]   | [getTransform()][getTransform()]       |
-| [bezierCurveTo()][bezierCurveTo()]       | [*fontVariant* ⚡](#fontvariant)                            | [createImageData()][createImageData()]             | [resetTransform()][resetTransform()]   |
-| [closePath()][closePath()]               | [*textAlign*][textAlign]                                    | [createLinearGradient()][createLinearGradient()]   | [rotate()][rotate()]                   |
-| [ellipse()][ellipse()]                   | [*textBaseline*][textBaseline]                              | [createPattern()][createPattern()]                 | [scale()][scale()]                     |
-| [lineTo()][lineTo()]                     | [*textTracking* ⚡](#texttracking)                          | [createRadialGradient()][createRadialGradient()]   | [setTransform()][setTransform()]       |
-| [moveTo()][moveTo()]                     | [*textWrap* ⚡](#textwrap)                                  | [getImageData()][getImageData()]                   | [transform()][transform()]             |
+| [arc()][arc()]                           | [**direction**][direction]                                    | [**imageSmoothingEnabled**][imageSmoothingEnabled]   | [**currentTransform**][currentTransform] |
+| [arcTo()][arcTo()]                       | [**font**][font]                                              | [**imageSmoothingQuality**][imageSmoothingQuality]   | [getTransform()][getTransform()]       |
+| [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** ⚡](#fontvariant)                            | [createImageData()][createImageData()]             | [resetTransform()][resetTransform()]   |
+| [closePath()][closePath()]               | [**textAlign**][textAlign]                                    | [createLinearGradient()][createLinearGradient()]   | [rotate()][rotate()]                   |
+| [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                              | [createPattern()][createPattern()]                 | [scale()][scale()]                     |
+| [lineTo()][lineTo()]                     | [**textTracking** ⚡](#texttracking)                          | [createRadialGradient()][createRadialGradient()]   | [setTransform()][setTransform()]       |
+| [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                  | [getImageData()][getImageData()]                   | [transform()][transform()]             |
 | [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] [⚡](#measuretextstr-width)  | [putImageData()][putImageData()]                   | [translate()][translate()]             |
 | [rect()][rect()]                         |                                                             |                                                    |                                        |
 
