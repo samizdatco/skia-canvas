@@ -112,28 +112,28 @@ Most of your interaction with the canvas will actually be directed toward its �
 
 | Canvas State                           | Drawing Primitives                          | Stroke & Fill Style                  | Compositing Effects                                      |
 |----------------------------------------|---------------------------------------------|--------------------------------------|----------------------------------------------------------|
-| [**canvas**](#canvas) [⚡](#canvas)    | [clearRect()][clearRect()]                  | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
+| [**canvas**](#canvas) [⚡](#canvas)     | [clearRect()][clearRect()]                  | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
 | [**globalAlpha**][globalAlpha]         | [drawImage()][drawImage()]                  | [**lineCap**][lineCap]               | [**globalCompositeOperation**][globalCompositeOperation] |
 | [beginPath()][beginPath()]             | [fill()][fill()]                            | [**lineDashOffset**][lineDashOffset] | [**shadowBlur**][shadowBlur]                             |
 | [clip()][clip()]                       | [fillRect()][fillRect()]                    | [**lineJoin**][lineJoin]             | [**shadowColor**][shadowColor]                           |
-| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] [⚡][drawText]     | [**lineWidth**][lineWidth]           | [**shadowOffsetX**][shadowOffsetX]                       |
+| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] [⚡][drawText]      | [**lineWidth**][lineWidth]           | [**shadowOffsetX**][shadowOffsetX]                       |
 | [isPointInStroke()][isPointInStroke()] | [stroke()][stroke()]                        | [**miterLimit**][miterLimit]         | [**shadowOffsetY**][shadowOffsetY]                       |
 | [restore()][restore()]                 | [strokeRect()][strokeRect()]                | [**strokeStyle**][strokeStyle]       |                                                          |
-| [save()][save()]                       | [strokeText()][strokeText()] [⚡][drawText] | [getLineDash()][getLineDash()]       |                                                          |
+| [save()][save()]                       | [strokeText()][strokeText()] [⚡][drawText]  | [getLineDash()][getLineDash()]       |                                                          |
 |                                        |                                             | [setLineDash()][setLineDash()]       |                                                          |
 
 
-| Bezier Paths                             | Typography                                                  | Pattern & Image                                    | Transform                              |
-|------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|----------------------------------------|
-| [arc()][arc()]                           | [**direction**][direction]                                    | [**imageSmoothingEnabled**][imageSmoothingEnabled]   | [**currentTransform**][currentTransform] |
-| [arcTo()][arcTo()]                       | [**font**][font]                                              | [**imageSmoothingQuality**][imageSmoothingQuality]   | [getTransform()][getTransform()]       |
-| [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** ⚡](#fontvariant)                            | [createImageData()][createImageData()]             | [resetTransform()][resetTransform()]   |
-| [closePath()][closePath()]               | [**textAlign**][textAlign]                                    | [createLinearGradient()][createLinearGradient()]   | [rotate()][rotate()]                   |
-| [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                              | [createPattern()][createPattern()]                 | [scale()][scale()]                     |
-| [lineTo()][lineTo()]                     | [**textTracking** ⚡](#texttracking)                          | [createRadialGradient()][createRadialGradient()]   | [setTransform()][setTransform()]       |
-| [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                  | [getImageData()][getImageData()]                   | [transform()][transform()]             |
-| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] [⚡](#measuretextstr-width)  | [putImageData()][putImageData()]                   | [translate()][translate()]             |
-| [rect()][rect()]                         |                                                             |                                                    |                                        |
+| Bezier Paths                             | Typography                                                  | Pattern & Image                                    | Transform                                |
+|------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|------------------------------------------|
+| [arc()][arc()]                           | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
+| [arcTo()][arcTo()]                       | [**font**][font] [⚡](#font)                                 | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
+| [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** ⚡](#fontvariant)                           | [createImageData()][createImageData()]             | [resetTransform()][resetTransform()]     |
+| [closePath()][closePath()]               | [**textAlign**][textAlign]                                  | [createLinearGradient()][createLinearGradient()]   | [rotate()][rotate()]                     |
+| [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                            | [createPattern()][createPattern()]                 | [scale()][scale()]                       |
+| [lineTo()][lineTo()]                     | [**textTracking** ⚡](#texttracking)                         | [createRadialGradient()][createRadialGradient()]   | [setTransform()][setTransform()]         |
+| [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                 | [getImageData()][getImageData()]                   | [transform()][transform()]               |
+| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] [⚡](#measuretextstr-width)   | [putImageData()][putImageData()]                   | [translate()][translate()]               |
+| [rect()][rect()]                         |                                                             |                                                    |                                          |
 
 
 
@@ -177,6 +177,10 @@ The optional `page` argument accepts an integer that allows for the individual s
 This method accepts the same arguments and behaves similarly to `.toBuffer`. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
 
 ### CanvasRenderingContext2D
+
+##### `.font`
+
+By default any [`line-height`][lineHeight] value included in a font specification (separated from the font size by a `/`) will be preserved but ignored. If the `textWrap` property is set to `true`, the line-height will control the vertical spacing between lines.
 
 ##### `.fontVariant`
 
@@ -336,6 +340,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [Image]: https://developer.mozilla.org/en-US/docs/Web/API/Image
 [ImageData]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData
 [Path2D]: https://developer.mozilla.org/en-US/docs/Web/API/Path2D
+[lineHeight]: https://developer.mozilla.org/en-US/docs/Web/CSS/line-height
 
 [canvas]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/canvas
 [currentTransform]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/currentTransform
