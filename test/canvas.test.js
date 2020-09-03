@@ -506,7 +506,7 @@ describe("Context2D", ()=>{
       expect(__foo).toBeGreaterThan(foo)
 
       // start from the default, alphabetic baseline
-      ctx.font = "20px Arial"
+      ctx.font = "20px Arial, DejaVu Sans"
       var metrics = ctx.measureText("Lordran gypsum")
 
       // + means up, - means down when it comes to baselines
@@ -689,23 +689,26 @@ describe("FontLibrary", ()=>{
         sorted = fams.slice().sort(),
         unique = _.uniq(sorted);
 
-    // expect(fams).toContain("Arial")
+    expect(fams.indexOf("Arial")>=0 || fams.indexOf("DejaVu Sans")>=0).toBe(true)
     expect(fams).toEqual(sorted)
     expect(fams).toEqual(unique)
   })
 
   test("can check for a family", ()=>{
-    // expect(FontLibrary.has("Arial")).toBe(true)
+    expect(FontLibrary.has("Arial") || FontLibrary.has("DejaVu Sans")).toBe(true)
     expect(FontLibrary.has("_n_o_n_e_s_u_c_h_")).toBe(false)
   })
 
   test("can describe a family", ()=>{
-    if (!FontLibrary.has("Arial")) return
-    expect(FontLibrary.family("Arial")).toMatchObject({
-      family: 'Arial',
+    let fam = FontLibrary.has("Arial") ? "Arial"
+            : FontLibrary.has("DejaVu Sans") ? "DejaVu Sans"
+            : null;
+
+    if (fam) expect(FontLibrary.family(fam)).toMatchObject({
+      family: fam,
       weights: [ 400, 700 ],
       widths: [ 'normal' ],
-      styles: [ 'normal', 'italic' ]
+      // styles: [ 'normal', 'italic' ],
     })
   })
 
