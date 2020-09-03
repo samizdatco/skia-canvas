@@ -32,19 +32,21 @@ On the agenda for subsequent updates are:
 
 ## Installation
 
-Until prebuilt binaries can be provided you’ll need to compile the portions of this library that directly interface with Skia. For this you’ll need to install:
+On macOS and Linux, installation *should* be as simple as:
+```console
+$ npm install skia-canvas
+```
+
+This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases). Note that these binaries are in an early state and currently only work with fairly recent systems. In particular, if using the library with Docker you’ll want to pick a base system from the last few years like [`node:buster`](https://hub.docker.com/_/node) or [`ubuntu:bionic`](https://hub.docker.com/_/ubuntu).
+
+If prebuilt binaries aren’t available for your system you’ll need to compile the portions of this library that directly interface with Skia. Start by installing:
 
   1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using `rustup`
   2. Python 2.7 (Python 3 is not supported by [neon](https://neon-bindings.com/docs/getting-started#install-node-build-tools))
   3. The GNU `make` tool
   4. A C compiler toolchain like LLVM/Clang, GCC, or MSVC
 
-Once these are all in place, installation *should* be as simple as:
-```console
-$ npm install skia-canvas
-```
-
-> Development of this library has taken place entirely on macOS, so reports from users of other platforms on the specifics of getting everything to compile properly would be appreciated.
+Once all these dependencies are present, installing from npm should work (after a fairly lengthy compilation process).
 
 ## Module Contents
 
