@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.19",
+  "version": "0.9.20",
   "description": "A canvas environment for Node",
   "main": "lib/index.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
@@ -50,8 +50,8 @@
     "module_path": "./native"
   },
   "dependencies": {
+    "@mapbox/node-pre-gyp": "^1.0.1",
     "glob": "^7.1.6",
-    "node-pre-gyp": "^0.15.0",
     "simple-get": "^4.0.0",
     "string-split-by": "^1.0.0"
   },
