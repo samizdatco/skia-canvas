@@ -4,6 +4,7 @@ _arc
 native/artifacts.json
 native/target
 native/*.node
+node_modules
 
 test/assets
 
