@@ -46,7 +46,7 @@ package:
 	@read line; if [[ $$line = "y" ]]; then echo "Pushing tag to github..."; else exit 1; fi
 	git tag -a v$(PACKAGE_VERSION) -m v$(PACKAGE_VERSION)
 	git push origin --tags
-	@echo "Call 'npm publish' when travis’s build completes..."
+	@echo "Next: run 'make publish' when travis’s build completes..."
 
 publish:
 	@echo "NPM Version: $(NPM_VERSION)"
@@ -60,4 +60,5 @@ publish:
 	@/bin/echo -n "Update NPM package -> v$(PACKAGE_VERSION)? [y/N] "
 	@read line; if [[ $$line = "y" ]]; then echo "Publishing to NPM..."; else exit 1; fi
 	npm publish
+	@echo "Next: publish the draft release at https://github.com/samizdatco/skia-canvas/releases"
 
