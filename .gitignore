@@ -1,11 +1,10 @@
 .DS_Store
 _arc
 .vscode
+node_modules
 native/artifacts.json
 native/target
 native/*.node
-node_modules
-
 test/assets
 
 scr[ia]bble.*
