@@ -12,10 +12,10 @@ name = "skia_canvas"
 crate-type = ["cdylib"]
 
 [build-dependencies]
-neon-build = "0.4.0"
+neon-build = "0.8.1"
 
 [dependencies]
-neon = "0.4.0"
+neon = "0.8.1"
 css-color = "0.1.1"
 skia-safe = {version = "0", features = ["textlayout"]}
 # usvg = "0.11.0"

@@ -59,7 +59,7 @@
     "express": "^4.17.1",
     "jest": "^26.2.2",
     "lodash": "^4.17.20",
-    "neon-cli": "^0.4.0",
+    "neon-cli": "^0.8.1",
     "node-pre-gyp-github": "^1.4.3",
     "nodemon": "^2.0.4"
   }
