@@ -85,9 +85,7 @@ declare_types! {
     constructor(mut cx){
       let mut this = cx.this();
 
-      if cx.len() > 0 {
-        let arg = cx.argument::<JsValue>(0)?;
-
+      if let Some(arg) = cx.argument_opt(0){
         if arg.is_a::<JsPath2D>(){
           let that = arg.downcast::<JsPath2D>().or_throw(&mut cx)?;
           cx.borrow(&that, |that| {
