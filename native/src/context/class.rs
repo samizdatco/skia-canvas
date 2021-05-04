@@ -581,9 +581,9 @@ declare_types! {
           });
         });
       }else if let Some(canvas) = canvas {
-        let mut drobble = canvas_context(&mut cx, &canvas, |ctx| ctx.get_drawable() )?;
+        let pict = canvas_context(&mut cx, &canvas, |ctx| ctx.get_picture(None) )?;
         cx.borrow_mut(&mut this, |mut this| {
-            this.draw_drawable(&mut drobble, &src, &dst);
+            this.draw_picture(&pict, &src, &dst);
         });
       }
 
