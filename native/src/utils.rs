@@ -274,7 +274,23 @@ pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Co
 pub fn color_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Option<Color> {
   match opt_string_arg(cx, idx){
     Some(css) => color_in(cx, &css),
-    None => None
+    None => {
+      let args: Vec<Handle<JsValue>> = vec![];
+      if let Some(arg) = cx.argument_opt(idx as i32) {
+        if let Ok(obj) = arg.downcast::<JsObject>(){
+          if let Ok(attr) = obj.get(cx, "toString"){
+            if let Ok(to_string) = attr.downcast::<JsFunction>(){
+              if let Ok(result) = to_string.call(cx, obj, args){
+                if let Ok(clr) = result.downcast::<JsString>(){
+                  return color_in(cx, &clr.value())
+                }
+              }
+            }
+          }
+        }
+      }
+      None
+    }
   }
 }
 
