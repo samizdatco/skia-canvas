@@ -313,7 +313,7 @@ impl FontLibrary{
     widths.dedup();
     styles.sort_by(|a, b| a.replace("normal", "_").partial_cmp(&b.replace("normal", "_")).unwrap());
     styles.dedup();
-    weights.sort();
+    weights.sort_unstable();
     weights.dedup();
     let weights = weights.iter().map(|w| *w as f32 ).collect();
     (weights, widths, styles)
