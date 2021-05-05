@@ -322,7 +322,7 @@ pub fn matrix_in<T: This>(cx: &mut CallContext<'_, T>, vals:&[Handle<JsValue>]) 
 
 pub fn to_matrix(t:&[f32]) -> Option<Matrix>{
   match t.len(){
-    6 => Some(Matrix::new_all(t[0], t[1], t[2], t[3], t[4], t[5], 0.0 as f32, 0.0 as f32, 1.0 as f32)),
+    6 => Some(Matrix::new_all(t[0], t[1], t[2], t[3], t[4], t[5], 0.0, 0.0, 1.0)),
     9 => Some(Matrix::new_all(t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8])),
     _ => None
   }
@@ -347,7 +347,7 @@ pub fn matrix_arg<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize) -> 
 }
 
 pub fn matrix_to_array<'a, T: This+Class>(cx: &mut CallContext<'a, T>, matrix:&Matrix) -> JsResult<'a, JsValue> {
-  let array = JsArray::new(cx, 9 as u32);
+  let array = JsArray::new(cx, 9);
   for i in 0..9 {
     let num = cx.number(matrix[i as usize] as f64);
     array.set(cx, i as u32, num)?;
