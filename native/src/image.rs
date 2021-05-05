@@ -31,7 +31,7 @@ declare_types! {
         Data::new_copy(buf_data.as_slice())
       });
       let success = cx.borrow_mut(&mut this, |mut this| {
-        this.image = SkImage::from_encoded(data, None);
+        this.image = SkImage::from_encoded(data);
         this.image.is_some()
       });
 
