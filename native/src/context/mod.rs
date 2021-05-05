@@ -121,7 +121,7 @@ impl Default for State {
 impl Context2D{
   pub fn new(bounds: Rect, library: &Rc<RefCell<FontLibrary>>) -> Self {
     let mut recorder = PictureRecorder::new();
-    recorder.begin_recording(bounds, None, None);
+    recorder.begin_recording(bounds, None);
     if let Some(canvas) = recorder.recording_canvas() {
       canvas.save(); // start at depth 2
     }
@@ -173,7 +173,7 @@ impl Context2D{
         let mut layer_paint = self.state.paint.clone();
         layer_paint.set_blend_mode(BlendMode::SrcOver);
         let mut layer_recorder = PictureRecorder::new();
-        layer_recorder.begin_recording(self.bounds, None, None);
+        layer_recorder.begin_recording(self.bounds, None);
         if let Some(layer) = layer_recorder.recording_canvas() {
           // draw the dropshadow (if applicable)
           if let Some(shadow_paint) = self.paint_for_shadow(&layer_paint){
@@ -256,7 +256,7 @@ impl Context2D{
 
     // erase any existing content
     let mut new_recorder = PictureRecorder::new();
-    new_recorder.begin_recording(self.bounds, None, None);
+    new_recorder.begin_recording(self.bounds, None);
     self.recorder.replace(new_recorder);
     self.reset_canvas();
   }
@@ -425,7 +425,7 @@ impl Context2D{
     // stop the recorder to take a snapshot then restart it again
     let mut recorder = self.recorder.borrow_mut();
     let mut drobble = recorder.finish_recording_as_drawable();
-    recorder.begin_recording(self.bounds, None, None);
+    recorder.begin_recording(self.bounds, None);
 
     if let Some(canvas) = recorder.recording_canvas() {
       // fill the newly restarted recorder with the snapshot content...
@@ -447,7 +447,7 @@ impl Context2D{
     // stop the recorder to take a snapshot then restart it again
     let mut recorder = self.recorder.borrow_mut();
     let snapshot = recorder.finish_recording_as_picture(cull.or(Some(&self.bounds)));
-    recorder.begin_recording(self.bounds, None, None);
+    recorder.begin_recording(self.bounds, None);
 
     if let Some(canvas) = recorder.recording_canvas() {
       // fill the newly restarted recorder with the snapshot content...
@@ -557,7 +557,7 @@ impl Context2D{
 
     // render the text once into a picture we can use for the shadow as well
     let mut recorder = PictureRecorder::new();
-    recorder.begin_recording(bounds, None, None);
+    recorder.begin_recording(bounds, None);
     if let Some(canvas) = recorder.recording_canvas() {
       paragraph.paint(canvas, (0.0,0.0));
 
