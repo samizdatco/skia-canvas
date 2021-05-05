@@ -96,7 +96,7 @@ declare_types! {
       let offset = float_arg(&mut cx, 0, "offset")?;
       let color = color_arg(&mut cx, 1);
 
-      if offset < 0.0 || offset > 1.0 {
+      if !(0.0..=1.0).contains(&offset){
         let err = JsError::range_error(&mut cx, "Color stop offsets must be between 0 and 1")?;
         return cx.throw(err)
       }

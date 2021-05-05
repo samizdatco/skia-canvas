@@ -25,7 +25,7 @@ fn arg_num(o:usize) -> String{
   let n = (o + 1) as i32; // we're working with zero-bounded idxs
   let ords = ["st","nd","rd"];
   let slot = ((n+90)%100-10)%10 - 1;
-  let suffix = if slot >= 0 && slot < 3 { ords[slot as usize] } else { "th" };
+  let suffix = if (0..=2).contains(&slot) { ords[slot as usize] } else { "th" };
   format!("{}{}", n, suffix)
 }
 

@@ -909,7 +909,7 @@ declare_types! {
     method set_globalAlpha(mut cx){
       let mut this = cx.this();
       let num = float_arg(&mut cx, 0, "globalAlpha")?;
-      if num <= 1.0 && num >= 0.0{
+      if (0.0..=1.0).contains(&num){
         cx.borrow_mut(&mut this, |mut this| this.state.global_alpha = num );
       }
       Ok(cx.undefined().upcast())
