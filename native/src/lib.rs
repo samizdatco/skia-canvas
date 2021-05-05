@@ -1,3 +1,4 @@
+#![allow(clippy::unnecessary_wraps)]
 use neon::prelude::*;
 
 mod canvas;
