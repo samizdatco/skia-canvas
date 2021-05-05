@@ -178,14 +178,14 @@ impl Context2D{
           // draw the dropshadow (if applicable)
           if let Some(shadow_paint) = self.paint_for_shadow(&layer_paint){
             layer.save();
-            layer.set_matrix(&Matrix::translate(self.state.shadow_offset));
+            layer.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
             layer.concat(&self.state.matrix);
             f(layer, &shadow_paint);
             layer.restore();
           }
 
           // draw normally
-          layer.set_matrix(&self.state.matrix);
+          layer.set_matrix(&self.state.matrix.into());
           f(layer, &layer_paint);
         }
 
@@ -196,7 +196,7 @@ impl Context2D{
           let mut recorder = self.recorder.borrow_mut();
           if let Some(canvas) = recorder.recording_canvas() {
             canvas.save();
-            canvas.set_matrix(&Matrix::new_identity());
+            canvas.set_matrix(&Matrix::new_identity().into());
             canvas.draw_picture(&pict, None, Some(&paint));
             canvas.restore();
           }
@@ -209,7 +209,7 @@ impl Context2D{
           // only call the closure if there's an active dropshadow
           if let Some(shadow_paint) = self.paint_for_shadow(&paint){
             canvas.save();
-            canvas.set_matrix(&Matrix::translate(self.state.shadow_offset));
+            canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
             canvas.concat(&self.state.matrix);
             f(canvas, &shadow_paint);
             canvas.restore();
@@ -229,7 +229,7 @@ impl Context2D{
   {
     f(&mut self.state.matrix);
     self.with_canvas(|canvas| {
-      canvas.set_matrix(&self.state.matrix);
+      canvas.set_matrix(&self.state.matrix.into());
     });
   }
 
@@ -273,7 +273,7 @@ impl Context2D{
 
       self.reset_canvas();
       self.with_canvas(|canvas|{
-        canvas.set_matrix(&self.state.matrix);
+        canvas.set_matrix(&self.state.matrix.into());
         if !self.state.clip.is_empty(){
           canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
         }
@@ -435,7 +435,7 @@ impl Context2D{
 
       // ...and the current ctm/clip state
       canvas.save();
-      canvas.set_matrix(&self.state.matrix);
+      canvas.set_matrix(&self.state.matrix.into());
       if !self.state.clip.is_empty(){
         canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
       }
@@ -457,7 +457,7 @@ impl Context2D{
 
       // ...and the current ctm/clip state
       canvas.save();
-      canvas.set_matrix(&self.state.matrix);
+      canvas.set_matrix(&self.state.matrix.into());
       if !self.state.clip.is_empty(){
         canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
       }
