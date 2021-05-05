@@ -271,7 +271,7 @@ pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Co
   )
 }
 
-pub fn color_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Option<Color> {
+pub fn color_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Option<Color> {
   match opt_string_arg(cx, idx){
     Some(css) => color_in(cx, &css),
     None => {
@@ -337,7 +337,7 @@ pub fn matrix_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> R
   }
 }
 
-pub fn matrix_arg<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize) -> Result<Matrix, Throw> {
+pub fn matrix_arg<T: This+Class>(cx: &mut CallContext<T>, idx:usize) -> Result<Matrix, Throw> {
   let arg = cx.argument::<JsArray>(idx as i32)?.to_vec(cx)?;
   let terms = floats_in(&arg);
   match to_matrix(&terms){
@@ -370,7 +370,7 @@ pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
 // Path2D
 //
 
-pub fn path2d_arg_opt<'a, T: This+Class>(cx: &mut CallContext<'a, T>, idx:usize) -> Option<Path> {
+pub fn path2d_arg_opt<T: This+Class>(cx: &mut CallContext<T>, idx:usize) -> Option<Path> {
   if let Some(arg) = cx.argument_opt(idx as i32){
     if let Ok(arg) = arg.downcast::<JsPath2D>(){
       return Some(cx.borrow(&arg, |arg| arg.path.clone() ))
@@ -388,7 +388,7 @@ pub enum FilterSpec{
   Shadow{offset:Point, blur:f32, color:Color},
 }
 
-pub fn filter_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<(String, Vec<FilterSpec>), Throw> {
+pub fn filter_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<(String, Vec<FilterSpec>), Throw> {
   let arg = cx.argument::<JsObject>(idx as i32)?;
   let canonical = string_for_key(cx, &arg, "canonical")?;
 

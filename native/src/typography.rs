@@ -29,7 +29,7 @@ pub struct FontSpec{
   pub canonical: String
 }
 
-pub fn font_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize) -> Result<Option<FontSpec>, Throw> {
+pub fn font_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<Option<FontSpec>, Throw> {
   let arg = cx.argument::<JsValue>(0)?;
   if arg.is_a::<JsNull>(){ return Ok(None) }
 
