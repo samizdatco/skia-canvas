@@ -17,5 +17,5 @@ neon-build = "0.8.1"
 [dependencies]
 neon = "0.8.1"
 css-color = "0.1.1"
-skia-safe = {version = "0", features = ["textlayout"]}
+skia-safe = {version = "0.39.1", features = ["textlayout"]}
 # usvg = "0.11.0"
