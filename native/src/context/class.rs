@@ -395,7 +395,10 @@ declare_types! {
       let mut this = cx.this();
       let arg = cx.argument::<JsValue>(0)?;
       if let Some(dye) = Dye::new(&mut cx, arg, Fill)? {
-        cx.borrow_mut(&mut this, |mut this|  this.state.fill_style = dye );
+        cx.borrow_mut(&mut this, |mut this|{
+          this.state.fill_style = dye;
+          this.update_image_quality();
+        });
       }else{
         eprintln!("Warning: Invalid fill style (expected a css color string, CanvasGradient, or CanvasPattern)");
       }
@@ -413,7 +416,10 @@ declare_types! {
       let mut this = cx.this();
       let arg = cx.argument::<JsValue>(0)?;
       if let Some(dye) = Dye::new(&mut cx, arg, Stroke)? {
-        cx.borrow_mut(&mut this, |mut this| this.state.stroke_style = dye );
+        cx.borrow_mut(&mut this, |mut this|{
+          this.state.stroke_style = dye;
+          this.update_image_quality();
+        });
       }else{
         eprintln!("Warning: Invalid stroke style (expected a css color string, CanvasGradient, or CanvasPattern)");
       }

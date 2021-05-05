@@ -10,9 +10,9 @@ use neon::object::This;
 use neon::result::Throw;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo,
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
-                PaintStyle, BlendMode, FilterQuality, AlphaType, TileMode, ClipOp,
-                image_filters, color_filters, table_color_filter, dash_path_effect,
-                Data, PictureRecorder, Picture, Drawable};
+                PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data,
+                PictureRecorder, Picture, Drawable, FilterQuality, SamplingOptions,
+                image_filters, color_filters, table_color_filter, dash_path_effect};
 use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow, RectHeightStyle, RectWidthStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
@@ -78,8 +78,7 @@ impl Default for State {
       .set_color(BLACK)
       .set_anti_alias(true)
       .set_stroke_width(1.0)
-      .set_style(PaintStyle::Fill)
-      .set_filter_quality(FilterQuality::Low);
+      .set_style(PaintStyle::Fill);
 
     let graf_style = ParagraphStyle::new();
     let mut char_style = TextStyle::new();
@@ -414,9 +413,14 @@ impl Context2D{
     canvas_paint
       .set_alpha_f(self.state.global_alpha);
 
+    let sampling = match self.state.image_smoothing_enabled {
+      true => SamplingOptions::from_filter_quality(self.state.image_filter_quality, None),
+      false => SamplingOptions::default()
+    };
+
     if let Some(image) = &img {
       self.render_to_canvas(&canvas_paint, |canvas, paint| {
-        canvas.draw_image_rect(&image, Some((src_rect, Strict)), dst_rect, &paint);
+        canvas.draw_image_rect_with_sampling_options(&image, Some((src_rect, Strict)), dst_rect, sampling, &paint);
       });
     }
   }
@@ -721,10 +725,13 @@ impl Context2D{
   }
 
   pub fn update_image_quality(&mut self){
-    self.state.paint.set_filter_quality(match self.state.image_smoothing_enabled{
-      true => self.state.image_filter_quality,
-      false => FilterQuality::None
-    });
+    if let Dye::Pattern(pat) = &mut self.state.fill_style {
+      pat.smoothing = self.state.image_smoothing_enabled;
+    }
+
+    if let Dye::Pattern(pat) = &mut self.state.stroke_style {
+      pat.smoothing = self.state.image_smoothing_enabled;
+    }
   }
 
   pub fn color_with_alpha(&self, src:&Color) -> Color{
