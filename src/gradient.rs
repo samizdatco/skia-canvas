@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(non_snake_case)]
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use neon::prelude::*;
@@ -70,7 +71,11 @@ impl CanvasGradient{
   }
 }
 
-pub fn canvasgradient_linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
+//
+// -- Javascript Methods --------------------------------------------------------------------------
+//
+
+pub fn linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
   if let [x1, y1, x2, y2] = opt_float_args(&mut cx, 1..5).as_slice(){
     let start = Point::new(*x1, *y1);
     let end = Point::new(*x2, *y2);
@@ -84,7 +89,7 @@ pub fn canvasgradient_linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGra
   }
 }
 
-pub fn canvasgradient_radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
+pub fn radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
   if let [x1, y1, r1, x2, y2, r2] = opt_float_args(&mut cx, 1..7).as_slice(){
     let start_point = Point::new(*x1, *y1);
     let end_point = Point::new(*x2, *y2);
@@ -98,7 +103,7 @@ pub fn canvasgradient_radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGra
   }
 }
 
-pub fn canvasgradient_add_color_stop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn addColorStop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvasGradient>(0)?;
   let offset = float_arg(&mut cx, 1, "offset")?;
   let color = color_arg(&mut cx, 2);

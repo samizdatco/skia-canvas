@@ -1,6 +1,7 @@
 #![allow(unused_mut)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 use std::cell::RefCell;
 use neon::prelude::*;
@@ -43,7 +44,11 @@ impl CanvasPattern{
   }
 }
 
-pub fn canvaspattern_from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
+//
+// -- Javascript Methods --------------------------------------------------------------------------
+//
+
+pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let src = cx.argument::<BoxedImage>(1)?;
   let repetition = if cx.len() > 2 && cx.argument::<JsValue>(2)?.is_a::<JsNull, _>(&mut cx){
     "".to_string() // null is a valid synonym for "repeat" (as is "")
@@ -66,7 +71,7 @@ pub fn canvaspattern_from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvas
   }
 }
 
-// pub fn canvaspattern_from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
+// pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 //   let src = cx.argument::<BoxedCanvas>(1)?;
 //   let repetition = if cx.len() > 2 && cx.argument::<JsValue>(2)?.is_a::<JsNull, _>(&mut cx){
 //     "".to_string() // null is a valid synonym for "repeat" (as is "")
@@ -91,7 +96,7 @@ pub fn canvaspattern_from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvas
 //   }
 // }
 
-pub fn canvaspattern_set_transform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn setTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvasPattern>(0)?;
   let mut this = this.borrow_mut();
   this.matrix = matrix_arg(&mut cx, 1)?;

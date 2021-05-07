@@ -2,6 +2,7 @@
 #![allow(unused_mut)]
 #![allow(dead_code)]
 #![allow(unused_imports)]
+#![allow(non_snake_case)]
 use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 use std::fs;
@@ -423,22 +424,25 @@ impl FontLibrary{
 
 }
 
+//
+// Javascript Methods
+//
 
-pub fn fontlibrary_get_families(mut cx: FunctionContext) -> JsResult<JsArray> {
+pub fn get_families(mut cx: FunctionContext) -> JsResult<JsArray> {
   let library = FONT_LIBRARY.lock().unwrap();
   let families = library.families();
   let names = strings_to_array(&mut cx, &families)?;
   Ok(names)
 }
 
-pub fn fontlibrary_has(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+pub fn has(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let library = FONT_LIBRARY.lock().unwrap();
   let family = string_arg(&mut cx, 1, "familyName")?;
   let found = library.families().contains(&family);
   Ok(cx.boolean(found))
 }
 
-pub fn fontlibrary_family(mut cx: FunctionContext) -> JsResult<JsValue> {
+pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
   let library = FONT_LIBRARY.lock().unwrap();
   let family = string_arg(&mut cx, 1, "familyName")?;
   let (weights, widths, styles) = library.family_details(&family);
@@ -461,7 +465,7 @@ pub fn fontlibrary_family(mut cx: FunctionContext) -> JsResult<JsValue> {
   Ok(details.upcast())
 }
 
-pub fn fontlibrary_add_family(mut cx: FunctionContext) -> JsResult<JsValue> {
+pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
   let alias = opt_string_arg(&mut cx, 1);
   let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
   let results = JsArray::new(&mut cx, filenames.len() as u32);

@@ -17,7 +17,6 @@ pub struct Image{
   pub image:Option<SkImage>
 }
 
-pub fn image_new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
 impl Image{
   pub fn info(width:f32, height:f32) -> ImageInfo {
     let dims = (width as i32, height as i32);
@@ -29,18 +28,19 @@ impl Image{
 // -- Javascript Methods --------------------------------------------------------------------------
 //
 
+pub fn new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
   let this = RefCell::new(Image{ src:"".to_string(), image:None });
   Ok(cx.boxed(this))
 }
 
-pub fn image_get_src(mut cx: FunctionContext) -> JsResult<JsString> {
+pub fn get_src(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
 
   Ok(cx.string(&this.src))
 }
 
-pub fn image_set_src(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn set_src(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedImage>(0)?;
   let mut this = this.borrow_mut();
 
@@ -49,7 +49,7 @@ pub fn image_set_src(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn image_set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedImage>(0)?;
   let mut this = this.borrow_mut();
 
@@ -62,7 +62,7 @@ pub fn image_set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   Ok(cx.boolean(this.image.is_some()))
 }
 
-pub fn image_get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
+pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
 
@@ -72,7 +72,7 @@ pub fn image_get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
   }
 }
 
-pub fn image_get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
+pub fn get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
 
@@ -82,7 +82,7 @@ pub fn image_get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
   }
 }
 
-pub fn image_get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
   Ok(cx.boolean(this.image.is_some()))

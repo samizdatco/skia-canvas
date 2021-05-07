@@ -1,6 +1,7 @@
 #![allow(unused_mut)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
+#![allow(non_snake_case)]
 #![allow(dead_code)]
 use std::cell::RefCell;
 use std::f32::consts::PI;
@@ -84,26 +85,29 @@ impl Path2D{
   }
 }
 
+//
+// -- Javascript Methods --------------------------------------------------------------------------
+//
 
-pub fn path2d_new(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+pub fn new(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let path = Path::new();
   Ok(cx.boxed(RefCell::new(Path2D{path})))
 }
 
-pub fn path2d_from_path2d(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+pub fn from_path2d(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let other_path = cx.argument::<BoxedPath2D>(1)?;
   let path = other_path.borrow().path.clone();
   Ok(cx.boxed(RefCell::new(Path2D{path})))
 }
 
-pub fn path2d_from_svg(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+pub fn from_svg(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let svg_string = string_arg(&mut cx, 1, "svgPath")?;
   let path = Path::from_svg(svg_string).unwrap_or_else(Path::new);
   Ok(cx.boxed(RefCell::new(Path2D{path})))
 }
 
 // Adds a path to the current path.
-pub fn path2d_add_path(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn addPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let other = cx.argument::<BoxedPath2D>(1)?;
   let matrix = Matrix::new_identity();
@@ -116,7 +120,7 @@ pub fn path2d_add_path(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 // Adds a path to the current path (with the specified transform).
-pub fn path2d_add_path_matrix(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn addPath_matrix(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let other = cx.argument::<BoxedPath2D>(1)?;
   let matrix = matrix_arg(&mut cx, 1)?;
@@ -129,7 +133,7 @@ pub fn path2d_add_path_matrix(mut cx: FunctionContext) -> JsResult<JsUndefined> 
 }
 
 // Causes the point of the pen to move back to the start of the current sub-path. It tries to draw a straight line from the current point to the start. If the shape has already been closed or has only one point, this function does nothing.
-pub fn path2d_close_path(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn closePath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   this.path.close();
@@ -137,7 +141,7 @@ pub fn path2d_close_path(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 // Moves the starting point of a new sub-path to the (x, y) coordinates.
-pub fn path2d_move_to(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let x = float_arg(&mut cx, 1, "x")?;
@@ -148,7 +152,7 @@ pub fn path2d_move_to(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 // Connects the last point in the subpath to the (x, y) coordinates with a straight line.
-pub fn path2d_line_to(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let x = float_arg(&mut cx, 1, "x")?;
@@ -160,7 +164,7 @@ pub fn path2d_line_to(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 // Adds a cubic Bézier curve to the path. It requires three points. The first two points are control points and the third one is the end point. The starting point is the last point in the current path, which can be changed using moveTo() before creating the Bézier curve.
-pub fn path2d_bezier_curve_to(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let nums = float_args(&mut cx, 1..7)?;
@@ -173,7 +177,7 @@ pub fn path2d_bezier_curve_to(mut cx: FunctionContext) -> JsResult<JsUndefined> 
 }
 
 // Adds a quadratic Bézier curve to the current path.
-pub fn path2d_quadratic_curve_to(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let nums = float_args(&mut cx, 1..5)?;
@@ -186,7 +190,7 @@ pub fn path2d_quadratic_curve_to(mut cx: FunctionContext) -> JsResult<JsUndefine
 }
 
 // Adds an arc to the path which is centered at (x, y) position with radius r starting at startAngle and ending at endAngle going in the given direction by anticlockwise (defaulting to clockwise).
-pub fn path2d_arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let nums = float_args(&mut cx, 1..6)?;
@@ -200,8 +204,7 @@ pub fn path2d_arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 // Adds a circular arc to the path with the given control points and radius, connected to the previous point by a straight line.
-
-pub fn path2d_arc_to(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let coords = float_args(&mut cx, 1..5)?;
@@ -216,7 +219,7 @@ pub fn path2d_arc_to(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 // Adds an elliptical arc to the path which is centered at (x, y) position with the radii radiusX and radiusY starting at startAngle and ending at endAngle going in the given direction by anticlockwise (defaulting to clockwise).
-pub fn path2d_ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let nums = float_args(&mut cx, 1..8)?;
@@ -234,7 +237,7 @@ pub fn path2d_ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 // Creates a path for a rectangle at position (x, y) with a size that is determined by width and height.
-pub fn path2d_rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let nums = float_args(&mut cx, 0..4)?;
@@ -247,7 +250,7 @@ pub fn path2d_rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn path2d_op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let other_path = cx.argument::<BoxedPath2D>(1)?;
   let op_name = string_arg(&mut cx, 2, "pathOp")?;
@@ -264,7 +267,7 @@ pub fn path2d_op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   }
 }
 
-pub fn path2d_simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let this = this.borrow();
 
@@ -278,7 +281,7 @@ pub fn path2d_simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   Ok(cx.boxed(RefCell::new(new_path)))
 }
 
-pub fn path2d_bounds(mut cx: FunctionContext) -> JsResult<JsObject> {
+pub fn bounds(mut cx: FunctionContext) -> JsResult<JsObject> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let this = this.borrow();
 

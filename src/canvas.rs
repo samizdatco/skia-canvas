@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+#![allow(non_snake_case)]
 #![allow(clippy::needless_range_loop)]
 use std::fs;
 use std::path::Path;
@@ -118,11 +119,11 @@ pub fn canvas_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<B
 
 
 
+//
+// -- Javascript Methods --------------------------------------------------------------------------
+//
 
-
-
-
-pub fn canvas_new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
+pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
   let width = float_arg_or(&mut cx, 1, 300.0).floor();
   let height = float_arg_or(&mut cx, 2, 150.0).floor();
   let this = RefCell::new(Canvas{
@@ -132,21 +133,21 @@ pub fn canvas_new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
   Ok(cx.boxed(this))
 }
 
-pub fn canvas_get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
+pub fn get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let this = this.borrow();
 
   Ok(cx.number(this.width as f64))
 }
 
-pub fn canvas_get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
+pub fn get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let this = this.borrow();
 
   Ok(cx.number(this.height as f64))
 }
 
-pub fn canvas_set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
 
   let width = float_arg(&mut cx, 1, "size")?.floor();
@@ -162,7 +163,7 @@ pub fn canvas_set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn canvas_set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
 
   let height = float_arg(&mut cx, 1, "size")?.floor();
@@ -178,7 +179,7 @@ pub fn canvas_set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn canvas_save_as(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn saveAs(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let name_pattern = string_arg(&mut cx, 1, "filePath")?;
   let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
@@ -237,7 +238,7 @@ pub fn canvas_save_as(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn canvas_to_buffer(mut cx: FunctionContext) -> JsResult<JsBuffer> {
+pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let file_format = string_arg(&mut cx, 1, "format")?;
   let quality = float_arg(&mut cx, 2, "quality")?;

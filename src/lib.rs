@@ -23,53 +23,52 @@ lazy_static! {
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
-  cx.export_function("Image_new", image::image_new)?;
-  cx.export_function("Image_get_src", image::image_get_src)?;
-  cx.export_function("Image_set_src", image::image_set_src)?;
-  cx.export_function("Image_set_data", image::image_set_data)?;
-  cx.export_function("Image_get_width", image::image_get_width)?;
-  cx.export_function("Image_get_height", image::image_get_height)?;
-  cx.export_function("Image_get_complete", image::image_get_complete)?;
+  cx.export_function("Image_new", image::new)?;
+  cx.export_function("Image_get_src", image::get_src)?;
+  cx.export_function("Image_set_src", image::set_src)?;
+  cx.export_function("Image_set_data", image::set_data)?;
+  cx.export_function("Image_get_width", image::get_width)?;
+  cx.export_function("Image_get_height", image::get_height)?;
+  cx.export_function("Image_get_complete", image::get_complete)?;
 
+  cx.export_function("Path2D_new", path::new)?;
+  cx.export_function("Path2D_from_path2d", path::from_path2d)?;
+  cx.export_function("Path2D_from_svg", path::from_svg)?;
+  cx.export_function("Path2D_add_path", path::addPath)?;
+  cx.export_function("Path2D_add_path_matrix", path::addPath_matrix)?;
+  cx.export_function("Path2D_close_path", path::closePath)?;
+  cx.export_function("Path2D_move_to", path::moveTo)?;
+  cx.export_function("Path2D_line_to", path::lineTo)?;
+  cx.export_function("Path2D_bezier_curve_to", path::bezierCurveTo)?;
+  cx.export_function("Path2D_quadratic_curve_to", path::quadraticCurveTo)?;
+  cx.export_function("Path2D_arc", path::arc)?;
+  cx.export_function("Path2D_arc_to", path::arcTo)?;
+  cx.export_function("Path2D_ellipse", path::ellipse)?;
+  cx.export_function("Path2D_rect", path::rect)?;
+  cx.export_function("Path2D_op", path::op)?;
+  cx.export_function("Path2D_simplify", path::simplify)?;
+  cx.export_function("Path2D_bounds", path::bounds)?;
 
-  cx.export_function("Path2D_new", path::path2d_new)?;
-  cx.export_function("Path2D_from_path2d", path::path2d_from_path2d)?;
-  cx.export_function("Path2D_from_svg", path::path2d_from_svg)?;
-  cx.export_function("Path2D_add_path", path::path2d_add_path)?;
-  cx.export_function("Path2D_add_path_matrix", path::path2d_add_path_matrix)?;
-  cx.export_function("Path2D_close_path", path::path2d_close_path)?;
-  cx.export_function("Path2D_move_to", path::path2d_move_to)?;
-  cx.export_function("Path2D_line_to", path::path2d_line_to)?;
-  cx.export_function("Path2D_bezier_curve_to", path::path2d_bezier_curve_to)?;
-  cx.export_function("Path2D_quadratic_curve_to", path::path2d_quadratic_curve_to)?;
-  cx.export_function("Path2D_arc", path::path2d_arc)?;
-  cx.export_function("Path2D_arc_to", path::path2d_arc_to)?;
-  cx.export_function("Path2D_ellipse", path::path2d_ellipse)?;
-  cx.export_function("Path2D_rect", path::path2d_rect)?;
-  cx.export_function("Path2D_op", path::path2d_op)?;
-  cx.export_function("Path2D_simplify", path::path2d_simplify)?;
-  cx.export_function("Path2D_bounds", path::path2d_bounds)?;
+  cx.export_function("CanvasGradient_linear", gradient::linear)?;
+  cx.export_function("CanvasGradient_radial", gradient::radial)?;
+  cx.export_function("CanvasGradient_addColorStop", gradient::addColorStop)?;
 
-  cx.export_function("CanvasGradient_linear", gradient::canvasgradient_linear)?;
-  cx.export_function("CanvasGradient_radial", gradient::canvasgradient_radial)?;
-  cx.export_function("CanvasGradient_add_color_stop", gradient::canvasgradient_add_color_stop)?;
+  cx.export_function("CanvasPattern_from_image", pattern::from_image)?;
+  // cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
+  cx.export_function("CanvasPattern_set_transform", pattern::setTransform)?;
 
-  cx.export_function("CanvasPattern_from_image", pattern::canvaspattern_from_image)?;
-  // cx.export_function("CanvasPattern_from_canvas", pattern::canvaspattern_from_canvas)?;
-  cx.export_function("CanvasPattern_set_transform", pattern::canvaspattern_set_transform)?;
+  cx.export_function("FontLibrary_get_families", typography::get_families)?;
+  cx.export_function("FontLibrary_has", typography::has)?;
+  cx.export_function("FontLibrary_family", typography::family)?;
+  cx.export_function("FontLibrary_add_family", typography::addFamily)?;
 
-  cx.export_function("FontLibrary_get_families", typography::fontlibrary_get_families)?;
-  cx.export_function("FontLibrary_has", typography::fontlibrary_has)?;
-  cx.export_function("FontLibrary_family", typography::fontlibrary_family)?;
-  cx.export_function("FontLibrary_add_family", typography::fontlibrary_add_family)?;
-
-  cx.export_function("Canvas_new", canvas::canvas_new)?;
-  cx.export_function("Canvas_get_width", canvas::canvas_get_width)?;
-  cx.export_function("Canvas_get_height", canvas::canvas_get_height)?;
-  cx.export_function("Canvas_set_width", canvas::canvas_set_width)?;
-  cx.export_function("Canvas_set_height", canvas::canvas_set_height)?;
-  cx.export_function("Canvas_save_as", canvas::canvas_save_as)?;
-  cx.export_function("Canvas_to_buffer", canvas::canvas_to_buffer)?;
+  cx.export_function("Canvas_new", canvas::new)?;
+  cx.export_function("Canvas_get_width", canvas::get_width)?;
+  cx.export_function("Canvas_get_height", canvas::get_height)?;
+  cx.export_function("Canvas_set_width", canvas::set_width)?;
+  cx.export_function("Canvas_set_height", canvas::set_height)?;
+  cx.export_function("Canvas_save_as", canvas::saveAs)?;
+  cx.export_function("Canvas_to_buffer", canvas::toBuffer)?;
 
   cx.export_function("CanvasRenderingContext2D_new", ctx::new)?;
   cx.export_function("CanvasRenderingContext2D_save", ctx::save)?;
