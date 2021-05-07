@@ -94,7 +94,7 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   Ok(cx.boxed(RefCell::new(Path2D{path})))
 }
 
-pub fn from_path2d(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+pub fn from_path(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let other_path = cx.argument::<BoxedPath2D>(1)?;
   let path = other_path.borrow().path.clone();
   Ok(cx.boxed(RefCell::new(Path2D{path})))
@@ -110,20 +110,10 @@ pub fn from_svg(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 pub fn addPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let other = cx.argument::<BoxedPath2D>(1)?;
-  let matrix = Matrix::new_identity();
-
-  let mut this = this.borrow_mut();
-  let other = other.borrow();
-  this.path.add_path_matrix(&other.path, &matrix, AddPathMode::Append);
-
-  Ok(cx.undefined())
-}
-
-// Adds a path to the current path (with the specified transform).
-pub fn addPath_matrix(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let other = cx.argument::<BoxedPath2D>(1)?;
-  let matrix = matrix_arg(&mut cx, 1)?;
+  let matrix = match matrix_arg(&mut cx, 2){
+    Ok(matrix) => matrix,
+    Err(_e) => Matrix::new_identity()
+  };
 
   let mut this = this.borrow_mut();
   let other = other.borrow();
