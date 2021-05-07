@@ -18,6 +18,17 @@ pub struct Image{
 }
 
 pub fn image_new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
+impl Image{
+  pub fn info(width:f32, height:f32) -> ImageInfo {
+    let dims = (width as i32, height as i32);
+    ImageInfo::new(dims, ColorType::RGBA8888, AlphaType::Unpremul, None)
+  }
+}
+
+//
+// -- Javascript Methods --------------------------------------------------------------------------
+//
+
   let this = RefCell::new(Image{ src:"".to_string(), image:None });
   Ok(cx.boxed(this))
 }
@@ -75,42 +86,4 @@ pub fn image_get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
   Ok(cx.boolean(this.image.is_some()))
-}
-
-
-
-pub type BoxedImageData = JsBox<RefCell<ImageData>>;
-impl Finalize for ImageData {}
-
-pub struct ImageData{
-  pub width: f32,
-  pub height: f32
-}
-
-impl ImageData{
-  pub fn get_info(&self) -> ImageInfo {
-    let dims = (self.width as i32, self.height as i32);
-    ImageInfo::new(dims, ColorType::RGBA8888, AlphaType::Unpremul, None)
-  }
-}
-
-
-pub fn imagedata_new(mut cx: FunctionContext) -> JsResult<BoxedImageData> {
-  let width = cx.argument::<JsNumber>(1)?.value(&mut cx) as f32;
-  let height = cx.argument::<JsNumber>(2)?.value(&mut cx) as f32;
-
-  let this = RefCell::new(ImageData{ width, height });
-  Ok(cx.boxed(this))
-}
-
-pub fn imagedata_get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
-  let this = cx.argument::<BoxedImageData>(0)?;
-  let this = this.borrow();
-  Ok(cx.number(this.width))
-}
-
-pub fn imagedata_get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
-  let this = cx.argument::<BoxedImageData>(0)?;
-  let this = this.borrow();
-  Ok(cx.number(this.height))
 }

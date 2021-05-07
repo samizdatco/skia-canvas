@@ -14,7 +14,7 @@ use skia_safe::PaintStyle::{Fill, Stroke};
 use super::{Context2D, BoxedContext2D, Dye};
 use crate::canvas::{BoxedCanvas, canvas_context};
 use crate::path::{Path2D, BoxedPath2D};
-use crate::image::{BoxedImage, BoxedImageData, ImageData};
+use crate::image::{Image, BoxedImage};
 use crate::typography::*;
 use crate::utils::*;
 
@@ -601,17 +601,17 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
 pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let img_data = cx.argument::<BoxedImageData>(1)?;
-  let info = img_data.borrow().get_info();
+  let img_data = cx.argument::<JsObject>(1)?;
 
   // determine geometry
+  let width = float_for_key(&mut cx, &img_data, "width")?;
+  let height = float_for_key(&mut cx, &img_data, "height")?;
   let x = float_arg(&mut cx, 2, "x")?;
   let y = float_arg(&mut cx, 3, "y")?;
   let mut dirty = opt_float_args(&mut cx, 4..8);
   if !dirty.is_empty() && dirty.len() != 4 {
     return cx.throw_type_error("expected either 2 or 6 numbers")
   }
-  let (width, height) = (info.width() as f32, info.height() as f32);
   let (mut src, mut dst) = match dirty.as_mut_slice(){
     [dx, dy, dw, dh] => {
       if *dw < 0.0 { *dw *= -1.0; *dx -= *dw; }
@@ -624,6 +624,7 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   )};
 
   let buffer = img_data.get(&mut cx, "data")?.downcast_or_throw::<JsBuffer, _>(&mut cx)?;
+  let info = Image::info(width, height);
   cx.borrow(&buffer, |data| {
     this.blit_pixels(data.as_slice(), &info, &src, &dst);
   });
