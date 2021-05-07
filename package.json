@@ -29,10 +29,10 @@
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
-    "aws-sdk": "^2.902.0",
+    "aws-sdk": "^2.903.0",
     "cargo-cp-artifact": "^0.1",
     "express": "^4.17.1",
-    "jest": "^26.5.0",
+    "jest": "^26.6.3",
     "lodash": "^4.17.21",
     "nodemon": "^2.0.7"
   },
