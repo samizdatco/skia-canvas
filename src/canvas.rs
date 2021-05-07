@@ -122,160 +122,160 @@ pub fn canvas_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<B
 
 
 
-    pub fn canvas_new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
-      let width = float_arg_or(&mut cx, 1, 300.0).floor();
-      let height = float_arg_or(&mut cx, 2, 150.0).floor();
-      let this = RefCell::new(Canvas{
-        width: if width < 0.0 { 300.0 } else { width },
-        height: if height < 0.0 { 150.0 } else { height }
-      });
-      Ok(cx.boxed(this))
-    }
+pub fn canvas_new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
+  let width = float_arg_or(&mut cx, 1, 300.0).floor();
+  let height = float_arg_or(&mut cx, 2, 150.0).floor();
+  let this = RefCell::new(Canvas{
+    width: if width < 0.0 { 300.0 } else { width },
+    height: if height < 0.0 { 150.0 } else { height }
+  });
+  Ok(cx.boxed(this))
+}
 
-    pub fn canvas_get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
-      let this = cx.argument::<BoxedCanvas>(0)?;
+pub fn canvas_get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let this = this.borrow();
+
+  Ok(cx.number(this.width as f64))
+}
+
+pub fn canvas_get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let this = this.borrow();
+
+  Ok(cx.number(this.height as f64))
+}
+
+pub fn canvas_set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+
+  let width = float_arg(&mut cx, 1, "size")?.floor();
+  if width >= 0.0 {
+    let mut that = this.borrow_mut();
+    that.width = width;
+
+    // canvas_context(&mut cx, &this, |ctx|{
+    //   ctx.resize((width, that.height))
+    // })?;
+  }
+
+  Ok(cx.undefined())
+}
+
+pub fn canvas_set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+
+  let height = float_arg(&mut cx, 1, "size")?.floor();
+  if height >= 0.0 {
+    let mut that = this.borrow_mut();
+    that.height = height;
+
+    // canvas_context(&mut cx, &this, |ctx|{
+    //   ctx.resize((that.width, height))
+    // })?;
+  }
+
+  Ok(cx.undefined())
+}
+
+pub fn canvas_save_as(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let name_pattern = string_arg(&mut cx, 1, "filePath")?;
+  let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
+  let file_format = string_arg(&mut cx, 3, "format")?;
+  let quality = float_arg(&mut cx, 4, "quality")?;
+
+  if sequence {
+    let mut pages = canvas_pages(&mut cx, &this)?;
+    pages.reverse();
+
+    let padding = float_arg(&mut cx, 1, "padding")? as i32;
+    let padding = match padding {
+      -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
+      _ => padding as usize
+    };
+
+    for pp in 0..pages.len() {
+      let mut page = &mut pages[pp];
+      let filename = name_pattern.replace("{}", format!("{:0width$}", pp+1, width=padding).as_str());
       let this = this.borrow();
-
-      Ok(cx.number(this.width as f64))
-    }
-
-    pub fn canvas_get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
-      let this = cx.argument::<BoxedCanvas>(0)?;
-      let this = this.borrow();
-
-      Ok(cx.number(this.height as f64))
-    }
-
-    pub fn canvas_set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-      let this = cx.argument::<BoxedCanvas>(0)?;
-
-      let width = float_arg(&mut cx, 1, "size")?.floor();
-      if width >= 0.0 {
-        let mut that = this.borrow_mut();
-        that.width = width;
-
-        // canvas_context(&mut cx, &this, |ctx|{
-        //   ctx.resize((width, that.height))
-        // })?;
+      let mut page = page.borrow_mut();
+      if let Err(why) = this.write_page(&mut page, &filename, &file_format, quality) {
+        return cx.throw_error(why)
       }
-
-      Ok(cx.undefined())
     }
+  } else if file_format == "pdf" {
+    let mut pages = canvas_pages(&mut cx, &this)?;
+    pages.reverse();
 
-    pub fn canvas_set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-      let this = cx.argument::<BoxedCanvas>(0)?;
-
-      let height = float_arg(&mut cx, 1, "size")?.floor();
-      if height >= 0.0 {
-        let mut that = this.borrow_mut();
-        that.height = height;
-
-        // canvas_context(&mut cx, &this, |ctx|{
-        //   ctx.resize((that.width, height))
-        // })?;
+    let document = pages.iter_mut().fold(pdf::new_document(None), |doc, page|{
+      let mut page = page.borrow_mut();
+      let dims = (page.width() as i32, page.height() as i32);
+      let mut doc = doc.begin_page(dims, None);
+      let canvas = doc.canvas();
+      if let Some(picture) = page.get_picture(None){
+        canvas.draw_picture(&picture, None, None);
       }
+      doc.end_page()
+    });
 
-      Ok(cx.undefined())
+    let path = Path::new(&name_pattern);
+    return match fs::write(path, document.close().as_bytes()){
+      Err(why) => cx.throw_error(format!("{}: \"{}\"", why, path.display())),
+      Ok(()) => Ok(cx.undefined())
     }
+  } else {
+    let mut page = canvas_pages(&mut cx, &this)?[0];
+    let this = this.borrow();
+    let mut page = page.borrow_mut();
 
-    pub fn canvas_save_as(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-      let this = cx.argument::<BoxedCanvas>(0)?;
-      let name_pattern = string_arg(&mut cx, 1, "filePath")?;
-      let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
-      let file_format = string_arg(&mut cx, 3, "format")?;
-      let quality = float_arg(&mut cx, 4, "quality")?;
+    if let Err(why) = this.write_page(&mut page, &name_pattern, &file_format, quality) {
+      return cx.throw_error(why)
+    }
+  }
 
-      if sequence {
-        let mut pages = canvas_pages(&mut cx, &this)?;
-        pages.reverse();
+  Ok(cx.undefined())
+}
 
-        let padding = float_arg(&mut cx, 1, "padding")? as i32;
-        let padding = match padding {
-          -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
-          _ => padding as usize
-        };
+pub fn canvas_to_buffer(mut cx: FunctionContext) -> JsResult<JsBuffer> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let file_format = string_arg(&mut cx, 1, "format")?;
+  let quality = float_arg(&mut cx, 2, "quality")?;
+  let page_idx = opt_float_arg(&mut cx, 3);
 
-        for pp in 0..pages.len() {
-          let mut page = &mut pages[pp];
-          let filename = name_pattern.replace("{}", format!("{:0width$}", pp+1, width=padding).as_str());
-          let this = this.borrow();
-          let mut page = page.borrow_mut();
-          if let Err(why) = this.write_page(&mut page, &filename, &file_format, quality) {
-            return cx.throw_error(why)
-          }
-        }
-      } else if file_format == "pdf" {
-        let mut pages = canvas_pages(&mut cx, &this)?;
-        pages.reverse();
-
-        let document = pages.iter_mut().fold(pdf::new_document(None), |doc, page|{
-          let mut page = page.borrow_mut();
-          let dims = (page.width() as i32, page.height() as i32);
-          let mut doc = doc.begin_page(dims, None);
-          let canvas = doc.canvas();
-          if let Some(picture) = page.get_picture(None){
-            canvas.draw_picture(&picture, None, None);
-          }
-          doc.end_page()
-        });
-
-        let path = Path::new(&name_pattern);
-        return match fs::write(path, document.close().as_bytes()){
-          Err(why) => cx.throw_error(format!("{}: \"{}\"", why, path.display())),
-          Ok(()) => Ok(cx.undefined())
-        }
-      } else {
-        let mut page = canvas_pages(&mut cx, &this)?[0];
-        let this = this.borrow();
+  let mut pages = canvas_pages(&mut cx, &this)?;
+  let data = {
+    if file_format=="pdf" && page_idx.is_none() {
+      Some(pages.iter_mut().rev().fold(pdf::new_document(None), |doc, page|{
         let mut page = page.borrow_mut();
-
-        if let Err(why) = this.write_page(&mut page, &name_pattern, &file_format, quality) {
-          return cx.throw_error(why)
+        let dims = (page.width() as i32, page.height() as i32);
+        let mut doc = doc.begin_page(dims, None);
+        let canvas = doc.canvas();
+        if let Some(picture) = page.get_picture(None){
+          canvas.draw_picture(&picture, None, None);
         }
+        doc.end_page()
+      }).close())
+    }else{
+      let page_idx = page_idx.unwrap_or(0.0);
+      let this = this.borrow();
+      let mut page = pages[page_idx as usize].borrow_mut();
+      match page.get_picture(None) {
+        Some(picture) => this.encode_image(&picture, &file_format, page.width(), page.height(), quality),
+        None => None
       }
-
-      Ok(cx.undefined())
     }
+  };
 
-    pub fn canvas_to_buffer(mut cx: FunctionContext) -> JsResult<JsBuffer> {
-      let this = cx.argument::<BoxedCanvas>(0)?;
-      let file_format = string_arg(&mut cx, 1, "format")?;
-      let quality = float_arg(&mut cx, 2, "quality")?;
-      let page_idx = opt_float_arg(&mut cx, 3);
+  match data{
+    Some(data) => {
+      let mut buffer = JsBuffer::new(&mut cx, data.len() as u32)?;
+      cx.borrow_mut(&mut buffer, |buf_data| {
+        buf_data.as_mut_slice().copy_from_slice(&data);
+      });
+      Ok(buffer)
+    },
+    None => cx.throw_error(format!("Unsupported image format: {:?}", file_format))
+  }
 
-      let mut pages = canvas_pages(&mut cx, &this)?;
-      let data = {
-        if file_format=="pdf" && page_idx.is_none() {
-          Some(pages.iter_mut().rev().fold(pdf::new_document(None), |doc, page|{
-            let mut page = page.borrow_mut();
-            let dims = (page.width() as i32, page.height() as i32);
-            let mut doc = doc.begin_page(dims, None);
-            let canvas = doc.canvas();
-            if let Some(picture) = page.get_picture(None){
-              canvas.draw_picture(&picture, None, None);
-            }
-            doc.end_page()
-          }).close())
-        }else{
-          let page_idx = page_idx.unwrap_or(0.0);
-          let this = this.borrow();
-          let mut page = pages[page_idx as usize].borrow_mut();
-          match page.get_picture(None) {
-            Some(picture) => this.encode_image(&picture, &file_format, page.width(), page.height(), quality),
-            None => None
-          }
-        }
-      };
-
-      match data{
-        Some(data) => {
-          let mut buffer = JsBuffer::new(&mut cx, data.len() as u32)?;
-          cx.borrow_mut(&mut buffer, |buf_data| {
-            buf_data.as_mut_slice().copy_from_slice(&data);
-          });
-          Ok(buffer)
-        },
-        None => cx.throw_error(format!("Unsupported image format: {:?}", file_format))
-      }
-
-    }
+}

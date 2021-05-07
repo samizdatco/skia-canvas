@@ -70,43 +70,43 @@ impl CanvasGradient{
   }
 }
 
-    pub fn canvasgradient_linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
-      if let [x1, y1, x2, y2] = opt_float_args(&mut cx, 1..5).as_slice(){
-        let start = Point::new(*x1, *y1);
-        let end = Point::new(*x2, *y2);
-        let ramp = Gradient::Linear{ start, end, stops:vec![], colors:vec![] };
-        let canvas_gradient = CanvasGradient{ gradient:Arc::new(Mutex::new(ramp)) };
-        let this = RefCell::new(canvas_gradient);
-        Ok(cx.boxed(this))
-      }else{
-        let msg = format!("Expected 4 arguments (x1, y1, x2, y2), received {}", cx.len() - 1);
-        cx.throw_type_error(msg)
-      }
-    }
+pub fn canvasgradient_linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
+  if let [x1, y1, x2, y2] = opt_float_args(&mut cx, 1..5).as_slice(){
+    let start = Point::new(*x1, *y1);
+    let end = Point::new(*x2, *y2);
+    let ramp = Gradient::Linear{ start, end, stops:vec![], colors:vec![] };
+    let canvas_gradient = CanvasGradient{ gradient:Arc::new(Mutex::new(ramp)) };
+    let this = RefCell::new(canvas_gradient);
+    Ok(cx.boxed(this))
+  }else{
+    let msg = format!("Expected 4 arguments (x1, y1, x2, y2), received {}", cx.len() - 1);
+    cx.throw_type_error(msg)
+  }
+}
 
-    pub fn canvasgradient_radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
-      if let [x1, y1, r1, x2, y2, r2] = opt_float_args(&mut cx, 1..7).as_slice(){
-        let start_point = Point::new(*x1, *y1);
-        let end_point = Point::new(*x2, *y2);
-        let bloom = Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![] };
-        let canvas_gradient = CanvasGradient{ gradient:Arc::new(Mutex::new(bloom)) };
-        let this = RefCell::new(canvas_gradient);
-        Ok(cx.boxed(this))
-      }else{
-        let msg = format!("Expected 6 arguments (x1, y1, r1, x2, y2, r2), received {}", cx.len() - 1);
-        cx.throw_type_error(msg)
-      }
-    }
+pub fn canvasgradient_radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
+  if let [x1, y1, r1, x2, y2, r2] = opt_float_args(&mut cx, 1..7).as_slice(){
+    let start_point = Point::new(*x1, *y1);
+    let end_point = Point::new(*x2, *y2);
+    let bloom = Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![] };
+    let canvas_gradient = CanvasGradient{ gradient:Arc::new(Mutex::new(bloom)) };
+    let this = RefCell::new(canvas_gradient);
+    Ok(cx.boxed(this))
+  }else{
+    let msg = format!("Expected 6 arguments (x1, y1, r1, x2, y2, r2), received {}", cx.len() - 1);
+    cx.throw_type_error(msg)
+  }
+}
 
-    pub fn canvasgradient_add_color_stop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-      let this = cx.argument::<BoxedCanvasGradient>(0)?;
-      let offset = float_arg(&mut cx, 1, "offset")?;
-      let color = color_arg(&mut cx, 2);
+pub fn canvasgradient_add_color_stop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvasGradient>(0)?;
+  let offset = float_arg(&mut cx, 1, "offset")?;
+  let color = color_arg(&mut cx, 2);
 
-      let mut this = this.borrow_mut();
-      if let Some(color) = color {
-        this.add_color_stop(offset, color);
-      }
+  let mut this = this.borrow_mut();
+  if let Some(color) = color {
+    this.add_color_stop(offset, color);
+  }
 
-      Ok(cx.undefined())
-    }
+  Ok(cx.undefined())
+}

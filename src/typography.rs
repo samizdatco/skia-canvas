@@ -424,73 +424,73 @@ impl FontLibrary{
 }
 
 
-    pub fn fontlibrary_get_families(mut cx: FunctionContext) -> JsResult<JsArray> {
-      let library = FONT_LIBRARY.lock().unwrap();
-      let families = library.families();
-      let names = strings_to_array(&mut cx, &families)?;
-      Ok(names)
-    }
+pub fn fontlibrary_get_families(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let library = FONT_LIBRARY.lock().unwrap();
+  let families = library.families();
+  let names = strings_to_array(&mut cx, &families)?;
+  Ok(names)
+}
 
-    pub fn fontlibrary_has(mut cx: FunctionContext) -> JsResult<JsBoolean> {
-      let library = FONT_LIBRARY.lock().unwrap();
-      let family = string_arg(&mut cx, 1, "familyName")?;
-      let found = library.families().contains(&family);
-      Ok(cx.boolean(found))
-    }
+pub fn fontlibrary_has(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let library = FONT_LIBRARY.lock().unwrap();
+  let family = string_arg(&mut cx, 1, "familyName")?;
+  let found = library.families().contains(&family);
+  Ok(cx.boolean(found))
+}
 
-    pub fn fontlibrary_family(mut cx: FunctionContext) -> JsResult<JsValue> {
-      let library = FONT_LIBRARY.lock().unwrap();
-      let family = string_arg(&mut cx, 1, "familyName")?;
-      let (weights, widths, styles) = library.family_details(&family);
+pub fn fontlibrary_family(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let library = FONT_LIBRARY.lock().unwrap();
+  let family = string_arg(&mut cx, 1, "familyName")?;
+  let (weights, widths, styles) = library.family_details(&family);
 
-      if weights.is_empty() {
-        return Ok(cx.undefined().upcast())
+  if weights.is_empty() {
+    return Ok(cx.undefined().upcast())
+  }
+
+  let name = cx.string(family);
+  let weights = floats_to_array(&mut cx, &weights)?;
+  let widths = strings_to_array(&mut cx, &widths)?;
+  let styles = strings_to_array(&mut cx, &styles)?;
+
+  let details = JsObject::new(&mut cx);
+  let attr = cx.string("family"); details.set(&mut cx, attr, name)?;
+  let attr = cx.string("weights"); details.set(&mut cx, attr, weights)?;
+  let attr = cx.string("widths"); details.set(&mut cx, attr, widths)?;
+  let attr = cx.string("styles"); details.set(&mut cx, attr, styles)?;
+
+  Ok(details.upcast())
+}
+
+pub fn fontlibrary_add_family(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let alias = opt_string_arg(&mut cx, 1);
+  let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
+  let results = JsArray::new(&mut cx, filenames.len() as u32);
+
+  for (i, filename) in strings_in(&mut cx, &filenames).iter().enumerate(){
+    let path = Path::new(&filename);
+    let typeface = match fs::read(path){
+      Err(why) => {
+        return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
+      },
+      Ok(bytes) => Typeface::from_data(Data::new_copy(&bytes), None)
+    };
+
+    match typeface {
+      Some(font) => {
+        // add family/weight/width/slant details to return value
+        let details = typeface_details(&mut cx, &filename, &font, alias.clone())?;
+        results.set(&mut cx, i as u32, details)?;
+
+        // register the typeface
+        let mut library = FONT_LIBRARY.lock().unwrap();
+        library.add_typeface(font, alias.clone());
+      },
+      None => {
+        return cx.throw_error(format!("Could not decode font data in {}", path.display()))
       }
-
-      let name = cx.string(family);
-      let weights = floats_to_array(&mut cx, &weights)?;
-      let widths = strings_to_array(&mut cx, &widths)?;
-      let styles = strings_to_array(&mut cx, &styles)?;
-
-      let details = JsObject::new(&mut cx);
-      let attr = cx.string("family"); details.set(&mut cx, attr, name)?;
-      let attr = cx.string("weights"); details.set(&mut cx, attr, weights)?;
-      let attr = cx.string("widths"); details.set(&mut cx, attr, widths)?;
-      let attr = cx.string("styles"); details.set(&mut cx, attr, styles)?;
-
-      Ok(details.upcast())
     }
+  }
 
-    pub fn fontlibrary_add_family(mut cx: FunctionContext) -> JsResult<JsValue> {
-      let alias = opt_string_arg(&mut cx, 1);
-      let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
-      let results = JsArray::new(&mut cx, filenames.len() as u32);
-
-      for (i, filename) in strings_in(&mut cx, &filenames).iter().enumerate(){
-        let path = Path::new(&filename);
-        let typeface = match fs::read(path){
-          Err(why) => {
-            return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
-          },
-          Ok(bytes) => Typeface::from_data(Data::new_copy(&bytes), None)
-        };
-
-        match typeface {
-          Some(font) => {
-            // add family/weight/width/slant details to return value
-            let details = typeface_details(&mut cx, &filename, &font, alias.clone())?;
-            results.set(&mut cx, i as u32, details)?;
-
-            // register the typeface
-            let mut library = FONT_LIBRARY.lock().unwrap();
-            library.add_typeface(font, alias.clone());
-          },
-          None => {
-            return cx.throw_error(format!("Could not decode font data in {}", path.display()))
-          }
-        }
-      }
-
-      Ok(results.upcast())
-    }
+  Ok(results.upcast())
+}
 
