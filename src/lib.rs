@@ -32,17 +32,16 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Image_get_complete", image::get_complete)?;
 
   cx.export_function("Path2D_new", path::new)?;
-  cx.export_function("Path2D_from_path2d", path::from_path2d)?;
+  cx.export_function("Path2D_from_path", path::from_path)?;
   cx.export_function("Path2D_from_svg", path::from_svg)?;
-  cx.export_function("Path2D_add_path", path::addPath)?;
-  cx.export_function("Path2D_add_path_matrix", path::addPath_matrix)?;
-  cx.export_function("Path2D_close_path", path::closePath)?;
-  cx.export_function("Path2D_move_to", path::moveTo)?;
-  cx.export_function("Path2D_line_to", path::lineTo)?;
-  cx.export_function("Path2D_bezier_curve_to", path::bezierCurveTo)?;
-  cx.export_function("Path2D_quadratic_curve_to", path::quadraticCurveTo)?;
+  cx.export_function("Path2D_addPath", path::addPath)?;
+  cx.export_function("Path2D_closePath", path::closePath)?;
+  cx.export_function("Path2D_moveTo", path::moveTo)?;
+  cx.export_function("Path2D_lineTo", path::lineTo)?;
+  cx.export_function("Path2D_bezierCurveTo", path::bezierCurveTo)?;
+  cx.export_function("Path2D_quadraticCurveTo", path::quadraticCurveTo)?;
   cx.export_function("Path2D_arc", path::arc)?;
-  cx.export_function("Path2D_arc_to", path::arcTo)?;
+  cx.export_function("Path2D_arcTo", path::arcTo)?;
   cx.export_function("Path2D_ellipse", path::ellipse)?;
   cx.export_function("Path2D_rect", path::rect)?;
   cx.export_function("Path2D_op", path::op)?;
@@ -55,20 +54,20 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   cx.export_function("CanvasPattern_from_image", pattern::from_image)?;
   // cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
-  cx.export_function("CanvasPattern_set_transform", pattern::setTransform)?;
+  cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
 
   cx.export_function("FontLibrary_get_families", typography::get_families)?;
   cx.export_function("FontLibrary_has", typography::has)?;
   cx.export_function("FontLibrary_family", typography::family)?;
-  cx.export_function("FontLibrary_add_family", typography::addFamily)?;
+  cx.export_function("FontLibrary_addFamily", typography::addFamily)?;
 
   cx.export_function("Canvas_new", canvas::new)?;
   cx.export_function("Canvas_get_width", canvas::get_width)?;
   cx.export_function("Canvas_get_height", canvas::get_height)?;
   cx.export_function("Canvas_set_width", canvas::set_width)?;
   cx.export_function("Canvas_set_height", canvas::set_height)?;
-  cx.export_function("Canvas_save_as", canvas::saveAs)?;
-  cx.export_function("Canvas_to_buffer", canvas::toBuffer)?;
+  cx.export_function("Canvas_saveAs", canvas::saveAs)?;
+  cx.export_function("Canvas_toBuffer", canvas::toBuffer)?;
 
   cx.export_function("CanvasRenderingContext2D_new", ctx::new)?;
   cx.export_function("CanvasRenderingContext2D_save", ctx::save)?;
