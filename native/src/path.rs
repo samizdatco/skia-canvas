@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Point, PathDirection, Rect, Matrix};
+use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp};
 use skia_safe::path::{AddPathMode};
 
 use crate::utils::*;
@@ -256,6 +256,39 @@ declare_types! {
       }
 
       Ok(cx.undefined().upcast())
+    }
+
+    method _op(mut cx){
+      let this = cx.this();
+      let other_path = cx.argument::<JsPath2D>(0)?;
+      let op_name = string_arg(&mut cx, 1, "pathOp")?;
+      let path_op = match op_name.to_lowercase().as_str(){
+        "difference" => PathOp::Difference,
+        "intersect" => PathOp::Intersect,
+        "union" => PathOp::Union,
+        "xor" => PathOp::XOR,
+        "reversedifference" | "complement" => PathOp::ReverseDifference,
+        _ => return cx.throw_error("pathOp must be Difference, Intersect, Union, XOR, or Complement")
+      };
+
+      let new_sk_path = cx.borrow(&other_path, |other| {
+        cx.borrow(&this, |this| {
+          this.path.op(&other.path, path_op)
+        })
+      });
+
+      let op_path = match new_sk_path{
+        Some(sk_path) => {
+          let mut new_js_path = JsPath2D::new(&mut cx, argv())?;
+          cx.borrow_mut(&mut new_js_path, |mut new|
+            new.path = sk_path
+          );
+          new_js_path
+        },
+        None => return cx.throw_error("path operation failed")
+      };
+
+      Ok(op_path.upcast())
     }
 
   }
