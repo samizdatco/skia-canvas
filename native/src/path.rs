@@ -291,5 +291,20 @@ declare_types! {
       Ok(op_path.upcast())
     }
 
+    method _simplify(mut cx){
+      let this = cx.this();
+      let mut new_path = JsPath2D::new(&mut cx, argv())?;
+      cx.borrow_mut(&mut new_path, |mut new|
+        new.path = cx.borrow(&this, |this| {
+          match this.path.simplify(){
+            Some(simpler) => simpler,
+            None => this.path.clone()
+          }
+        })
+      );
+      Ok(new_path.upcast())
+    }
+
+
   }
 }
