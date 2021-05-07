@@ -15,14 +15,14 @@ use skia_safe::{
   font_arguments::{VariationPosition, variation_position::{Coordinate}}
 };
 
-use crate::path::{JsPath2D};
 
 //
 // meta-helpers
 //
 
 fn arg_num(o:usize) -> String{
-  let n = (o + 1) as i32; // we're working with zero-bounded idxs
+  // let n = (o + 1) as i32; // we're working with zero-bounded idxs
+  let n = o; // arg 0 is always self, so no need to increment the idx
   let ords = ["st","nd","rd"];
   let slot = ((n+90)%100-10)%10 - 1;
   let suffix = if (0..=2).contains(&slot) { ords[slot as usize] } else { "th" };
@@ -52,51 +52,53 @@ pub fn to_radians(degrees: f32) -> f32{
   degrees / 180.0 * PI
 }
 
-pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> JsResult<'a, JsValue> {
-  let global = cx.global();
-  let symbol_ctor = global
-      .get(cx, "Symbol")?
-      .downcast::<JsObject>()
-      .or_throw(cx)?
-      .get(cx, "for")?
-      .downcast::<JsFunction>()
-      .or_throw(cx)?;
+// pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> JsResult<'a, JsValue> {
+//   let global = cx.global();
+//   let symbol_ctor = global
+//       .get(cx, "Symbol")?
+//       .downcast::<JsObject>()
+//       .or_throw(cx)?
+//       .get(cx, "for")?
+//       .downcast::<JsFunction>()
+//       .or_throw(cx)?;
 
-  let symbol_label = cx.string(symbol_name);
-  let sym = symbol_ctor.call(cx, global, vec![symbol_label])?;
-  Ok(sym)
-}
+//   let symbol_label = cx.string(symbol_name);
+//   let sym = symbol_ctor.call(cx, global, vec![symbol_label])?;
+//   Ok(sym)
+// }
 
-//
-// strings
-//
+// //
+// // strings
+// //
 
-
-pub fn strings_in(vals: &[Handle<JsValue>]) -> Vec<String>{
-  vals.iter()
-      .map(|js_val| js_val.downcast::<JsString>())
-      .filter( |r| r.is_ok() )
-      .map( |num| num.as_ref().unwrap().value() )
-      .collect()
+pub fn strings_in<T: This>(cx: &mut CallContext<T>, vals: &[Handle<JsValue>]) -> Vec<String>{
+  let mut strs:Vec<String> = Vec::new();
+  for (i, val) in vals.iter().enumerate() {
+    if let Ok(txt) = val.downcast::<JsString, _>(cx){
+      let val = txt.value(cx);
+      strs.push(val);
+    }
+  }
+  strs
 }
 
 pub fn strings_at_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<Vec<String>, Throw>{
-  let array = obj.get(cx, attr)?.downcast::<JsArray>().or_throw(cx)?.to_vec(cx)?;
-  Ok(strings_in(&array))
+  let array = obj.get(cx, attr)?.downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
+  Ok(strings_in(cx, &array))
 }
 
 pub fn string_for_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<String, Throw>{
   let key = cx.string(attr);
-  match obj.get(cx, key)?.downcast::<JsString>(){
-    Ok(s) => Ok(s.value()),
+  match obj.get(cx, key)?.downcast::<JsString, _>(cx){
+    Ok(s) => Ok(s.value(cx)),
     Err(_e) => cx.throw_error(format!("Exptected a string for \"{}\"", attr))
   }
 }
 
 pub fn opt_string_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<String>{
   match cx.argument_opt(idx as i32) {
-    Some(arg) => match arg.downcast::<JsString>() {
-      Ok(v) => Some(v.value()),
+    Some(arg) => match arg.downcast::<JsString, _>(cx) {
+      Ok(v) => Some(v.value(cx)),
       Err(_e) => None
     },
     None => None
@@ -121,13 +123,13 @@ pub fn string_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize, attr:&st
   }
 }
 
-pub fn strings_to_array<'a, T: This>(cx: &mut CallContext<'a, T>, strings: &[String]) -> JsResult<'a, JsValue> {
+pub fn strings_to_array<'a, T: This>(cx: &mut CallContext<'a, T>, strings: &[String]) -> JsResult<'a, JsArray> {
   let array = JsArray::new(cx, strings.len() as u32);
   for (i, val) in strings.iter().enumerate() {
     let num = cx.string(val.as_str());
     array.set(cx, i as u32, num)?;
   }
-  Ok(array.upcast())
+  Ok(array)
 }
 
 /// Convert from byte-indices to char-indices for a given UTF-8 string
@@ -141,14 +143,14 @@ pub fn string_idx_range(text: &str, begin: usize, end: usize) -> Range<usize>{
 }
 
 
-//
-// bools
-//
+// //
+// // bools
+// //
 
 pub fn opt_bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<bool>{
   match cx.argument_opt(idx as i32) {
-    Some(arg) => match arg.downcast::<JsBoolean>() {
-      Ok(v) => Some(v.value()),
+    Some(arg) => match arg.downcast::<JsBoolean, _>(cx) {
+      Ok(v) => Some(v.value(cx)),
       Err(_e) => None
     },
     None => None
@@ -180,25 +182,29 @@ pub fn bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> 
 
 pub fn float_for_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<f32, Throw>{
   let key = cx.string(attr);
-  match obj.get(cx, key)?.downcast::<JsNumber>(){
-    Ok(num) => Ok(num.value() as f32),
+  match obj.get(cx, key)?.downcast::<JsNumber, _>(cx){
+    Ok(num) => Ok(num.value(cx) as f32),
     Err(_e) => cx.throw_error(format!("Exptected a numerical value for \"{}\"", attr))
   }
 }
 
-pub fn floats_in(vals: &[Handle<JsValue>]) -> Vec<f32>{
-  vals.iter()
-      .map(|js_val| js_val.downcast::<JsNumber>())
-      .filter( |r| r.is_ok() )
-      .map( |num| num.as_ref().unwrap().value() as f32 )
-      .filter( |num| num.is_finite() && !num.is_nan() )
-      .collect()
+pub fn floats_in<T: This>(cx: &mut CallContext<T>, vals: &[Handle<JsValue>]) -> Vec<f32>{
+  let mut nums:Vec<f32> = Vec::new();
+  for (i, val) in vals.iter().enumerate() {
+    if let Ok(num) = val.downcast::<JsNumber, _>(cx){
+      let val = num.value(cx) as f32;
+      if val.is_finite() && !val.is_nan(){
+        nums.push(val);
+      }
+    }
+  }
+  nums
 }
 
 pub fn opt_float_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<f32>{
   match cx.argument_opt(idx as i32) {
-    Some(arg) => match arg.downcast::<JsNumber>() {
-      Ok(v) => if v.value().is_finite(){ Some(v.value() as f32) }else{ None },
+    Some(arg) => match arg.downcast::<JsNumber, _>(cx) {
+      Ok(v) => if v.value(cx).is_finite(){ Some(v.value(cx) as f32) }else{ None },
       Err(_e) => None
     },
     None => None
@@ -239,10 +245,14 @@ pub fn floats_to_array<'a, T: This>(cx: &mut CallContext<'a, T>, nums: &[f32]) -
 pub fn opt_float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Vec<f32>{
   let end = cmp::min(rng.end, cx.len() as usize);
   let rng = rng.start..end;
-  rng.map(|i| cx.argument::<JsNumber>(i as i32))
-     .filter( |r| r.is_ok() )
-     .map( |num| num.as_ref().unwrap().value() as f32 )
-     .collect()
+
+  let mut args:Vec<f32> = Vec::new();
+  for i in rng.start..end{
+    if let Ok(num) = cx.argument::<JsNumber>(i as i32){
+      args.push(num.value(cx) as f32);
+    }
+  }
+  args
 }
 
 pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Vec<f32>, Throw>{
@@ -255,9 +265,9 @@ pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Re
   }
 }
 
-//
-// Colors
-//
+// //
+// // Colors
+// //
 
 
 pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Color> {
@@ -277,12 +287,13 @@ pub fn color_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Option<Color> 
     None => {
       let args: Vec<Handle<JsValue>> = vec![];
       if let Some(arg) = cx.argument_opt(idx as i32) {
-        if let Ok(obj) = arg.downcast::<JsObject>(){
+        if let Ok(obj) = arg.downcast::<JsObject, _>(cx){
           if let Ok(attr) = obj.get(cx, "toString"){
-            if let Ok(to_string) = attr.downcast::<JsFunction>(){
+            if let Ok(to_string) = attr.downcast::<JsFunction, _>(cx){
               if let Ok(result) = to_string.call(cx, obj, args){
-                if let Ok(clr) = result.downcast::<JsString>(){
-                  return color_in(cx, &clr.value())
+                if let Ok(clr) = result.downcast::<JsString, _>(cx){
+                  let css = &clr.value(cx);
+                  return color_in(cx, css)
                 }
               }
             }
@@ -294,7 +305,7 @@ pub fn color_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Option<Color> 
   }
 }
 
-pub fn color_to_css<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color) -> JsResult<'a, JsValue> {
+pub fn color_to_css<'a, T: This>(cx: &mut CallContext<'a, T>, color:&Color) -> JsResult<'a, JsValue> {
   let RGB {r, g, b} = color.to_rgb();
   let css = match color.a() {
     255 => format!("#{:02x}{:02x}{:02x}", r, g, b),
@@ -307,18 +318,18 @@ pub fn color_to_css<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color
   Ok(cx.string(css).upcast())
 }
 
-//
-// Matrices
-//
+// //
+// // Matrices
+// //
 
-pub fn matrix_in<T: This>(cx: &mut CallContext<'_, T>, vals:&[Handle<JsValue>]) -> Result<Matrix, Throw>{
-  // for converting single js-array args
-  let terms = floats_in(vals);
-  match to_matrix(&terms){
-    Some(matrix) => Ok(matrix),
-    None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
-  }
-}
+// pub fn matrix_in<T: This>(cx: &mut CallContext<'_, T>, vals:&[Handle<JsValue>]) -> Result<Matrix, Throw>{
+//   // for converting single js-array args
+//   let terms = floats_in(vals);
+//   match to_matrix(&terms){
+//     Some(matrix) => Ok(matrix),
+//     None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+//   }
+// }
 
 pub fn to_matrix(t:&[f32]) -> Option<Matrix>{
   match t.len(){
@@ -328,56 +339,51 @@ pub fn to_matrix(t:&[f32]) -> Option<Matrix>{
   }
 }
 
-pub fn matrix_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Matrix, Throw>{
-  // for converting inline args (e.g., in Path.transform())
-  let terms = opt_float_args(cx, rng);
-  match to_matrix(&terms){
-    Some(matrix) => Ok(matrix),
-    None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
-  }
-}
+// pub fn matrix_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Matrix, Throw>{
+//   // for converting inline args (e.g., in Path.transform())
+//   let terms = opt_float_args(cx, rng);
+//   match to_matrix(&terms){
+//     Some(matrix) => Ok(matrix),
+//     None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+//   }
+// }
 
-pub fn matrix_arg<T: This+Class>(cx: &mut CallContext<T>, idx:usize) -> Result<Matrix, Throw> {
+pub fn matrix_arg<T: This>(cx: &mut CallContext<T>, idx:usize) -> Result<Matrix, Throw> {
   let arg = cx.argument::<JsArray>(idx as i32)?.to_vec(cx)?;
-  let terms = floats_in(&arg);
+  let terms = floats_in(cx, &arg);
   match to_matrix(&terms){
     Some(matrix) => Ok(matrix),
     None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
   }
 }
 
-pub fn matrix_to_array<'a, T: This+Class>(cx: &mut CallContext<'a, T>, matrix:&Matrix) -> JsResult<'a, JsValue> {
-  let array = JsArray::new(cx, 9);
-  for i in 0..9 {
-    let num = cx.number(matrix[i as usize] as f64);
-    array.set(cx, i as u32, num)?;
-  }
-  Ok(array.upcast())
-}
+// //
+// // Points
+// //
 
-//
-// Points
-//
-
-pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
-  floats_in(&vals).as_slice()
-      .chunks(2)
-      .map(|pair| Point::new(pair[0], pair[1]))
-      .collect()
-}
+// pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
+//   floats_in(&vals).as_slice()
+//       .chunks(2)
+//       .map(|pair| Point::new(pair[0], pair[1]))
+//       .collect()
+// }
 
 //
 // Path2D
 //
 
-pub fn path2d_arg_opt<T: This+Class>(cx: &mut CallContext<T>, idx:usize) -> Option<Path> {
+use crate::path::{BoxedPath2D};
+
+pub fn path2d_arg_opt<T: This>(cx: &mut CallContext<T>, idx:usize) -> Option<Path> {
   if let Some(arg) = cx.argument_opt(idx as i32){
-    if let Ok(arg) = arg.downcast::<JsPath2D>(){
-      return Some(cx.borrow(&arg, |arg| arg.path.clone() ))
+    if let Ok(arg) = arg.downcast::<BoxedPath2D, _>(cx){
+      let arg = arg.borrow();
+      return Some(arg.path.clone())
     }
   }
   None
 }
+
 
 //
 // Filters
@@ -395,12 +401,13 @@ pub fn filter_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<(Strin
   let obj = arg.get(cx, "filters")?.downcast_or_throw::<JsObject, _>(cx)?;
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut filters = vec![];
-  for (name, key) in strings_in(&keys).iter().zip(keys) {
+  for (name, key) in strings_in(cx, &keys).iter().zip(keys) {
     match name.as_str() {
       "drop-shadow" => {
         let values = obj.get(cx, key)?.downcast_or_throw::<JsArray, _>(cx)?;
-        let dims = floats_in(&values.to_vec(cx)?);
-        let color_str = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value();
+        let nums = values.to_vec(cx)?;
+        let dims = floats_in(cx, &nums);
+        let color_str = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value(cx);
         if let Some(color) = color_in(cx, &color_str) {
           filters.push(FilterSpec::Shadow{
             offset: Point::new(dims[0], dims[1]), blur: dims[2], color
@@ -408,7 +415,7 @@ pub fn filter_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<(Strin
         }
       },
       _ => {
-        let value = obj.get(cx, key)?.downcast_or_throw::<JsNumber, _>(cx)?.value();
+        let value = obj.get(cx, key)?.downcast_or_throw::<JsNumber, _>(cx)?.value(cx);
         filters.push(FilterSpec::Plain{
           name:name.to_string(), value:value as f32
         })
@@ -422,7 +429,7 @@ pub fn filter_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<(Strin
 // Skia Enums
 //
 
-use skia_safe::{TileMode};
+use skia_safe::{TileMode, TileMode::{Decal, Repeat}};
 pub fn to_tile_mode(mode_name:&str) -> Option<TileMode>{
   let mode = match mode_name.to_lowercase().as_str(){
     "clamp" => TileMode::Clamp,
@@ -433,6 +440,18 @@ pub fn to_tile_mode(mode_name:&str) -> Option<TileMode>{
   };
   Some(mode)
 }
+
+pub fn to_repeat_mode(repeat:&str) -> Option<(TileMode, TileMode)> {
+  let mode = match repeat.to_lowercase().as_str() {
+    "repeat" | "" => (Repeat, Repeat),
+    "repeat-x" => (Repeat, Decal),
+    "repeat-y" => (Decal, Repeat),
+    "no-repeat" => (Decal, Decal),
+    _ => return None
+  };
+  Some(mode)
+}
+
 
 use skia_safe::{FilterQuality};
 pub fn to_filter_quality(mode_name:&str) -> Option<FilterQuality>{
@@ -562,6 +581,20 @@ pub fn from_blend_mode(mode:BlendMode) -> String{
     _ => "source-over"
   }.to_string()
 }
+
+use skia_safe::{PathOp};
+pub fn to_path_op(op_name:&str) -> Option<PathOp> {
+  let op = match op_name.to_lowercase().as_str() {
+    "difference" => PathOp::Difference,
+    "intersect" => PathOp::Intersect,
+    "union" => PathOp::Union,
+    "xor" => PathOp::XOR,
+    "reversedifference" | "complement" => PathOp::ReverseDifference,
+    _ => return None
+  };
+  Some(op)
+}
+
 
 use skia_safe::path::FillType;
 pub fn fill_rule_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default: &str) -> Result<FillType, Throw>{

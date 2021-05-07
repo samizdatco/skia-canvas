@@ -369,6 +369,7 @@ checksum = "7567f84d17e451c0f6c4e6799a4702294b97debd2db007ab1453f85714bfcb80"
 dependencies = [
  "cslice",
  "neon-build",
+ "neon-macros",
  "neon-runtime",
  "semver",
  "smallvec",
@@ -379,8 +380,15 @@ name = "neon-build"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fd3ca70b6bc64f337131b1ec6181adadcf6f0df30ec99ee6cd25652bcb6c831"
+
+[[package]]
+name = "neon-macros"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cf750fcad4f407d8042f744e645d20730abbf0404fd40019b250693d8fdeba6"
 dependencies = [
- "neon-sys",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -390,18 +398,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a1a13a60640ef807aac092a2a4ae08bc9bc701b516bd39cc54cfe441935b3d3"
 dependencies = [
  "cfg-if 1.0.0",
- "neon-sys",
+ "libloading",
  "smallvec",
-]
-
-[[package]]
-name = "neon-sys"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94fca3a6fcf36b82a80f9897afb211264aa1e924b9b157c75e073a0f919c43e0"
-dependencies = [
- "cc",
- "regex",
 ]
 
 [[package]]
@@ -602,8 +600,8 @@ name = "skia-canvas"
 version = "0.1.0"
 dependencies = [
  "css-color",
+ "lazy_static",
  "neon",
- "neon-build",
  "skia-safe",
 ]
 

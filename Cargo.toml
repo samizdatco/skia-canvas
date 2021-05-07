@@ -1,21 +1,21 @@
 [package]
 name = "skia-canvas"
 version = "0.1.0"
+description = "A canvas environment for Node"
 authors = ["Christian Swinehart <drafting@samizdat.co>"]
 license = "MIT"
-build = "build.rs"
 edition = "2018"
-exclude = ["artifacts.json", "index.node"]
+exclude = ["index.node"]
 
 [lib]
-name = "skia_canvas"
 crate-type = ["cdylib"]
 
-[build-dependencies]
-neon-build = "0.8.1"
+[dependencies.neon]
+version = "0.8"
+default-features = false
+features = ["napi-6"]
 
 [dependencies]
-neon = "0.8.1"
 css-color = "0.1.1"
+lazy_static = "1.4.0"
 skia-safe = {version = "0.39.1", features = ["textlayout"]}
-# usvg = "0.11.0"

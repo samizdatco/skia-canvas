@@ -1,25 +1,51 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.20",
+  "version": "0.9.21",
   "description": "A canvas environment for Node",
   "main": "lib/index.js",
+  "browser": "lib/stub.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/samizdatco/skia-canvas.git"
   },
-  "files": [
-    "lib",
-    "native/build.rs",
-    "native/Cargo.*",
-    "native/src",
-    "README.md"
-  ],
   "bugs": {
     "url": "https://github.com/samizdatco/skia-canvas/issues"
   },
   "homepage": "https://github.com/samizdatco/skia-canvas#readme",
+  "scripts": {
+    "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
+    "release": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --release --message-format=json-render-diagnostics",
+    "package": "npm run release && node-pre-gyp package",
+    "publish": "node-pre-gyp publish",
+    "install": "node-pre-gyp install || npm run build",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@mapbox/node-pre-gyp": "^1.0.4",
+    "glob": "^7.1.7",
+    "simple-get": "^4.0.0",
+    "string-split-by": "^1.0.0"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.902.0",
+    "cargo-cp-artifact": "^0.1",
+    "express": "^4.17.1",
+    "jest": "^26.5.0",
+    "lodash": "^4.17.21",
+    "nodemon": "^2.0.7"
+  },
+  "binary": {
+    "module_name": "index",
+    "module_path": "./lib/v{napi_build_version}",
+    "remote_path": "./v{version}",
+    "package_name": "{platform}-{arch}-{node_napi_label}.tar.gz",
+    "host": "https://skia-canvas.s3.us-east-1.amazonaws.com",
+    "napi_versions": [
+      6
+    ]
+  },
   "keywords": [
     "skia",
     "canvas",
@@ -34,33 +60,5 @@
     "pdf",
     "svg",
     "rust"
-  ],
-  "scripts": {
-    "build": "neon build --release",
-    "install": "node-pre-gyp install --fallback-to-build=false || npm run build",
-    "package": "npm run build && rm -rf native/target && node-pre-gyp package",
-    "upload-binary": "node-pre-gyp-github publish",
-    "test": "jest"
-  },
-  "binary": {
-    "module_name": "index",
-    "host": "https://github.com/samizdatco/skia-canvas/releases/download/",
-    "remote_path": "v{version}",
-    "package_name": "{node_abi}-{platform}-{arch}.tar.gz",
-    "module_path": "./native"
-  },
-  "dependencies": {
-    "@mapbox/node-pre-gyp": "^1.0.1",
-    "glob": "^7.1.6",
-    "simple-get": "^4.0.0",
-    "string-split-by": "^1.0.0"
-  },
-  "devDependencies": {
-    "express": "^4.17.1",
-    "jest": "^26.2.2",
-    "lodash": "^4.17.20",
-    "neon-cli": "^0.8.1",
-    "node-pre-gyp-github": "^1.4.3",
-    "nodemon": "^2.0.4"
-  }
+  ]
 }

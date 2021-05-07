@@ -1,5 +1,6 @@
-use std::rc::Rc;
+#![allow(dead_code)]
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use skia_safe::{Shader, Color, Point, TileMode, gradient_shader, gradient_shader::GradientShaderColors::Colors};
 
@@ -22,14 +23,21 @@ enum Gradient{
   }
 }
 
+pub type BoxedCanvasGradient = JsBox<RefCell<CanvasGradient>>;
+impl Finalize for CanvasGradient {}
+
 #[derive(Clone)]
 pub struct CanvasGradient{
-  gradient:Rc<RefCell<Gradient>>
+  gradient:Arc<Mutex<Gradient>>
 }
 
 impl CanvasGradient{
   pub fn shader(&self) -> Option<Shader>{
-    match &*self.gradient.borrow(){
+
+    let gradient = Arc::clone(&self.gradient);
+    let gradient = gradient.lock().unwrap();
+
+    match &*gradient{
       Gradient::Linear{start, end, stops, colors} => {
         gradient_shader::linear((*start, *end), Colors(&colors), Some(stops.as_slice()), TileMode::Clamp, None, None)
       },
@@ -44,68 +52,61 @@ impl CanvasGradient{
   }
 
   pub fn add_color_stop(&mut self, offset: f32, color:Color){
-    let gradient = &mut *self.gradient.borrow_mut();
+    // let gradient = &mut *self.gradient.borrow_mut();
+    let gradient = Arc::clone(&self.gradient);
+    let mut gradient = gradient.lock().unwrap();
 
-    let stops = match gradient{
+    let stops = match &*gradient{
       Gradient::Linear{stops, ..} => stops,
       Gradient::Radial{stops, ..} => stops,
     };
 
     // insert the new entries at the right index to keep the vectors sorted
     let idx = stops.binary_search_by(|n| (n-f32::EPSILON).partial_cmp(&offset).unwrap()).unwrap_or_else(|x| x);
-    match gradient{
+    match &mut *gradient{
       Gradient::Linear{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
       Gradient::Radial{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
     };
   }
 }
 
-declare_types! {
-  pub class JsCanvasGradient for CanvasGradient {
-    init(mut cx) {
-      let kind = string_arg(&mut cx, 0, "gradientType")?;
-      let gradient = match kind.to_lowercase().as_str(){
-        "linear" => {
-          if let [x1, y1, x2, y2] = float_args(&mut cx, 1..5)?.as_slice(){
-            let start = Point::new(*x1, *y1);
-            let end = Point::new(*x2, *y2);
-            Gradient::Linear{ start, end, stops:vec![], colors:vec![]}
-          }else{
-            return cx.throw_type_error("Not enough arguments")
-          }
-        },
-        "radial" => {
-          if let [x1, y1, r1, x2, y2, r2] = float_args(&mut cx, 1..7)?.as_slice(){
-            let start_point = Point::new(*x1, *y1);
-            let end_point = Point::new(*x2, *y2);
-            Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![]}
-          }else{
-            return cx.throw_type_error("Not enough arguments")
-          }
-        },
-        _ => return cx.throw_error("Function is not a constructor \
-                                   (use CanvasRenderingContext2D's \"createLinearGradient\" \
-                                   and \"createRadialGradient\" methods instead)")
-      };
-
-      Ok(CanvasGradient{ gradient:Rc::new(RefCell::new(gradient)) })
+    pub fn canvasgradient_linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
+      if let [x1, y1, x2, y2] = opt_float_args(&mut cx, 1..5).as_slice(){
+        let start = Point::new(*x1, *y1);
+        let end = Point::new(*x2, *y2);
+        let ramp = Gradient::Linear{ start, end, stops:vec![], colors:vec![] };
+        let canvas_gradient = CanvasGradient{ gradient:Arc::new(Mutex::new(ramp)) };
+        let this = RefCell::new(canvas_gradient);
+        Ok(cx.boxed(this))
+      }else{
+        let msg = format!("Expected 4 arguments (x1, y1, x2, y2), received {}", cx.len() - 1);
+        cx.throw_type_error(msg)
+      }
     }
 
-    method addColorStop(mut cx){
-      let mut this = cx.this();
-      let offset = float_arg(&mut cx, 0, "offset")?;
-      let color = color_arg(&mut cx, 1);
-
-      if !(0.0..=1.0).contains(&offset){
-        let err = JsError::range_error(&mut cx, "Color stop offsets must be between 0 and 1")?;
-        return cx.throw(err)
+    pub fn canvasgradient_radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
+      if let [x1, y1, r1, x2, y2, r2] = opt_float_args(&mut cx, 1..7).as_slice(){
+        let start_point = Point::new(*x1, *y1);
+        let end_point = Point::new(*x2, *y2);
+        let bloom = Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![] };
+        let canvas_gradient = CanvasGradient{ gradient:Arc::new(Mutex::new(bloom)) };
+        let this = RefCell::new(canvas_gradient);
+        Ok(cx.boxed(this))
+      }else{
+        let msg = format!("Expected 6 arguments (x1, y1, r1, x2, y2, r2), received {}", cx.len() - 1);
+        cx.throw_type_error(msg)
       }
+    }
 
+    pub fn canvasgradient_add_color_stop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+      let this = cx.argument::<BoxedCanvasGradient>(0)?;
+      let offset = float_arg(&mut cx, 1, "offset")?;
+      let color = color_arg(&mut cx, 2);
+
+      let mut this = this.borrow_mut();
       if let Some(color) = color {
-        cx.borrow_mut(&mut this, |mut this| this.add_color_stop(offset, color) );
+        this.add_color_stop(offset, color);
       }
-      Ok(cx.undefined().upcast())
-    }
 
-  }
-}
+      Ok(cx.undefined())
+    }
