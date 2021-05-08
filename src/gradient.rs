@@ -3,7 +3,8 @@
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use neon::prelude::*;
-use skia_safe::{Shader, Color, Point, TileMode, gradient_shader, gradient_shader::GradientShaderColors::Colors};
+use skia_safe::{Shader, Color, Point, TileMode, Matrix};
+use skia_safe::{gradient_shader, gradient_shader::GradientShaderColors::Colors};
 
 use crate::utils::*;
 
@@ -19,6 +20,12 @@ enum Gradient{
     start_radius:f32,
     end_point:Point,
     end_radius:f32,
+    stops:Vec<f32>,
+    colors:Vec<Color>,
+  },
+  Conic{
+    center:Point,
+    angle:f32,
     stops:Vec<f32>,
     colors:Vec<Color>,
   }
@@ -48,6 +55,25 @@ impl CanvasGradient{
           *end_point, *end_radius,
           Colors(&colors), Some(stops.as_slice()),
           TileMode::Clamp, None, None)
+      },
+      Gradient::Conic{center, angle, stops, colors} => {
+        let Point{x, y} = *center;
+        let mut rotated = Matrix::new_identity();
+        rotated
+          .pre_translate((x, y))
+          .pre_rotate(*angle, None)
+          .pre_translate((-x, -y));
+
+        gradient_shader::sweep(
+          *center,
+          Colors(&colors),
+          Some(stops.as_slice()),
+          TileMode::Clamp,
+          None, // angles
+          None, // flags
+          Some(&rotated), // local_matrix
+
+        )
       }
     }
   }
@@ -60,6 +86,7 @@ impl CanvasGradient{
     let stops = match &*gradient{
       Gradient::Linear{stops, ..} => stops,
       Gradient::Radial{stops, ..} => stops,
+      Gradient::Conic{stops, ..} => stops,
     };
 
     // insert the new entries at the right index to keep the vectors sorted
@@ -67,6 +94,7 @@ impl CanvasGradient{
     match &mut *gradient{
       Gradient::Linear{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
       Gradient::Radial{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
+      Gradient::Conic{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
     };
   }
 }
@@ -99,6 +127,20 @@ pub fn radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
     Ok(cx.boxed(this))
   }else{
     let msg = format!("Expected 6 arguments (x1, y1, r1, x2, y2, r2), received {}", cx.len() - 1);
+    cx.throw_type_error(msg)
+  }
+}
+
+pub fn conic(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
+  if let [theta, x, y] = opt_float_args(&mut cx, 1..4).as_slice(){
+    let center = Point::new(*x, *y);
+    let angle = to_degrees(*theta) - 90.0;
+    let sweep = Gradient::Conic{ center, angle, stops:vec![], colors:vec![] };
+    let canvas_gradient = CanvasGradient{ gradient:Arc::new(Mutex::new(sweep)) };
+    let this = RefCell::new(canvas_gradient);
+    Ok(cx.boxed(this))
+  }else{
+    let msg = format!("Expected 3 arguments (startAngle, x, y), received {}", cx.len() - 1);
     cx.throw_type_error(msg)
   }
 }

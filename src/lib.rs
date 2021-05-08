@@ -57,6 +57,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   cx.export_function("CanvasGradient_linear", gradient::linear)?;
   cx.export_function("CanvasGradient_radial", gradient::radial)?;
+  cx.export_function("CanvasGradient_conic", gradient::conic)?;
   cx.export_function("CanvasGradient_addColorStop", gradient::addColorStop)?;
 
   // -- CanvasPattern -----------------------------------------------------------------------------

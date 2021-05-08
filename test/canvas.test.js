@@ -347,6 +347,17 @@ describe("Context2D", ()=>{
         expect(pixel(x+outside, y)).toEqual([255,0,0,255])
         expect(pixel(x, y+outside)).toEqual([255,0,0,255])
       })
+
+      test("conic", () => {
+        let gradient = ctx.createConicGradient(0, 10, 10);
+        gradient.addColorStop(0,'#fff');
+        gradient.addColorStop(1,'#000');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0,0,21,21);
+
+        expect(pixel(10,1)).toEqual([255,255,255,255])
+        expect(pixel(20,20)).toEqual([0,0,0,255])
+      })
     })
   })
 
