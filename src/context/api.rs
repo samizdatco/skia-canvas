@@ -48,20 +48,6 @@ pub fn restore(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn clip(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let mut shift = 1;
-  let clip = path2d_arg_opt(&mut cx, 1);
-  if clip.is_some() { shift += 1; }
-
-  let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
-  this.clip_path(clip, rule);
-
-  Ok(cx.undefined())
-}
-
 pub fn transform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
@@ -110,7 +96,7 @@ pub fn resetTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-// -- ctm property --------------------------------------------------------------------
+// -- ctm property ----------------------------------------------------------------------
 
 pub fn get_currentTransform(mut cx: FunctionContext) -> JsResult<JsArray> {
   let this = cx.argument::<BoxedContext2D>(0)?;
@@ -145,7 +131,7 @@ pub fn beginPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-// -- primitives --------------------------------------------------------------------
+// -- primitives ------------------------------------------------------------------------
 
 pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
@@ -258,7 +244,6 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-
 pub fn closePath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
@@ -267,7 +252,7 @@ pub fn closePath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-// hit testing ----------------------------------------------------------------------
+// hit testing --------------------------------------------------------------------------
 
 pub fn isPointInPath(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   _is_in(cx, Fill)
@@ -295,6 +280,23 @@ fn _is_in(mut cx: FunctionContext, ink:PaintStyle) -> JsResult<JsBoolean> {
   };
   Ok(cx.boolean(is_in))
 }
+
+// masking ------------------------------------------------------------------------------
+
+pub fn clip(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+
+  let mut shift = 1;
+  let clip = path2d_arg_opt(&mut cx, 1);
+  if clip.is_some() { shift += 1; }
+
+  let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
+  this.clip_path(clip, rule);
+
+  Ok(cx.undefined())
+}
+
 
 //
 // Fill & Stroke
@@ -364,7 +366,7 @@ pub fn clearRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 
-// fill & stoke properties -------------------------------------------------------------
+// fill & stoke properties --------------------------------------------------------------
 
 pub fn get_fillStyle(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedContext2D>(0)?;

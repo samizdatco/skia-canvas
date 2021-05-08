@@ -23,6 +23,9 @@ lazy_static! {
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
+
+  // -- Image -------------------------------------------------------------------------------------
+
   cx.export_function("Image_new", image::new)?;
   cx.export_function("Image_get_src", image::get_src)?;
   cx.export_function("Image_set_src", image::set_src)?;
@@ -30,6 +33,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Image_get_width", image::get_width)?;
   cx.export_function("Image_get_height", image::get_height)?;
   cx.export_function("Image_get_complete", image::get_complete)?;
+
+  // -- Path2D ------------------------------------------------------------------------------------
 
   cx.export_function("Path2D_new", path::new)?;
   cx.export_function("Path2D_from_path", path::from_path)?;
@@ -48,18 +53,26 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_simplify", path::simplify)?;
   cx.export_function("Path2D_bounds", path::bounds)?;
 
+  // -- CanvasGradient ----------------------------------------------------------------------------
+
   cx.export_function("CanvasGradient_linear", gradient::linear)?;
   cx.export_function("CanvasGradient_radial", gradient::radial)?;
   cx.export_function("CanvasGradient_addColorStop", gradient::addColorStop)?;
+
+  // -- CanvasPattern -----------------------------------------------------------------------------
 
   cx.export_function("CanvasPattern_from_image", pattern::from_image)?;
   // cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
   cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
 
+  // -- FontLibrary -------------------------------------------------------------------------------
+
   cx.export_function("FontLibrary_get_families", typography::get_families)?;
   cx.export_function("FontLibrary_has", typography::has)?;
   cx.export_function("FontLibrary_family", typography::family)?;
   cx.export_function("FontLibrary_addFamily", typography::addFamily)?;
+
+  // -- Canvas ------------------------------------------------------------------------------------
 
   cx.export_function("Canvas_new", canvas::new)?;
   cx.export_function("Canvas_get_width", canvas::get_width)?;
@@ -69,10 +82,13 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Canvas_saveAs", canvas::saveAs)?;
   cx.export_function("Canvas_toBuffer", canvas::toBuffer)?;
 
+  // -- Context -----------------------------------------------------------------------------------
+
   cx.export_function("CanvasRenderingContext2D_new", ctx::new)?;
+
+  // grid state
   cx.export_function("CanvasRenderingContext2D_save", ctx::save)?;
   cx.export_function("CanvasRenderingContext2D_restore", ctx::restore)?;
-  cx.export_function("CanvasRenderingContext2D_clip", ctx::clip)?;
   cx.export_function("CanvasRenderingContext2D_transform", ctx::transform)?;
   cx.export_function("CanvasRenderingContext2D_translate", ctx::translate)?;
   cx.export_function("CanvasRenderingContext2D_scale", ctx::scale)?;
@@ -80,6 +96,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_resetTransform", ctx::resetTransform)?;
   cx.export_function("CanvasRenderingContext2D_get_currentTransform", ctx::get_currentTransform)?;
   cx.export_function("CanvasRenderingContext2D_set_currentTransform", ctx::set_currentTransform)?;
+
+  // bézier paths
   cx.export_function("CanvasRenderingContext2D_beginPath", ctx::beginPath)?;
   cx.export_function("CanvasRenderingContext2D_rect", ctx::rect)?;
   cx.export_function("CanvasRenderingContext2D_arc", ctx::arc)?;
@@ -92,6 +110,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_closePath", ctx::closePath)?;
   cx.export_function("CanvasRenderingContext2D_isPointInPath", ctx::isPointInPath)?;
   cx.export_function("CanvasRenderingContext2D_isPointInStroke", ctx::isPointInStroke)?;
+  cx.export_function("CanvasRenderingContext2D_clip", ctx::clip)?;
+
+  // fill & stroke
   cx.export_function("CanvasRenderingContext2D_fill", ctx::fill)?;
   cx.export_function("CanvasRenderingContext2D_stroke", ctx::stroke)?;
   cx.export_function("CanvasRenderingContext2D_fillRect", ctx::fillRect)?;
@@ -101,6 +122,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_fillStyle", ctx::set_fillStyle)?;
   cx.export_function("CanvasRenderingContext2D_get_strokeStyle", ctx::get_strokeStyle)?;
   cx.export_function("CanvasRenderingContext2D_set_strokeStyle", ctx::set_strokeStyle)?;
+
+  // line style
   cx.export_function("CanvasRenderingContext2D_getLineDash", ctx::getLineDash)?;
   cx.export_function("CanvasRenderingContext2D_setLineDash", ctx::setLineDash)?;
   cx.export_function("CanvasRenderingContext2D_get_lineCap", ctx::get_lineCap)?;
@@ -112,6 +135,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_get_lineWidth", ctx::get_lineWidth)?;
   cx.export_function("CanvasRenderingContext2D_set_lineWidth", ctx::set_lineWidth)?;
   cx.export_function("CanvasRenderingContext2D_get_miterLimit", ctx::get_miterLimit)?;
+
+  // imagery
   cx.export_function("CanvasRenderingContext2D_drawImage", ctx::drawImage)?;
   cx.export_function("CanvasRenderingContext2D_getImageData", ctx::getImageData)?;
   cx.export_function("CanvasRenderingContext2D_putImageData", ctx::putImageData)?;
@@ -119,6 +144,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_imageSmoothingEnabled", ctx::set_imageSmoothingEnabled)?;
   cx.export_function("CanvasRenderingContext2D_get_imageSmoothingQuality", ctx::get_imageSmoothingQuality)?;
   cx.export_function("CanvasRenderingContext2D_set_imageSmoothingQuality", ctx::set_imageSmoothingQuality)?;
+
+  // typography
   cx.export_function("CanvasRenderingContext2D_fillText", ctx::fillText)?;
   cx.export_function("CanvasRenderingContext2D_strokeText", ctx::strokeText)?;
   cx.export_function("CanvasRenderingContext2D_measureText", ctx::measureText)?;
@@ -136,6 +163,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_textTracking", ctx::set_textTracking)?;
   cx.export_function("CanvasRenderingContext2D_get_textWrap", ctx::get_textWrap)?;
   cx.export_function("CanvasRenderingContext2D_set_textWrap", ctx::set_textWrap)?;
+
+  // effects
   cx.export_function("CanvasRenderingContext2D_get_globalAlpha", ctx::get_globalAlpha)?;
   cx.export_function("CanvasRenderingContext2D_set_globalAlpha", ctx::set_globalAlpha)?;
   cx.export_function("CanvasRenderingContext2D_get_globalCompositeOperation", ctx::get_globalCompositeOperation)?;
