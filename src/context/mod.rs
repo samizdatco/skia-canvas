@@ -3,8 +3,9 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::ops::Range;
+use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
@@ -30,11 +31,13 @@ const GALLEY:f32 = 100_000.0;
 pub mod api;
 pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
 impl Finalize for Context2D {}
-unsafe impl Send for Context2D {} // yikes!
+unsafe impl Send for Context2D {
+  // PictureRecorder is non-threadsafe
+}
 
 pub struct Context2D{
   bounds: Rect,
-  recorder: RefCell<PictureRecorder>,
+  recorder: Arc<Mutex<PictureRecorder>>,
   state: State,
   stack: Vec<State>,
   path: Path,
@@ -120,7 +123,6 @@ impl Default for State {
 }
 
 impl Context2D{
-  // pub fn new(bounds: Rect, library: &Rc<RefCell<FontLibrary>>) -> Self {
   pub fn new(bounds: Rect) -> Self {
     let mut recorder = PictureRecorder::new();
     recorder.begin_recording(bounds, None);
@@ -131,8 +133,7 @@ impl Context2D{
 
     Context2D{
       bounds,
-      recorder: RefCell::new(recorder),
-      // library: Rc::clone(&library),
+      recorder: Arc::new(Mutex::new(recorder)),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
@@ -157,7 +158,8 @@ impl Context2D{
   pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
-    let mut recorder = self.recorder.borrow_mut();
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
     if let Some(canvas) = recorder.recording_canvas() {
       f(canvas);
     }
@@ -195,7 +197,8 @@ impl Context2D{
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
         if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
-          let mut recorder = self.recorder.borrow_mut();
+          let recorder = Arc::clone(&self.recorder);
+          let mut recorder = recorder.lock().unwrap();
           if let Some(canvas) = recorder.recording_canvas() {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
@@ -206,7 +209,8 @@ impl Context2D{
 
       },
       _ => {
-        let mut recorder = self.recorder.borrow_mut();
+        let recorder = Arc::clone(&self.recorder);
+        let mut recorder = recorder.lock().unwrap();
         if let Some(canvas) = recorder.recording_canvas() {
           // only call the closure if there's an active dropshadow
           if let Some(shadow_paint) = self.paint_for_shadow(&paint){
@@ -259,7 +263,10 @@ impl Context2D{
     // erase any existing content
     let mut new_recorder = PictureRecorder::new();
     new_recorder.begin_recording(self.bounds, None);
-    self.recorder.replace(new_recorder);
+    let recorder = Arc::clone(&self.recorder);
+    if let Ok(mut recorder) = recorder.lock(){
+      *recorder = new_recorder;
+    }
     self.reset_canvas();
   }
 
@@ -430,7 +437,8 @@ impl Context2D{
 
   pub fn get_drawable(&mut self) -> Option<Drawable> {
     // stop the recorder to take a snapshot then restart it again
-    let mut recorder = self.recorder.borrow_mut();
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
     let mut drobble = recorder.finish_recording_as_drawable();
     recorder.begin_recording(self.bounds, None);
 
@@ -452,7 +460,8 @@ impl Context2D{
 
   pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
     // stop the recorder to take a snapshot then restart it again
-    let mut recorder = self.recorder.borrow_mut();
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
     let snapshot = recorder.finish_recording_as_picture(cull.or(Some(&self.bounds)));
     recorder.begin_recording(self.bounds, None);
 
