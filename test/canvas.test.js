@@ -228,6 +228,7 @@ describe("Context2D", ()=>{
             pattern = ctx.createPattern(image, 'repeat'),
             [width, height] = [20, 20];
 
+        ctx.imageSmoothingEnabled = false
         ctx.fillStyle = pattern;
         ctx.fillRect(0,0,width,height)
 
