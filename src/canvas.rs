@@ -26,6 +26,11 @@ pub struct Canvas{
 }
 
 impl Canvas{
+  pub fn new(width:f32, height:f32) -> Self{
+    let width = if width < 0.0 { 300.0 } else { width };
+    let height = if height < 0.0 { 150.0 } else { height };
+    Canvas{width, height}
+  }
 
   fn encode_image(&self, picture: &Picture, format:&str, width: f32, height: f32, quality: f32) -> Option<Data> {
     let img_format = match format {
@@ -80,7 +85,6 @@ impl Canvas{
       None => Err(format!("Unsupported file format: {:?}", file_format))
     }
   }
-
 }
 
 pub fn canvas_pages<'a, T:This>(cx: &mut CallContext<'a, T>, this: &Handle<BoxedCanvas>)->Result<Vec<Handle<'a, BoxedContext2D>>, Throw>{
@@ -126,10 +130,7 @@ pub fn canvas_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<B
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
   let width = float_arg_or(&mut cx, 1, 300.0).floor();
   let height = float_arg_or(&mut cx, 2, 150.0).floor();
-  let this = RefCell::new(Canvas{
-    width: if width < 0.0 { 300.0 } else { width },
-    height: if height < 0.0 { 150.0 } else { height }
-  });
+  let this = RefCell::new(Canvas::new(width, height));
   Ok(cx.boxed(this))
 }
 
