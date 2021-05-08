@@ -31,11 +31,11 @@ pub struct FontSpec{
   pub canonical: String
 }
 
-pub fn font_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<Option<FontSpec>, Throw> {
-  let arg = cx.argument::<JsValue>(0)?;
+pub fn font_arg<T: This>(cx: &mut CallContext<T>, idx: i32) -> Result<Option<FontSpec>, Throw> {
+  let arg = cx.argument::<JsValue>(idx)?;
   if arg.is_a::<JsNull, _>(cx){ return Ok(None) }
 
-  let font_desc = cx.argument::<JsObject>(idx as i32)?;
+  let font_desc = cx.argument::<JsObject>(idx)?;
   let families = strings_at_key(cx, &font_desc, "family")?;
   let canonical = string_for_key(cx, &font_desc, "canonical")?;
   let variant = string_for_key(cx, &font_desc, "variant")?;
