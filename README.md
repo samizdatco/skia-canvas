@@ -342,6 +342,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [ImageData]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData
 [Path2D]: https://developer.mozilla.org/en-US/docs/Web/API/Path2D
 [lineHeight]: https://developer.mozilla.org/en-US/docs/Web/CSS/line-height
+[font-variant]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant
 
 [canvas]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/canvas
 [currentTransform]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/currentTransform
@@ -349,7 +350,6 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [fillStyle]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillStyle
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [font]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/font
-[font-variant]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-CanvasRenderingContext2D/variant
 [globalAlpha]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalAlpha
 [globalCompositeOperation]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation
 [imageSmoothingEnabled]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/imageSmoothingEnabled
