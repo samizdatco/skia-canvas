@@ -36,7 +36,7 @@ unsafe impl Send for Context2D {
 }
 
 pub struct Context2D{
-  bounds: Rect,
+  pub bounds: Rect,
   recorder: Arc<Mutex<PictureRecorder>>,
   state: State,
   stack: Vec<State>,

@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::{Image as SkImage, ImageInfo, ColorType, AlphaType, Data};
+use skia_safe::{Image as SkImage, ImageInfo, Size, ColorType, AlphaType, Data};
 
 use crate::utils::*;
 
@@ -21,6 +21,16 @@ impl Image{
   pub fn info(width:f32, height:f32) -> ImageInfo {
     let dims = (width as i32, height as i32);
     ImageInfo::new(dims, ColorType::RGBA8888, AlphaType::Unpremul, None)
+  }
+
+  pub fn size(&self) -> Size{
+    if let Some(img) = &self.image {
+      let width = &img.width();
+      let height = &img.height();
+      Size::new(*width as f32, *height as f32)
+    }else{
+      Size::new(0.0, 0.0)
+    }
   }
 }
 

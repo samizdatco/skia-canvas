@@ -59,12 +59,14 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasGradient_radial", gradient::radial)?;
   cx.export_function("CanvasGradient_conic", gradient::conic)?;
   cx.export_function("CanvasGradient_addColorStop", gradient::addColorStop)?;
+  cx.export_function("CanvasGradient_repr", gradient::repr)?;
 
   // -- CanvasPattern -----------------------------------------------------------------------------
 
   cx.export_function("CanvasPattern_from_image", pattern::from_image)?;
   // cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
   cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
+  cx.export_function("CanvasPattern_repr", pattern::repr)?;
 
   // -- FontLibrary -------------------------------------------------------------------------------
 

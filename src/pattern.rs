@@ -5,7 +5,7 @@
 #![allow(dead_code)]
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::{Shader, TileMode, TileMode::{Decal, Repeat}, SamplingOptions,
+use skia_safe::{Shader, TileMode, TileMode::{Decal, Repeat}, SamplingOptions, Size,
                 Image as SkImage, Picture, Matrix, FilterQuality, FilterMode};
 
 use crate::utils::*;
@@ -20,6 +20,7 @@ pub struct CanvasPattern{
   pub smoothing:bool,
   image:Option<SkImage>,
   pict:Option<Picture>,
+  dims:Size,
   repeat:(TileMode, TileMode),
   matrix:Matrix
 }
@@ -58,9 +59,11 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 
   if let Some(repeat) = to_repeat_mode(&repetition){
     let src = src.borrow();
+    let dims = src.size();
     let pattern = CanvasPattern{
       image:src.image.clone(),
       pict:None,
+      dims,
       repeat,
       smoothing:true,
       matrix:Matrix::new_identity()
@@ -81,9 +84,12 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 
   if let Some(repeat) = to_repeat_mode(&repetition){
     let mut ctx = src.borrow_mut();
+
+    let dims = ctx.bounds.size();
     let pattern = CanvasPattern{
       image:None,
       pict:ctx.get_picture(None),
+      dims,
       repeat,
       smoothing:true,
       matrix:Matrix::new_identity()
@@ -99,4 +105,11 @@ pub fn setTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
   this.matrix = matrix_arg(&mut cx, 1)?;
   Ok(cx.undefined())
+}
+
+pub fn repr(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedCanvasPattern>(0)?;
+  let mut this = this.borrow_mut();
+  let style = if this.image.is_some(){ "Bitmap" }else{ "Canvas" };
+  Ok(cx.string(format!("{} {}×{}", style, this.dims.width, this.dims.height)))
 }

@@ -157,3 +157,18 @@ pub fn addColorStop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   Ok(cx.undefined())
 }
+
+pub fn repr(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedCanvasGradient>(0)?;
+  let this = this.borrow();
+  let gradient = Arc::clone(&this.gradient);
+  let gradient = gradient.lock().unwrap();
+
+  let style = match &*gradient{
+    Gradient::Linear{..} => "Linear",
+    Gradient::Radial{..} => "Radial",
+    Gradient::Conic{..} => "Conic",
+  };
+
+  Ok(cx.string(style))
+}
