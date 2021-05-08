@@ -18,7 +18,6 @@ use crate::context::{BoxedContext2D, Context2D};
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
-unsafe impl Send for Canvas {} // yikes!
 
 pub struct Canvas{
   pub width: f32,
@@ -87,41 +86,6 @@ impl Canvas{
   }
 }
 
-pub fn canvas_pages<'a, T:This>(cx: &mut CallContext<'a, T>, this: &Handle<BoxedCanvas>)->Result<Vec<Handle<'a, BoxedContext2D>>, Throw>{
-  let context_map = this
-      .get(cx, "constructor")?
-      .downcast::<JsFunction, _>(cx).or_throw(cx)?
-      .get(cx, "context")?
-      .downcast::<JsObject, _>(cx).or_throw(cx)?;
-
-  let map_getter = context_map
-      .get(cx, "get")?
-      .downcast::<JsFunction, _>(cx).or_throw(cx)?;
-
-  let contexts = map_getter
-      .call(cx, context_map, vec![this.upcast::<JsObject>()])?
-      .downcast::<JsArray, _>(cx).or_throw(cx)?
-      .to_vec(cx)?
-      .iter()
-      .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
-      .filter( |ctx| ctx.is_ok() )
-      .map(|obj| obj.unwrap())
-      .collect::<Vec<Handle<BoxedContext2D>>>();
-
-    Ok(contexts)
-}
-
-
-pub fn canvas_context<T:This, F, U>(cx: &mut CallContext<'_, T>, this: &Handle<BoxedCanvas>, f:F)->Result<U, Throw> where
-  T: This,
-  F:FnOnce(&mut Context2D) -> U
-{
-  let mut contexts = canvas_pages(cx, &this)?;
-  let mut ctx = contexts[0].borrow_mut();
-  Ok(f(&mut ctx))
-}
-
-
 
 //
 // -- Javascript Methods --------------------------------------------------------------------------
@@ -186,9 +150,15 @@ pub fn saveAs(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
   let file_format = string_arg(&mut cx, 3, "format")?;
   let quality = float_arg(&mut cx, 4, "quality")?;
+  let mut pages = cx.argument::<JsArray>(5)?
+          .to_vec(&mut cx)?
+          .iter()
+          .map(|obj| obj.downcast::<BoxedContext2D, _>(&mut cx))
+          .filter( |ctx| ctx.is_ok() )
+          .map(|obj| obj.unwrap())
+          .collect::<Vec<Handle<BoxedContext2D>>>();
 
   if sequence {
-    let mut pages = canvas_pages(&mut cx, &this)?;
     pages.reverse();
 
     let padding = float_arg(&mut cx, 1, "padding")? as i32;
@@ -207,7 +177,6 @@ pub fn saveAs(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       }
     }
   } else if file_format == "pdf" {
-    let mut pages = canvas_pages(&mut cx, &this)?;
     pages.reverse();
 
     let document = pages.iter_mut().fold(pdf::new_document(None), |doc, page|{
@@ -227,7 +196,7 @@ pub fn saveAs(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       Ok(()) => Ok(cx.undefined())
     }
   } else {
-    let mut page = canvas_pages(&mut cx, &this)?[0];
+    let mut page = pages[0];
     let this = this.borrow();
     let mut page = page.borrow_mut();
 
@@ -244,8 +213,14 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let file_format = string_arg(&mut cx, 1, "format")?;
   let quality = float_arg(&mut cx, 2, "quality")?;
   let page_idx = opt_float_arg(&mut cx, 3);
+  let mut pages = cx.argument::<JsArray>(4)?
+          .to_vec(&mut cx)?
+          .iter()
+          .map(|obj| obj.downcast::<BoxedContext2D, _>(&mut cx))
+          .filter( |ctx| ctx.is_ok() )
+          .map(|obj| obj.unwrap())
+          .collect::<Vec<Handle<BoxedContext2D>>>();
 
-  let mut pages = canvas_pages(&mut cx, &this)?;
   let data = {
     if file_format=="pdf" && page_idx.is_none() {
       Some(pages.iter_mut().rev().fold(pdf::new_document(None), |doc, page|{

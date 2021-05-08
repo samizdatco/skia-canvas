@@ -12,7 +12,7 @@ use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
 use super::{Context2D, BoxedContext2D, Dye};
-use crate::canvas::{BoxedCanvas, canvas_context};
+use crate::canvas::{BoxedCanvas};
 use crate::path::{Path2D, BoxedPath2D};
 use crate::image::{Image, BoxedImage};
 use crate::typography::*;
@@ -535,23 +535,27 @@ pub fn get_miterLimit(mut cx: FunctionContext) -> JsResult<JsNumber> {
 // Imagery
 //
 
-pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
-  let arg = cx.argument::<JsObject>(1)?;
-  let canvas = arg.downcast::<BoxedCanvas, _>(&mut cx).ok();
-  let image = arg.downcast::<BoxedImage, _>(&mut cx).ok();
-
-  let dims = if let Some(canvas) = canvas{
-    let canvas = canvas.borrow();
-    Some((canvas.width as i32, canvas.height as i32))
-  }else if let Some(source) = image{
-    let source = source.borrow();
-    source.image.as_ref().map(|img|
-      (img.width(), img.height())
-    )
-  }else{
-    return cx.throw_type_error("Expected an Image or a Canvas argument")
+fn _layout_rects(width:f32, height:f32, nums:&[f32]) -> Option<(Rect, Rect)> {
+  let (src, dst) = match nums.len() {
+    2 => ( Rect::from_xywh(0.0, 0.0, width, height),
+           Rect::from_xywh(nums[0], nums[1], width, height) ),
+    4 => ( Rect::from_xywh(0.0, 0.0, width, height),
+           Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
+    8 => ( Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]),
+           Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
+    _ => return None
   };
+  Some((src, dst))
+}
+
+pub fn drawRaster(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let source = cx.argument::<BoxedImage>(1)?;
+  let image = &source.borrow().image;
+
+  let dims = image.as_ref().map(|img|
+    (img.width(), img.height())
+  );
 
   let (width, height) = match dims{
     Some((w,h)) => (w as f32, h as f32),
@@ -560,29 +564,40 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let argc = cx.len() as usize;
   let nums = float_args(&mut cx, 2..argc)?;
-  let (src, dst) = match nums.len() {
-    2 => ( Rect::from_xywh(0.0, 0.0, width, height),
-           Rect::from_xywh(nums[0], nums[1], width, height) ),
-    4 => ( Rect::from_xywh(0.0, 0.0, width, height),
-           Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
-    8 => ( Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]),
-           Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
-    _ => return cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
-  };
+  match _layout_rects(width, height, &nums){
+    Some((src, dst)) => {
+      // shrink src to lie within the image bounds and adjust dst proportionately
+      let (src, dst) = fit_bounds(width, height, src, dst);
 
-  // shrink src to lie within the image bounds and adjust dst proportionately
-  let (src, dst) = fit_bounds(width, height, src, dst);
-
-  let mut this = this.borrow_mut();
-  if let Some(source) = image {
-    let source = source.borrow();
-    this.draw_image(&source.image, &src, &dst);
-  }else if let Some(canvas) = canvas {
-    let pict = canvas_context(&mut cx, &canvas, |ctx| ctx.get_picture(None) )?;
-    this.draw_picture(&pict, &src, &dst);
+      let mut this = this.borrow_mut();
+      this.draw_image(&image, &src, &dst);
+      Ok(cx.undefined())
+    },
+    None => cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
   }
+}
 
-  Ok(cx.undefined())
+pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let canvas = cx.argument::<BoxedCanvas>(1)?;
+  let context = cx.argument::<BoxedContext2D>(2)?;
+
+  let canvas = canvas.borrow();
+  let (width, height) = (canvas.width as f32, canvas.height as f32);
+
+  let argc = cx.len() as usize;
+  let nums = float_args(&mut cx, 3..argc)?;
+  match _layout_rects(width, height, &nums){
+    Some((src, dst)) => {
+      let mut ctx = context.borrow_mut();
+      let pict = ctx.get_picture(None);
+
+      let mut this = this.borrow_mut();
+      this.draw_picture(&pict, &src, &dst);
+      Ok(cx.undefined())
+    },
+    None => cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
+  }
 }
 
 pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
