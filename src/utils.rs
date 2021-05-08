@@ -56,10 +56,10 @@ pub fn to_radians(degrees: f32) -> f32{
 //   let global = cx.global();
 //   let symbol_ctor = global
 //       .get(cx, "Symbol")?
-//       .downcast::<JsObject>()
+//       .downcast::<JsObject, _>(cx)
 //       .or_throw(cx)?
 //       .get(cx, "for")?
-//       .downcast::<JsFunction>()
+//       .downcast::<JsFunction, _>(cx)
 //       .or_throw(cx)?;
 
 //   let symbol_label = cx.string(symbol_name);
@@ -67,9 +67,9 @@ pub fn to_radians(degrees: f32) -> f32{
 //   Ok(sym)
 // }
 
-// //
-// // strings
-// //
+//
+// strings
+//
 
 pub fn strings_in<T: This>(cx: &mut CallContext<T>, vals: &[Handle<JsValue>]) -> Vec<String>{
   let mut strs:Vec<String> = Vec::new();
@@ -143,9 +143,9 @@ pub fn string_idx_range(text: &str, begin: usize, end: usize) -> Range<usize>{
 }
 
 
-// //
-// // bools
-// //
+//
+// bools
+//
 
 pub fn opt_bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<bool>{
   match cx.argument_opt(idx as i32) {
@@ -363,9 +363,9 @@ pub fn matrix_arg<T: This>(cx: &mut CallContext<T>, idx:usize) -> Result<Matrix,
   }
 }
 
-// //
-// // Points
-// //
+//
+// Points
+//
 
 // pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
 //   floats_in(&vals).as_slice()
