@@ -133,8 +133,10 @@ pub fn get_currentTransform(mut cx: FunctionContext) -> JsResult<JsArray> {
 pub fn set_currentTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let matrix = matrix_arg(&mut cx, 1)?;
 
+  if let Ok(matrix) = matrix_arg(&mut cx, 1){
+    this.with_matrix(|ctm| ctm.reset().pre_concat(&matrix) );
+  }
   Ok(cx.undefined())
 }
 
