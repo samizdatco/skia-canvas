@@ -823,7 +823,7 @@ impl Dye{
   pub fn value<'a, T: This>(&self, cx: &mut CallContext<'a, T>, style: PaintStyle) -> JsResult<'a, JsValue> {
     match self{
       Dye::Color(color) => color_to_css(cx, &color),
-      _ => Ok(cx.number(f64::NAN).upcast()) // flag to the js context that it should use its cached pattern/gradient ref
+      _ => Ok(cx.null().upcast()) // flag to the js context that it should use its cached pattern/gradient ref
     }
   }
 
