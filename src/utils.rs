@@ -265,12 +265,12 @@ pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Re
   }
 }
 
-// //
-// // Colors
-// //
+//
+// Colors
+//
 
 
-pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Color> {
+pub fn css_to_color<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Color> {
   css.parse::<Rgba>().ok().map(|Rgba{red, green, blue, alpha}|
     Color::from_argb(
       (alpha*255.0).round() as u8,
@@ -281,27 +281,33 @@ pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Co
   )
 }
 
-pub fn color_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Option<Color> {
-  match opt_string_arg(cx, idx){
-    Some(css) => color_in(cx, &css),
-    None => {
-      let args: Vec<Handle<JsValue>> = vec![];
-      if let Some(arg) = cx.argument_opt(idx as i32) {
-        if let Ok(obj) = arg.downcast::<JsObject, _>(cx){
-          if let Ok(attr) = obj.get(cx, "toString"){
-            if let Ok(to_string) = attr.downcast::<JsFunction, _>(cx){
-              if let Ok(result) = to_string.call(cx, obj, args){
-                if let Ok(clr) = result.downcast::<JsString, _>(cx){
-                  let css = &clr.value(cx);
-                  return color_in(cx, css)
-                }
-              }
-            }
+pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, val: Handle<'a, JsValue>) -> Option<Color> {
+  if val.is_a::<JsString, _>(cx) {
+    let css = val.downcast::<JsString, _>(cx).unwrap().value(cx);
+    return css_to_color(cx, &css)
+  }
+
+  if let Ok(obj) = val.downcast::<JsObject, _>(cx){
+    if let Ok(attr) = obj.get(cx, "toString"){
+      if let Ok(to_string) = attr.downcast::<JsFunction, _>(cx){
+        let args: Vec<Handle<JsValue>> = vec![];
+        if let Ok(result) = to_string.call(cx, obj, args){
+          if let Ok(clr) = result.downcast::<JsString, _>(cx){
+            let css = &clr.value(cx);
+            return css_to_color(cx, css)
           }
         }
       }
-      None
     }
+  }
+
+  None
+}
+
+pub fn color_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Option<Color> {
+  match cx.argument_opt(idx as i32) {
+    Some(arg) => color_in(cx, arg),
+    _ => None
   }
 }
 
@@ -318,9 +324,9 @@ pub fn color_to_css<'a, T: This>(cx: &mut CallContext<'a, T>, color:&Color) -> J
   Ok(cx.string(css).upcast())
 }
 
-// //
-// // Matrices
-// //
+//
+// Matrices
+//
 
 // pub fn matrix_in<T: This>(cx: &mut CallContext<'_, T>, vals:&[Handle<JsValue>]) -> Result<Matrix, Throw>{
 //   // for converting single js-array args
@@ -408,7 +414,7 @@ pub fn filter_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<(Strin
         let nums = values.to_vec(cx)?;
         let dims = floats_in(cx, &nums);
         let color_str = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value(cx);
-        if let Some(color) = color_in(cx, &color_str) {
+        if let Some(color) = css_to_color(cx, &color_str) {
           filters.push(FilterSpec::Shadow{
             offset: Point::new(dims[0], dims[1]), blur: dims[2], color
           });

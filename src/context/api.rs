@@ -380,7 +380,7 @@ pub fn set_fillStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
   let arg = cx.argument::<JsValue>(1)?;
 
-  if let Some(dye) = Dye::new(&mut cx, arg, Fill)? {
+  if let Some(dye) = Dye::new(&mut cx, arg, Fill) {
     this.state.fill_style = dye;
     this.update_image_quality();
   }else{
@@ -401,7 +401,7 @@ pub fn set_strokeStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
   let arg = cx.argument::<JsValue>(1)?;
 
-  if let Some(dye) = Dye::new(&mut cx, arg, Stroke)? {
+  if let Some(dye) = Dye::new(&mut cx, arg, Stroke) {
     this.state.stroke_style = dye;
     this.update_image_quality();
   }else{

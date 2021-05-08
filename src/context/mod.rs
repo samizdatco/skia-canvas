@@ -799,34 +799,22 @@ pub enum Dye{
 }
 
 impl Dye{
-  pub fn new<'a, T: This>(cx: &mut CallContext<'a, T>, value: Handle<'a, JsValue>, style: PaintStyle) -> Result<Option<Self>, Throw> {
-    let stash = if style == PaintStyle::Fill{ "fillShader" } else { "strokeShader" };
-    match value{
-      // arg if arg.is_a::<BoxedCanvasGradient, _>(cx) => {
-      //   let gradient = cx.argument::<BoxedCanvasGradient>(0)?;
-      //   let gradient = gradient.borrow();
-      //   stash_ref(cx, stash, arg)?;
-      //   Ok(Some(Dye::Gradient(gradient.clone()) ))
-      // },
-      // arg if arg.is_a::<BoxedCanvasPattern, _>(cx) => {
-      //   let pattern = cx.argument::<BoxedCanvasPattern>(0)?;
-      //   let pattern = pattern.borrow();
-      //   stash_ref(cx, stash, arg)?;
-      //   Ok(Some(Dye::Pattern(pattern.clone()) ))
-      // },
-      _ => {
-        Ok(color_arg(cx, 0).map(Dye::Color))
-      }
+  pub fn new<'a, T: This>(cx: &mut CallContext<'a, T>, value: Handle<'a, JsValue>, style: PaintStyle) -> Option<Self> {
+    if let Ok(gradient) = value.downcast::<BoxedCanvasGradient, _>(cx){
+      Some(Dye::Gradient(gradient.borrow().clone()) )
+    }else if let Ok(pattern) = value.downcast::<BoxedCanvasPattern, _>(cx){
+      Some(Dye::Pattern(pattern.borrow().clone()) )
+    }else if let Some(color) = color_in(cx, value){
+      Some(Dye::Color(color))
+    }else{
+      None
     }
   }
 
   pub fn value<'a, T: This>(&self, cx: &mut CallContext<'a, T>, style: PaintStyle) -> JsResult<'a, JsValue> {
-    let cache = if style == PaintStyle::Fill{ "fillShader" } else { "strokeShader" };
     match self{
-      // Dye::Gradient(..) => fetch_ref(cx, cache),
-      // Dye::Pattern(..)  => fetch_ref(cx, cache),
       Dye::Color(color) => color_to_css(cx, &color),
-      _ => cx.throw_error("bad")
+      _ => Ok(cx.number(f64::NAN).upcast()) // flag to the js context that it should use its cached pattern/gradient ref
     }
   }
 
@@ -848,46 +836,3 @@ impl Dye{
     };
   }
 }
-
-// -- persistent references to js gradient/pattern objects ------------------------------
-
-// pub fn stash_ref<'a, T: This>(cx: &mut CallContext<'a, T>, queue_name:&str, obj:Handle<'a, JsValue>) -> JsResult<'a, JsUndefined>{
-//   let this = cx.this().downcast::<BoxedContext2D, _>(cx).or_throw(cx)?;
-//   let sym = symbol(cx, queue_name)?;
-//   let queue = match this.get(cx, sym)?.downcast::<JsArray>(){
-//     Ok(array) => array,
-//     Err(_e) => {
-//       // create ref queues lazily
-//       let array = JsArray::new(cx, 0);
-//       this.set(cx, sym, array)?;
-//       array
-//     }
-//   };
-
-//   let this = this.borrow();
-//   let depth = this.stack.len() as f64;
-//   let len = cx.number(depth + 1.0);
-//   let idx = cx.number(depth);
-//   let length = cx.string("length");
-
-//   queue.set(cx, length, len)?;
-//   queue.set(cx, idx, obj)?;
-//   Ok(cx.undefined())
-// }
-
-// pub fn fetch_ref<'a, T: This>(cx: &mut CallContext<'a, T>, queue_name:&str) -> JsResult<'a, JsValue>{
-//   let this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
-//   let sym = symbol(cx, queue_name)?;
-//   let queue = this.get(cx, sym)?.downcast::<JsArray>().or_throw(cx)?;
-
-//   let length = cx.string("length");
-//   let len = queue.get(cx, length)?.downcast::<JsNumber>().or_throw(cx)?.value() as f64;
-//   let depth = cx.borrow(&this, |this| this.stack.len() as f64);
-//   let idx = cx.number(depth.min(len - 1.0));
-
-//   match queue.get(cx, idx){
-//     Ok(gradient) => Ok(gradient.upcast()),
-//     Err(_e) => Ok(cx.undefined().upcast())
-//   }
-// }
-
