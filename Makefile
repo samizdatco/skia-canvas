@@ -13,6 +13,7 @@ $(LIB): $(NPM)
 	npm run build
 
 build: $(LIB)
+	@npm run build
 	@echo build complete
 
 test: $(LIB)
