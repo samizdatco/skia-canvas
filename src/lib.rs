@@ -64,7 +64,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- CanvasPattern -----------------------------------------------------------------------------
 
   cx.export_function("CanvasPattern_from_image", pattern::from_image)?;
-  // cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
+  cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
   cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
   cx.export_function("CanvasPattern_repr", pattern::repr)?;
 
@@ -138,6 +138,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_get_lineWidth", ctx::get_lineWidth)?;
   cx.export_function("CanvasRenderingContext2D_set_lineWidth", ctx::set_lineWidth)?;
   cx.export_function("CanvasRenderingContext2D_get_miterLimit", ctx::get_miterLimit)?;
+  cx.export_function("CanvasRenderingContext2D_set_miterLimit", ctx::set_miterLimit)?;
 
   // imagery
   cx.export_function("CanvasRenderingContext2D_drawRaster", ctx::drawRaster)?;

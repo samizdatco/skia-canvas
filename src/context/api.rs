@@ -531,6 +531,18 @@ pub fn get_miterLimit(mut cx: FunctionContext) -> JsResult<JsNumber> {
   Ok(cx.number(num))
 }
 
+pub fn set_miterLimit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  if let Some(num) = opt_float_arg(&mut cx, 1){
+    if num > 0.0 {
+      this.state.paint.set_stroke_miter(num);
+    }
+  }
+  Ok(cx.undefined())
+}
+
+
 //
 // Imagery
 //
