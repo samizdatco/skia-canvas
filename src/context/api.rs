@@ -30,6 +30,26 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedContext2D> {
   Ok(cx.boxed(this))
 }
 
+pub fn resetWidth(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+
+  let new_width = float_arg(&mut cx, 1, "width")?;
+  let old_height = this.bounds.size().height;
+  this.resize((new_width, old_height));
+  Ok(cx.undefined())
+}
+
+pub fn resetHeight(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+
+  let new_height = float_arg(&mut cx, 1, "height")?;
+  let old_width = this.bounds.size().width;
+  this.resize((old_width, new_height));
+  Ok(cx.undefined())
+}
+
 //
 // Grid State
 //

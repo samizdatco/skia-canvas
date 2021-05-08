@@ -119,10 +119,6 @@ pub fn set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if width >= 0.0 {
     let mut that = this.borrow_mut();
     that.width = width;
-
-    // canvas_context(&mut cx, &this, |ctx|{
-    //   ctx.resize((width, that.height))
-    // })?;
   }
 
   Ok(cx.undefined())
@@ -135,10 +131,6 @@ pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if height >= 0.0 {
     let mut that = this.borrow_mut();
     that.height = height;
-
-    // canvas_context(&mut cx, &this, |ctx|{
-    //   ctx.resize((that.width, height))
-    // })?;
   }
 
   Ok(cx.undefined())
