@@ -32,6 +32,7 @@ distclean:
 	cargo clean
 
 run: $(LIB)
+	@npm run build
 	@node check.js
 
 preview: run
