@@ -350,14 +350,27 @@ describe("Context2D", ()=>{
       })
 
       test("conic", () => {
-        let gradient = ctx.createConicGradient(0, 10, 10);
+        // draw a sweep with white at top and black on bottom
+        let gradient = ctx.createConicGradient(0, 256, 256);
         gradient.addColorStop(0,'#fff');
-        gradient.addColorStop(1,'#000');
+        gradient.addColorStop(.5,'#000');
+        gradient.addColorStop(1,'#fff');
         ctx.fillStyle = gradient;
-        ctx.fillRect(0,0,21,21);
+        ctx.fillRect(0,0,512,512);
 
-        expect(pixel(10,1)).toEqual([255,255,255,255])
-        expect(pixel(20,20)).toEqual([0,0,0,255])
+        expect(pixel(256,5)).toEqual([255,255,255,255])
+        expect(pixel(256,500)).toEqual([0,0,0,255])
+
+        // rotate 90° so black is left and white is right
+        gradient = ctx.createConicGradient(Math.PI/2, 256, 256);
+        gradient.addColorStop(0,'#fff');
+        gradient.addColorStop(.5,'#000');
+        gradient.addColorStop(1,'#fff');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0,0,512,512);
+
+        expect(pixel(500,256)).toEqual([255,255,255,255])
+        expect(pixel(5,256)).toEqual([0,0,0,255])
       })
     })
   })
