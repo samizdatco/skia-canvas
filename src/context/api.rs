@@ -294,11 +294,11 @@ fn _is_in(mut cx: FunctionContext, ink:PaintStyle) -> JsResult<JsBoolean> {
   let y = float_arg(&mut cx, shift+1, "y")?;
   let rule = fill_rule_arg_or(&mut cx, shift+2, "nonzero")?;
 
-  let mut target = container.borrow_mut();
+  let mut target = container.borrow_mut().path.clone();
   let mut this = this.borrow_mut();
   let is_in = match ink{
-    Stroke => this.hit_test_path(&mut target.path, (x, y), None, Stroke),
-    _ => this.hit_test_path(&mut target.path, (x, y), Some(rule), Fill)
+    Stroke => this.hit_test_path(&mut target, (x, y), None, Stroke),
+    _ => this.hit_test_path(&mut target, (x, y), Some(rule), Fill)
   };
   Ok(cx.boolean(is_in))
 }
