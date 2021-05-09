@@ -4,6 +4,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use skia_safe::{Shader, TileMode, TileMode::{Decal, Repeat}, SamplingOptions, Size,
                 Image as SkImage, Picture, Matrix, FilterQuality, FilterMode};
@@ -15,8 +16,8 @@ use crate::context::{BoxedContext2D};
 pub type BoxedCanvasPattern = JsBox<RefCell<CanvasPattern>>;
 impl Finalize for CanvasPattern {}
 
-#[derive(Clone)]
-pub struct CanvasPattern{
+
+pub struct Stamp{
   pub smoothing:bool,
   image:Option<SkImage>,
   pict:Option<Picture>,
@@ -25,20 +26,28 @@ pub struct CanvasPattern{
   matrix:Matrix
 }
 
+#[derive(Clone)]
+pub struct CanvasPattern{
+  pub stamp:Arc<Mutex<Stamp>>
+}
+
 impl CanvasPattern{
   pub fn shader(&self) -> Option<Shader>{
-    if let Some(image) = &self.image{
-      let sampling = match self.smoothing{
+    let stamp = Arc::clone(&self.stamp);
+    let stamp = stamp.lock().unwrap();
+
+    if let Some(image) = &stamp.image{
+      let sampling = match stamp.smoothing{
         true => SamplingOptions::from_filter_quality(FilterQuality::High, None),
         false => SamplingOptions::default()
       };
-      match image.to_shader(self.repeat, sampling, None){
-        Some(shader) => Some(shader.with_local_matrix(&self.matrix)),
+      match image.to_shader(stamp.repeat, sampling, None){
+        Some(shader) => Some(shader.with_local_matrix(&stamp.matrix)),
         None => None
       }
-    }else if let Some(pict) = &self.pict{
-      let shader = pict.to_shader(self.repeat, FilterMode::Linear, None, None);
-      Some(shader.with_local_matrix(&self.matrix))
+    }else if let Some(pict) = &stamp.pict{
+      let shader = pict.to_shader(stamp.repeat, FilterMode::Linear, None, None);
+      Some(shader.with_local_matrix(&stamp.matrix))
     }else{
       None
     }
@@ -60,7 +69,7 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   if let Some(repeat) = to_repeat_mode(&repetition){
     let src = src.borrow();
     let dims = src.size();
-    let pattern = CanvasPattern{
+    let stamp = Stamp{
       image:src.image.clone(),
       pict:None,
       dims,
@@ -68,7 +77,8 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
       smoothing:true,
       matrix:Matrix::new_identity()
     };
-    Ok(cx.boxed(RefCell::new(pattern)))
+    let stamp = Arc::new(Mutex::new(stamp));
+    Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
   }else{
     cx.throw_error("Unknown pattern repeat style")
   }
@@ -86,7 +96,7 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
     let mut ctx = src.borrow_mut();
 
     let dims = ctx.bounds.size();
-    let pattern = CanvasPattern{
+    let stamp = Stamp{
       image:None,
       pict:ctx.get_picture(None),
       dims,
@@ -94,7 +104,8 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
       smoothing:true,
       matrix:Matrix::new_identity()
     };
-    Ok(cx.boxed(RefCell::new(pattern)))
+    let stamp = Arc::new(Mutex::new(stamp));
+    Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
   }else{
     cx.throw_error("Unknown pattern repeat style")
   }
@@ -103,13 +114,19 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 pub fn setTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvasPattern>(0)?;
   let mut this = this.borrow_mut();
-  this.matrix = matrix_arg(&mut cx, 1)?;
+
+  let stamp = Arc::clone(&this.stamp);
+  let mut stamp = stamp.lock().unwrap();
+  stamp.matrix = matrix_arg(&mut cx, 1)?;
   Ok(cx.undefined())
 }
 
 pub fn repr(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvasPattern>(0)?;
   let mut this = this.borrow_mut();
-  let style = if this.image.is_some(){ "Bitmap" }else{ "Canvas" };
-  Ok(cx.string(format!("{} {}×{}", style, this.dims.width, this.dims.height)))
+
+  let stamp = Arc::clone(&this.stamp);
+  let stamp = stamp.lock().unwrap();
+  let style = if stamp.image.is_some(){ "Bitmap" }else{ "Canvas" };
+  Ok(cx.string(format!("{} {}×{}", style, stamp.dims.width, stamp.dims.height)))
 }

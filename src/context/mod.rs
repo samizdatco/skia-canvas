@@ -737,12 +737,12 @@ impl Context2D{
   }
 
   pub fn update_image_quality(&mut self){
-    if let Dye::Pattern(pat) = &mut self.state.fill_style {
-      pat.smoothing = self.state.image_smoothing_enabled;
-    }
-
-    if let Dye::Pattern(pat) = &mut self.state.stroke_style {
-      pat.smoothing = self.state.image_smoothing_enabled;
+    for style in [&self.state.fill_style, &self.state.stroke_style].iter(){
+      if let Dye::Pattern(pattern) = &style {
+        let stamp = Arc::clone(&pattern.stamp);
+        let mut stamp = stamp.lock().unwrap();
+        stamp.smoothing = self.state.image_smoothing_enabled;
+      }
     }
   }
 
