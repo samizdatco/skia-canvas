@@ -736,16 +736,6 @@ impl Context2D{
     self.state.filter = filter_text.to_string();
   }
 
-  pub fn update_image_quality(&mut self){
-    for style in [&self.state.fill_style, &self.state.stroke_style].iter(){
-      if let Dye::Pattern(pattern) = &style {
-        let stamp = Arc::clone(&pattern.stamp);
-        let mut stamp = stamp.lock().unwrap();
-        stamp.smoothing = self.state.image_smoothing_enabled;
-      }
-    }
-  }
-
   pub fn color_with_alpha(&self, src:&Color) -> Color{
     let mut color:Color4f = src.clone().into();
     color.a *= self.state.global_alpha;
@@ -754,10 +744,10 @@ impl Context2D{
 
   pub fn paint_for_fill(&self) -> Paint{
     let mut paint = self.state.paint.clone();
-
     let dye = &self.state.fill_style;
     let alpha = self.state.global_alpha;
-    dye.mix_into(&mut paint, alpha);
+    let smoothing = self.state.image_smoothing_enabled;
+    dye.mix_into(&mut paint, alpha, smoothing);
 
     paint
   }
@@ -768,7 +758,8 @@ impl Context2D{
 
     let dye = &self.state.stroke_style;
     let alpha = self.state.global_alpha;
-    dye.mix_into(&mut paint, alpha);
+    let smoothing = self.state.image_smoothing_enabled;
+    dye.mix_into(&mut paint, alpha, smoothing);
 
     if !self.state.line_dash_list.is_empty() {
       let dash = dash_path_effect::new(&self.state.line_dash_list, self.state.line_dash_offset);
@@ -827,7 +818,7 @@ impl Dye{
     }
   }
 
-  pub fn mix_into(&self, paint: &mut Paint, alpha: f32){
+  pub fn mix_into(&self, paint: &mut Paint, alpha: f32, smoothing: bool){
     match self {
       Dye::Color(color) => {
         let mut color:Color4f = color.clone().into();
@@ -839,7 +830,7 @@ impl Dye{
              .set_alpha_f(alpha);
       },
       Dye::Pattern(pattern) =>{
-        paint.set_shader(pattern.shader())
+        paint.set_shader(pattern.shader(smoothing))
              .set_alpha_f(alpha);
       }
     };

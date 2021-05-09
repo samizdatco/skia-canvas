@@ -404,7 +404,6 @@ pub fn set_fillStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   if let Some(dye) = Dye::new(&mut cx, arg, Fill) {
     this.state.fill_style = dye;
-    this.update_image_quality();
   }else{
     eprintln!("Warning: Invalid fill style (expected a css color string, CanvasGradient, or CanvasPattern)");
   }
@@ -425,7 +424,6 @@ pub fn set_strokeStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   if let Some(dye) = Dye::new(&mut cx, arg, Stroke) {
     this.state.stroke_style = dye;
-    this.update_image_quality();
   }else{
     eprintln!("Warning: Invalid stroke style (expected a css color string, CanvasGradient, or CanvasPattern)");
   }
@@ -695,7 +693,6 @@ pub fn set_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsUndefine
   let mut this = this.borrow_mut();
   if let Ok(flag) = bool_arg(&mut cx, 1, "imageSmoothingEnabled"){
     this.state.image_smoothing_enabled = flag;
-    this.update_image_quality();
   }
   Ok(cx.undefined())
 }
@@ -714,7 +711,6 @@ pub fn set_imageSmoothingQuality(mut cx: FunctionContext) -> JsResult<JsUndefine
 
   if let Some(mode) = to_filter_quality(&name){
     this.state.image_filter_quality = mode;
-    this.update_image_quality();
   }
   Ok(cx.undefined())
 }

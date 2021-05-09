@@ -18,7 +18,6 @@ impl Finalize for CanvasPattern {}
 
 
 pub struct Stamp{
-  pub smoothing:bool,
   image:Option<SkImage>,
   pict:Option<Picture>,
   dims:Size,
@@ -32,12 +31,12 @@ pub struct CanvasPattern{
 }
 
 impl CanvasPattern{
-  pub fn shader(&self) -> Option<Shader>{
+  pub fn shader(&self, smoothing: bool) -> Option<Shader>{
     let stamp = Arc::clone(&self.stamp);
     let stamp = stamp.lock().unwrap();
 
     if let Some(image) = &stamp.image{
-      let sampling = match stamp.smoothing{
+      let sampling = match smoothing{
         true => SamplingOptions::from_filter_quality(FilterQuality::High, None),
         false => SamplingOptions::default()
       };
@@ -74,7 +73,6 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
       pict:None,
       dims,
       repeat,
-      smoothing:true,
       matrix:Matrix::new_identity()
     };
     let stamp = Arc::new(Mutex::new(stamp));
@@ -101,7 +99,6 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
       pict:ctx.get_picture(None),
       dims,
       repeat,
-      smoothing:true,
       matrix:Matrix::new_identity()
     };
     let stamp = Arc::new(Mutex::new(stamp));
