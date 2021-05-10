@@ -1,0 +1,53 @@
+name: Run tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - neon-napi
+  pull_request:
+    branches:
+      - main
+jobs:
+  run-tests:
+    name: Rebuild & Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: 
+          - 10
+          - 15
+        os: 
+          - macos-latest
+          - windows-latest
+          - ubuntu-18.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+    
+    - name: Use Rust
+      uses: actions-rs/toolchain@v1.0.6
+      with:
+        toolchain: stable
+    
+    - name: Download ICU data
+      if: startsWith(matrix.os, 'windows')
+      run: |
+        mkdir -p lib/v6
+        curl -sS https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/icudtl.dat -o lib/v6/icudtl.dat
+    
+    - name: Build module
+      run: |
+        npm ci --ignore-scripts
+        npm run build
+    
+    - name: Run tests
+      run: npm test
