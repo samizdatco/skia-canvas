@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 #![allow(unused_mut)]
-#![allow(dead_code)]
+// #![allow(dead_code)]
 #![allow(unused_imports)]
 use std::cmp;
 use std::f32::consts::PI;
@@ -29,16 +29,16 @@ fn arg_num(o:usize) -> String{
   format!("{}{}", n, suffix)
 }
 
-pub fn argv<'a>() -> Vec<Handle<'a, JsValue>>{
-  let list:Vec<Handle<JsValue>> = Vec::new();
-  list
-}
+// pub fn argv<'a>() -> Vec<Handle<'a, JsValue>>{
+//   let list:Vec<Handle<JsValue>> = Vec::new();
+//   list
+// }
 
-pub fn clamp(val: f32, min:f64, max:f64) -> f32{
-  let min = min as f32;
-  let max = max as f32;
-  if val < min { min } else if val > max { max } else { val }
-}
+// pub fn clamp(val: f32, min:f64, max:f64) -> f32{
+//   let min = min as f32;
+//   let max = max as f32;
+//   if val < min { min } else if val > max { max } else { val }
+// }
 
 pub fn almost_equal(a: f32, b: f32) -> bool{
   (a-b).abs() < 0.00001
@@ -436,16 +436,16 @@ pub fn filter_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<(Strin
 //
 
 use skia_safe::{TileMode, TileMode::{Decal, Repeat}};
-pub fn to_tile_mode(mode_name:&str) -> Option<TileMode>{
-  let mode = match mode_name.to_lowercase().as_str(){
-    "clamp" => TileMode::Clamp,
-    "repeat" => TileMode::Repeat,
-    "mirror" => TileMode::Mirror,
-    "decal" => TileMode::Decal,
-    _ => return None
-  };
-  Some(mode)
-}
+// pub fn to_tile_mode(mode_name:&str) -> Option<TileMode>{
+//   let mode = match mode_name.to_lowercase().as_str(){
+//     "clamp" => TileMode::Clamp,
+//     "repeat" => TileMode::Repeat,
+//     "mirror" => TileMode::Mirror,
+//     "decal" => TileMode::Decal,
+//     _ => return None
+//   };
+//   Some(mode)
+// }
 
 pub fn to_repeat_mode(repeat:&str) -> Option<(TileMode, TileMode)> {
   let mode = match repeat.to_lowercase().as_str() {
@@ -615,16 +615,16 @@ pub fn fill_rule_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, defaul
   Ok(rule)
 }
 
-pub fn blend_mode_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr: &str) -> Result<BlendMode, Throw>{
-  let mode_name = string_arg(cx, idx, attr)?;
-  match to_blend_mode(&mode_name){
-    Some(blend_mode) => Ok(blend_mode),
-    None => cx.throw_error("blendMode must be SrcOver, DstOver, Src, Dst, Clear, SrcIn, DstIn, \
-                            SrcOut, DstOut, SrcATop, DstATop, Xor, Plus, Multiply, Screen, Overlay, \
-                            Darken, Lighten, ColorDodge, ColorBurn, HardLight, SoftLight, Difference, \
-                            Exclusion, Hue, Saturation, Color, Luminosity, or Modulate")
-  }
-}
+// pub fn blend_mode_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr: &str) -> Result<BlendMode, Throw>{
+//   let mode_name = string_arg(cx, idx, attr)?;
+//   match to_blend_mode(&mode_name){
+//     Some(blend_mode) => Ok(blend_mode),
+//     None => cx.throw_error("blendMode must be SrcOver, DstOver, Src, Dst, Clear, SrcIn, DstIn, \
+//                             SrcOut, DstOut, SrcATop, DstATop, Xor, Plus, Multiply, Screen, Overlay, \
+//                             Darken, Lighten, ColorDodge, ColorBurn, HardLight, SoftLight, Difference, \
+//                             Exclusion, Hue, Saturation, Color, Luminosity, or Modulate")
+//   }
+// }
 
 
 //
