@@ -10,6 +10,7 @@ In particular, Skia Canvas:
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files](#saveasfilename-format-quality), return them as [Buffers](#tobufferformat-quality-page), or encode [dataURL](#todataurlformat-quality-page) strings
   - can create [multiple ‘pages’](#newpagewidth-height) on a given canvas and then [output](#saveasfilename-format-quality) them as a single, multi-page PDF or an image-sequence saved to multiple files
+  - can simplify and combine bézier paths using efficient [boolean operations](https://www.youtube.com/watch?v=OmfliNQsk88)
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
 
@@ -25,28 +26,38 @@ In particular, Skia Canvas:
 This project is newly-hatched and still has some obvious gaps to fill (feel free to pitch in!).
 
 On the agenda for subsequent updates are:
-  - Windows support & prebuilt binaries
-  - Use neon [Tasks](https://neon-bindings.com/docs/async) to provide asynchronous file i/o
+  - Use neon [EventQueues](https://github.com/neon-bindings/neon/blob/main/src/event/event_queue.rs) to provide asynchronous file i/o
   - Add SVG image loading using the [µsvg](https://crates.io/crates/usvg) parser
   - Add a `density` argument to Canvas and/or the output methods to allow for scaling to other device-pixel-ratios
 
+## Platform Support
+
+The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions: 
+  - 10.20+
+  - 12.17+
+  - 14.0 and later
+
+There are pre-compiled binaries for:
+
+  - Linux (x86)
+  - macOS (x86 & Apple silicon)
+  - Windows (x86)
+
 ## Installation
 
-On macOS and Linux, installation *should* be as simple as:
+If you’re running on a supported platform, installation should be as simple as:
 ```console
 $ npm install skia-canvas
 ```
 
-This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases). Note that these binaries are in an early state and currently only work with fairly recent systems. In particular, if using the library with Docker you’ll want to pick a base system from the last few years like [`node:buster`](https://hub.docker.com/_/node) or [`ubuntu:bionic`](https://hub.docker.com/_/ubuntu).
+This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases). If prebuilt binaries aren’t available for your system you’ll need to compile the portions of this library that directly interface with Skia. 
 
-If prebuilt binaries aren’t available for your system you’ll need to compile the portions of this library that directly interface with Skia. Start by installing:
+Start by installing:
 
   1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using `rustup`
-  2. Python 2.7 (Python 3 is not supported by [neon](https://neon-bindings.com/docs/getting-started#install-node-build-tools))
-  3. The GNU `make` tool
-  4. A C compiler toolchain like LLVM/Clang, GCC, or MSVC
+  2. A C compiler toolchain like LLVM/Clang, GCC, or MSVC
 
-Once all these dependencies are present, installing from npm should work (after a fairly lengthy compilation process).
+Once these dependencies are present, running `npm run build` will give you a useable library (after a fairly lengthy compilation process).
 
 ## Module Contents
 
