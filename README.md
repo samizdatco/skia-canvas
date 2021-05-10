@@ -141,29 +141,29 @@ Most of your interaction with the canvas will actually be directed toward its �
 | [rect()][rect()]                         |                                                             | [putImageData()][putImageData()]                   |                                          |
 
 
-#### Path2D
+### Path2D
 
-Lorem ipsum, also the constructor takes SVG strings or other path2d objects and the objects can be passed to the fill(), stroke(), and clip() ctx methods...
+The context object creates an implicit ‘current’ bézier path which is updated by commands like [lineTo()][lineTo()] and [arcTo()][arcTo()] and is drawn to the canvas by calling [fill()][fill()], [stroke()][stroke()], or [clip()][clip()] without any arguments (aside from an optional [winding][nonzero] [rule][evenodd]). The only way to create a *second* path through the context itself is to call its [beginPath()][beginPath()] method, which erases its current contents and allows you to start issuing a new set of drawing commands.
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡      | Extents ⚡      |
-| --                                         | --                       | --                | --            |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | complement()    | **bounds**   |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | difference()    | simplify()   |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | intersect()     |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | union()         |
-| [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | xor()           |
+The `Path2D` class allows you to create paths independent of the context to be drawn (and potentially reused) later on. Its constructor can be called without any arguments to create a new, empty path object. It can also accept string describing a path using [SVG syntax][SVG_path_commands] or a reference to and existing `Path2D` object (which it will clone and return an independent copy of):
 
+```js
+// three identical (but independent) paths
+let p1 = new Path2D("M 10,10 h 100 v 100 h -100 Z")
+let p2 = new Path2D(p1)
+let p3 = new Path2D()
+p3.rect(10, 10, 100, 100)
+```
 
-[p2d_addPath]: https://developer.mozilla.org/en-US/docs/Web/API/Path2D/addPath
-[p2d_closePath]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
-[p2d_moveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/moveTo
-[p2d_lineTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineTo
-[p2d_bezierCurveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/bezierCurveTo
-[p2d_quadraticCurveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/quadraticCurveTo
-[p2d_arc]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arc
-[p2d_arcTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arcTo
-[p2d_ellipse]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/ellipse
-[p2d_rect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect
+You can then use these objects by passing them as the first argument to the context’s `fill()`, `stroke()`, and `clip()` methods (along with an optional second argument defining the winding rule).
+
+| Line Segments                              | Shapes                   | Boolean Ops ⚡            | Extents ⚡      |
+| --                                         | --                       | --                       | --            |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [**bounds**][#bounds]   |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [simplify()][#simplify]   |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | [union()][bool-ops]      |
+| [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |
 
 
 
@@ -253,6 +253,54 @@ The `x`, `y`, `width`, and `height` values define a rectangle that fully enclose
 The `baseline` value is a y-axis offset from the text origin to that particular line’s baseline.
 
 The `startIndex` and `endIndex` values are the indices into the string of the first and last character that were typeset on that line.
+
+
+### Path2D
+
+##### `.bounds`
+
+In the browser, Path2D objects offer very little in the way of introspection—they are mostly-opaque recorders of drawing commands that can be ‘played back’ later on. Skia Canvas offers some additional transparency by allowing you to measure the total amount of space the lines will occupy (though you’ll need to account for the current `lineWidth` if you plan to draw the path with `stroke()`).
+
+The `.bounds` property returns an object defining the minimal rectangle containing the path:
+```
+{top, left, bottom, right, width, height}
+```
+
+##### `complement()`, `difference()`, `intersect()`, `union()`, and `xor()`
+In addition to creating `Path2D` objects through the constructor, you can use pairs of existing paths *in combination* to generate new paths based on their degree of overlap. Based on the method you choose, a different boolean relationship will be used to construct the new path. In all the following examples we’ll be starting off with a pair of overlapping shapes:
+```js
+let rect = new Path2D()
+rect.rect(0, 100, 100, 100)
+
+let oval = new Path2D()
+oval.arc(100,100, 100, 0, 2*Math.PI)
+```
+![layered paths](https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/path-operation-none.svg)
+
+We can then create a new path by using one of the boolean operations such as:
+```js
+let knockout = rect.complement(oval),
+    overlap = rect.intersection(oval),
+    footprint = rect.union(oval),
+    ...
+```
+![different combinations](https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/path-operations@2x.png)
+
+Note that the `xor` operator is liable to create a path with lines that cross over one another so you’ll get different results when filling it using the [`"evenodd"`][evenodd] winding rule (as shown above) than with [`"nonzero"`][nonzero] (the canvas default).
+
+
+##### `simplify()`
+
+In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments:
+
+```js
+let cross = new Path2D("M 10,50 h 100 v 20 h -100 Z M 50,10 h 20 v100 h -20 Z")
+let uncrossed = cross.simplify()
+```
+![different combinations](https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/path-simplify@2x.png)
+
+
+
 
 
 ## Utilities
@@ -358,6 +406,18 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 
 Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) developers for their terrific set of unit tests. In the absence of an [Acid Test](https://www.acidtests.org) for canvas, these routines were invaluable.
 
+[SVG_path_commands]: https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d#path_commands
+[p2d_addPath]: https://developer.mozilla.org/en-US/docs/Web/API/Path2D/addPath
+[p2d_closePath]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
+[p2d_moveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/moveTo
+[p2d_lineTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineTo
+[p2d_bezierCurveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/bezierCurveTo
+[p2d_quadraticCurveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/quadraticCurveTo
+[p2d_arc]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arc
+[p2d_arcTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arcTo
+[p2d_ellipse]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/ellipse
+[p2d_rect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect
+[bool-ops]: #complement-difference-intersect-union-and-xor
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
 
 [Buffer]: https://nodejs.org/api/buffer.html
@@ -440,3 +500,6 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [strokeText()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/strokeText
 [transform()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/transform
 [translate()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/translate
+
+[nonzero]: https://en.wikipedia.org/wiki/Nonzero-rule
+[evenodd]: https://en.wikipedia.org/wiki/Even–odd_rule
