@@ -739,12 +739,6 @@ describe("FontLibrary", ()=>{
       expect(info).toHaveProperty('styles')
       expect(typeof info.styles[0]).toBe('string');
     }
-    if (fam) expect(FontLibrary.family(fam)).toMatchObject({
-      family: fam,
-      weights: [ 400, 700 ],
-      widths: [ 'normal' ],
-      // styles: [ 'normal', 'italic' ],
-    })
   })
 
   test("can register fonts", ()=>{
