@@ -6,7 +6,7 @@ node_modules
 native/artifacts.json
 native/target
 native/*.node
-test/assets
+test/assets/*/*
 scr[ia]bble.*
 /*.png
 /*.jpg
