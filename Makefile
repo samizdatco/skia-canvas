@@ -7,16 +7,15 @@ LIB := $(LIBDIR)/index.node
 GIT_TAG = $(shell git describe)
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | cut -d '=' -f 2)
 NPM_VERSION = $(shell npm view skia-canvas version)
-.PHONY: build run test check clean visual preview release
-
-$(NPM):
-	npm install
+.PHONY: build test visual check clean distclean release run preview
 
 build: $(NPM)
 	@npm run build
 
+$(NPM):
+	npm install
+
 $(LIB): build
-	@echo compilling
 
 test: $(LIB)
 	@$(JEST) --watch
@@ -28,10 +27,11 @@ check:
 	cargo check
 
 clean:
-	@rm $(LIB)
-	@rmdir $(LIBDIR)
+	rm -rf $(LIBDIR)
 
-distclean:
+distclean: clean
+	rm -rf $(NPM)
+	rm -rf $(CURDIR)/build
 	cargo clean
 
 release:

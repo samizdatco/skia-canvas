@@ -15,8 +15,8 @@
   },
   "homepage": "https://github.com/samizdatco/skia-canvas#readme",
   "scripts": {
-    "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --release --message-format=json-render-diagnostics",
-    "install": "node-pre-gyp install || npm run build",
+    "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
+    "install": "node-pre-gyp install || npm run build -- --release",
     "package": "node-pre-gyp package",
     "upload": "node-pre-gyp publish",
     "test": "jest"
