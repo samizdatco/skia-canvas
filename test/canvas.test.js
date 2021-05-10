@@ -729,6 +729,16 @@ describe("FontLibrary", ()=>{
             : FontLibrary.has("DejaVu Sans") ? "DejaVu Sans"
             : null;
 
+    if (fam){
+      let info = FontLibrary.family(fam)
+      expect(info).toHaveProperty('family')
+      expect(info).toHaveProperty('weights')
+      expect(typeof info.weights[0]).toBe('number');
+      expect(info).toHaveProperty('widths')
+      expect(typeof info.widths[0]).toBe('string');
+      expect(info).toHaveProperty('styles')
+      expect(typeof info.styles[0]).toBe('string');
+    }
     if (fam) expect(FontLibrary.family(fam)).toMatchObject({
       family: fam,
       weights: [ 400, 700 ],

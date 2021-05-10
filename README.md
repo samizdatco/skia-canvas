@@ -110,7 +110,10 @@ console.log(`<img src="${canvas.toDataURL("png")}">`)
 
 ## API Documentation
 
+### CanvasRenderingContext2D
+
 Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method. Documentation for each of the context’s attributes is linked below—properties are printed in **bold** and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a ⚡ symbol (see the next section for details).
+
 
 | Canvas State                           | Drawing Primitives                          | Stroke & Fill Style                  | Compositing Effects                                      |
 |----------------------------------------|---------------------------------------------|--------------------------------------|----------------------------------------------------------|
@@ -136,6 +139,36 @@ Most of your interaction with the canvas will actually be directed toward its �
 | [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                 | [createRadialGradient()][createRadialGradient()]   | [transform()][transform()]               |
 | [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] [⚡](#measuretextstr-width)   | [getImageData()][getImageData()]                   | [translate()][translate()]               |
 | [rect()][rect()]                         |                                                             | [putImageData()][putImageData()]                   |                                          |
+
+
+#### Path2D
+
+Lorem ipsum, also the constructor takes SVG strings or other path2d objects and the objects can be passed to the fill(), stroke(), and clip() ctx methods...
+
+| Line Segments                              | Shapes                   | Boolean Ops ⚡      | Extents ⚡      |
+| --                                         | --                       | --                | --            |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | complement()    | **bounds**   |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | difference()    | simplify()   |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | intersect()     |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | union()         |
+| [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | xor()           |
+
+
+[p2d_addPath]: https://developer.mozilla.org/en-US/docs/Web/API/Path2D/addPath
+[p2d_closePath]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
+[p2d_moveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/moveTo
+[p2d_lineTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineTo
+[p2d_bezierCurveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/bezierCurveTo
+[p2d_quadraticCurveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/quadraticCurveTo
+[p2d_arc]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arc
+[p2d_arcTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arcTo
+[p2d_ellipse]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/ellipse
+[p2d_rect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect
+
+
+
+
+
 
 
 
