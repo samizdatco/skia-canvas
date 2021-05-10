@@ -597,7 +597,7 @@ dependencies = [
 
 [[package]]
 name = "skia-canvas"
-version = "0.1.0"
+version = "0.9.21"
 dependencies = [
  "css-color",
  "lazy_static",
