@@ -1,0 +1,92 @@
+name: Compile binaries
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+    
+jobs:
+  x86-platform:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: 
+          - macos-latest
+          - windows-latest 
+          - ubuntu-18.04
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v2
+      with:
+        node-version: 15
+    
+    - name: Use Rust
+      uses: actions-rs/toolchain@v1.0.6
+      with:
+        toolchain: stable
+    
+    - name: Fetch ICU data
+      if: startsWith(matrix.os,'windows')
+      run: |
+        mkdir -p lib/v6
+        curl -sS https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/icudtl.dat -o lib/v6/icudtl.dat
+    
+    - name: Package module
+      run: |
+        npm ci --ignore-scripts
+        npm run build -- --release
+        npm run package
+        npm test
+    
+    - name: Publish prebuilt binaries
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        npm run upload
+  apple-silicon:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: 
+          - macos-latest
+          
+    steps:    
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v2
+      with:
+        node-version: 15
+    
+    - name: Use Rust
+      uses: actions-rs/toolchain@v1.0.6
+      with:
+        toolchain: nightly
+        override: true
+        target: aarch64-apple-darwin
+
+    - name: Inspect xcode paths
+      run: |
+        echo "SDKROOT=$(xcrun -sdk macosx11.1 --show-sdk-path)" >> $GITHUB_ENV
+        echo "MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx11.1 --show-sdk-platform-version)" >> $GITHUB_ENV
+    - name: Package module
+      run: |
+        npm ci --ignore-scripts
+        npm run build -- --release --target aarch64-apple-darwin
+        sed -i.bak 's/"package_name":.*/"package_name": "{platform}-aarch64-{node_napi_label}.tar.gz",/' package.json
+        npm run package
+        
+    - name: Publish prebuilt binaries
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        npm run upload
