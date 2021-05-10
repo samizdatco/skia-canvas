@@ -799,7 +799,7 @@ pub enum Dye{
 }
 
 impl Dye{
-  pub fn new<'a, T: This>(cx: &mut CallContext<'a, T>, value: Handle<'a, JsValue>, style: PaintStyle) -> Option<Self> {
+  pub fn new<'a>(cx: &mut FunctionContext<'a>, value: Handle<'a, JsValue>, style: PaintStyle) -> Option<Self> {
     if let Ok(gradient) = value.downcast::<BoxedCanvasGradient, _>(cx){
       Some(Dye::Gradient(gradient.borrow().clone()) )
     }else if let Ok(pattern) = value.downcast::<BoxedCanvasPattern, _>(cx){
@@ -811,7 +811,7 @@ impl Dye{
     }
   }
 
-  pub fn value<'a, T: This>(&self, cx: &mut CallContext<'a, T>, style: PaintStyle) -> JsResult<'a, JsValue> {
+  pub fn value<'a>(&self, cx: &mut FunctionContext<'a>, style: PaintStyle) -> JsResult<'a, JsValue> {
     match self{
       Dye::Color(color) => color_to_css(cx, &color),
       _ => Ok(cx.null().upcast()) // flag to the js context that it should use its cached pattern/gradient ref

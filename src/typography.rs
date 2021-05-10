@@ -31,7 +31,7 @@ pub struct FontSpec{
   pub canonical: String
 }
 
-pub fn font_arg<T: This>(cx: &mut CallContext<T>, idx: i32) -> Result<Option<FontSpec>, Throw> {
+pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> Result<Option<FontSpec>, Throw> {
   let arg = cx.argument::<JsValue>(idx)?;
   if arg.is_a::<JsNull, _>(cx){ return Ok(None) }
 
@@ -53,7 +53,7 @@ pub fn font_arg<T: This>(cx: &mut CallContext<T>, idx: i32) -> Result<Option<Fon
   Ok(Some(FontSpec{ families, size, leading, style, features, variant, canonical}))
 }
 
-pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>) -> Result<Vec<(String, i32)>, Throw>{
+pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> Result<Vec<(String, i32)>, Throw>{
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut features:Vec<(String, i32)> = vec![];
   for key in strings_in(cx, &keys).iter() {
@@ -67,7 +67,7 @@ pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject
   Ok(features)
 }
 
-pub fn typeface_details<'a, T: This>(cx: &mut CallContext<'a, T>, filename:&str, font: &Typeface, alias:Option<String>) -> JsResult<'a, JsObject> {
+pub fn typeface_details<'a>(cx: &mut FunctionContext<'a>, filename:&str, font: &Typeface, alias:Option<String>) -> JsResult<'a, JsObject> {
   let style = font.font_style();
 
   let filename = cx.string(filename);
