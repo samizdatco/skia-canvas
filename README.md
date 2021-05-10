@@ -159,8 +159,8 @@ You can then use these objects by passing them as the first argument to the cont
 
 | Line Segments                              | Shapes                   | Boolean Ops ⚡            | Extents ⚡      |
 | --                                         | --                       | --                       | --            |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [**bounds**][#bounds]   |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [simplify()][#simplify]   |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [**bounds**](#bounds)   |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [simplify()](#simplify)   |
 | [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  |
 | [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | [union()][bool-ops]      |
 | [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |
