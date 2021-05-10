@@ -280,11 +280,11 @@ The `.bounds` property returns an object defining the minimal rectangle containi
 ##### `complement()`, `difference()`, `intersect()`, `union()`, and `xor()`
 In addition to creating `Path2D` objects through the constructor, you can use pairs of existing paths *in combination* to generate new paths based on their degree of overlap. Based on the method you choose, a different boolean relationship will be used to construct the new path. In all the following examples we’ll be starting off with a pair of overlapping shapes:
 ```js
+let oval = new Path2D()
+oval.arc(100, 100, 100, 0, 2*Math.PI)
+
 let rect = new Path2D()
 rect.rect(0, 100, 100, 100)
-
-let oval = new Path2D()
-oval.arc(100,100, 100, 0, 2*Math.PI)
 ```
 ![layered paths](https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/path-operation-none.svg)
 
