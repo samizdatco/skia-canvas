@@ -50,6 +50,7 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
         npm run upload
+        
   apple-silicon:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -69,19 +70,21 @@ jobs:
     - name: Use Rust
       uses: actions-rs/toolchain@v1.0.6
       with:
+        target: aarch64-apple-darwin
         toolchain: nightly
         override: true
-        target: aarch64-apple-darwin
 
     - name: Inspect xcode paths
       run: |
-        echo "SDKROOT=$(xcrun -sdk macosx11.1 --show-sdk-path)" >> $GITHUB_ENV
-        echo "MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk macosx11.1 --show-sdk-platform-version)" >> $GITHUB_ENV
+        SDK=$(xcodebuild -showsdks -json | jq -r '.[] | .canonicalName' | grep '^macosx' | tail -n 1)
+        echo "SDKROOT=$(xcrun -sdk $SDK --show-sdk-path)"
+        echo "MACOSX_DEPLOYMENT_TARGET=$(xcrun -sdk $SDK --show-sdk-platform-version)"
+        
     - name: Package module
       run: |
         npm ci --ignore-scripts
         npm run build -- --release --target aarch64-apple-darwin
-        sed -i.bak 's/"package_name":.*/"package_name": "{platform}-aarch64-{node_napi_label}.tar.gz",/' package.json
+        sed -i.bak 's/"package_name":.*/"package_name": "{platform}-arm64-{node_napi_label}.tar.gz",/' package.json
         npm run package
         
     - name: Publish prebuilt binaries
