@@ -154,9 +154,9 @@ Most of your interaction with the canvas will actually be directed toward its �
 
 ### Path2D
 
-The context object creates an implicit ‘current’ bézier path which is updated by commands like [lineTo()][lineTo()] and [arcTo()][arcTo()] and is drawn to the canvas by calling [fill()][fill()], [stroke()][stroke()], or [clip()][clip()] without any arguments (aside from an optional [winding][nonzero] [rule][evenodd]). The only way to create a *second* path through the context itself is to call its [beginPath()][beginPath()] method, which erases its current contents and allows you to start issuing a new set of drawing commands.
+The context object creates an implicit ‘current’ bézier path which is updated by commands like [lineTo()][lineTo()] and [arcTo()][arcTo()] and is drawn to the canvas by calling [fill()][fill()], [stroke()][stroke()], or [clip()][clip()] without any arguments (aside from an optional [winding][nonzero] [rule][evenodd]). If you start creating a second path by calling [beginPath()][beginPath()] the context discards the prior path, forcing you to recreate it by hand if you need it again later.
 
-The `Path2D` class allows you to create paths independent of the context to be drawn (and potentially reused) later on. Its constructor can be called without any arguments to create a new, empty path object. It can also accept string describing a path using [SVG syntax][SVG_path_commands] or a reference to and existing `Path2D` object (which it will clone and return an independent copy of):
+The `Path2D` class allows you to create paths independent of the context to be drawn as needed (potentially repeatedly). Its constructor can be called without any arguments to create a new, empty path object. It can also accept a string  using [SVG syntax][SVG_path_commands] or a reference to an existing `Path2D` object (which it will return a clone of):
 
 ```js
 // three identical (but independent) paths
@@ -166,7 +166,7 @@ let p3 = new Path2D()
 p3.rect(10, 10, 100, 100)
 ```
 
-You can then use these objects by passing them as the first argument to the context’s `fill()`, `stroke()`, and `clip()` methods (along with an optional second argument defining the winding rule).
+You can then use these objects by passing them as the first argument to the context’s `fill()`, `stroke()`, and `clip()` methods (along with an optional second argument specifying the winding rule).
 
 | Line Segments                              | Shapes                   | Boolean Ops ⚡            | Extents ⚡      |
 | --                                         | --                       | --                       | --            |
@@ -272,7 +272,7 @@ The `startIndex` and `endIndex` values are the indices into the string of the fi
 
 In the browser, Path2D objects offer very little in the way of introspection—they are mostly-opaque recorders of drawing commands that can be ‘played back’ later on. Skia Canvas offers some additional transparency by allowing you to measure the total amount of space the lines will occupy (though you’ll need to account for the current `lineWidth` if you plan to draw the path with `stroke()`).
 
-The `.bounds` property returns an object defining the minimal rectangle containing the path:
+The `.bounds` property contains an object defining the minimal rectangle containing the path:
 ```
 {top, left, bottom, right, width, height}
 ```
@@ -291,7 +291,7 @@ rect.rect(0, 100, 100, 100)
 We can then create a new path by using one of the boolean operations such as:
 ```js
 let knockout = rect.complement(oval),
-    overlap = rect.intersection(oval),
+    overlap = rect.intersect(oval),
     footprint = rect.union(oval),
     ...
 ```
