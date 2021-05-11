@@ -343,7 +343,6 @@ impl FontLibrary{
     // don't update the style if no usable family names were specified
     let matches = self.collection.find_typefaces(&spec.families, spec.style);
     if matches.is_empty(){
-      eprintln!("Warning: No matching font families found for {:?}", spec.families);
       return None
     }
 

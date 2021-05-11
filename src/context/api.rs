@@ -404,8 +404,6 @@ pub fn set_fillStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   if let Some(dye) = Dye::new(&mut cx, arg, Fill) {
     this.state.fill_style = dye;
-  }else{
-    eprintln!("Warning: Invalid fill style (expected a css color string, CanvasGradient, or CanvasPattern)");
   }
   Ok(cx.undefined())
 }
@@ -424,8 +422,6 @@ pub fn set_strokeStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   if let Some(dye) = Dye::new(&mut cx, arg, Stroke) {
     this.state.stroke_style = dye;
-  }else{
-    eprintln!("Warning: Invalid stroke style (expected a css color string, CanvasGradient, or CanvasPattern)");
   }
   Ok(cx.undefined())
 }
