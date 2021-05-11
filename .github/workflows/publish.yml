@@ -1,10 +1,9 @@
 name: Publish to NPM
-
 on:
   workflow_dispatch:
   release:
-    types: [published] 
-    
+    types: [published]
+
 jobs:
   publish:
     name: Publish to NPM
@@ -13,12 +12,12 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v2
-      
-    - name: Use Node.js ${{ matrix.node-version }}
+
+    - name: Use Node.js
       uses: actions/setup-node@v2
       with:
         node-version: 15
-    
+
     - name: Publish to NPM
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

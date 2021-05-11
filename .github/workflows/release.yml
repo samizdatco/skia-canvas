@@ -1,5 +1,4 @@
 name: New release
-
 on:
   push:
     tags:
