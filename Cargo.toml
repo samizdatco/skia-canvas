@@ -10,12 +10,15 @@ exclude = ["index.node"]
 [lib]
 crate-type = ["cdylib"]
 
+[dependencies]
+css-color = "0.1.1"
+lazy_static = "1.4.0"
+
 [dependencies.neon]
 version = "0.8"
 default-features = false
 features = ["napi-6"]
 
-[dependencies]
-css-color = "0.1.1"
-lazy_static = "1.4.0"
-skia-safe = {version = "0.39.1", features = ["textlayout"]}
+[dependencies.skia-safe]
+version = "0.39.1"
+features = ["textlayout"]
