@@ -321,9 +321,9 @@ describe("Context2D", ()=>{
     describe("CanvasGradient", () => {
       test("linear", () => {
         let gradient = ctx.createLinearGradient(1,1,19,1);
+        ctx.fillStyle = gradient;
         gradient.addColorStop(0,'#fff');
         gradient.addColorStop(1,'#000');
-        ctx.fillStyle = gradient;
         ctx.fillRect(0,0,21,1);
 
         expect(pixel(0,0)).toEqual([255,255,255,255])
@@ -335,11 +335,11 @@ describe("Context2D", ()=>{
             inner = [x, y, 25],
             outer = [x, y, 50],
             gradient = ctx.createRadialGradient(...inner, ...outer);
+        ctx.fillStyle = gradient
         gradient.addColorStop(0,'#fff');
         gradient.addColorStop(.5,'#000');
         gradient.addColorStop(1,'#000');
         gradient.addColorStop(1,'red');
-        ctx.fillStyle = gradient
         ctx.fillRect(0,0, 200,200)
 
         expect(pixel(x, y)).toEqual([255,255,255,255])
@@ -352,10 +352,10 @@ describe("Context2D", ()=>{
       test("conic", () => {
         // draw a sweep with white at top and black on bottom
         let gradient = ctx.createConicGradient(0, 256, 256);
+        ctx.fillStyle = gradient;
         gradient.addColorStop(0,'#fff');
         gradient.addColorStop(.5,'#000');
         gradient.addColorStop(1,'#fff');
-        ctx.fillStyle = gradient;
         ctx.fillRect(0,0,512,512);
 
         expect(pixel(256,5)).toEqual([255,255,255,255])
@@ -363,10 +363,10 @@ describe("Context2D", ()=>{
 
         // rotate 90° so black is left and white is right
         gradient = ctx.createConicGradient(Math.PI/2, 256, 256);
+        ctx.fillStyle = gradient;
         gradient.addColorStop(0,'#fff');
         gradient.addColorStop(.5,'#000');
         gradient.addColorStop(1,'#fff');
-        ctx.fillStyle = gradient;
         ctx.fillRect(0,0,512,512);
 
         expect(pixel(500,256)).toEqual([255,255,255,255])
