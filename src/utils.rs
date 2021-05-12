@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 #![allow(unused_mut)]
-// #![allow(dead_code)]
+#![allow(dead_code)]
 #![allow(unused_imports)]
 use std::cmp;
 use std::f32::consts::PI;
