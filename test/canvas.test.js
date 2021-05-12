@@ -1,5 +1,8 @@
 const _ = require('lodash'),
       fs = require('fs'),
+      os = require('fs'),
+      tmp = require('tmp'),
+      glob = require('glob').sync,
       {Canvas, DOMMatrix, FontLibrary, loadImage} = require('../lib'),
       {parseFont} = require('../lib/parse');
 
@@ -32,6 +35,81 @@ describe("Canvas", ()=>{
       expect(pixel(0,0)).toEqual([0,0,0,0])
     })
   })
+
+    test("export file formats", () => {
+      expect(() => canvas.saveAs(`${TMP}/output.gif`) ).toThrowError('Unsupported file format');
+      expect(() => canvas.saveAs(`${TMP}/output.targa`) ).toThrowError('Unsupported file format');
+      expect(() => canvas.saveAs(`${TMP}/output`) ).toThrowError('Cannot determine image format');
+      expect(() => canvas.saveAs(`${TMP}/`) ).toThrowError('Cannot determine image format');
+      expect(() => canvas.saveAs(`${TMP}/output`, {format:'png'}) ).not.toThrow()
+    })
+
+  })
+
+  describe("can create", ()=>{
+    let TMP
+    beforeEach(() => {
+      TMP = tmp.dirSync().name
+
+      ctx.fillStyle = 'red'
+      ctx.arc(100, 100, 25, 0, Math.PI/2)
+      ctx.fill()
+    })
+    afterEach(() => os.rmdirSync(TMP, {recursive:true}) )
+
+    test("JPEGs", ()=>{
+      canvas.saveAs(`${TMP}/output1.jpg`)
+      canvas.saveAs(`${TMP}/output2.jpeg`)
+      canvas.saveAs(`${TMP}/output3.JPG`)
+      canvas.saveAs(`${TMP}/output4.JPEG`)
+      canvas.saveAs(`${TMP}/output5`, {format:'jpg'})
+      canvas.saveAs(`${TMP}/output6`, {format:'jpeg'})
+      canvas.saveAs(`${TMP}/output6.png`, {format:'jpeg'})
+
+      let magic = Buffer.from([0xFF, 0xD8, 0xFF])
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+    test("PNGs", ()=>{
+      canvas.saveAs(`${TMP}/output1.png`)
+      canvas.saveAs(`${TMP}/output2.PNG`)
+      canvas.saveAs(`${TMP}/output3`, {format:'png'})
+      canvas.saveAs(`${TMP}/output4.svg`, {format:'png'})
+
+      let magic = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+    test("SVGs", ()=>{
+      canvas.saveAs(`${TMP}/output1.svg`)
+      canvas.saveAs(`${TMP}/output2.SVG`)
+      canvas.saveAs(`${TMP}/output3`, {format:'svg'})
+      canvas.saveAs(`${TMP}/output4.jpeg`, {format:'svg'})
+
+      for (let path of glob(`${TMP}/*`)){
+        let svg = fs.readFileSync(path, 'utf-8')
+        expect(svg).toMatch(/^<\?xml version/)
+      }
+    })
+    test("PDFs", ()=>{
+      canvas.saveAs(`${TMP}/output1.pdf`)
+      canvas.saveAs(`${TMP}/output2.PDF`)
+      canvas.saveAs(`${TMP}/output3`, {format:'pdf'})
+      canvas.saveAs(`${TMP}/output4.jpg`, {format:'pdf'})
+
+      let magic = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d])
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+
+  })
+
 
 })
 
