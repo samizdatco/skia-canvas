@@ -12,7 +12,7 @@ use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
 use super::{Context2D, BoxedContext2D, Dye};
-use crate::canvas::{BoxedCanvas};
+use crate::canvas::{Canvas, BoxedCanvas};
 use crate::path::{Path2D, BoxedPath2D};
 use crate::image::{Image, BoxedImage};
 use crate::typography::*;
@@ -23,30 +23,20 @@ use crate::utils::*;
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedContext2D> {
-  let dims = float_args(&mut cx, 1..3)?;
+  let this = RefCell::new(Context2D::new());
+  let parent = cx.argument::<BoxedCanvas>(1)?;
+  let parent = parent.borrow();
 
-  let bounds = Rect::from_wh(dims[0], dims[1]);
-  let this = RefCell::new(Context2D::new(bounds));
+  this.borrow_mut().resize((parent.width, parent.height));
   Ok(cx.boxed(this))
 }
 
-pub fn resetWidth(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn resetSize(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
+  let parent = cx.argument::<BoxedCanvas>(1)?;
+  let parent = parent.borrow();
 
-  let new_width = float_arg(&mut cx, 1, "width")?;
-  let old_height = this.bounds.size().height;
-  this.resize((new_width, old_height));
-  Ok(cx.undefined())
-}
-
-pub fn resetHeight(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let new_height = float_arg(&mut cx, 1, "height")?;
-  let old_width = this.bounds.size().width;
-  this.resize((old_width, new_height));
+  this.borrow_mut().resize((parent.width, parent.height));
   Ok(cx.undefined())
 }
 

@@ -36,6 +36,66 @@ describe("Canvas", ()=>{
     })
   })
 
+  describe("handles bad arguments for", ()=>{
+    let TMP
+    beforeEach(() => TMP = tmp.dirSync().name )
+    afterEach(() => os.rmdirSync(TMP, {recursive:true}) )
+
+    test("initial dimensions", () => {
+      let W = 300,
+          H = 150,
+          c
+
+      c = new Canvas()
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(H)
+
+      c = new Canvas(0, 0)
+      expect(c.width).toBe(0)
+      expect(c.height).toBe(0)
+
+      c = new Canvas(-99, 123)
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(123)
+
+      c = new Canvas(456)
+      expect(c.width).toBe(456)
+      expect(c.height).toBe(H)
+
+      c = new Canvas(undefined, 789)
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(789)
+
+      c = new Canvas('garbage', NaN)
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(H)
+
+      c = new Canvas(false, {})
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(H)
+    })
+
+    test("new page dimensions", () => {
+      let W = 300,
+          H = 150,
+          c, pg
+
+      c = new Canvas(123, 456)
+      expect(c.width).toBe(123)
+      expect(c.height).toBe(456)
+      pg = c.newPage().canvas
+      expect(pg.width).toBe(123)
+      expect(pg.height).toBe(456)
+
+      pg = c.newPage(987).canvas
+      expect(pg.width).toBe(123)
+      expect(pg.height).toBe(456)
+
+      pg = c.newPage(NaN, NaN).canvas
+      expect(pg.width).toBe(W)
+      expect(pg.height).toBe(H)
+    })
+
     test("export file formats", () => {
       expect(() => canvas.saveAs(`${TMP}/output.gif`) ).toThrowError('Unsupported file format');
       expect(() => canvas.saveAs(`${TMP}/output.targa`) ).toThrowError('Unsupported file format');

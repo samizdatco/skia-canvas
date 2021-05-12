@@ -123,13 +123,13 @@ impl Default for State {
 }
 
 impl Context2D{
-  pub fn new(bounds: Rect) -> Self {
+  pub fn new() -> Self {
     let mut recorder = PictureRecorder::new();
+    let bounds = Rect::from_wh(300.0, 150.0);
     recorder.begin_recording(bounds, None);
     if let Some(canvas) = recorder.recording_canvas() {
       canvas.save(); // start at depth 2
     }
-
 
     Context2D{
       bounds,

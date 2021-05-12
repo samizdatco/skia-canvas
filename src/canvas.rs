@@ -25,10 +25,8 @@ pub struct Canvas{
 }
 
 impl Canvas{
-  pub fn new(width:f32, height:f32) -> Self{
-    let width = if width < 0.0 { 300.0 } else { width };
-    let height = if height < 0.0 { 150.0 } else { height };
-    Canvas{width, height}
+  pub fn new() -> Self{
+    Canvas{width:300.0, height:150.0}
   }
 
   fn encode_image(&self, picture: &Picture, format:&str, width: f32, height: f32, quality: f32) -> Option<Data> {
@@ -92,9 +90,7 @@ impl Canvas{
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
-  let width = float_arg_or(&mut cx, 1, 300.0).floor();
-  let height = float_arg_or(&mut cx, 2, 150.0).floor();
-  let this = RefCell::new(Canvas::new(width, height));
+  let this = RefCell::new(Canvas::new());
   Ok(cx.boxed(this))
 }
 
