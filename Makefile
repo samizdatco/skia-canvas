@@ -18,6 +18,9 @@ $(NPM):
 $(LIB): build
 
 test: $(LIB)
+	@$(JEST)
+
+tests: $(LIB)
 	@$(JEST) --watch
 
 visual: $(LIB)
