@@ -32,7 +32,7 @@ On the agenda for subsequent updates are:
 
 ## Platform Support
 
-The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions: 
+The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions:
   - 10.20+
   - 12.17+
   - 14.0 and later
@@ -50,7 +50,7 @@ If you’re running on a supported platform, installation should be as simple as
 $ npm install skia-canvas
 ```
 
-This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases). If prebuilt binaries aren’t available for your system you’ll need to compile the portions of this library that directly interface with Skia. 
+This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases). If prebuilt binaries aren’t available for your system you’ll need to compile the portions of this library that directly interface with Skia.
 
 Start by installing:
 
@@ -286,7 +286,7 @@ oval.arc(100, 100, 100, 0, 2*Math.PI)
 let rect = new Path2D()
 rect.rect(0, 100, 100, 100)
 ```
-![layered paths](https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/path-operation-none.svg)
+![layered paths](/test/assets/path-operation-none.svg)
 
 We can then create a new path by using one of the boolean operations such as:
 ```js
@@ -295,7 +295,7 @@ let knockout = rect.complement(oval),
     footprint = rect.union(oval),
     ...
 ```
-![different combinations](https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/path-operations@2x.png)
+![different combinations](/test/assets/path-operations@2x.png)
 
 Note that the `xor` operator is liable to create a path with lines that cross over one another so you’ll get different results when filling it using the [`"evenodd"`][evenodd] winding rule (as shown above) than with [`"nonzero"`][nonzero] (the canvas default).
 
@@ -308,7 +308,7 @@ In cases where the contours of a single path overlap one another, it’s often u
 let cross = new Path2D("M 10,50 h 100 v 20 h -100 Z M 50,10 h 20 v100 h -20 Z")
 let uncrossed = cross.simplify()
 ```
-![different combinations](https://skia-canvas.s3.us-east-1.amazonaws.com/dependencies/path-simplify@2x.png)
+![different combinations](/test/assets/path-simplify@2x.png)
 
 
 
