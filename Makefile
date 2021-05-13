@@ -20,7 +20,7 @@ $(LIB): build
 test: $(LIB)
 	@$(JEST)
 
-tests: $(LIB)
+debug: $(LIB)
 	@$(JEST) --watch
 
 visual: $(LIB)
