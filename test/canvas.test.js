@@ -6,6 +6,10 @@ const _ = require('lodash'),
       {Canvas, DOMMatrix, FontLibrary, loadImage} = require('../lib'),
       {parseFont} = require('../lib/parse');
 
+const BLACK = [0,0,0,255],
+      WHITE = [255,255,255,255],
+      CLEAR = [0,0,0,0]
+
 describe("Canvas", ()=>{
   let canvas, ctx,
       WIDTH = 512, HEIGHT = 512,
@@ -24,7 +28,7 @@ describe("Canvas", ()=>{
       ctx.fillStyle = 'white'
       ctx.fillRect(0,0, WIDTH,HEIGHT)
       expect(ctx.fillStyle).toBe('#ffffff')
-      expect(pixel(0,0)).toEqual([255,255,255,255])
+      expect(pixel(0,0)).toEqual(WHITE)
 
       // resizing also clears content & resets state
       canvas.width = 123
@@ -32,7 +36,7 @@ describe("Canvas", ()=>{
       expect(canvas.width).toBe(123)
       expect(canvas.height).toBe(456)
       expect(ctx.fillStyle).toBe('#000000')
-      expect(pixel(0,0)).toEqual([0,0,0,0])
+      expect(pixel(0,0)).toEqual(CLEAR)
     })
   })
 
@@ -357,7 +361,7 @@ describe("Context2D", ()=>{
       expect(bmp.width).toBe(width)
       expect(bmp.height).toBe(height)
       expect(bmp.data.length).toBe(width * height * 4)
-      expect(Array.from(bmp.data.slice(0,4))).toEqual([0,0,0,0])
+      expect(Array.from(bmp.data.slice(0,4))).toEqual(CLEAR)
     })
 
     describe("CanvasPattern", () => {
@@ -377,7 +381,7 @@ describe("Context2D", ()=>{
         for (var i=0; i<bmp.data.length; i+=4){
           if (i % (bmp.width*4) != 0) blackPixel = !blackPixel
           expect(Array.from(bmp.data.slice(i, i+4))).toEqual(
-            blackPixel ? [0,0,0,255] : [255,255,255,255]
+            blackPixel ? BLACK : WHITE
           )
         }
       })
@@ -400,7 +404,7 @@ describe("Context2D", ()=>{
         for (var i=0; i<bmp.data.length; i+=4){
           if (i % (bmp.width*4) != 0) blackPixel = !blackPixel
           expect(Array.from(bmp.data.slice(i, i+4))).toEqual(
-            blackPixel ? [0,0,0,255] : [255,255,255,255]
+            blackPixel ? BLACK : WHITE
           )
         }
       })
@@ -464,8 +468,8 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'#000');
         ctx.fillRect(0,0,21,1);
 
-        expect(pixel(0,0)).toEqual([255,255,255,255])
-        expect(pixel(20,0)).toEqual([0,0,0,255])
+        expect(pixel(0,0)).toEqual(WHITE)
+        expect(pixel(20,0)).toEqual(BLACK)
       })
 
       test("radial", () => {
@@ -480,9 +484,9 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'red');
         ctx.fillRect(0,0, 200,200)
 
-        expect(pixel(x, y)).toEqual([255,255,255,255])
-        expect(pixel(x+inside, y)).toEqual([0,0,0,255])
-        expect(pixel(x, y+inside)).toEqual([0,0,0,255])
+        expect(pixel(x, y)).toEqual(WHITE)
+        expect(pixel(x+inside, y)).toEqual(BLACK)
+        expect(pixel(x, y+inside)).toEqual(BLACK)
         expect(pixel(x+outside, y)).toEqual([255,0,0,255])
         expect(pixel(x, y+outside)).toEqual([255,0,0,255])
       })
@@ -496,8 +500,8 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'#fff');
         ctx.fillRect(0,0,512,512);
 
-        expect(pixel(256,5)).toEqual([255,255,255,255])
-        expect(pixel(256,500)).toEqual([0,0,0,255])
+        expect(pixel(256,5)).toEqual(WHITE)
+        expect(pixel(256,500)).toEqual(BLACK)
 
         // rotate 90° so black is left and white is right
         gradient = ctx.createConicGradient(Math.PI/2, 256, 256);
@@ -507,8 +511,8 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'#fff');
         ctx.fillRect(0,0,512,512);
 
-        expect(pixel(500,256)).toEqual([255,255,255,255])
-        expect(pixel(5,256)).toEqual([0,0,0,255])
+        expect(pixel(500,256)).toEqual(WHITE)
+        expect(pixel(5,256)).toEqual(BLACK)
       })
     })
   })
@@ -531,10 +535,10 @@ describe("Context2D", ()=>{
       ctx.fillRect(0, 0, 2, 2)
       ctx.restore()
 
-      expect(pixel(0, 0)).toEqual([0,0,0,255])
-      expect(pixel(1, 0)).toEqual([255,255,255,255])
-      expect(pixel(0, 1)).toEqual([255,255,255,255])
-      expect(pixel(1, 1)).toEqual([0,0,0,255])
+      expect(pixel(0, 0)).toEqual(BLACK)
+      expect(pixel(1, 0)).toEqual(WHITE)
+      expect(pixel(0, 1)).toEqual(WHITE)
+      expect(pixel(1, 1)).toEqual(BLACK)
 
       // b | b
       // -----
@@ -543,10 +547,10 @@ describe("Context2D", ()=>{
       ctx.fillStyle = 'black'
       ctx.fillRect(0, 0, 2, 2)
 
-      expect(pixel(0, 0)).toEqual([0,0,0,255])
-      expect(pixel(1, 0)).toEqual([0,0,0,255])
-      expect(pixel(0, 1)).toEqual([255,255,255,255])
-      expect(pixel(1, 1)).toEqual([0,0,0,255])
+      expect(pixel(0, 0)).toEqual(BLACK)
+      expect(pixel(1, 0)).toEqual(BLACK)
+      expect(pixel(0, 1)).toEqual(WHITE)
+      expect(pixel(1, 1)).toEqual(BLACK)
     })
 
     test("fill()", () => {
@@ -562,19 +566,19 @@ describe("Context2D", ()=>{
       // -----
       // w | b
       ctx.fill('evenodd')
-      expect(pixel(0, 0)).toEqual([0,0,0,255])
-      expect(pixel(1, 0)).toEqual([255,255,255,255])
-      expect(pixel(0, 1)).toEqual([255,255,255,255])
-      expect(pixel(1, 1)).toEqual([0,0,0,255])
+      expect(pixel(0, 0)).toEqual(BLACK)
+      expect(pixel(1, 0)).toEqual(WHITE)
+      expect(pixel(0, 1)).toEqual(WHITE)
+      expect(pixel(1, 1)).toEqual(BLACK)
 
       // b | b
       // -----
       // w | b
       ctx.fill() // nonzero
-      expect(pixel(0, 0)).toEqual([0,0,0,255])
-      expect(pixel(1, 0)).toEqual([0,0,0,255])
-      expect(pixel(0, 1)).toEqual([255,255,255,255])
-      expect(pixel(1, 1)).toEqual([0,0,0,255])
+      expect(pixel(0, 0)).toEqual(BLACK)
+      expect(pixel(1, 0)).toEqual(BLACK)
+      expect(pixel(0, 1)).toEqual(WHITE)
+      expect(pixel(1, 1)).toEqual(BLACK)
     })
 
     test("fillText()", () => {
