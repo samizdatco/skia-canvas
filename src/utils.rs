@@ -118,7 +118,7 @@ pub fn string_arg<'a>(cx: &mut FunctionContext<'a>, idx: usize, attr:&str) -> Re
     Some(v) => Ok(v),
     None => cx.throw_type_error(
       if exists { format!("{} must be a string", attr) }
-      else { format!("missing argument: expected a string for {} ({} arg)", attr, arg_num(idx)) }
+      else { format!("Missing argument: expected a string for {} ({} arg)", attr, arg_num(idx)) }
     )
   }
 }
@@ -170,7 +170,7 @@ pub fn bool_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> Result<bool,
     Some(v) => Ok(v),
     None => cx.throw_type_error(
       if exists { format!("{} must be a boolean", attr) }
-      else { format!("missing argument: expected a boolean for {} (as {} arg)", attr, arg_num(idx)) }
+      else { format!("Missing argument: expected a boolean for {} (as {} arg)", attr, arg_num(idx)) }
     )
   }
 }
@@ -224,7 +224,7 @@ pub fn float_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> Result<f32,
     Some(v) => Ok(v),
     None => cx.throw_type_error(
       if exists { format!("{} must be a number", attr) }
-      else { format!("missing argument: expected a number for {} as {} arg", attr, arg_num(idx)) }
+      else { format!("Missing argument: expected a number for {} as {} arg", attr, arg_num(idx)) }
     )
   }
 }
