@@ -18,7 +18,7 @@ $(NPM):
 $(LIB): build
 
 test: $(LIB)
-	@$(JEST)
+	@$(JEST) --verbose
 
 debug: $(LIB)
 	@$(JEST) --watch
