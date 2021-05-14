@@ -752,6 +752,7 @@ describe("Context2D", ()=>{
       expect(ctx.fillStyle).toBe('#ffffff');
 
       // #rgba and #rrggbbaa
+
       ctx.fillStyle = '#ffccaa80'
       expect(ctx.fillStyle).toBe('rgba(255, 204, 170, 0.502)')
 
@@ -841,9 +842,47 @@ describe("Context2D", ()=>{
       ctx.fillStyle = 'hsl(1.24e2, 760e-1%, 4.7e1%)';
       expect(ctx.fillStyle).toBe('#1dd329');
 
-      // case-insensitive (#235)
+      // case-insensitive css names
+
       ctx.fillStyle = "sILveR";
       expect(ctx.fillStyle).toBe("#c0c0c0");
+
+      // wrong type args
+
+      let transparent = 'rgba(0, 0, 0, 0)'
+      ctx.fillStyle = 'transparent'
+      expect(ctx.fillStyle).toBe(transparent);
+
+      ctx.fillStyle = null
+      expect(ctx.fillStyle).toBe(transparent);
+
+      ctx.fillStyle = NaN
+      expect(ctx.fillStyle).toBe(transparent);
+
+      ctx.fillStyle = [undefined, 255, false]
+      expect(ctx.fillStyle).toBe(transparent);
+
+      ctx.fillStyle = true
+      expect(ctx.fillStyle).toBe(transparent);
+
+      ctx.fillStyle = {}
+      expect(ctx.fillStyle).toBe(transparent);
+
+      // objects with .toString methods
+
+      ctx.fillStyle = {toString:() => 'red'}
+      expect(ctx.fillStyle).toBe('#ff0000');
+
+      ctx.fillStyle = 'transparent'
+      ctx.fillStyle = {toString:'red'}
+      expect(ctx.fillStyle).toBe(transparent);
+
+      ctx.fillStyle = {toString:() => 'gobbledygook'}
+      expect(ctx.fillStyle).toBe(transparent);
+
+      ctx.fillStyle = {toString:() => NaN}
+      expect(ctx.fillStyle).toBe(transparent);
+
     });
   })
 })
