@@ -115,9 +115,16 @@ pub fn addPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     Err(_e) => Matrix::new_identity()
   };
 
-  let mut this = this.borrow_mut();
-  let other = other.borrow();
-  this.path.add_path_matrix(&other.path, &matrix, AddPathMode::Append);
+  // make a copy if adding a path to itself, otherwise use a ref
+  if this.strict_equals(&mut cx, other){
+    let src = other.borrow().path.clone();
+    let mut dst = &mut this.borrow_mut().path;
+    dst.add_path_matrix(&src, &matrix, AddPathMode::Append);
+  }else{
+    let src = &other.borrow().path;
+    let mut dst = &mut this.borrow_mut().path;
+    dst.add_path_matrix(src, &matrix, AddPathMode::Append);
+  };
 
   Ok(cx.undefined())
 }
