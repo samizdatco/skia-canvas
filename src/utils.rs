@@ -248,8 +248,10 @@ pub fn opt_float_args(cx: &mut FunctionContext, rng: Range<usize>) -> Vec<f32>{
 
   let mut args:Vec<f32> = Vec::new();
   for i in rng.start..end{
-    if let Ok(num) = cx.argument::<JsNumber>(i as i32){
-      args.push(num.value(cx) as f32);
+    if let Ok(arg) = cx.argument::<JsValue>(i as i32){
+      if let Ok(num) = arg.downcast::<JsNumber, _>(cx){
+        args.push(num.value(cx) as f32);
+      }
     }
   }
   args
