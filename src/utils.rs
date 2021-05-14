@@ -356,12 +356,22 @@ pub fn to_matrix(t:&[f32]) -> Option<Matrix>{
 //   }
 // }
 
+pub fn opt_matrix_arg(cx: &mut FunctionContext, idx: usize) -> Option<Matrix>{
+  if let Some(arg) = cx.argument_opt(idx as i32) {
+    if let Ok(array) = arg.downcast::<JsArray, _>(cx) {
+      if let Ok(vals) = array.to_vec(cx){
+        let terms = floats_in(cx, &vals);
+        return to_matrix(&terms)
+      }
+    }
+  }
+  None
+}
+
 pub fn matrix_arg(cx: &mut FunctionContext, idx:usize) -> Result<Matrix, Throw> {
-  let arg = cx.argument::<JsArray>(idx as i32)?.to_vec(cx)?;
-  let terms = floats_in(cx, &arg);
-  match to_matrix(&terms){
-    Some(matrix) => Ok(matrix),
-    None => cx.throw_type_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+  match opt_matrix_arg(cx, idx){
+    Some(v) => Ok(v),
+    None => cx.throw_type_error("expected a DOMMatrix")
   }
 }
 

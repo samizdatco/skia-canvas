@@ -110,11 +110,12 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 
 pub fn setTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvasPattern>(0)?;
+  let matrix = matrix_arg(&mut cx, 1)?;
   let mut this = this.borrow_mut();
-
   let stamp = Arc::clone(&this.stamp);
   let mut stamp = stamp.lock().unwrap();
-  stamp.matrix = matrix_arg(&mut cx, 1)?;
+
+  stamp.matrix = matrix;
   Ok(cx.undefined())
 }
 

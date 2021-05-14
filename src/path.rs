@@ -110,10 +110,9 @@ pub fn from_svg(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 pub fn addPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let other = cx.argument::<BoxedPath2D>(1)?;
-  let matrix = match matrix_arg(&mut cx, 2){
-    Ok(matrix) => matrix,
-    Err(_e) => Matrix::new_identity()
-  };
+  let matrix = opt_matrix_arg(&mut cx, 2).unwrap_or_else(
+    Matrix::new_identity
+  );
 
   // make a copy if adding a path to itself, otherwise use a ref
   if this.strict_equals(&mut cx, other){

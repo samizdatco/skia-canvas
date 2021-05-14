@@ -124,7 +124,7 @@ pub fn set_currentTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
 
-  if let Ok(matrix) = matrix_arg(&mut cx, 1){
+  if let Some(matrix) = opt_matrix_arg(&mut cx, 1){
     this.with_matrix(|ctm| ctm.reset().pre_concat(&matrix) );
   }
   Ok(cx.undefined())
@@ -680,9 +680,9 @@ pub fn get_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsBoolean>
 pub fn set_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  if let Ok(flag) = bool_arg(&mut cx, 1, "imageSmoothingEnabled"){
-    this.state.image_smoothing_enabled = flag;
-  }
+  let flag = bool_arg(&mut cx, 1, "imageSmoothingEnabled")?;
+
+  this.state.image_smoothing_enabled = flag;
   Ok(cx.undefined())
 }
 
