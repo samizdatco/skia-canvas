@@ -597,18 +597,21 @@ pub fn drawRaster(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let canvas = cx.argument::<BoxedCanvas>(1)?;
-  let context = cx.argument::<BoxedContext2D>(2)?;
+  let context = cx.argument::<BoxedContext2D>(1)?;
 
-  let canvas = canvas.borrow();
-  let (width, height) = (canvas.width as f32, canvas.height as f32);
+  let (width, height) = {
+    let bounds = context.borrow().bounds;
+    (bounds.width(), bounds.height())
+  };
 
   let argc = cx.len() as usize;
-  let nums = float_args(&mut cx, 3..argc)?;
+  let nums = float_args(&mut cx, 2..argc)?;
   match _layout_rects(width, height, &nums){
     Some((src, dst)) => {
-      let mut ctx = context.borrow_mut();
-      let pict = ctx.get_picture(None);
+      let pict = {
+        let mut ctx = context.borrow_mut();
+        ctx.get_picture(None)
+      };
 
       let mut this = this.borrow_mut();
       this.draw_picture(&pict, &src, &dst);
