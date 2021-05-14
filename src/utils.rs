@@ -91,7 +91,7 @@ pub fn string_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&st
   let key = cx.string(attr);
   match obj.get(cx, key)?.downcast::<JsString, _>(cx){
     Ok(s) => Ok(s.value(cx)),
-    Err(_e) => cx.throw_error(format!("Exptected a string for \"{}\"", attr))
+    Err(_e) => cx.throw_type_error(format!("Exptected a string for \"{}\"", attr))
   }
 }
 
@@ -184,7 +184,7 @@ pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str
   let key = cx.string(attr);
   match obj.get(cx, key)?.downcast::<JsNumber, _>(cx){
     Ok(num) => Ok(num.value(cx) as f32),
-    Err(_e) => cx.throw_error(format!("Exptected a numerical value for \"{}\"", attr))
+    Err(_e) => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
   }
 }
 
@@ -261,7 +261,7 @@ pub fn float_args(cx: &mut FunctionContext, rng: Range<usize>) -> Result<Vec<f32
   let got = list.len();
   match got == need{
     true => Ok(list),
-    false => cx.throw_error(format!("expected {} numbers (got {})", need, got))
+    false => cx.throw_type_error(format!("Not enough arguments: expected {} numbers (got {})", need, got))
   }
 }
 
@@ -359,7 +359,7 @@ pub fn matrix_arg(cx: &mut FunctionContext, idx:usize) -> Result<Matrix, Throw> 
   let terms = floats_in(cx, &arg);
   match to_matrix(&terms){
     Some(matrix) => Ok(matrix),
-    None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+    None => cx.throw_type_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
   }
 }
 
