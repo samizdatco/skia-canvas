@@ -219,7 +219,7 @@ pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
   let nums = float_args(&mut cx, 1..8)?;
-  let ccw = bool_arg(&mut cx, 8, "isCCW")?;
+  let ccw = bool_arg_or(&mut cx, 8, false);
 
   if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
     if *x_radius < 0.0 || *y_radius < 0.0 {
