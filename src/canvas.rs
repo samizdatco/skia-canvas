@@ -149,7 +149,7 @@ pub fn saveAs(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if sequence {
     pages.reverse();
 
-    let padding = float_arg(&mut cx, 1, "padding")? as i32;
+    let padding = float_arg(&mut cx, 2, "padding")? as i32;
     let padding = match padding {
       -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
       _ => padding as usize
