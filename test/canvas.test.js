@@ -3,7 +3,7 @@ const _ = require('lodash'),
       os = require('fs'),
       tmp = require('tmp'),
       glob = require('glob').sync,
-      {Canvas, DOMMatrix, FontLibrary, loadImage} = require('../lib'),
+      {Canvas, Image, FontLibrary, loadImage} = require('../lib'),
       {parseFont} = require('../lib/parse');
 
 const BLACK = [0,0,0,255],
@@ -136,6 +136,7 @@ describe("Canvas", ()=>{
         expect(header.equals(magic)).toBe(true)
       }
     })
+
     test("PNGs", ()=>{
       canvas.saveAs(`${TMP}/output1.png`)
       canvas.saveAs(`${TMP}/output2.PNG`)
@@ -148,6 +149,7 @@ describe("Canvas", ()=>{
         expect(header.equals(magic)).toBe(true)
       }
     })
+
     test("SVGs", ()=>{
       canvas.saveAs(`${TMP}/output1.svg`)
       canvas.saveAs(`${TMP}/output2.SVG`)
@@ -159,6 +161,7 @@ describe("Canvas", ()=>{
         expect(svg).toMatch(/^<\?xml version/)
       }
     })
+
     test("PDFs", ()=>{
       canvas.saveAs(`${TMP}/output1.pdf`)
       canvas.saveAs(`${TMP}/output2.PDF`)
@@ -172,7 +175,35 @@ describe("Canvas", ()=>{
       }
     })
 
-    // TKTKTKTKTKTK
+    test("image-sequences", ()=>{
+      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+      colors.forEach((color, i) => {
+        let dim = 512 + 100*i
+        ctx = i ? canvas.newPage(dim, dim) : canvas.newPage()
+        ctx.fillStyle = color
+        ctx.arc(100, 100, 25, 0, Math.PI + Math.PI/colors.length*(i+1))
+        ctx.fill()
+        expect(ctx.canvas.height).toEqual(dim)
+        expect(ctx.canvas.width).toEqual(dim)
+      })
+
+      canvas.saveAs(`${TMP}/output-{2}.png`)
+
+      let files = glob(`${TMP}/output-0?.png`)
+      expect(files.length).toEqual(colors.length+1)
+
+      files.forEach((fn, i) => {
+        let img = new Image()
+        img.src = fn
+        expect(img.complete).toBe(true)
+
+        // second page inherits the first's size, then they increase
+        let dim = i<2 ? 512 : 512 + 100 * (i-1)
+        expect(img.width).toEqual(dim)
+        expect(img.height).toEqual(dim)
+      })
+    })
+
 
   })
 })
