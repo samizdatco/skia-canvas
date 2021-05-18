@@ -5,6 +5,158 @@ const _ = require('lodash'),
       {parseFont} = require('../lib/parse'),
       simple = require('simple-get')
 
+jest.mock('simple-get', () => {
+  const fs = require('fs')
+  return {
+    concat:function(src, callback){
+      let path = src.replace(/^https?:\//, process.cwd())
+      try{
+        var [statusCode, data] = [200, fs.readFileSync(path)]
+      }catch(e){
+        var [statusCode, err] = [404, 'HTTP_ERROR_404']
+      }
+
+      setTimeout(() => callback(err, {statusCode}, data) )
+    }
+  }
+})
+
+describe("Image", () => {
+  var PATH = 'test/assets/pentagon.png',
+      URL = `https://${PATH}`,
+      BUFFER = fs.readFileSync(PATH),
+      DATA_URI = `data:image/png;base64,${BUFFER.toString('base64')}`,
+      FRESH = {complete:false, width:undefined, height:undefined},
+      LOADED = {complete:true, width:125, height:125},
+      FORMAT = 'test/assets/image/format',
+      PARSED = {complete:true, width:60, height:60},
+      img
+
+  beforeEach(() => img = new Image() )
+
+  describe("can be initialized from", () => {
+    test("buffer", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = BUFFER
+      expect(img).toMatchObject(LOADED)
+    })
+
+    test("data uri", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = DATA_URI
+      expect(img).toMatchObject(LOADED)
+    })
+
+    test("local file", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = PATH
+      expect(img).toMatchObject(LOADED)
+    })
+
+    test("http url", done => {
+      expect(img).toMatchObject(FRESH)
+      img.onload = loaded => {
+        expect(loaded).toBe(img)
+        expect(img).toMatchObject(LOADED)
+        done()
+      }
+      img.src = URL
+    })
+
+    test("loadImage call", async done => {
+      expect(img).toMatchObject(FRESH)
+
+      img = await loadImage(URL)
+      expect(img).toMatchObject(LOADED)
+
+      img = await loadImage(BUFFER)
+      expect(img).toMatchObject(LOADED)
+
+      img = await loadImage(DATA_URI)
+      expect(img).toMatchObject(LOADED)
+
+      img = await loadImage(PATH)
+      expect(img).toMatchObject(LOADED)
+
+      expect(async () => { await loadImage('http://nonesuch') }).rejects.toEqual("HTTP_ERROR_404")
+
+      done()
+    })
+  })
+
+  describe("sends notifications through", () => {
+    test(".complete flag", () => {
+      expect(img.complete).toEqual(false)
+
+      img.src = PATH
+      expect(img.complete).toEqual(true)
+    })
+
+    test(".onload callback", async done => {
+      // ensure that the fetch process can be overwritten while in flight
+      img.onload = loaded => { throw Error("should not be called") }
+      img.src = URL
+
+      img.onload = loaded => done()
+      img.src = 'http://test/assets/globe.jpg'
+    })
+
+    test(".onerror callback", async done => {
+      img.onerror = err => {
+        expect(err).toEqual("HTTP_ERROR_404")
+        done()
+      }
+      img.src = 'http://nonesuch'
+    })
+
+    test(".decode promise", async done => {
+      expect(()=> img.decode() ).rejects.toEqual(new Error('Missing Source URL'))
+
+      img.src = URL
+      let decoded = await img.decode()
+      expect(decoded).toBe(img)
+
+      // can load new data into existing Image
+      img.src = 'http://test/assets/image/format.png'
+      decoded = await img.decode()
+      expect(decoded).toBe(img)
+
+      // autoresolves once loaded
+      expect(img.decode()).resolves.toEqual(img)
+
+      done()
+    })
+  })
+
+  describe("can decode format", () => {
+    test("PNG", () => {
+      img.src = FORMAT + '.png'
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("JPEG", () => {
+      img.src = FORMAT + '.jpg'
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("GIF", () => {
+      img.src = FORMAT + '.gif'
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("BMP", () => {
+      img.src = FORMAT + '.bmp'
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("ICO", () => {
+      img.src = FORMAT + '.ico'
+      expect(img).toMatchObject(PARSED)
+    })
+  })
+})
+
+
 describe("FontLibrary", ()=>{
   const findFont = font => `${__dirname}/assets/${font}`
 
