@@ -6,7 +6,8 @@ node_modules
 native/artifacts.json
 native/target
 native/*.node
-test/assets/*/*
+test/assets/Oswald
+test/assets/Raleway
 scr[ia]bble.*
 /*.png
 /*.jpg
