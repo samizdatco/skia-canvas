@@ -1,6 +1,5 @@
 const _ = require('lodash'),
       fs = require('fs'),
-      os = require('fs'),
       tmp = require('tmp'),
       glob = require('glob').sync,
       {Canvas, Image, FontLibrary, loadImage} = require('../lib'),
@@ -43,7 +42,7 @@ describe("Canvas", ()=>{
   describe("handles bad arguments for", ()=>{
     let TMP
     beforeEach(() => TMP = tmp.dirSync().name )
-    afterEach(() => os.rmdirSync(TMP, {recursive:true}) )
+    afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
 
     test("initial dimensions", () => {
       let W = 300,
@@ -119,7 +118,7 @@ describe("Canvas", ()=>{
       ctx.arc(100, 100, 25, 0, Math.PI/2)
       ctx.fill()
     })
-    afterEach(() => os.rmdirSync(TMP, {recursive:true}) )
+    afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
 
     test("JPEGs", ()=>{
       canvas.saveAs(`${TMP}/output1.jpg`)
