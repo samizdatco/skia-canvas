@@ -202,6 +202,34 @@ describe("Canvas", ()=>{
       })
     })
 
+    test("multi-page PDFs", () => {
+      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+      colors.forEach((color, i) => {
+        ctx = canvas.newPage()
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = 'white'
+        ctx.textAlign = 'center'
+        ctx.fillText(i+1, canvas.width/2, canvas.height/2)
+      })
+      expect(() => canvas.saveAs(`${TMP}/multipage.pdf`) ).not.toThrow()
+    })
 
+    test("sensible errors for misbegotten exports", () => {
+      ctx.fillStyle = 'lightskyblue'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      // invalid path
+      expect(() =>
+        canvas.saveAs(`${TMP}/deep/path/that/doesn/not/exist.pdf`)
+      ).toThrow()
+
+      // canvas has a zero dimension
+      let width = 0, height = 128
+      Object.assign(canvas, {width, height})
+      expect(canvas).toMatchObject({width, height})
+      canvas.saveAs(`${TMP}/zeroed.pdf`)
+      expect( () => canvas.saveAs(`${TMP}/zeroed.png`)).toThrowError("must be non-zero")
+    })
   })
 })
