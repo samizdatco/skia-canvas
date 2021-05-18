@@ -170,12 +170,17 @@ pub fn saveAs(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let document = pages.iter_mut().fold(pdf::new_document(None), |doc, page|{
       let mut page = page.borrow_mut();
       let dims = (page.width() as i32, page.height() as i32);
-      let mut doc = doc.begin_page(dims, None);
-      let canvas = doc.canvas();
-      if let Some(picture) = page.get_picture(None){
-        canvas.draw_picture(&picture, None, None);
+      if dims.0 > 0 && dims.1 > 0{
+        let mut doc = doc.begin_page(dims, None);
+        let canvas = doc.canvas();
+        if let Some(picture) = page.get_picture(None){
+          canvas.draw_picture(&picture, None, None);
+        }
+        doc.end_page()
+      }else{
+        let mut doc = doc.begin_page((1, 1), None);
+        doc.end_page()
       }
-      doc.end_page()
     });
 
     let path = Path::new(&name_pattern);
