@@ -5,6 +5,7 @@ on:
     branches:
       - master
       - neon-napi
+      - gl
   pull_request:
     branches:
       - main
