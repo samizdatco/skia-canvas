@@ -17,6 +17,7 @@ jobs:
       uses: actions/setup-node@v2
       with:
         node-version: 15
+        registry-url: 'https://registry.npmjs.org'
 
     - name: Publish to NPM
       env:
