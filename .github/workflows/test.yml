@@ -1,0 +1,55 @@
+name: Run tests
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - neon-napi
+      - gl
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  run-tests:
+    name: Rebuild & Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+          - ubuntu-18.04
+        node:
+          - 10
+          - 15
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Use Rust
+      uses: actions-rs/toolchain@v1.0.6
+      with:
+        toolchain: stable
+
+    - name: Build module
+      run: |
+        npm ci --ignore-scripts
+        npm run build
+
+    - name: Bundle ICU data (windows only)
+      if: startsWith(matrix.os,'windows')
+      shell: bash
+      run: |
+        ICU=$(find . -name icudtl.dat | grep skia-bindings | head -n 1)
+        cp $ICU lib/v6
+
+    - name: Run tests
+      run: npm test

@@ -10,6 +10,7 @@ In particular, Skia Canvas:
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files](#saveasfilename-format-quality), return them as [Buffers](#tobufferformat-quality-page), or encode [dataURL](#todataurlformat-quality-page) strings
   - can create [multiple ‘pages’](#newpagewidth-height) on a given canvas and then [output](#saveasfilename-format-quality) them as a single, multi-page PDF or an image-sequence saved to multiple files
+  - can simplify and combine bézier paths using efficient [boolean operations](https://www.youtube.com/watch?v=OmfliNQsk88)
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
 
@@ -25,28 +26,38 @@ In particular, Skia Canvas:
 This project is newly-hatched and still has some obvious gaps to fill (feel free to pitch in!).
 
 On the agenda for subsequent updates are:
-  - Windows support & prebuilt binaries
-  - Use neon [Tasks](https://neon-bindings.com/docs/async) to provide asynchronous file i/o
+  - Use neon [EventQueues](https://github.com/neon-bindings/neon/blob/main/src/event/event_queue.rs) to provide asynchronous file i/o
   - Add SVG image loading using the [µsvg](https://crates.io/crates/usvg) parser
   - Add a `density` argument to Canvas and/or the output methods to allow for scaling to other device-pixel-ratios
 
+## Platform Support
+
+The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions:
+  - 10.20+
+  - 12.17+
+  - 14.0 and later
+
+There are pre-compiled binaries for:
+
+  - Linux (x86)
+  - macOS (x86 & Apple silicon)
+  - Windows (x86)
+
 ## Installation
 
-On macOS and Linux, installation *should* be as simple as:
+If you’re running on a supported platform, installation should be as simple as:
 ```console
 $ npm install skia-canvas
 ```
 
-This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases). Note that these binaries are in an early state and currently only work with fairly recent systems. In particular, if using the library with Docker you’ll want to pick a base system from the last few years like [`node:buster`](https://hub.docker.com/_/node) or [`ubuntu:bionic`](https://hub.docker.com/_/ubuntu).
+This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases). If prebuilt binaries aren’t available for your system you’ll need to compile the portions of this library that directly interface with Skia.
 
-If prebuilt binaries aren’t available for your system you’ll need to compile the portions of this library that directly interface with Skia. Start by installing:
+Start by installing:
 
   1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using `rustup`
-  2. Python 2.7 (Python 3 is not supported by [neon](https://neon-bindings.com/docs/getting-started#install-node-build-tools))
-  3. The GNU `make` tool
-  4. A C compiler toolchain like LLVM/Clang, GCC, or MSVC
+  2. A C compiler toolchain like LLVM/Clang, GCC, or MSVC
 
-Once all these dependencies are present, installing from npm should work (after a fairly lengthy compilation process).
+Once these dependencies are present, running `npm run build` will give you a useable library (after a fairly lengthy compilation process).
 
 ## Module Contents
 
@@ -110,7 +121,10 @@ console.log(`<img src="${canvas.toDataURL("png")}">`)
 
 ## API Documentation
 
+### CanvasRenderingContext2D
+
 Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method. Documentation for each of the context’s attributes is linked below—properties are printed in **bold** and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a ⚡ symbol (see the next section for details).
+
 
 | Canvas State                           | Drawing Primitives                          | Stroke & Fill Style                  | Compositing Effects                                      |
 |----------------------------------------|---------------------------------------------|--------------------------------------|----------------------------------------------------------|
@@ -129,13 +143,42 @@ Most of your interaction with the canvas will actually be directed toward its �
 |------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|------------------------------------------|
 | [arc()][arc()]                           | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
 | [arcTo()][arcTo()]                       | [**font**][font] [⚡](#font)                                 | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
-| [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** ⚡](#fontvariant)                           | [createImageData()][createImageData()]             | [resetTransform()][resetTransform()]     |
-| [closePath()][closePath()]               | [**textAlign**][textAlign]                                  | [createLinearGradient()][createLinearGradient()]   | [rotate()][rotate()]                     |
-| [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                            | [createPattern()][createPattern()]                 | [scale()][scale()]                       |
-| [lineTo()][lineTo()]                     | [**textTracking** ⚡](#texttracking)                         | [createRadialGradient()][createRadialGradient()]   | [setTransform()][setTransform()]         |
-| [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                 | [getImageData()][getImageData()]                   | [transform()][transform()]               |
-| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] [⚡](#measuretextstr-width)   | [putImageData()][putImageData()]                   | [translate()][translate()]               |
-| [rect()][rect()]                         |                                                             |                                                    |                                          |
+| [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** ⚡](#fontvariant)                           | [createConicGradient()][createConicGradient()]     | [resetTransform()][resetTransform()]     |
+| [closePath()][closePath()]               | [**textAlign**][textAlign]                                  | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
+| [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                            | [createLinearGradient()][createLinearGradient()]   | [scale()][scale()]                       |
+| [lineTo()][lineTo()]                     | [**textTracking** ⚡](#texttracking)                         | [createPattern()][createPattern()]                 | [setTransform()][setTransform()]         |
+| [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                 | [createRadialGradient()][createRadialGradient()]   | [transform()][transform()]               |
+| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] [⚡](#measuretextstr-width)   | [getImageData()][getImageData()]                   | [translate()][translate()]               |
+| [rect()][rect()]                         |                                                             | [putImageData()][putImageData()]                   |                                          |
+
+
+### Path2D
+
+The context object creates an implicit ‘current’ bézier path which is updated by commands like [lineTo()][lineTo()] and [arcTo()][arcTo()] and is drawn to the canvas by calling [fill()][fill()], [stroke()][stroke()], or [clip()][clip()] without any arguments (aside from an optional [winding][nonzero] [rule][evenodd]). If you start creating a second path by calling [beginPath()][beginPath()] the context discards the prior path, forcing you to recreate it by hand if you need it again later.
+
+The `Path2D` class allows you to create paths independent of the context to be drawn as needed (potentially repeatedly). Its constructor can be called without any arguments to create a new, empty path object. It can also accept a string  using [SVG syntax][SVG_path_commands] or a reference to an existing `Path2D` object (which it will return a clone of):
+
+```js
+// three identical (but independent) paths
+let p1 = new Path2D("M 10,10 h 100 v 100 h -100 Z")
+let p2 = new Path2D(p1)
+let p3 = new Path2D()
+p3.rect(10, 10, 100, 100)
+```
+
+You can then use these objects by passing them as the first argument to the context’s `fill()`, `stroke()`, and `clip()` methods (along with an optional second argument specifying the winding rule).
+
+| Line Segments                              | Shapes                   | Boolean Ops ⚡            | Extents ⚡      |
+| --                                         | --                       | --                       | --            |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [**bounds**](#bounds)   |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [simplify()](#simplify)   |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | [union()][bool-ops]      |
+| [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |
+
+
+
+
 
 
 
@@ -221,6 +264,54 @@ The `x`, `y`, `width`, and `height` values define a rectangle that fully enclose
 The `baseline` value is a y-axis offset from the text origin to that particular line’s baseline.
 
 The `startIndex` and `endIndex` values are the indices into the string of the first and last character that were typeset on that line.
+
+
+### Path2D
+
+##### `.bounds`
+
+In the browser, Path2D objects offer very little in the way of introspection—they are mostly-opaque recorders of drawing commands that can be ‘played back’ later on. Skia Canvas offers some additional transparency by allowing you to measure the total amount of space the lines will occupy (though you’ll need to account for the current `lineWidth` if you plan to draw the path with `stroke()`).
+
+The `.bounds` property contains an object defining the minimal rectangle containing the path:
+```
+{top, left, bottom, right, width, height}
+```
+
+##### `complement()`, `difference()`, `intersect()`, `union()`, and `xor()`
+In addition to creating `Path2D` objects through the constructor, you can use pairs of existing paths *in combination* to generate new paths based on their degree of overlap. Based on the method you choose, a different boolean relationship will be used to construct the new path. In all the following examples we’ll be starting off with a pair of overlapping shapes:
+```js
+let oval = new Path2D()
+oval.arc(100, 100, 100, 0, 2*Math.PI)
+
+let rect = new Path2D()
+rect.rect(0, 100, 100, 100)
+```
+![layered paths](/test/assets/path-operation-none.svg)
+
+We can then create a new path by using one of the boolean operations such as:
+```js
+let knockout = rect.complement(oval),
+    overlap = rect.intersect(oval),
+    footprint = rect.union(oval),
+    ...
+```
+![different combinations](/test/assets/path-operations@2x.png)
+
+Note that the `xor` operator is liable to create a path with lines that cross over one another so you’ll get different results when filling it using the [`"evenodd"`][evenodd] winding rule (as shown above) than with [`"nonzero"`][nonzero] (the canvas default).
+
+
+##### `simplify()`
+
+In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments:
+
+```js
+let cross = new Path2D("M 10,50 h 100 v 20 h -100 Z M 50,10 h 20 v100 h -20 Z")
+let uncrossed = cross.simplify()
+```
+![different combinations](/test/assets/path-simplify@2x.png)
+
+
+
 
 
 ## Utilities
@@ -326,6 +417,18 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 
 Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) developers for their terrific set of unit tests. In the absence of an [Acid Test](https://www.acidtests.org) for canvas, these routines were invaluable.
 
+[SVG_path_commands]: https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d#path_commands
+[p2d_addPath]: https://developer.mozilla.org/en-US/docs/Web/API/Path2D/addPath
+[p2d_closePath]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
+[p2d_moveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/moveTo
+[p2d_lineTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineTo
+[p2d_bezierCurveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/bezierCurveTo
+[p2d_quadraticCurveTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/quadraticCurveTo
+[p2d_arc]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arc
+[p2d_arcTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arcTo
+[p2d_ellipse]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/ellipse
+[p2d_rect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect
+[bool-ops]: #complement-difference-intersect-union-and-xor
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
 
 [Buffer]: https://nodejs.org/api/buffer.html
@@ -343,6 +446,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [ImageData]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData
 [Path2D]: https://developer.mozilla.org/en-US/docs/Web/API/Path2D
 [lineHeight]: https://developer.mozilla.org/en-US/docs/Web/CSS/line-height
+[font-variant]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant
 
 [canvas]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/canvas
 [currentTransform]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/currentTransform
@@ -350,7 +454,6 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [fillStyle]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillStyle
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [font]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/font
-[font-variant]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-CanvasRenderingContext2D/variant
 [globalAlpha]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalAlpha
 [globalCompositeOperation]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation
 [imageSmoothingEnabled]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/imageSmoothingEnabled
@@ -374,6 +477,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [clearRect()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clearRect
 [clip()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clip
 [closePath()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
+[createConicGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createConicGradient
 [createImageData()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createImageData
 [createLinearGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createLinearGradient
 [createPattern()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createPattern
@@ -407,3 +511,6 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [strokeText()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/strokeText
 [transform()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/transform
 [translate()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/translate
+
+[nonzero]: https://en.wikipedia.org/wiki/Nonzero-rule
+[evenodd]: https://en.wikipedia.org/wiki/Even–odd_rule

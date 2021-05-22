@@ -1,7 +1,12 @@
 const _ = require('lodash'),
       fs = require('fs'),
-      {Canvas, DOMMatrix, FontLibrary, loadImage} = require('../lib'),
-      {parseFont} = require('../lib/parse');
+      tmp = require('tmp'),
+      glob = require('glob').sync,
+      {Canvas, Image} = require('../lib');
+
+const BLACK = [0,0,0,255],
+      WHITE = [255,255,255,255],
+      CLEAR = [0,0,0,0]
 
 describe("Canvas", ()=>{
   let canvas, ctx,
@@ -21,7 +26,7 @@ describe("Canvas", ()=>{
       ctx.fillStyle = 'white'
       ctx.fillRect(0,0, WIDTH,HEIGHT)
       expect(ctx.fillStyle).toBe('#ffffff')
-      expect(pixel(0,0)).toEqual([255,255,255,255])
+      expect(pixel(0,0)).toEqual(WHITE)
 
       // resizing also clears content & resets state
       canvas.width = 123
@@ -29,702 +34,202 @@ describe("Canvas", ()=>{
       expect(canvas.width).toBe(123)
       expect(canvas.height).toBe(456)
       expect(ctx.fillStyle).toBe('#000000')
-      expect(pixel(0,0)).toEqual([0,0,0,0])
+      expect(pixel(0,0)).toEqual(CLEAR)
     })
   })
 
-})
+  describe("handles bad arguments for", ()=>{
+    let TMP
+    beforeEach(() => TMP = tmp.dirSync().name )
+    afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
 
-describe("Context2D", ()=>{
-  let canvas, ctx,
-      WIDTH = 512, HEIGHT = 512,
-      pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data),
-      loadAsset = url => loadImage(`${__dirname}/assets/${url}`),
-      mockedWarn = () => {},
-      realWarn = console.warn;
+    test("initial dimensions", () => {
+      let W = 300,
+          H = 150,
+          c
 
-  beforeEach(() => {
-    canvas = new Canvas(WIDTH, HEIGHT)
-    ctx = canvas.getContext("2d")
-    console.warn = mockedWarn
-  })
+      c = new Canvas()
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(H)
 
-  afterEach(() => {
-    console.warn = realWarn
-  })
+      c = new Canvas(0, 0)
+      expect(c.width).toBe(0)
+      expect(c.height).toBe(0)
 
-  describe("can get & set", ()=>{
+      c = new Canvas(-99, 123)
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(123)
 
-    test('currentTransform', () => {
-      ctx.scale(0.1, 0.3)
-      let matrix = ctx.currentTransform
-      _.each({a:0.1, b:0, c:0, d:0.3, e:0, f:0}, (val, term) =>
-        expect(matrix[term]).toBeCloseTo(val)
-      )
+      c = new Canvas(456)
+      expect(c.width).toBe(456)
+      expect(c.height).toBe(H)
 
-      ctx.resetTransform()
-      _.each({a:1, d:1}, (val, term) =>
-        expect(ctx.currentTransform[term]).toBeCloseTo(val)
-      )
+      c = new Canvas(undefined, 789)
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(789)
 
-      ctx.currentTransform = matrix
-      _.each({a:0.1, d:0.3}, (val, term) =>
-        expect(ctx.currentTransform[term]).toBeCloseTo(val)
-      )
+      c = new Canvas('garbage', NaN)
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(H)
+
+      c = new Canvas(false, {})
+      expect(c.width).toBe(W)
+      expect(c.height).toBe(H)
     })
 
-    test('font', () => {
-      expect(ctx.font).toBe('10px sans-serif')
-      let font = '16px Baskerville, serif',
-          canonical = parseFont(font).canonical;
-      ctx.font = font
-      expect(ctx.font).toBe(canonical)
-      ctx.font = 'invalid'
-      expect(ctx.font).toBe(canonical)
+    test("new page dimensions", () => {
+      let W = 300,
+          H = 150,
+          c, pg
+
+      c = new Canvas(123, 456)
+      expect(c.width).toBe(123)
+      expect(c.height).toBe(456)
+      pg = c.newPage().canvas
+      expect(pg.width).toBe(123)
+      expect(pg.height).toBe(456)
+
+      pg = c.newPage(987).canvas
+      expect(pg.width).toBe(123)
+      expect(pg.height).toBe(456)
+
+      pg = c.newPage(NaN, NaN).canvas
+      expect(pg.width).toBe(W)
+      expect(pg.height).toBe(H)
     })
 
-    test('globalAlpha', () => {
-      expect(ctx.globalAlpha).toBe(1)
-      ctx.globalAlpha = 0.25
-      expect(ctx.globalAlpha).toBeCloseTo(0.25)
-      ctx.globalAlpha = -1
-      expect(ctx.globalAlpha).toBeCloseTo(0.25)
-      ctx.globalAlpha = 3
-      expect(ctx.globalAlpha).toBeCloseTo(0.25)
-      ctx.globalAlpha = 0
-      expect(ctx.globalAlpha).toBe(0)
-    })
-
-    test('globalCompositeOperation', () => {
-      let ops = ["source-over", "destination-over", "copy", "destination", "clear",
-                 "source-in", "destination-in", "source-out", "destination-out",
-                 "source-atop", "destination-atop", "xor", "lighter", "multiply",
-                 "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn",
-                 "hard-light", "soft-light", "difference", "exclusion", "hue",
-                 "saturation", "color", "luminosity"]
-
-      expect(ctx.globalCompositeOperation).toBe('source-over')
-      ctx.globalCompositeOperation = 'invalid'
-      expect(ctx.globalCompositeOperation).toBe('source-over')
-
-      for (let op of ops){
-        ctx.globalCompositeOperation = op
-        expect(ctx.globalCompositeOperation).toBe(op)
-      }
-    })
-
-    test('imageSmoothingEnabled', () => {
-      expect(ctx.imageSmoothingEnabled).toBe(true)
-      ctx.imageSmoothingEnabled = false
-      expect(ctx.imageSmoothingEnabled).toBe(false)
-    })
-
-
-    test('imageSmoothingQuality', () => {
-      let vals = ["low", "medium", "high"]
-
-      expect(ctx.imageSmoothingQuality).toBe('low')
-      ctx.imageSmoothingQuality = 'invalid'
-      expect(ctx.imageSmoothingQuality).toBe('low')
-
-      for (let val of vals){
-        ctx.imageSmoothingQuality = val
-        expect(ctx.imageSmoothingQuality).toBe(val)
-      }
-    })
-
-    test('lineCap', () => {
-      let vals = ["butt", "square", "round"]
-
-      expect(ctx.lineCap).toBe('butt')
-      ctx.lineCap = 'invalid'
-      expect(ctx.lineCap).toBe('butt')
-
-      for (let val of vals){
-        ctx.lineCap = val
-        expect(ctx.lineCap).toBe(val)
-      }
-    })
-
-    test('lineDash', () => {
-      expect(ctx.getLineDash()).toEqual([])
-      ctx.setLineDash([1,2,3,4])
-      expect(ctx.getLineDash()).toEqual([1,2,3,4])
-      ctx.setLineDash(null)
-      expect(ctx.getLineDash()).toEqual([1,2,3,4])
-    })
-
-    test('lineJoin', () => {
-      let vals = ["miter", "round", "bevel"]
-
-      expect(ctx.lineJoin).toBe('miter')
-      ctx.lineJoin = 'invalid'
-      expect(ctx.lineJoin).toBe('miter')
-
-      for (let val of vals){
-        ctx.lineJoin = val
-        expect(ctx.lineJoin).toBe(val)
-      }
-    })
-
-    test('lineWidth', () => {
-      ctx.lineWidth = 10.0;
-      expect(ctx.lineWidth).toBe(10)
-      ctx.lineWidth = Infinity;
-      expect(ctx.lineWidth).toBe(10)
-      ctx.lineWidth = -Infinity;
-      expect(ctx.lineWidth).toBe(10)
-      ctx.lineWidth = -5;
-      expect(ctx.lineWidth).toBe(10)
-      ctx.lineWidth = 0;
-      expect(ctx.lineWidth).toBe(10)
-    })
-
-    test('textAlign', () => {
-      let vals = ["start", "end", "left", "center", "right"]
-
-      expect(ctx.textAlign).toBe('start')
-      ctx.textAlign = 'invalid'
-      expect(ctx.textAlign).toBe('start')
-
-      for (let val of vals){
-        ctx.textAlign = val
-        expect(ctx.textAlign).toBe(val)
-      }
+    test("export file formats", () => {
+      expect(() => canvas.saveAs(`${TMP}/output.gif`) ).toThrowError('Unsupported file format');
+      expect(() => canvas.saveAs(`${TMP}/output.targa`) ).toThrowError('Unsupported file format');
+      expect(() => canvas.saveAs(`${TMP}/output`) ).toThrowError('Cannot determine image format');
+      expect(() => canvas.saveAs(`${TMP}/`) ).toThrowError('Cannot determine image format');
+      expect(() => canvas.saveAs(`${TMP}/output`, {format:'png'}) ).not.toThrow()
     })
 
   })
 
   describe("can create", ()=>{
-    test('a context', () => {
-      expect(canvas.getContext("invalid")).toBe(null)
-      expect(canvas.getContext("2d")).toBe(ctx)
-      expect(canvas.pages[0]).toBe(ctx)
-      expect(ctx.canvas).toBe(canvas)
+    let TMP
+    beforeEach(() => {
+      TMP = tmp.dirSync().name
+
+      ctx.fillStyle = 'red'
+      ctx.arc(100, 100, 25, 0, Math.PI/2)
+      ctx.fill()
+    })
+    afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
+
+    test("JPEGs", ()=>{
+      canvas.saveAs(`${TMP}/output1.jpg`)
+      canvas.saveAs(`${TMP}/output2.jpeg`)
+      canvas.saveAs(`${TMP}/output3.JPG`)
+      canvas.saveAs(`${TMP}/output4.JPEG`)
+      canvas.saveAs(`${TMP}/output5`, {format:'jpg'})
+      canvas.saveAs(`${TMP}/output6`, {format:'jpeg'})
+      canvas.saveAs(`${TMP}/output6.png`, {format:'jpeg'})
+
+      let magic = Buffer.from([0xFF, 0xD8, 0xFF])
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
     })
 
-    test('multiple pages', () => {
-      let ctx2 = canvas.newPage(WIDTH*2, HEIGHT*2);
-      expect(canvas.width).toBe(WIDTH*2)
-      expect(canvas.height).toBe(HEIGHT*2)
-      expect(canvas.pages[0]).toBe(ctx)
-      expect(canvas.pages[1]).toBe(ctx2)
-      expect(ctx.canvas).toBe(canvas)
-      expect(ctx2.canvas).toBe(canvas)
+    test("PNGs", ()=>{
+      canvas.saveAs(`${TMP}/output1.png`)
+      canvas.saveAs(`${TMP}/output2.PNG`)
+      canvas.saveAs(`${TMP}/output3`, {format:'png'})
+      canvas.saveAs(`${TMP}/output4.svg`, {format:'png'})
+
+      let magic = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
     })
 
-    test("ImageData", () => {
-      let [width, height] = [123, 456],
-          bmp = ctx.createImageData(width, height);
-      expect(bmp.width).toBe(width)
-      expect(bmp.height).toBe(height)
-      expect(bmp.data.length).toBe(width * height * 4)
-      expect(Array.from(bmp.data.slice(0,4))).toEqual([0,0,0,0])
+    test("SVGs", ()=>{
+      canvas.saveAs(`${TMP}/output1.svg`)
+      canvas.saveAs(`${TMP}/output2.SVG`)
+      canvas.saveAs(`${TMP}/output3`, {format:'svg'})
+      canvas.saveAs(`${TMP}/output4.jpeg`, {format:'svg'})
+
+      for (let path of glob(`${TMP}/*`)){
+        let svg = fs.readFileSync(path, 'utf-8')
+        expect(svg).toMatch(/^<\?xml version/)
+      }
     })
 
-    describe("CanvasPattern", () => {
-      test("from Image", async () => {
-        let image = await loadAsset('checkers.png'),
-            pattern = ctx.createPattern(image, 'repeat'),
-            [width, height] = [20, 20];
+    test("PDFs", ()=>{
+      canvas.saveAs(`${TMP}/output1.pdf`)
+      canvas.saveAs(`${TMP}/output2.PDF`)
+      canvas.saveAs(`${TMP}/output3`, {format:'pdf'})
+      canvas.saveAs(`${TMP}/output4.jpg`, {format:'pdf'})
 
-        ctx.fillStyle = pattern;
-        ctx.fillRect(0,0,width,height)
+      let magic = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d])
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
 
-        expect.assertions(width * height) // check each pixel
-
-        let bmp = ctx.getImageData(0,0,width,height)
-        let blackPixel = true
-        for (var i=0; i<bmp.data.length; i+=4){
-          if (i % (bmp.width*4) != 0) blackPixel = !blackPixel
-          expect(Array.from(bmp.data.slice(i, i+4))).toEqual(
-            blackPixel ? [0,0,0,255] : [255,255,255,255]
-          )
-        }
+    test("image-sequences", ()=>{
+      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+      colors.forEach((color, i) => {
+        let dim = 512 + 100*i
+        ctx = i ? canvas.newPage(dim, dim) : canvas.newPage()
+        ctx.fillStyle = color
+        ctx.arc(100, 100, 25, 0, Math.PI + Math.PI/colors.length*(i+1))
+        ctx.fill()
+        expect(ctx.canvas.height).toEqual(dim)
+        expect(ctx.canvas.width).toEqual(dim)
       })
 
-      test("from Canvas", () => {
-        let checkers = new Canvas(2, 2),
-            patCtx = checkers.getContext("2d");
-        patCtx.fillStyle = 'white';
-        patCtx.fillRect(0,0,2,2);
-        patCtx.fillStyle = 'black';
-        patCtx.fillRect(0,0,1,1);
-        patCtx.fillRect(1,1,1,1);
+      canvas.saveAs(`${TMP}/output-{2}.png`)
 
-        let pattern = ctx.createPattern(checkers, 'repeat')
-        ctx.fillStyle = pattern;
-        ctx.fillRect(0,0, 20,20);
+      let files = glob(`${TMP}/output-0?.png`)
+      expect(files.length).toEqual(colors.length+1)
 
-        let bmp = ctx.getImageData(0,0, 20,20)
-        let blackPixel = true
-        for (var i=0; i<bmp.data.length; i+=4){
-          if (i % (bmp.width*4) != 0) blackPixel = !blackPixel
-          expect(Array.from(bmp.data.slice(i, i+4))).toEqual(
-            blackPixel ? [0,0,0,255] : [255,255,255,255]
-          )
-        }
-      })
+      files.forEach((fn, i) => {
+        let img = new Image()
+        img.src = fn
+        expect(img.complete).toBe(true)
 
-      test("with local transform", () => {
-
-        // call func with an ImageData-offset and pixel color value appropriate for a 4-quadrant pattern within
-        // the width and height that's white in the upper-left & lower-right and black in the other corners
-        function eachPixel(bmp, func){
-          let {width, height} = bmp;
-          for (let x=0; x<width; x++){
-            for (let y=0; y<height; y++){
-              let i = y*4*width + x*4,
-                  clr = (x<width/2 && y<height/2 || x>=width/2 && y>=height/2) ? 255 : 0;
-              func(i, clr);
-            }
-          }
-        }
-
-        // create a canvas with a single repeat of the pattern within its dims
-        function makeCheckerboard(w, h){
-          let check = new Canvas(w, h),
-              ctx = check.getContext('2d'),
-              bmp = ctx.createImageData(w, h);
-          eachPixel(bmp, (i, clr) => bmp.data.set([clr,clr,clr, 255], i));
-          ctx.putImageData(bmp, 0, 0);
-          return check;
-        }
-
-        // verify that the region looks like a single 4-quadrant checkerboard cell
-        function isCheckerboard(ctx, w, h){
-          let bmp = ctx.getImageData(0, 0, w, h);
-          eachPixel(bmp, (i, clr) => {
-            let px = Array.from(bmp.data.slice(i, i+4))
-            expect(px).toEqual([clr,clr,clr, 255])
-          })
-        }
-
-        let w = 160, h = 160,
-            pat = ctx.createPattern(makeCheckerboard(w, h), 'repeat'),
-            mat = new DOMMatrix();
-
-        ctx.fillStyle = pat;
-
-        // draw a single repeat of the pattern at each scale and then confirm that
-        // the transformation succeeded
-        [1, .5, .25, .125, 0.0625].forEach(mag => {
-          mat = new DOMMatrix().scale(mag);
-          pat.setTransform(mat);
-          ctx.fillRect(0,0, w*mag, h*mag);
-          isCheckerboard(ctx, w*mag, h*mag);
-        })
+        // second page inherits the first's size, then they increase
+        let dim = i<2 ? 512 : 512 + 100 * (i-1)
+        expect(img.width).toEqual(dim)
+        expect(img.height).toEqual(dim)
       })
     })
 
-    describe("CanvasGradient", () => {
-      test("linear", () => {
-        let gradient = ctx.createLinearGradient(1,1,19,1);
-        gradient.addColorStop(0,'#fff');
-        gradient.addColorStop(1,'#000');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0,0,21,1);
-
-        expect(pixel(0,0)).toEqual([255,255,255,255])
-        expect(pixel(20,0)).toEqual([0,0,0,255])
-      })
-
-      test("radial", () => {
-        let [x, y, inside, outside] = [100, 100, 45, 55],
-            inner = [x, y, 25],
-            outer = [x, y, 50],
-            gradient = ctx.createRadialGradient(...inner, ...outer);
-        gradient.addColorStop(0,'#fff');
-        gradient.addColorStop(.5,'#000');
-        gradient.addColorStop(1,'#000');
-        gradient.addColorStop(1,'red');
-        ctx.fillStyle = gradient
-        ctx.fillRect(0,0, 200,200)
-
-        expect(pixel(x, y)).toEqual([255,255,255,255])
-        expect(pixel(x+inside, y)).toEqual([0,0,0,255])
-        expect(pixel(x, y+inside)).toEqual([0,0,0,255])
-        expect(pixel(x+outside, y)).toEqual([255,0,0,255])
-        expect(pixel(x, y+outside)).toEqual([255,0,0,255])
-      })
-    })
-  })
-
-  describe("supports", () => {
-    test("clip()", () => {
-      ctx.fillStyle = 'white'
-      ctx.fillRect(0, 0, 2, 2)
-
-      // overlapping rectangles to use as a clipping mask
-      ctx.rect(0, 0, 2, 1)
-      ctx.rect(1, 0, 1, 2)
-
-      // b | w
-      // -----
-      // w | b
-      ctx.save()
-      ctx.clip('evenodd')
-      ctx.fillStyle = 'black'
-      ctx.fillRect(0, 0, 2, 2)
-      ctx.restore()
-
-      expect(pixel(0, 0)).toEqual([0,0,0,255])
-      expect(pixel(1, 0)).toEqual([255,255,255,255])
-      expect(pixel(0, 1)).toEqual([255,255,255,255])
-      expect(pixel(1, 1)).toEqual([0,0,0,255])
-
-      // b | b
-      // -----
-      // w | b
-      ctx.clip() // nonzero
-      ctx.fillStyle = 'black'
-      ctx.fillRect(0, 0, 2, 2)
-
-      expect(pixel(0, 0)).toEqual([0,0,0,255])
-      expect(pixel(1, 0)).toEqual([0,0,0,255])
-      expect(pixel(0, 1)).toEqual([255,255,255,255])
-      expect(pixel(1, 1)).toEqual([0,0,0,255])
-    })
-
-    test("fill()", () => {
-      ctx.fillStyle = 'white'
-      ctx.fillRect(0, 0, 2, 2)
-
-      // set the current path to a pair of overlapping rects
-      ctx.fillStyle = 'black'
-      ctx.rect(0, 0, 2, 1)
-      ctx.rect(1, 0, 1, 2)
-
-      // b | w
-      // -----
-      // w | b
-      ctx.fill('evenodd')
-      expect(pixel(0, 0)).toEqual([0,0,0,255])
-      expect(pixel(1, 0)).toEqual([255,255,255,255])
-      expect(pixel(0, 1)).toEqual([255,255,255,255])
-      expect(pixel(1, 1)).toEqual([0,0,0,255])
-
-      // b | b
-      // -----
-      // w | b
-      ctx.fill() // nonzero
-      expect(pixel(0, 0)).toEqual([0,0,0,255])
-      expect(pixel(1, 0)).toEqual([0,0,0,255])
-      expect(pixel(0, 1)).toEqual([255,255,255,255])
-      expect(pixel(1, 1)).toEqual([0,0,0,255])
-    })
-
-    test("fillText()", () => {
-      let argsets = [
-        [['A', 10, 10], true],
-        [['A', 10, 10, undefined], true],
-        [['A', 10, 10, NaN], false],
-        [['A', 10, 10, Infinity], false],
-        [[1234, 10, 10], true],
-        [[false, 10, 10], true],
-        [[{}, 10, 10], true],
-      ]
-
-      _.each(argsets, ([args, shouldDraw]) => {
-        canvas.width = WIDTH
-        ctx.textBaseline = 'middle'
+    test("multi-page PDFs", () => {
+      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+      colors.forEach((color, i) => {
+        ctx = canvas.newPage()
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = 'white'
         ctx.textAlign = 'center'
-        ctx.fillText(...args)
-        expect(ctx.getImageData(0, 0, 20, 20).data.some(a => a)).toBe(shouldDraw)
+        ctx.fillText(i+1, canvas.width/2, canvas.height/2)
       })
+      expect(() => canvas.saveAs(`${TMP}/multipage.pdf`) ).not.toThrow()
     })
 
-    test('getImageData()', () => {
-      ctx.fillStyle = 'rgba(255,0,0, 0.25)'
-      ctx.fillRect(0,0,1,6)
+    test("sensible errors for misbegotten exports", () => {
+      ctx.fillStyle = 'lightskyblue'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-      ctx.fillStyle = 'rgba(0,255,0, 0.5)'
-      ctx.fillRect(1,0,1,6)
+      // invalid path
+      expect(() =>
+        canvas.saveAs(`${TMP}/deep/path/that/doesn/not/exist.pdf`)
+      ).toThrow()
 
-      ctx.fillStyle = 'rgba(0,0,255, 0.75)'
-      ctx.fillRect(2,0,1,6)
-
-      let [width, height] = [3, 6],
-          bmp = ctx.getImageData(0,0, width,height);
-      expect(bmp.width).toBe(width)
-      expect(bmp.height).toBe(height)
-      expect(bmp.data.length).toBe(width * height * 4)
-      expect(Array.from(bmp.data.slice(0,4))).toEqual([255,0,0,64])
-      expect(Array.from(bmp.data.slice(4,8))).toEqual([0,255,0,128])
-      expect(Array.from(bmp.data.slice(8,12))).toEqual([0,0,255,191])
-
-      for(var x=0; x<width; x++){
-        for(var y=0; y<height; y++){
-          let i = 4 * (y*width + x)
-          let px = Array.from(bmp.data.slice(i,i+4))
-          expect(pixel(x,y)).toEqual(px)
-        }
-      }
+      // canvas has a zero dimension
+      let width = 0, height = 128
+      Object.assign(canvas, {width, height})
+      expect(canvas).toMatchObject({width, height})
+      canvas.saveAs(`${TMP}/zeroed.pdf`)
+      expect( () => canvas.saveAs(`${TMP}/zeroed.png`)).toThrowError("must be non-zero")
     })
-
-    test('putImageData()', () => {
-      expect(() => ctx.putImageData({}, 0, 0)).toThrow()
-      expect(() => ctx.putImageData(undefined, 0, 0)).toThrow()
-
-      var srcImageData = ctx.createImageData(2,2)
-      srcImageData.data.set([
-        1,2,3,255, 5,6,7,255,
-        0,1,2,255, 4,5,6,255
-      ], 0)
-
-      ctx.putImageData(srcImageData, -1, -1);
-
-      var resImageData = ctx.getImageData(0, 0, 2, 2);
-      expect(Array.from(resImageData.data)).toEqual([
-        4,5,6,255, 0,0,0,0,
-        0,0,0,0,   0,0,0,0
-      ])
-    })
-
-    test("isPointInPath()", () => {
-      let inStroke = [100, 94],
-          inFill = [150, 150],
-          inBoth = [100, 100];
-      ctx.lineWidth = 12
-      ctx.rect(100,100,100,100)
-
-      expect(ctx.isPointInPath(...inStroke)).toBe(false)
-      expect(ctx.isPointInStroke(...inStroke)).toBe(true)
-
-      expect(ctx.isPointInPath(...inFill)).toBe(true)
-      expect(ctx.isPointInStroke(...inFill)).toBe(false)
-
-      expect(ctx.isPointInPath(...inBoth)).toBe(true)
-      expect(ctx.isPointInStroke(...inBoth)).toBe(true)
-    })
-
-    test("measureText()", () => {
-      let foo = ctx.measureText('foo').width,
-          foobar = ctx.measureText('foobar').width,
-          __foo = ctx.measureText('  foo').width;
-      expect(foo).toBeLessThan(foobar)
-      expect(__foo).toBeGreaterThan(foo)
-
-      // start from the default, alphabetic baseline
-      ctx.font = "20px Arial, DejaVu Sans"
-      var metrics = ctx.measureText("Lordran gypsum")
-
-      // + means up, - means down when it comes to baselines
-      expect(metrics.alphabeticBaseline).toBe(0)
-      expect(metrics.hangingBaseline).toBeGreaterThan(0)
-      expect(metrics.ideographicBaseline).toBeLessThan(0)
-
-      // for ascenders + means up, for descenders + means down
-      expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(0)
-      expect(metrics.actualBoundingBoxDescent).toBeGreaterThan(0)
-
-      ctx.textBaseline = "bottom"
-      metrics = ctx.measureText("Lordran gypsum")
-      expect(metrics.alphabeticBaseline).toBeGreaterThan(0)
-      expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(0)
-      expect(metrics.actualBoundingBoxDescent).toBeLessThan(0)
-    })
-
-  })
-
-
-  describe("parses", () => {
-    test('fonts', () => {
-      let cases = {
-        '20px Arial': { size: 20, family: ['Arial'] },
-        '33pt Arial': { size: 44, family: ['Arial'] },
-        '75pt Arial': { size: 100, family: ['Arial'] },
-        '20% Arial': { size: 16 * 0.2, family:['Arial'] },
-        '20mm Arial': { size: 75.59055118110237, family: ['Arial'] },
-        '20px serif': { size: 20, family: ['serif'] },
-        '20px sans-serif': { size: 20, family: ['sans-serif'] },
-        '20px monospace': { size: 20, family: ['monospace'] },
-        '50px Arial, sans-serif': { size: 50, family: ['Arial','sans-serif'] },
-        'bold italic 50px Arial, sans-serif': { style: 'italic', weight: 700, size: 50, family: ['Arial','sans-serif'] },
-        '50px Helvetica ,  Arial, sans-serif': { size: 50, family: ['Helvetica','Arial','sans-serif'] },
-        '50px "Helvetica Neue", sans-serif': { size: 50, family: ['Helvetica Neue','sans-serif'] },
-        '50px "Helvetica Neue", "foo bar baz" , sans-serif': { size: 50, family: ['Helvetica Neue','foo bar baz','sans-serif'] },
-        "50px 'Helvetica Neue'": { size: 50, family: ['Helvetica Neue'] },
-        'italic 20px Arial': { size: 20, style: 'italic', family: ['Arial'] },
-        'oblique 20px Arial': { size: 20, style: 'oblique', family: ['Arial'] },
-        'normal 20px Arial': { size: 20, style: 'normal', family: ['Arial'] },
-        '300 20px Arial': { size: 20, weight: 300, family: ['Arial'] },
-        '800 20px Arial': { size: 20, weight: 800, family: ['Arial'] },
-        'bolder 20px Arial': { size: 20, weight: 800, family: ['Arial'] },
-        'lighter 20px Arial': { size: 20, weight: 300, family: ['Arial'] },
-        'normal normal normal 16px Impact': { size: 16, weight: 400, family: ['Impact'], style: 'normal', variant: 'normal' },
-        'italic small-caps bolder 16px cursive': { size: 16, style: 'italic', variant: 'small-caps', weight: 800, family: ['cursive'] },
-        '20px "new century schoolbook", serif': { size: 20, family: ['new century schoolbook','serif'] },
-        '20px "Arial bold 300"': { size: 20, family: ['Arial bold 300'], variant: 'normal' }, // synthetic case with weight keyword inside family
-      }
-
-      _.each(cases, (spec, font) => {
-        let expected = _.defaults(spec, {style:"normal", stretch:"normal", variant:"normal"}),
-            parsed = parseFont(font);
-        expect(parsed).toMatchObject(expected)
-      })
-
-    })
-
-    test('colors', () => {
-      ctx.fillStyle = '#ffccaa';
-      expect(ctx.fillStyle).toBe('#ffccaa');
-
-      ctx.fillStyle = '#FFCCAA';
-      expect(ctx.fillStyle).toBe('#ffccaa');
-
-      ctx.fillStyle = '#FCA';
-      expect(ctx.fillStyle).toBe('#ffccaa');
-
-      ctx.fillStyle = '#0ff';
-      ctx.fillStyle = '#FGG';
-      expect(ctx.fillStyle).toBe('#00ffff');
-
-      ctx.fillStyle = '#fff';
-      ctx.fillStyle = 'afasdfasdf';
-      expect(ctx.fillStyle).toBe('#ffffff');
-
-      // #rgba and #rrggbbaa
-      ctx.fillStyle = '#ffccaa80'
-      expect(ctx.fillStyle).toBe('rgba(255, 204, 170, 0.502)')
-
-      ctx.fillStyle = '#acf8'
-      expect(ctx.fillStyle).toBe('rgba(170, 204, 255, 0.533)')
-
-      ctx.fillStyle = '#BEAD'
-      expect(ctx.fillStyle).toBe('rgba(187, 238, 170, 0.867)')
-
-      ctx.fillStyle = 'rgb(255,255,255)';
-      expect(ctx.fillStyle).toBe('#ffffff');
-
-      ctx.fillStyle = 'rgb(0,0,0)';
-      expect(ctx.fillStyle).toBe('#000000');
-
-      ctx.fillStyle = 'rgb( 0  ,   0  ,  0)';
-      expect(ctx.fillStyle).toBe('#000000');
-
-      ctx.fillStyle = 'rgba( 0  ,   0  ,  0, 1)';
-      expect(ctx.fillStyle).toBe('#000000');
-
-      ctx.fillStyle = 'rgba( 255, 200, 90, 0.5)';
-      expect(ctx.fillStyle).toBe('rgba(255, 200, 90, 0.502)');
-
-      ctx.fillStyle = 'rgba( 255, 200, 90, 0.75)';
-      expect(ctx.fillStyle).toBe('rgba(255, 200, 90, 0.749)');
-
-      ctx.fillStyle = 'rgba( 255, 200, 90, 0.7555)';
-      expect(ctx.fillStyle).toBe('rgba(255, 200, 90, 0.757)');
-
-      ctx.fillStyle = 'rgba( 255, 200, 90, .7555)';
-      expect(ctx.fillStyle).toBe('rgba(255, 200, 90, 0.757)');
-
-      ctx.fillStyle = 'rgb(0, 0, 9000)';
-      expect(ctx.fillStyle).toBe('#0000ff');
-
-      ctx.fillStyle = 'rgba(0, 0, 0, 42.42)';
-      expect(ctx.fillStyle).toBe('#000000');
-
-      // hsl / hsla tests
-
-      ctx.fillStyle = 'hsl(0, 0%, 0%)';
-      expect(ctx.fillStyle).toBe('#000000');
-
-      ctx.fillStyle = 'hsl(3600, -10%, -10%)';
-      expect(ctx.fillStyle).toBe('#000000');
-
-      ctx.fillStyle = 'hsl(10, 100%, 42%)';
-      expect(ctx.fillStyle).toBe('#d62400');
-
-      ctx.fillStyle = 'hsl(370, 120%, 42%)';
-      expect(ctx.fillStyle).toBe('#d62400');
-
-      ctx.fillStyle = 'hsl(0, 100%, 100%)';
-      expect(ctx.fillStyle).toBe('#ffffff');
-
-      ctx.fillStyle = 'hsl(0, 150%, 150%)';
-      expect(ctx.fillStyle).toBe('#ffffff');
-
-      ctx.fillStyle = 'hsl(237, 76%, 25%)';
-      expect(ctx.fillStyle).toBe('#0f1470');
-
-      ctx.fillStyle = 'hsl(240, 73%, 25%)';
-      expect(ctx.fillStyle).toBe('#11116e');
-
-      ctx.fillStyle = 'hsl(262, 32%, 42%)';
-      expect(ctx.fillStyle).toBe('#62498d');
-
-      ctx.fillStyle = 'hsla(0, 0%, 0%, 1)';
-      expect(ctx.fillStyle).toBe('#000000');
-
-      ctx.fillStyle = 'hsla(0, 100%, 100%, 1)';
-      expect(ctx.fillStyle).toBe('#ffffff');
-
-      ctx.fillStyle = 'hsla(120, 25%, 75%, 0.5)';
-      expect(ctx.fillStyle).toBe('rgba(175, 207, 175, 0.502)');
-
-      ctx.fillStyle = 'hsla(240, 75%, 25%, 0.75)';
-      expect(ctx.fillStyle).toBe('rgba(16, 16, 112, 0.749)');
-
-      ctx.fillStyle = 'hsla(172.0, 33.00000e0%, 42%, 1)';
-      expect(ctx.fillStyle).toBe('#488e85');
-
-      ctx.fillStyle = 'hsl(124.5, 76.1%, 47.6%)';
-      expect(ctx.fillStyle).toBe('#1dd62b');
-
-      ctx.fillStyle = 'hsl(1.24e2, 760e-1%, 4.7e1%)';
-      expect(ctx.fillStyle).toBe('#1dd329');
-
-      // case-insensitive (#235)
-      ctx.fillStyle = "sILveR";
-      expect(ctx.fillStyle).toBe("#c0c0c0");
-    });
   })
 })
-
-describe("FontLibrary", ()=>{
-  const findFont = font => `${__dirname}/assets/${font}`
-
-  test("can list families", ()=>{
-    let fams = FontLibrary.families,
-        sorted = fams.slice().sort(),
-        unique = _.uniq(sorted);
-
-    expect(fams.indexOf("Arial")>=0 || fams.indexOf("DejaVu Sans")>=0).toBe(true)
-    expect(fams).toEqual(sorted)
-    expect(fams).toEqual(unique)
-  })
-
-  test("can check for a family", ()=>{
-    expect(FontLibrary.has("Arial") || FontLibrary.has("DejaVu Sans")).toBe(true)
-    expect(FontLibrary.has("_n_o_n_e_s_u_c_h_")).toBe(false)
-  })
-
-  test("can describe a family", ()=>{
-    let fam = FontLibrary.has("Arial") ? "Arial"
-            : FontLibrary.has("DejaVu Sans") ? "DejaVu Sans"
-            : null;
-
-    if (fam) expect(FontLibrary.family(fam)).toMatchObject({
-      family: fam,
-      weights: [ 400, 700 ],
-      widths: [ 'normal' ],
-      // styles: [ 'normal', 'italic' ],
-    })
-  })
-
-  test("can register fonts", ()=>{
-    let ttf = findFont("AmstelvarAlpha-VF.ttf"),
-        name = "AmstelvarAlpha",
-        alias = "PseudonymousBosch";
-
-    expect(() => FontLibrary.use(ttf)).not.toThrow()
-    expect(FontLibrary.has(name)).toBe(true)
-    expect(FontLibrary.family(name).weights).toContain(400)
-
-    expect(FontLibrary.has(alias)).toBe(false)
-    expect(() => FontLibrary.use(alias, ttf)).not.toThrow()
-    expect(FontLibrary.has(alias)).toBe(true)
-    expect(FontLibrary.family(alias).weights).toContain(400)
-  })
-})
-

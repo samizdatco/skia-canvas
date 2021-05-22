@@ -3,8 +3,9 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::ops::Range;
+use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use neon::object::This;
 use neon::result::Throw;
@@ -17,22 +18,26 @@ use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextSty
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
 
+use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::typography::*;
-use crate::gradient::{CanvasGradient, JsCanvasGradient};
-use crate::pattern::{CanvasPattern, JsCanvasPattern};
+use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
+use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;
 const GALLEY:f32 = 100_000.0;
 
-pub mod class;
-pub use class::JsContext2D;
+pub mod api;
+pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
+impl Finalize for Context2D {}
+unsafe impl Send for Context2D {
+  // PictureRecorder is non-threadsafe
+}
 
 pub struct Context2D{
-  bounds: Rect,
-  recorder: RefCell<PictureRecorder>,
-  library: Rc<RefCell<FontLibrary>>,
+  pub bounds: Rect,
+  recorder: Arc<Mutex<PictureRecorder>>,
   state: State,
   stack: Vec<State>,
   path: Path,
@@ -118,18 +123,17 @@ impl Default for State {
 }
 
 impl Context2D{
-  pub fn new(bounds: Rect, library: &Rc<RefCell<FontLibrary>>) -> Self {
+  pub fn new() -> Self {
     let mut recorder = PictureRecorder::new();
+    let bounds = Rect::from_wh(300.0, 150.0);
     recorder.begin_recording(bounds, None);
     if let Some(canvas) = recorder.recording_canvas() {
       canvas.save(); // start at depth 2
     }
 
-
     Context2D{
       bounds,
-      recorder: RefCell::new(recorder),
-      library: Rc::clone(&library),
+      recorder: Arc::new(Mutex::new(recorder)),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
@@ -154,7 +158,8 @@ impl Context2D{
   pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
-    let mut recorder = self.recorder.borrow_mut();
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
     if let Some(canvas) = recorder.recording_canvas() {
       f(canvas);
     }
@@ -192,7 +197,8 @@ impl Context2D{
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
         if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
-          let mut recorder = self.recorder.borrow_mut();
+          let recorder = Arc::clone(&self.recorder);
+          let mut recorder = recorder.lock().unwrap();
           if let Some(canvas) = recorder.recording_canvas() {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
@@ -203,7 +209,8 @@ impl Context2D{
 
       },
       _ => {
-        let mut recorder = self.recorder.borrow_mut();
+        let recorder = Arc::clone(&self.recorder);
+        let mut recorder = recorder.lock().unwrap();
         if let Some(canvas) = recorder.recording_canvas() {
           // only call the closure if there's an active dropshadow
           if let Some(shadow_paint) = self.paint_for_shadow(&paint){
@@ -256,7 +263,10 @@ impl Context2D{
     // erase any existing content
     let mut new_recorder = PictureRecorder::new();
     new_recorder.begin_recording(self.bounds, None);
-    self.recorder.replace(new_recorder);
+    let recorder = Arc::clone(&self.recorder);
+    if let Ok(mut recorder) = recorder.lock(){
+      *recorder = new_recorder;
+    }
     self.reset_canvas();
   }
 
@@ -427,7 +437,8 @@ impl Context2D{
 
   pub fn get_drawable(&mut self) -> Option<Drawable> {
     // stop the recorder to take a snapshot then restart it again
-    let mut recorder = self.recorder.borrow_mut();
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
     let mut drobble = recorder.finish_recording_as_drawable();
     recorder.begin_recording(self.bounds, None);
 
@@ -449,7 +460,8 @@ impl Context2D{
 
   pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
     // stop the recorder to take a snapshot then restart it again
-    let mut recorder = self.recorder.borrow_mut();
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
     let snapshot = recorder.finish_recording_as_picture(cull.or(Some(&self.bounds)));
     recorder.begin_recording(self.bounds, None);
 
@@ -502,7 +514,7 @@ impl Context2D{
   }
 
   pub fn set_font(&mut self, spec: FontSpec){
-    let mut library = self.library.borrow_mut();
+    let mut library = FONT_LIBRARY.lock().unwrap();
     if let Some(new_style) = library.update_style(&self.state.char_style, &spec){
       self.state.font = spec.canonical;
       self.state.font_variant = spec.variant.to_string();
@@ -511,7 +523,7 @@ impl Context2D{
   }
 
   pub fn set_font_variant(&mut self, variant:&str, features:&[(String, i32)]){
-    let mut library = self.library.borrow_mut();
+    let mut library = FONT_LIBRARY.lock().unwrap();
     let new_style = library.update_features(&self.state.char_style, features);
     self.state.font_variant = variant.to_string();
     self.state.char_style = new_style;
@@ -530,7 +542,7 @@ impl Context2D{
       }
     };
 
-    let mut library = self.library.borrow_mut();
+    let mut library = FONT_LIBRARY.lock().unwrap();
     let collection = library.collect_fonts(&char_style);
     let mut paragraph_builder = ParagraphBuilder::new(&graf_style, collection);
     paragraph_builder.push_style(&char_style);
@@ -724,16 +736,6 @@ impl Context2D{
     self.state.filter = filter_text.to_string();
   }
 
-  pub fn update_image_quality(&mut self){
-    if let Dye::Pattern(pat) = &mut self.state.fill_style {
-      pat.smoothing = self.state.image_smoothing_enabled;
-    }
-
-    if let Dye::Pattern(pat) = &mut self.state.stroke_style {
-      pat.smoothing = self.state.image_smoothing_enabled;
-    }
-  }
-
   pub fn color_with_alpha(&self, src:&Color) -> Color{
     let mut color:Color4f = src.clone().into();
     color.a *= self.state.global_alpha;
@@ -742,10 +744,10 @@ impl Context2D{
 
   pub fn paint_for_fill(&self) -> Paint{
     let mut paint = self.state.paint.clone();
-
     let dye = &self.state.fill_style;
     let alpha = self.state.global_alpha;
-    dye.mix_into(&mut paint, alpha);
+    let smoothing = self.state.image_smoothing_enabled;
+    dye.mix_into(&mut paint, alpha, smoothing);
 
     paint
   }
@@ -756,7 +758,8 @@ impl Context2D{
 
     let dye = &self.state.stroke_style;
     let alpha = self.state.global_alpha;
-    dye.mix_into(&mut paint, alpha);
+    let smoothing = self.state.image_smoothing_enabled;
+    dye.mix_into(&mut paint, alpha, smoothing);
 
     if !self.state.line_dash_list.is_empty() {
       let dash = dash_path_effect::new(&self.state.line_dash_list, self.state.line_dash_offset);
@@ -796,35 +799,26 @@ pub enum Dye{
 }
 
 impl Dye{
-  pub fn new<'a, T: This+Class>(cx: &mut CallContext<'a, T>, value: Handle<'a, JsValue>, style: PaintStyle) -> Result<Option<Self>, Throw> {
-    let stash = if style == PaintStyle::Fill{ "fillShader" } else { "strokeShader" };
-    match value{
-      arg if arg.is_a::<JsCanvasGradient>() => {
-        let gradient = cx.argument::<JsCanvasGradient>(0)?;
-        stash_ref(cx, stash, arg)?;
-        Ok(Some(cx.borrow(&gradient, |gradient| Dye::Gradient(gradient.clone()) )))
-      },
-      arg if arg.is_a::<JsCanvasPattern>() => {
-        let pattern = cx.argument::<JsCanvasPattern>(0)?;
-        stash_ref(cx, stash, arg)?;
-        Ok(Some(cx.borrow(&pattern, |pattern| Dye::Pattern(pattern.clone()) )))
-      },
-      _ => {
-        Ok(color_arg(cx, 0).map(Dye::Color))
-      }
+  pub fn new<'a>(cx: &mut FunctionContext<'a>, value: Handle<'a, JsValue>, style: PaintStyle) -> Option<Self> {
+    if let Ok(gradient) = value.downcast::<BoxedCanvasGradient, _>(cx){
+      Some(Dye::Gradient(gradient.borrow().clone()) )
+    }else if let Ok(pattern) = value.downcast::<BoxedCanvasPattern, _>(cx){
+      Some(Dye::Pattern(pattern.borrow().clone()) )
+    }else if let Some(color) = color_in(cx, value){
+      Some(Dye::Color(color))
+    }else{
+      None
     }
   }
 
-  pub fn value<'a, T: This+Class>(&self, cx: &mut CallContext<'a, T>, style: PaintStyle) -> JsResult<'a, JsValue> {
-    let cache = if style == PaintStyle::Fill{ "fillShader" } else { "strokeShader" };
+  pub fn value<'a>(&self, cx: &mut FunctionContext<'a>, style: PaintStyle) -> JsResult<'a, JsValue> {
     match self{
-      Dye::Gradient(..) => fetch_ref(cx, cache),
-      Dye::Pattern(..)  => fetch_ref(cx, cache),
-      Dye::Color(color) => color_to_css(cx, &color)
+      Dye::Color(color) => color_to_css(cx, &color),
+      _ => Ok(cx.null().upcast()) // flag to the js context that it should use its cached pattern/gradient ref
     }
   }
 
-  pub fn mix_into(&self, paint: &mut Paint, alpha: f32){
+  pub fn mix_into(&self, paint: &mut Paint, alpha: f32, smoothing: bool){
     match self {
       Dye::Color(color) => {
         let mut color:Color4f = color.clone().into();
@@ -836,51 +830,9 @@ impl Dye{
              .set_alpha_f(alpha);
       },
       Dye::Pattern(pattern) =>{
-        paint.set_shader(pattern.shader())
+        paint.set_shader(pattern.shader(smoothing))
              .set_alpha_f(alpha);
       }
     };
   }
 }
-
-// -- persistent references to js gradient/pattern objects ------------------------------
-
-pub fn stash_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str, obj:Handle<'a, JsValue>) -> JsResult<'a, JsUndefined>{
-  let this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
-  let sym = symbol(cx, queue_name)?;
-  let queue = match this.get(cx, sym)?.downcast::<JsArray>(){
-    Ok(array) => array,
-    Err(_e) => {
-      // create ref queues lazily
-      let array = JsArray::new(cx, 0);
-      this.set(cx, sym, array)?;
-      array
-    }
-  };
-
-  let depth = cx.borrow(&this, |this| this.stack.len() as f64);
-  let len = cx.number(depth + 1.0);
-  let idx = cx.number(depth);
-  let length = cx.string("length");
-
-  queue.set(cx, length, len)?;
-  queue.set(cx, idx, obj)?;
-  Ok(cx.undefined())
-}
-
-pub fn fetch_ref<'a, T: This+Class>(cx: &mut CallContext<'a, T>, queue_name:&str) -> JsResult<'a, JsValue>{
-  let this = cx.this().downcast::<JsContext2D>().or_throw(cx)?;
-  let sym = symbol(cx, queue_name)?;
-  let queue = this.get(cx, sym)?.downcast::<JsArray>().or_throw(cx)?;
-
-  let length = cx.string("length");
-  let len = queue.get(cx, length)?.downcast::<JsNumber>().or_throw(cx)?.value() as f64;
-  let depth = cx.borrow(&this, |this| this.stack.len() as f64);
-  let idx = cx.number(depth.min(len - 1.0));
-
-  match queue.get(cx, idx){
-    Ok(gradient) => Ok(gradient.upcast()),
-    Err(_e) => Ok(cx.undefined().upcast())
-  }
-}
-

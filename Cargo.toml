@@ -1,0 +1,24 @@
+[package]
+name = "skia-canvas"
+version = "0.9.21"
+description = "A canvas environment for Node"
+authors = ["Christian Swinehart <drafting@samizdat.co>"]
+license = "MIT"
+edition = "2018"
+exclude = ["index.node"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+css-color = "0.1.1"
+lazy_static = "1.4.0"
+
+[dependencies.neon]
+version = "0.8"
+default-features = false
+features = ["napi-6"]
+
+[dependencies.skia-safe]
+version = "0.39.1"
+features = ["textlayout"]

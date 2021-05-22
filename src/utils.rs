@@ -15,30 +15,30 @@ use skia_safe::{
   font_arguments::{VariationPosition, variation_position::{Coordinate}}
 };
 
-use crate::path::{JsPath2D};
 
 //
 // meta-helpers
 //
 
 fn arg_num(o:usize) -> String{
-  let n = (o + 1) as i32; // we're working with zero-bounded idxs
+  // let n = (o + 1) as i32; // we're working with zero-bounded idxs
+  let n = o; // arg 0 is always self, so no need to increment the idx
   let ords = ["st","nd","rd"];
   let slot = ((n+90)%100-10)%10 - 1;
   let suffix = if (0..=2).contains(&slot) { ords[slot as usize] } else { "th" };
   format!("{}{}", n, suffix)
 }
 
-pub fn argv<'a>() -> Vec<Handle<'a, JsValue>>{
-  let list:Vec<Handle<JsValue>> = Vec::new();
-  list
-}
+// pub fn argv<'a>() -> Vec<Handle<'a, JsValue>>{
+//   let list:Vec<Handle<JsValue>> = Vec::new();
+//   list
+// }
 
-pub fn clamp(val: f32, min:f64, max:f64) -> f32{
-  let min = min as f32;
-  let max = max as f32;
-  if val < min { min } else if val > max { max } else { val }
-}
+// pub fn clamp(val: f32, min:f64, max:f64) -> f32{
+//   let min = min as f32;
+//   let max = max as f32;
+//   if val < min { min } else if val > max { max } else { val }
+// }
 
 pub fn almost_equal(a: f32, b: f32) -> bool{
   (a-b).abs() < 0.00001
@@ -52,82 +52,84 @@ pub fn to_radians(degrees: f32) -> f32{
   degrees / 180.0 * PI
 }
 
-pub fn symbol<'a, T: This>(cx: &mut CallContext<'a, T>, symbol_name: &str) -> JsResult<'a, JsValue> {
-  let global = cx.global();
-  let symbol_ctor = global
-      .get(cx, "Symbol")?
-      .downcast::<JsObject>()
-      .or_throw(cx)?
-      .get(cx, "for")?
-      .downcast::<JsFunction>()
-      .or_throw(cx)?;
+// pub fn symbol<'a>(cx: &mut FunctionContext<'a>, symbol_name: &str) -> JsResult<'a, JsValue> {
+//   let global = cx.global();
+//   let symbol_ctor = global
+//       .get(cx, "Symbol")?
+//       .downcast::<JsObject, _>(cx)
+//       .or_throw(cx)?
+//       .get(cx, "for")?
+//       .downcast::<JsFunction, _>(cx)
+//       .or_throw(cx)?;
 
-  let symbol_label = cx.string(symbol_name);
-  let sym = symbol_ctor.call(cx, global, vec![symbol_label])?;
-  Ok(sym)
-}
+//   let symbol_label = cx.string(symbol_name);
+//   let sym = symbol_ctor.call(cx, global, vec![symbol_label])?;
+//   Ok(sym)
+// }
 
 //
 // strings
 //
 
-
-pub fn strings_in(vals: &[Handle<JsValue>]) -> Vec<String>{
-  vals.iter()
-      .map(|js_val| js_val.downcast::<JsString>())
-      .filter( |r| r.is_ok() )
-      .map( |num| num.as_ref().unwrap().value() )
-      .collect()
+pub fn strings_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<String>{
+  let mut strs:Vec<String> = Vec::new();
+  for (i, val) in vals.iter().enumerate() {
+    if let Ok(txt) = val.downcast::<JsString, _>(cx){
+      let val = txt.value(cx);
+      strs.push(val);
+    }
+  }
+  strs
 }
 
-pub fn strings_at_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<Vec<String>, Throw>{
-  let array = obj.get(cx, attr)?.downcast::<JsArray>().or_throw(cx)?.to_vec(cx)?;
-  Ok(strings_in(&array))
+pub fn strings_at_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Result<Vec<String>, Throw>{
+  let array = obj.get(cx, attr)?.downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
+  Ok(strings_in(cx, &array))
 }
 
-pub fn string_for_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<String, Throw>{
+pub fn string_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Result<String, Throw>{
   let key = cx.string(attr);
-  match obj.get(cx, key)?.downcast::<JsString>(){
-    Ok(s) => Ok(s.value()),
-    Err(_e) => cx.throw_error(format!("Exptected a string for \"{}\"", attr))
+  match obj.get(cx, key)?.downcast::<JsString, _>(cx){
+    Ok(s) => Ok(s.value(cx)),
+    Err(_e) => cx.throw_type_error(format!("Exptected a string for \"{}\"", attr))
   }
 }
 
-pub fn opt_string_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<String>{
+pub fn opt_string_arg(cx: &mut FunctionContext, idx: usize) -> Option<String>{
   match cx.argument_opt(idx as i32) {
-    Some(arg) => match arg.downcast::<JsString>() {
-      Ok(v) => Some(v.value()),
+    Some(arg) => match arg.downcast::<JsString, _>(cx) {
+      Ok(v) => Some(v.value(cx)),
       Err(_e) => None
     },
     None => None
   }
 }
 
-pub fn string_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default:&str) -> String{
+pub fn string_arg_or(cx: &mut FunctionContext, idx: usize, default:&str) -> String{
   match opt_string_arg(cx, idx){
     Some(v) => v,
     None => String::from(default)
   }
 }
 
-pub fn string_arg<'a, T: This>(cx: &mut CallContext<'a, T>, idx: usize, attr:&str) -> Result<String, Throw> {
+pub fn string_arg<'a>(cx: &mut FunctionContext<'a>, idx: usize, attr:&str) -> Result<String, Throw> {
   let exists = cx.len() > idx as i32;
   match opt_string_arg(cx, idx){
     Some(v) => Ok(v),
     None => cx.throw_type_error(
       if exists { format!("{} must be a string", attr) }
-      else { format!("missing argument: expected a string for {} ({} arg)", attr, arg_num(idx)) }
+      else { format!("Missing argument: expected a string for {} ({} arg)", attr, arg_num(idx)) }
     )
   }
 }
 
-pub fn strings_to_array<'a, T: This>(cx: &mut CallContext<'a, T>, strings: &[String]) -> JsResult<'a, JsValue> {
+pub fn strings_to_array<'a>(cx: &mut FunctionContext<'a>, strings: &[String]) -> JsResult<'a, JsArray> {
   let array = JsArray::new(cx, strings.len() as u32);
   for (i, val) in strings.iter().enumerate() {
     let num = cx.string(val.as_str());
     array.set(cx, i as u32, num)?;
   }
-  Ok(array.upcast())
+  Ok(array)
 }
 
 /// Convert from byte-indices to char-indices for a given UTF-8 string
@@ -145,30 +147,30 @@ pub fn string_idx_range(text: &str, begin: usize, end: usize) -> Range<usize>{
 // bools
 //
 
-pub fn opt_bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<bool>{
+pub fn opt_bool_arg(cx: &mut FunctionContext, idx: usize) -> Option<bool>{
   match cx.argument_opt(idx as i32) {
-    Some(arg) => match arg.downcast::<JsBoolean>() {
-      Ok(v) => Some(v.value()),
+    Some(arg) => match arg.downcast::<JsBoolean, _>(cx) {
+      Ok(v) => Some(v.value(cx)),
       Err(_e) => None
     },
     None => None
   }
 }
 
-pub fn bool_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default:bool) -> bool{
+pub fn bool_arg_or(cx: &mut FunctionContext, idx: usize, default:bool) -> bool{
   match opt_bool_arg(cx, idx){
     Some(v) => v,
     None => default
   }
 }
 
-pub fn bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> Result<bool, Throw>{
+pub fn bool_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> Result<bool, Throw>{
   let exists = cx.len() > idx as i32;
   match opt_bool_arg(cx, idx){
     Some(v) => Ok(v),
     None => cx.throw_type_error(
       if exists { format!("{} must be a boolean", attr) }
-      else { format!("missing argument: expected a boolean for {} (as {} arg)", attr, arg_num(idx)) }
+      else { format!("Missing argument: expected a boolean for {} (as {} arg)", attr, arg_num(idx)) }
     )
   }
 }
@@ -178,52 +180,56 @@ pub fn bool_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> 
 //
 
 
-pub fn float_for_key<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>, attr:&str) -> Result<f32, Throw>{
+pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Result<f32, Throw>{
   let key = cx.string(attr);
-  match obj.get(cx, key)?.downcast::<JsNumber>(){
-    Ok(num) => Ok(num.value() as f32),
-    Err(_e) => cx.throw_error(format!("Exptected a numerical value for \"{}\"", attr))
+  match obj.get(cx, key)?.downcast::<JsNumber, _>(cx){
+    Ok(num) => Ok(num.value(cx) as f32),
+    Err(_e) => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
   }
 }
 
-pub fn floats_in(vals: &[Handle<JsValue>]) -> Vec<f32>{
-  vals.iter()
-      .map(|js_val| js_val.downcast::<JsNumber>())
-      .filter( |r| r.is_ok() )
-      .map( |num| num.as_ref().unwrap().value() as f32 )
-      .filter( |num| num.is_finite() && !num.is_nan() )
-      .collect()
+pub fn floats_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<f32>{
+  let mut nums:Vec<f32> = Vec::new();
+  for (i, val) in vals.iter().enumerate() {
+    if let Ok(num) = val.downcast::<JsNumber, _>(cx){
+      let val = num.value(cx) as f32;
+      if val.is_finite() && !val.is_nan(){
+        nums.push(val);
+      }
+    }
+  }
+  nums
 }
 
-pub fn opt_float_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize) -> Option<f32>{
+pub fn opt_float_arg(cx: &mut FunctionContext, idx: usize) -> Option<f32>{
   match cx.argument_opt(idx as i32) {
-    Some(arg) => match arg.downcast::<JsNumber>() {
-      Ok(v) => if v.value().is_finite(){ Some(v.value() as f32) }else{ None },
+    Some(arg) => match arg.downcast::<JsNumber, _>(cx) {
+      Ok(v) => if v.value(cx).is_finite(){ Some(v.value(cx) as f32) }else{ None },
       Err(_e) => None
     },
     None => None
   }
 }
 
-pub fn float_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default:f64) -> f32{
+pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default:f64) -> f32{
   match opt_float_arg(cx, idx){
     Some(v) => v,
     None => default as f32
   }
 }
 
-pub fn float_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr:&str) -> Result<f32, Throw>{
+pub fn float_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> Result<f32, Throw>{
   let exists = cx.len() > idx as i32;
   match opt_float_arg(cx, idx){
     Some(v) => Ok(v),
     None => cx.throw_type_error(
       if exists { format!("{} must be a number", attr) }
-      else { format!("missing argument: expected a number for {} as {} arg", attr, arg_num(idx)) }
+      else { format!("Missing argument: expected a number for {} as {} arg", attr, arg_num(idx)) }
     )
   }
 }
 
-pub fn floats_to_array<'a, T: This>(cx: &mut CallContext<'a, T>, nums: &[f32]) -> JsResult<'a, JsValue> {
+pub fn floats_to_array<'a>(cx: &mut FunctionContext<'a>, nums: &[f32]) -> JsResult<'a, JsValue> {
   let array = JsArray::new(cx, nums.len() as u32);
   for (i, val) in nums.iter().enumerate() {
     let num = cx.number(*val);
@@ -236,22 +242,28 @@ pub fn floats_to_array<'a, T: This>(cx: &mut CallContext<'a, T>, nums: &[f32]) -
 // float spreads
 //
 
-pub fn opt_float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Vec<f32>{
+pub fn opt_float_args(cx: &mut FunctionContext, rng: Range<usize>) -> Vec<f32>{
   let end = cmp::min(rng.end, cx.len() as usize);
   let rng = rng.start..end;
-  rng.map(|i| cx.argument::<JsNumber>(i as i32))
-     .filter( |r| r.is_ok() )
-     .map( |num| num.as_ref().unwrap().value() as f32 )
-     .collect()
+
+  let mut args:Vec<f32> = Vec::new();
+  for i in rng.start..end{
+    if let Ok(arg) = cx.argument::<JsValue>(i as i32){
+      if let Ok(num) = arg.downcast::<JsNumber, _>(cx){
+        args.push(num.value(cx) as f32);
+      }
+    }
+  }
+  args
 }
 
-pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Vec<f32>, Throw>{
+pub fn float_args(cx: &mut FunctionContext, rng: Range<usize>) -> Result<Vec<f32>, Throw>{
   let need = rng.end - rng.start;
   let list = opt_float_args(cx, rng);
   let got = list.len();
   match got == need{
     true => Ok(list),
-    false => cx.throw_error(format!("expected {} numbers (got {})", need, got))
+    false => cx.throw_type_error(format!("Not enough arguments: expected {} numbers (got {})", need, got))
   }
 }
 
@@ -260,7 +272,7 @@ pub fn float_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Re
 //
 
 
-pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Color> {
+pub fn css_to_color<'a>(cx: &mut FunctionContext<'a>, css:&str) -> Option<Color> {
   css.parse::<Rgba>().ok().map(|Rgba{red, green, blue, alpha}|
     Color::from_argb(
       (alpha*255.0).round() as u8,
@@ -271,30 +283,37 @@ pub fn color_in<'a, T: This>(cx: &mut CallContext<'a, T>, css:&str) -> Option<Co
   )
 }
 
-pub fn color_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Option<Color> {
-  match opt_string_arg(cx, idx){
-    Some(css) => color_in(cx, &css),
-    None => {
-      let args: Vec<Handle<JsValue>> = vec![];
-      if let Some(arg) = cx.argument_opt(idx as i32) {
-        if let Ok(obj) = arg.downcast::<JsObject>(){
-          if let Ok(attr) = obj.get(cx, "toString"){
-            if let Ok(to_string) = attr.downcast::<JsFunction>(){
-              if let Ok(result) = to_string.call(cx, obj, args){
-                if let Ok(clr) = result.downcast::<JsString>(){
-                  return color_in(cx, &clr.value())
-                }
-              }
-            }
+pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
+  if val.is_a::<JsString, _>(cx) {
+    let css = val.downcast::<JsString, _>(cx).unwrap().value(cx);
+    return css_to_color(cx, &css)
+  }
+
+  if let Ok(obj) = val.downcast::<JsObject, _>(cx){
+    if let Ok(attr) = obj.get(cx, "toString"){
+      if let Ok(to_string) = attr.downcast::<JsFunction, _>(cx){
+        let args: Vec<Handle<JsValue>> = vec![];
+        if let Ok(result) = to_string.call(cx, obj, args){
+          if let Ok(clr) = result.downcast::<JsString, _>(cx){
+            let css = &clr.value(cx);
+            return css_to_color(cx, css)
           }
         }
       }
-      None
     }
+  }
+
+  None
+}
+
+pub fn color_arg(cx: &mut FunctionContext, idx: usize) -> Option<Color> {
+  match cx.argument_opt(idx as i32) {
+    Some(arg) => color_in(cx, arg),
+    _ => None
   }
 }
 
-pub fn color_to_css<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color) -> JsResult<'a, JsValue> {
+pub fn color_to_css<'a>(cx: &mut FunctionContext<'a>, color:&Color) -> JsResult<'a, JsValue> {
   let RGB {r, g, b} = color.to_rgb();
   let css = match color.a() {
     255 => format!("#{:02x}{:02x}{:02x}", r, g, b),
@@ -311,14 +330,14 @@ pub fn color_to_css<'a, T: This+Class>(cx: &mut CallContext<'a, T>, color:&Color
 // Matrices
 //
 
-pub fn matrix_in<T: This>(cx: &mut CallContext<'_, T>, vals:&[Handle<JsValue>]) -> Result<Matrix, Throw>{
-  // for converting single js-array args
-  let terms = floats_in(vals);
-  match to_matrix(&terms){
-    Some(matrix) => Ok(matrix),
-    None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
-  }
-}
+// pub fn matrix_in(cx: &mut FunctionContext, vals:&[Handle<JsValue>]) -> Result<Matrix, Throw>{
+//   // for converting single js-array args
+//   let terms = floats_in(vals);
+//   match to_matrix(&terms){
+//     Some(matrix) => Ok(matrix),
+//     None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+//   }
+// }
 
 pub fn to_matrix(t:&[f32]) -> Option<Matrix>{
   match t.len(){
@@ -328,56 +347,61 @@ pub fn to_matrix(t:&[f32]) -> Option<Matrix>{
   }
 }
 
-pub fn matrix_args<T: This>(cx: &mut CallContext<'_, T>, rng: Range<usize>) -> Result<Matrix, Throw>{
-  // for converting inline args (e.g., in Path.transform())
-  let terms = opt_float_args(cx, rng);
-  match to_matrix(&terms){
-    Some(matrix) => Ok(matrix),
-    None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+// pub fn matrix_args(cx: &mut FunctionContext, rng: Range<usize>) -> Result<Matrix, Throw>{
+//   // for converting inline args (e.g., in Path.transform())
+//   let terms = opt_float_args(cx, rng);
+//   match to_matrix(&terms){
+//     Some(matrix) => Ok(matrix),
+//     None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+//   }
+// }
+
+pub fn opt_matrix_arg(cx: &mut FunctionContext, idx: usize) -> Option<Matrix>{
+  if let Some(arg) = cx.argument_opt(idx as i32) {
+    if let Ok(array) = arg.downcast::<JsArray, _>(cx) {
+      if let Ok(vals) = array.to_vec(cx){
+        let terms = floats_in(cx, &vals);
+        return to_matrix(&terms)
+      }
+    }
   }
+  None
 }
 
-pub fn matrix_arg<T: This+Class>(cx: &mut CallContext<T>, idx:usize) -> Result<Matrix, Throw> {
-  let arg = cx.argument::<JsArray>(idx as i32)?.to_vec(cx)?;
-  let terms = floats_in(&arg);
-  match to_matrix(&terms){
-    Some(matrix) => Ok(matrix),
-    None => cx.throw_error(format!("expected 6 or 9 matrix values (got {})", terms.len()))
+pub fn matrix_arg(cx: &mut FunctionContext, idx:usize) -> Result<Matrix, Throw> {
+  match opt_matrix_arg(cx, idx){
+    Some(v) => Ok(v),
+    None => cx.throw_type_error("expected a DOMMatrix")
   }
-}
-
-pub fn matrix_to_array<'a, T: This+Class>(cx: &mut CallContext<'a, T>, matrix:&Matrix) -> JsResult<'a, JsValue> {
-  let array = JsArray::new(cx, 9);
-  for i in 0..9 {
-    let num = cx.number(matrix[i as usize] as f64);
-    array.set(cx, i as u32, num)?;
-  }
-  Ok(array.upcast())
 }
 
 //
 // Points
 //
 
-pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
-  floats_in(&vals).as_slice()
-      .chunks(2)
-      .map(|pair| Point::new(pair[0], pair[1]))
-      .collect()
-}
+// pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
+//   floats_in(&vals).as_slice()
+//       .chunks(2)
+//       .map(|pair| Point::new(pair[0], pair[1]))
+//       .collect()
+// }
 
 //
 // Path2D
 //
 
-pub fn path2d_arg_opt<T: This+Class>(cx: &mut CallContext<T>, idx:usize) -> Option<Path> {
+use crate::path::{BoxedPath2D};
+
+pub fn path2d_arg_opt(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
   if let Some(arg) = cx.argument_opt(idx as i32){
-    if let Ok(arg) = arg.downcast::<JsPath2D>(){
-      return Some(cx.borrow(&arg, |arg| arg.path.clone() ))
+    if let Ok(arg) = arg.downcast::<BoxedPath2D, _>(cx){
+      let arg = arg.borrow();
+      return Some(arg.path.clone())
     }
   }
   None
 }
+
 
 //
 // Filters
@@ -388,27 +412,28 @@ pub enum FilterSpec{
   Shadow{offset:Point, blur:f32, color:Color},
 }
 
-pub fn filter_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<(String, Vec<FilterSpec>), Throw> {
+pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> Result<(String, Vec<FilterSpec>), Throw> {
   let arg = cx.argument::<JsObject>(idx as i32)?;
   let canonical = string_for_key(cx, &arg, "canonical")?;
 
   let obj = arg.get(cx, "filters")?.downcast_or_throw::<JsObject, _>(cx)?;
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut filters = vec![];
-  for (name, key) in strings_in(&keys).iter().zip(keys) {
+  for (name, key) in strings_in(cx, &keys).iter().zip(keys) {
     match name.as_str() {
       "drop-shadow" => {
         let values = obj.get(cx, key)?.downcast_or_throw::<JsArray, _>(cx)?;
-        let dims = floats_in(&values.to_vec(cx)?);
-        let color_str = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value();
-        if let Some(color) = color_in(cx, &color_str) {
+        let nums = values.to_vec(cx)?;
+        let dims = floats_in(cx, &nums);
+        let color_str = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value(cx);
+        if let Some(color) = css_to_color(cx, &color_str) {
           filters.push(FilterSpec::Shadow{
             offset: Point::new(dims[0], dims[1]), blur: dims[2], color
           });
         }
       },
       _ => {
-        let value = obj.get(cx, key)?.downcast_or_throw::<JsNumber, _>(cx)?.value();
+        let value = obj.get(cx, key)?.downcast_or_throw::<JsNumber, _>(cx)?.value(cx);
         filters.push(FilterSpec::Plain{
           name:name.to_string(), value:value as f32
         })
@@ -422,17 +447,29 @@ pub fn filter_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<(Strin
 // Skia Enums
 //
 
-use skia_safe::{TileMode};
-pub fn to_tile_mode(mode_name:&str) -> Option<TileMode>{
-  let mode = match mode_name.to_lowercase().as_str(){
-    "clamp" => TileMode::Clamp,
-    "repeat" => TileMode::Repeat,
-    "mirror" => TileMode::Mirror,
-    "decal" => TileMode::Decal,
+use skia_safe::{TileMode, TileMode::{Decal, Repeat}};
+// pub fn to_tile_mode(mode_name:&str) -> Option<TileMode>{
+//   let mode = match mode_name.to_lowercase().as_str(){
+//     "clamp" => TileMode::Clamp,
+//     "repeat" => TileMode::Repeat,
+//     "mirror" => TileMode::Mirror,
+//     "decal" => TileMode::Decal,
+//     _ => return None
+//   };
+//   Some(mode)
+// }
+
+pub fn to_repeat_mode(repeat:&str) -> Option<(TileMode, TileMode)> {
+  let mode = match repeat.to_lowercase().as_str() {
+    "repeat" | "" => (Repeat, Repeat),
+    "repeat-x" => (Repeat, Decal),
+    "repeat-y" => (Decal, Repeat),
+    "no-repeat" => (Decal, Decal),
     _ => return None
   };
   Some(mode)
 }
+
 
 use skia_safe::{FilterQuality};
 pub fn to_filter_quality(mode_name:&str) -> Option<FilterQuality>{
@@ -563,8 +600,23 @@ pub fn from_blend_mode(mode:BlendMode) -> String{
   }.to_string()
 }
 
+use skia_safe::{PathOp};
+pub fn to_path_op(op_name:&str) -> Option<PathOp> {
+  let op = match op_name.to_lowercase().as_str() {
+    "difference" => PathOp::Difference,
+    "intersect" => PathOp::Intersect,
+    "union" => PathOp::Union,
+    "xor" => PathOp::XOR,
+    "reversedifference" | "complement" => PathOp::ReverseDifference,
+    _ => return None
+  };
+  Some(op)
+}
+
+
 use skia_safe::path::FillType;
-pub fn fill_rule_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, default: &str) -> Result<FillType, Throw>{
+
+pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> Result<FillType, Throw>{
   let rule = match string_arg_or(cx, idx, default).as_str(){
     "nonzero" => FillType::Winding,
     "evenodd" => FillType::EvenOdd,
@@ -576,16 +628,16 @@ pub fn fill_rule_arg_or<T: This>(cx: &mut CallContext<'_, T>, idx: usize, defaul
   Ok(rule)
 }
 
-pub fn blend_mode_arg<T: This>(cx: &mut CallContext<'_, T>, idx: usize, attr: &str) -> Result<BlendMode, Throw>{
-  let mode_name = string_arg(cx, idx, attr)?;
-  match to_blend_mode(&mode_name){
-    Some(blend_mode) => Ok(blend_mode),
-    None => cx.throw_error("blendMode must be SrcOver, DstOver, Src, Dst, Clear, SrcIn, DstIn, \
-                            SrcOut, DstOut, SrcATop, DstATop, Xor, Plus, Multiply, Screen, Overlay, \
-                            Darken, Lighten, ColorDodge, ColorBurn, HardLight, SoftLight, Difference, \
-                            Exclusion, Hue, Saturation, Color, Luminosity, or Modulate")
-  }
-}
+// pub fn blend_mode_arg(cx: &mut FunctionContext, idx: usize, attr: &str) -> Result<BlendMode, Throw>{
+//   let mode_name = string_arg(cx, idx, attr)?;
+//   match to_blend_mode(&mode_name){
+//     Some(blend_mode) => Ok(blend_mode),
+//     None => cx.throw_error("blendMode must be SrcOver, DstOver, Src, Dst, Clear, SrcIn, DstIn, \
+//                             SrcOut, DstOut, SrcATop, DstATop, Xor, Plus, Multiply, Screen, Overlay, \
+//                             Darken, Lighten, ColorDodge, ColorBurn, HardLight, SoftLight, Difference, \
+//                             Exclusion, Hue, Saturation, Color, Luminosity, or Modulate")
+//   }
+// }
 
 
 //

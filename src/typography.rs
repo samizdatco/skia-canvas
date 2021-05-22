@@ -2,7 +2,8 @@
 #![allow(unused_mut)]
 #![allow(dead_code)]
 #![allow(unused_imports)]
-use std::rc::Rc;
+#![allow(non_snake_case)]
+use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 use std::fs;
 use std::path::Path;
@@ -17,6 +18,7 @@ use skia_safe::font_arguments::{VariationPosition, variation_position::{Coordina
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
                             TextDirection, ParagraphStyle};
 
+use crate::FONT_LIBRARY;
 use crate::utils::*;
 
 pub struct FontSpec{
@@ -29,11 +31,11 @@ pub struct FontSpec{
   pub canonical: String
 }
 
-pub fn font_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<Option<FontSpec>, Throw> {
-  let arg = cx.argument::<JsValue>(0)?;
-  if arg.is_a::<JsNull>(){ return Ok(None) }
+pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> Result<Option<FontSpec>, Throw> {
+  let arg = cx.argument::<JsValue>(idx)?;
+  if arg.is_a::<JsNull, _>(cx){ return Ok(None) }
 
-  let font_desc = cx.argument::<JsObject>(idx as i32)?;
+  let font_desc = cx.argument::<JsObject>(idx)?;
   let families = strings_at_key(cx, &font_desc, "family")?;
   let canonical = string_for_key(cx, &font_desc, "canonical")?;
   let variant = string_for_key(cx, &font_desc, "variant")?;
@@ -44,17 +46,17 @@ pub fn font_arg<T: This>(cx: &mut CallContext<T>, idx: usize) -> Result<Option<F
   let slant = to_slant(string_for_key(cx, &font_desc, "style")?.as_str());
   let width = to_width(string_for_key(cx, &font_desc, "stretch")?.as_str());
 
-  let feat_obj = font_desc.get(cx, "features")?.downcast::<JsObject>().or_throw(cx)?;
+  let feat_obj = font_desc.get(cx, "features")?.downcast::<JsObject, _>(cx).or_throw(cx)?;
   let features = font_features(cx, &feat_obj)?;
 
   let style = FontStyle::new(weight, width, slant);
   Ok(Some(FontSpec{ families, size, leading, style, features, variant, canonical}))
 }
 
-pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject>) -> Result<Vec<(String, i32)>, Throw>{
+pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> Result<Vec<(String, i32)>, Throw>{
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut features:Vec<(String, i32)> = vec![];
-  for key in strings_in(&keys).iter() {
+  for key in strings_in(cx, &keys).iter() {
     match key.as_str() {
       "on" | "off" => strings_at_key(cx, obj, key)?.iter().for_each(|feat|{
         features.push( (feat.to_string(), if key == "on"{ 1 } else { 0 }) );
@@ -65,7 +67,7 @@ pub fn font_features<T: This>(cx: &mut CallContext<'_, T>, obj: &Handle<JsObject
   Ok(features)
 }
 
-pub fn typeface_details<'a, T: This>(cx: &mut CallContext<'a, T>, filename:&str, font: &Typeface, alias:Option<String>) -> JsResult<'a, JsObject> {
+pub fn typeface_details<'a>(cx: &mut FunctionContext<'a>, filename:&str, font: &Typeface, alias:Option<String>) -> JsResult<'a, JsObject> {
   let style = font.font_style();
 
   let filename = cx.string(filename);
@@ -250,15 +252,19 @@ pub struct FontLibrary{
   collection_cache: HashMap<CollectionKey, FontCollection>,
 }
 
-impl Default for FontLibrary{
-  fn default() -> Self{
-    let mut library = FontCollection::new();
-    library.set_default_font_manager(FontMgr::new(), None);
-    FontLibrary{ collection: library, collection_cache:HashMap::new(), fonts:vec![] }
-  }
+unsafe impl Send for FontLibrary {
+  // famous last words: this ‘should’ be safe in practice because the singleton is behind a mutex
 }
 
 impl FontLibrary{
+  pub fn shared() -> Mutex<Self>{
+    let fonts = vec![];
+    let collection_cache = HashMap::new();
+    let mut collection = FontCollection::new();
+    collection.set_default_font_manager(FontMgr::new(), None);
+    Mutex::new(FontLibrary{ collection, collection_cache, fonts })
+  }
+
   fn families(&self) -> Vec<String>{
     let font_mgr = FontMgr::new();
     let count = font_mgr.count_families();
@@ -337,7 +343,6 @@ impl FontLibrary{
     // don't update the style if no usable family names were specified
     let matches = self.collection.find_typefaces(&spec.families, spec.style);
     if matches.is_empty(){
-      eprintln!("Warning: No matching font families found for {:?}", spec.families);
       return None
     }
 
@@ -418,107 +423,77 @@ impl FontLibrary{
 
 }
 
+//
+// Javascript Methods
+//
 
-pub struct SharedFontLibrary{
-  // in practice the FontLibrary will always be a singleton, so base the js object
-  // on a refcell that can be borrowed by all the Context2Ds
-  pub library:Rc<RefCell<FontLibrary>>
+pub fn get_families(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let library = FONT_LIBRARY.lock().unwrap();
+  let families = library.families();
+  let names = strings_to_array(&mut cx, &families)?;
+  Ok(names)
 }
 
-impl Default for SharedFontLibrary{
-  fn default() -> Self{
-    SharedFontLibrary{ library: Rc::new(RefCell::new(FontLibrary::default())) }
-  }
+pub fn has(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let library = FONT_LIBRARY.lock().unwrap();
+  let family = string_arg(&mut cx, 1, "familyName")?;
+  let found = library.families().contains(&family);
+  Ok(cx.boolean(found))
 }
 
-declare_types! {
-  pub class JsFontLibrary for SharedFontLibrary {
-    init(_) {
-      Ok( SharedFontLibrary::default() )
-    }
+pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let library = FONT_LIBRARY.lock().unwrap();
+  let family = string_arg(&mut cx, 1, "familyName")?;
+  let (weights, widths, styles) = library.family_details(&family);
 
-    method get_families(mut cx){
-      let this = cx.this();
-      let families = cx.borrow(&this, |this| {
-        let library = this.library.borrow_mut();
-        library.families()
-      });
-      Ok(strings_to_array(&mut cx, &families)?)
-    }
-
-    method has(mut cx){
-      let this = cx.this();
-      let family = string_arg(&mut cx, 0, "familyName")?;
-      let found = cx.borrow(&this, |this| {
-        let library = this.library.borrow_mut();
-        library.families().contains(&family)
-      });
-
-      Ok(cx.boolean(found).upcast())
-    }
-
-    method family(mut cx){
-      let this = cx.this();
-      let family = cx.argument::<JsString>(0)?.value();
-      let (weights, widths, styles) = cx.borrow(&this, |this| {
-        let library = this.library.borrow_mut();
-        library.family_details(&family)
-      });
-
-      if weights.is_empty() {
-        return Ok(cx.undefined().upcast())
-      }
-
-      let name = cx.string(family);
-      let weights = floats_to_array(&mut cx, &weights)?;
-      let widths = strings_to_array(&mut cx, &widths)?;
-      let styles = strings_to_array(&mut cx, &styles)?;
-
-      let details = JsObject::new(&mut cx);
-      let attr = cx.string("family"); details.set(&mut cx, attr, name)?;
-      let attr = cx.string("weights"); details.set(&mut cx, attr, weights)?;
-      let attr = cx.string("widths"); details.set(&mut cx, attr, widths)?;
-      let attr = cx.string("styles"); details.set(&mut cx, attr, styles)?;
-
-      Ok(details.upcast())
-    }
-
-    method _addFamily(mut cx){
-      let this = cx.this();
-      let alias = opt_string_arg(&mut cx, 0);
-      let filenames = cx.argument::<JsArray>(1)?.to_vec(&mut cx)?;
-      let results = JsArray::new(&mut cx, filenames.len() as u32);
-
-      for (i, filename) in strings_in(&filenames).iter().enumerate(){
-        let path = Path::new(&filename);
-        let typeface = match fs::read(path){
-          Err(why) => {
-            return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
-          },
-          Ok(bytes) => Typeface::from_data(Data::new_copy(&bytes), None)
-        };
-
-        match typeface {
-          Some(font) => {
-            // add family/weight/width/slant details to return value
-            let details = typeface_details(&mut cx, &filename, &font, alias.clone())?;
-            results.set(&mut cx, i as u32, details)?;
-
-            // register the typeface
-            cx.borrow(&this, |this| {
-              let mut library = this.library.borrow_mut();
-              library.add_typeface(font, alias.clone());
-            });
-          },
-          None => {
-            return cx.throw_error(format!("Could not decode font data in {}", path.display()))
-          }
-        }
-      }
-
-      Ok(results.upcast())
-    }
-
+  if weights.is_empty() {
+    return Ok(cx.undefined().upcast())
   }
+
+  let name = cx.string(family);
+  let weights = floats_to_array(&mut cx, &weights)?;
+  let widths = strings_to_array(&mut cx, &widths)?;
+  let styles = strings_to_array(&mut cx, &styles)?;
+
+  let details = JsObject::new(&mut cx);
+  let attr = cx.string("family"); details.set(&mut cx, attr, name)?;
+  let attr = cx.string("weights"); details.set(&mut cx, attr, weights)?;
+  let attr = cx.string("widths"); details.set(&mut cx, attr, widths)?;
+  let attr = cx.string("styles"); details.set(&mut cx, attr, styles)?;
+
+  Ok(details.upcast())
+}
+
+pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let alias = opt_string_arg(&mut cx, 1);
+  let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
+  let results = JsArray::new(&mut cx, filenames.len() as u32);
+
+  for (i, filename) in strings_in(&mut cx, &filenames).iter().enumerate(){
+    let path = Path::new(&filename);
+    let typeface = match fs::read(path){
+      Err(why) => {
+        return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
+      },
+      Ok(bytes) => Typeface::from_data(Data::new_copy(&bytes), None)
+    };
+
+    match typeface {
+      Some(font) => {
+        // add family/weight/width/slant details to return value
+        let details = typeface_details(&mut cx, &filename, &font, alias.clone())?;
+        results.set(&mut cx, i as u32, details)?;
+
+        // register the typeface
+        let mut library = FONT_LIBRARY.lock().unwrap();
+        library.add_typeface(font, alias.clone());
+      },
+      None => {
+        return cx.throw_error(format!("Could not decode font data in {}", path.display()))
+      }
+    }
+  }
+
+  Ok(results.upcast())
 }
 

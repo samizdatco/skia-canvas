@@ -1895,7 +1895,7 @@ tests['smoothing disabled image'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.imageSmoothingEnabled = false
-    ctx.patternQuality = 'good'
+    ctx.imageSmoothingQuality = 'high'
     // cropped
     ctx.drawImage(img, 0, 0, 10, 10, 0, 0, 200, 200)
     done(null)
@@ -1910,7 +1910,7 @@ tests['createPattern() with globalAlpha and smoothing off scaling down'] = funct
   var img = new Image()
   img.onload = function () {
     ctx.imageSmoothingEnabled = false
-    ctx.patternQuality = 'good'
+    ctx.imageSmoothingQuality = 'high'
     var pattern = ctx.createPattern(img, 'repeat')
     ctx.scale(0.1, 0.1)
     ctx.globalAlpha = 0.95
@@ -1929,7 +1929,7 @@ tests['createPattern() with globalAlpha and smoothing off scaling up'] = functio
   var img = new Image()
   img.onload = function () {
     ctx.imageSmoothingEnabled = false
-    ctx.patternQuality = 'good'
+    ctx.imageSmoothingQuality = 'high'
     var pattern = ctx.createPattern(img, 'repeat')
     ctx.scale(20, 20)
     ctx.globalAlpha = 0.95
@@ -1951,7 +1951,6 @@ tests['smoothing and gradients (gradients are not influenced by patternQuality)'
   grad1.addColorStop(0.75, 'blue')
   grad1.addColorStop(1, 'limegreen')
   ctx.imageSmoothingEnabled = false
-  ctx.patternQuality = 'nearest'
   ctx.globalAlpha = 0.9
   // linear grad box
   ctx.fillStyle = grad1
