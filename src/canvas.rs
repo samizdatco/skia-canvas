@@ -42,46 +42,33 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
 
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let this = this.borrow();
-
-  Ok(cx.number(this.width as f64))
+  let width = this.borrow().width;
+  Ok(cx.number(width as f64))
 }
 
 pub fn get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let this = this.borrow();
-
-  Ok(cx.number(this.height as f64))
+  let height = this.borrow().height;
+  Ok(cx.number(height as f64))
 }
 
 pub fn set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-
-  let width = float_arg(&mut cx, 1, "size")?.floor();
-  if width >= 0.0 {
-    let mut that = this.borrow_mut();
-    that.width = width;
-  }
-
+  let width = float_arg(&mut cx, 1, "size")?;
+  this.borrow_mut().width = width.floor();
   Ok(cx.undefined())
 }
 
 pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-
-  let height = float_arg(&mut cx, 1, "size")?.floor();
-  if height >= 0.0 {
-    let mut that = this.borrow_mut();
-    that.height = height;
-  }
-
+  let height = float_arg(&mut cx, 1, "size")?;
+  this.borrow_mut().height = height.floor();
   Ok(cx.undefined())
 }
 
 pub fn get_async(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let this = this.borrow();
-
   Ok(cx.boolean(this.async_io))
 }
 
@@ -89,7 +76,6 @@ pub fn set_async(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let go_async = cx.argument::<JsBoolean>(1)?;
   this.borrow_mut().async_io = go_async.value(&mut cx);
-
   Ok(cx.undefined())
 }
 
