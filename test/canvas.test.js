@@ -6,7 +6,14 @@ const _ = require('lodash'),
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
-      CLEAR = [0,0,0,0]
+      CLEAR = [0,0,0,0],
+      MAGIC = {
+        jpg: Buffer.from([0xFF, 0xD8, 0xFF]),
+        png: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+        pdf: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d])
+      };
+
+
 
 describe("Canvas", ()=>{
   let canvas, ctx,
@@ -128,7 +135,7 @@ describe("Canvas", ()=>{
       canvas.saveAs(`${TMP}/output6`, {format:'jpeg'})
       canvas.saveAs(`${TMP}/output6.png`, {format:'jpeg'})
 
-      let magic = Buffer.from([0xFF, 0xD8, 0xFF])
+      let magic = MAGIC.jpg
       for (let path of glob(`${TMP}/*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
@@ -141,7 +148,7 @@ describe("Canvas", ()=>{
       canvas.saveAs(`${TMP}/output3`, {format:'png'})
       canvas.saveAs(`${TMP}/output4.svg`, {format:'png'})
 
-      let magic = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+      let magic = MAGIC.png
       for (let path of glob(`${TMP}/*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
@@ -166,7 +173,7 @@ describe("Canvas", ()=>{
       canvas.saveAs(`${TMP}/output3`, {format:'pdf'})
       canvas.saveAs(`${TMP}/output4.jpg`, {format:'pdf'})
 
-      let magic = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d])
+      let magic = MAGIC.pdf
       for (let path of glob(`${TMP}/*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
@@ -255,9 +262,25 @@ describe("Canvas", ()=>{
         ctx.textAlign = 'center'
         ctx.fillText(i+1, canvas.width/2, canvas.height/2)
       })
-      expect(async () => { await canvas.saveAsync(`${TMP}/multipage.pdf`) }).not.toThrow()
+
+      let path = `${TMP}/multipage.pdf`
+      await canvas.saveAsync(path)
+      let header = fs.readFileSync(path).slice(0, MAGIC.pdf.length)
+      expect(header.equals(MAGIC.pdf)).toBe(true)
+      done()
     })
 
+    test("image Buffers (async)", async done => {
+      for (ext of ["png", "jpg", "pdf"]){
+        let path = `${TMP}/output.${ext}`
+        let buf = await canvas.toBufferAsync(ext)
+        expect(buf).toBeInstanceOf(Buffer)
+        fs.writeFileSync(path, buf)
+        let header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
+        expect(header.equals(MAGIC[ext])).toBe(true)
+      }
+      done()
+    })
 
     test("sensible errors for misbegotten exports", () => {
       ctx.fillStyle = 'lightskyblue'
