@@ -10,9 +10,8 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use skia_safe::{Rect, Matrix, Path as SkPath, Picture, PictureRecorder,
-                Size, ClipOp, Surface, EncodedImageFormat, Data,
+                ISize, Size, ClipOp, Surface, EncodedImageFormat, Data,
                 pdf, svg, Document};
-
 
 use crate::utils::*;
 use crate::context::{BoxedContext2D, Context2D};
@@ -251,6 +250,10 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsBuffer> {
 
 }
 
+//
+// -- Async File I/O ------------------------------------------------------------------------------
+//
+
 pub struct Page{
   pub recorder: Arc<Mutex<PictureRecorder>>,
   pub bounds: Rect,
@@ -285,56 +288,54 @@ impl Page{
     snapshot
   }
 
-  fn encoded_as(&self, format:&str, width: f32, height: f32, quality: f32) -> Option<Data> {
-    let picture = self.get_picture()?;
+  fn encoded_as(&self, format:&str, quality: f32) -> Result<Data, String> {
+    let picture = self.get_picture().ok_or("Could not generate an image")?;
 
-    let img_format = match format {
-      "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
-      "png" => Some(EncodedImageFormat::PNG),
-      "webp" => Some(EncodedImageFormat::WEBP),
-      "gif" => Some(EncodedImageFormat::GIF),
-      "heic" => Some(EncodedImageFormat::HEIF),
-      _ => None
-    };
-
-    if let Some(format) = img_format{
-      let img_dims = (width as i32, height as i32);
-      if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
-        surface.canvas().draw_picture(&picture, None, None);
-        let img = surface.image_snapshot();
-        img.encode_to_data_with_quality(format, quality as i32)
-      }else{
-        None
-      }
-    }else if format == "pdf"{
-      let img_dims = (width as i32, height as i32);
-      let mut document = pdf::new_document(None).begin_page(img_dims, None);
-      let canvas = document.canvas();
-      canvas.draw_picture(&picture, None, None);
-      Some(document.end_page().close())
-    }else if format == "svg"{
-      let img_dims = (width as i32, height as i32);
-      let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), None);
-      canvas.draw_picture(&picture, None, None);
-      Some(canvas.end())
+    if self.bounds.is_empty(){
+      Err("Width and height must be non-zero to generate an image".to_string())
     }else{
-      None
+      let img_dims:ISize = self.bounds.size().to_floor();
+      let img_format = match format {
+        "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
+        "png" => Some(EncodedImageFormat::PNG),
+        "webp" => Some(EncodedImageFormat::WEBP),
+        "gif" => Some(EncodedImageFormat::GIF),
+        "heic" => Some(EncodedImageFormat::HEIF),
+        _ => None
+      };
+
+      if let Some(img_format) = img_format{
+        if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
+          surface.canvas().draw_picture(&picture, None, None);
+          let img = surface.image_snapshot();
+          img.encode_to_data_with_quality(img_format, quality as i32)
+             .ok_or(format!("Could not encode as {}", format))
+        }else{
+          Err("Could not allocate new bitmap".to_string())
+        }
+      }else if format == "pdf"{
+        let mut document = pdf::new_document(None).begin_page(img_dims, None);
+        let canvas = document.canvas();
+        canvas.draw_picture(&picture, None, None);
+        Ok(document.end_page().close())
+      }else if format == "svg"{
+        let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), None);
+        canvas.draw_picture(&picture, None, None);
+        Ok(canvas.end())
+      }else{
+        Err("Unknown image format".to_string())
+      }
+
     }
+
   }
 
   fn write(&self, filename: &str, file_format:&str, quality: f32) -> Result<(), String> {
     let path = Path::new(&filename);
-    if self.bounds.is_empty(){
-      Err("Width and height must be non-zero to generate an image".to_string())
-    }else{
-      let Size{width, height} = self.bounds.size();
-      match self.encoded_as(&file_format, width, height, quality){
-        Some(data) => fs::write(path, data.as_bytes()).map_err(|why|
-          format!("{}: \"{}\"", why, path.display())
-        ),
-        None => Err(format!("Unsupported file format: {:?}", file_format))
-      }
-    }
+    let data = self.encoded_as(&file_format, quality)?;
+    fs::write(path, data.as_bytes()).map_err(|why|
+      format!("{}: \"{}\"", why, path.display())
+    )
   }
 
   fn append_to(&self, doc:Document) -> Result<Document, String>{
@@ -372,18 +373,11 @@ pub fn toBufferAsync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   std::thread::spawn(move || {
     let mut error_msg = format!("Failed to render as {:?}", file_format);
 
-    let encoded = {
+    let mut encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        match pages.iter().rev().try_fold(pdf::new_document(None), |doc, page| page.append_to(doc)){
-          Ok(document) => Some(document.close()),
-          Err(msg) => {
-            error_msg = msg;
-            None
-          }
-        }
+        pages.iter().rev().try_fold(pdf::new_document(None), |doc, page| page.append_to(doc)).map(|doc| doc.close())
       }else{
-        let Size{width, height} = pages[0].bounds.size();
-        pages[0].encoded_as(&file_format, width, height, quality)
+        pages[0].encoded_as(&file_format, quality)
       }
     };
 
@@ -391,30 +385,21 @@ pub fn toBufferAsync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       let callback = callback.into_inner(&mut cx);
       let this = cx.undefined();
 
-      let mut result = Err(error_msg);
-
-      if let Some(data) = encoded {
-        if let Ok(mut buffer) = JsBuffer::new(&mut cx, data.len() as u32){
+      let args = match encoded{
+        Ok(data) => {
+          let mut buffer = JsBuffer::new(&mut cx, data.len() as u32).unwrap();
           cx.borrow_mut(&mut buffer, |buf_data| {
             buf_data.as_mut_slice().copy_from_slice(&data);
           });
-          result = Ok(buffer);
-        }
-      }
-
-      let args = match result {
-        Ok(buffer) => {
           vec![
             cx.string("ok").upcast::<JsValue>(),
             buffer.upcast::<JsValue>(),
           ]
         },
-        Err(msg) => {
-          vec![
-            cx.string("err").upcast::<JsValue>(),
-            cx.string(msg).upcast::<JsValue>(),
-          ]
-        }
+        Err(msg) => vec![
+          cx.string("err").upcast::<JsValue>(),
+          cx.string(msg).upcast::<JsValue>(),
+        ]
       };
 
       callback.call(&mut cx, this, args)?;
