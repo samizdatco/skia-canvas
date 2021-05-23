@@ -9,6 +9,7 @@ In particular, Skia Canvas:
   - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files](#saveasfilename-format-quality), return them as [Buffers](#tobufferformat-quality-page), or encode [dataURL](#todataurlformat-quality-page) strings
+  - uses native threads and [EventQueues](https://docs.rs/neon/0.8.2-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’](#newpagewidth-height) on a given canvas and then [output](#saveasfilename-format-quality) them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can simplify and combine bézier paths using efficient [boolean operations](https://www.youtube.com/watch?v=OmfliNQsk88)
   - fully supports the [CSS filter effects][filter] image processing operators
@@ -26,7 +27,6 @@ In particular, Skia Canvas:
 This project is newly-hatched and still has some obvious gaps to fill (feel free to pitch in!).
 
 On the agenda for subsequent updates are:
-  - Use neon [EventQueues](https://github.com/neon-bindings/neon/blob/main/src/event/event_queue.rs) to provide asynchronous file i/o
   - Add SVG image loading using the [µsvg](https://crates.io/crates/usvg) parser
   - Add a `density` argument to Canvas and/or the output methods to allow for scaling to other device-pixel-ratios
 
@@ -35,7 +35,7 @@ On the agenda for subsequent updates are:
 The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions:
   - 10.20+
   - 12.17+
-  - 14.0 and later
+  - 14.x and later
 
 There are pre-compiled binaries for:
 
@@ -186,6 +186,40 @@ You can then use these objects by passing them as the first argument to the cont
 ## Non-standard extensions
 
 ### Canvas
+
+##### `.async`
+
+When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script. As a result you’ll generally want to deal with the canvas from within an `async` function and be sure to use the `await` keyword when accessing any of its output methods or shorthand properties:
+  - [`saveAs()`][saveAs]
+  - [`toBuffer()`][toBuffer]
+  - [`toDataURL()`][toDataURL]
+  - [`.pdf`, `.svg`, `.jpg`, and `.png`][shorthands]
+
+In cases where this is not the desired behavior, you can switch these methods into a synchronous mode for a particular canvas by setting its `async` property to `false`. For instance, both of the example functions below will generate PNG & PDF from the canvas, though the first will be more efficient (particularly for parallel contexts like request-handlers in an HTTP server or batch exports):
+```js
+
+let canvas = new Canvas()
+console.log(canvas.async) // -> true by default
+
+async function normal(){
+  let pngURL = await canvas.toDataURL("png")
+  let pdfBuffer = await canvas.pdf
+}
+
+function synchronous(){
+  canvas.async = false // switch into synchronous mode
+  let pngURL = canvas.toDataURL("png")
+  let pdfBuffer = canvas.pdf
+}
+```
+
+
+
+[shorthands]: #pdf-svg-jpg-and-png
+[saveAs]: #saveasfilename-format-quality
+[toDataURL]: #todataurlformat-quality-page
+[toBuffer]: #tobufferformat-quality-page
+
 
 ##### `.pages`
 
