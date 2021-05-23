@@ -21,6 +21,7 @@ use skia_safe::path::FillType;
 use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::typography::*;
+use crate::canvas::Page;
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 
@@ -456,6 +457,15 @@ impl Context2D{
       }
     }
     drobble
+  }
+
+  pub fn get_page(&self) -> Page {
+    Page{
+      recorder: Arc::clone(&self.recorder),
+      bounds: self.bounds,
+      clip: self.state.clip.clone(),
+      matrix: self.state.matrix,
+    }
   }
 
   pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {

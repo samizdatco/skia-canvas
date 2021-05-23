@@ -202,6 +202,36 @@ describe("Canvas", ()=>{
       })
     })
 
+    test("image-sequences (async)", async done => {
+      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+      colors.forEach((color, i) => {
+        let dim = 512 + 100*i
+        ctx = i ? canvas.newPage(dim, dim) : canvas.newPage()
+        ctx.fillStyle = color
+        ctx.arc(100, 100, 25, 0, Math.PI + Math.PI/colors.length*(i+1))
+        ctx.fill()
+        expect(ctx.canvas.height).toEqual(dim)
+        expect(ctx.canvas.width).toEqual(dim)
+      })
+
+      await canvas.saveAsync(`${TMP}/output-{2}.png`)
+
+      let files = glob(`${TMP}/output-0?.png`)
+      expect(files.length).toEqual(colors.length+1)
+
+      files.forEach((fn, i) => {
+        let img = new Image()
+        img.src = fn
+        expect(img.complete).toBe(true)
+
+        // second page inherits the first's size, then they increase
+        let dim = i<2 ? 512 : 512 + 100 * (i-1)
+        expect(img.width).toEqual(dim)
+        expect(img.height).toEqual(dim)
+      })
+      done()
+    })
+
     test("multi-page PDFs", () => {
       let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
       colors.forEach((color, i) => {
@@ -214,6 +244,20 @@ describe("Canvas", ()=>{
       })
       expect(() => canvas.saveAs(`${TMP}/multipage.pdf`) ).not.toThrow()
     })
+
+    test("multi-page PDFs (async)", async done => {
+      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+      colors.forEach((color, i) => {
+        ctx = canvas.newPage()
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = 'white'
+        ctx.textAlign = 'center'
+        ctx.fillText(i+1, canvas.width/2, canvas.height/2)
+      })
+      expect(async () => { await canvas.saveAsync(`${TMP}/multipage.pdf`) }).not.toThrow()
+    })
+
 
     test("sensible errors for misbegotten exports", () => {
       ctx.fillStyle = 'lightskyblue'

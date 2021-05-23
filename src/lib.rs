@@ -85,6 +85,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Canvas_saveAs", canvas::saveAs)?;
   cx.export_function("Canvas_toBuffer", canvas::toBuffer)?;
 
+  cx.export_function("Canvas_saveAsync", canvas::saveAsync)?;
+  cx.export_function("Canvas_toBufferAsync", canvas::toBufferAsync)?;
+
   // -- Context -----------------------------------------------------------------------------------
 
   cx.export_function("CanvasRenderingContext2D_new", ctx::new)?;
