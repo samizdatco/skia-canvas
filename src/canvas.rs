@@ -1,20 +1,15 @@
-#![allow(unused_mut)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 #![allow(non_snake_case)]
-#![allow(clippy::needless_range_loop)]
 use std::fs;
 use std::path::Path;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use skia_safe::{Rect, Matrix, Path as SkPath, Picture, PictureRecorder,
-                ISize, Size, ClipOp, Surface, EncodedImageFormat, Data,
+                ISize, ClipOp, Surface, EncodedImageFormat, Data,
                 pdf, svg, Document};
 
 use crate::utils::*;
-use crate::context::{BoxedContext2D, Context2D};
+use crate::context::BoxedContext2D;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -30,10 +25,6 @@ impl Canvas{
     Canvas{width:300.0, height:150.0, async_io:true}
   }
 }
-
-//
-// -- Javascript Methods --------------------------------------------------------------------------
-//
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
   let this = RefCell::new(Canvas::new());
@@ -181,31 +172,70 @@ impl Page{
 }
 
 
+fn to_pdf(pages:&[Page]) -> Result<Data, String>{
+  pages
+    .iter()
+    .rev()
+    .try_fold(pdf::new_document(None), |doc, page| page.append_to(doc))
+    .map(|doc| doc.close())
+}
+
+fn write_pdf(path:&str, pages:&[Page]) -> Result<(), String>{
+  let path = Path::new(&path);
+  match to_pdf(&pages){
+    Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
+      format!("{}: \"{}\"", why, path.display())
+    ),
+    Err(msg) => Err(msg)
+  }
+}
+
+fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality:f32) -> Result<(), String>{
+  let padding = match padding as i32{
+    -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
+    pad => pad as usize
+  };
+
+  pages.iter()
+    .rev()
+    .enumerate()
+    .try_for_each(|(pp, page)|{
+      let folio = format!("{:0width$}", pp+1, width=padding);
+      let filename = pattern.replace("{}", folio.as_str());
+      page.write(&filename, &format, quality)
+    })
+}
+
+use neon::result::Throw;
+fn pages_arg(cx: &mut FunctionContext, idx: i32) -> Result<Vec<Page>, Throw> {
+  let pages = cx.argument::<JsArray>(idx)?
+      .to_vec(cx)?
+      .iter()
+      .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
+      .filter( |ctx| ctx.is_ok() )
+      .map(|obj| obj.unwrap().borrow().get_page())
+      .collect::<Vec<Page>>();
+  Ok(pages)
+}
+
+
+//
+// -- Javascript Methods --------------------------------------------------------------------------
+//
+
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedCanvas>(0)?;
+  // let this = cx.argument::<BoxedCanvas>(0)?;
   let file_format = string_arg(&mut cx, 1, "format")?;
   let quality = float_arg(&mut cx, 2, "quality")?;
   let callback = cx.argument::<JsFunction>(3)?.root(&mut cx);
-  let mut pages = cx.argument::<JsArray>(4)?
-    .to_vec(&mut cx)?
-    .iter()
-    .map(|obj| obj.downcast::<BoxedContext2D, _>(&mut cx))
-    .filter( |ctx| ctx.is_ok() )
-    .map(|obj| obj.unwrap().borrow().get_page())
-    .collect::<Vec<Page>>();
-
+  let pages = pages_arg(&mut cx, 4)?;
   let queue = cx.queue();
 
   std::thread::spawn(move || {
-    let mut error_msg = format!("Failed to render as {:?}", file_format);
 
-    let mut encoded = {
+    let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        pages
-          .iter()
-          .rev()
-          .try_fold(pdf::new_document(None), |doc, page| page.append_to(doc))
-          .map(|doc| doc.close())
+        to_pdf(&pages)
       }else{
         pages[0].encoded_as(&file_format, quality)
       }
@@ -235,30 +265,21 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       callback.call(&mut cx, this, args)?;
       Ok(())
     });
+
   });
 
   Ok(cx.undefined())
 }
 
 pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
-  let this = cx.argument::<BoxedCanvas>(0)?;
+  // let this = cx.argument::<BoxedCanvas>(0)?;
   let file_format = string_arg(&mut cx, 1, "format")?;
   let quality = float_arg(&mut cx, 2, "quality")?;
-  let mut pages = cx.argument::<JsArray>(3)?
-    .to_vec(&mut cx)?
-    .iter()
-    .map(|obj| obj.downcast::<BoxedContext2D, _>(&mut cx))
-    .filter( |ctx| ctx.is_ok() )
-    .map(|obj| obj.unwrap().borrow().get_page())
-    .collect::<Vec<Page>>();
+  let pages = pages_arg(&mut cx, 3)?;
 
-    let mut encoded = {
+    let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        pages
-          .iter()
-          .rev()
-          .try_fold(pdf::new_document(None), |doc, page| page.append_to(doc))
-          .map(|doc| doc.close())
+        to_pdf(&pages)
       }else{
         pages[0].encoded_as(&file_format, quality)
       }
@@ -278,61 +299,33 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 
 
 pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedCanvas>(0)?;
+  // let this = cx.argument::<BoxedCanvas>(0)?;
   let name_pattern = string_arg(&mut cx, 1, "filePath")?;
   let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
+  let padding = opt_float_arg(&mut cx, 2).unwrap_or(-1.0);
   let file_format = string_arg(&mut cx, 3, "format")?;
   let quality = float_arg(&mut cx, 4, "quality")?;
   let callback = cx.argument::<JsFunction>(5)?.root(&mut cx);
-  let mut pages = cx.argument::<JsArray>(6)?
-    .to_vec(&mut cx)?
-    .iter()
-    .map(|obj| obj.downcast::<BoxedContext2D, _>(&mut cx))
-    .filter( |ctx| ctx.is_ok() )
-    .map(|obj| obj.unwrap().borrow().get_page())
-    .collect::<Vec<Page>>();
-
-  let padding = match sequence{
-    true => match opt_float_arg(&mut cx, 2).unwrap_or(-1.0) as i32{
-      -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
-      pad => pad as usize
-    },
-    false => 0
-  };
-
+  let pages = pages_arg(&mut cx, 6)?;
   let queue = cx.queue();
-  let mut result = Ok(());
 
   std::thread::spawn(move || {
 
-    if sequence {
-      pages.reverse();
-
-      for pp in 0..pages.len() {
-        let filename = name_pattern.replace("{}", format!("{:0width$}", pp+1, width=padding).as_str());
-        result = pages[pp].write(&filename, &file_format, quality);
-        if result.is_err(){ break }
+    let result = {
+      if sequence {
+        write_sequence(&pages, &name_pattern, &file_format, padding, quality)
+      } else if file_format == "pdf" {
+        write_pdf(&name_pattern, &pages)
+      } else {
+        pages[0].write(&name_pattern, &file_format, quality)
       }
-    } else if file_format == "pdf" {
-      pages.reverse();
-
-      let path = Path::new(&name_pattern);
-      let pagination = pages.iter().try_fold(pdf::new_document(None), |doc, page| page.append_to(doc));
-      result = match pagination{
-        Ok(document) => fs::write(path, document.close().as_bytes()).map_err(|why|
-          format!("{}: \"{}\"", why, path.display())
-        ),
-        Err(msg) => Err(msg)
-      }
-    } else {
-      result = pages[0].write(&name_pattern, &file_format, quality);
-    }
+    };
 
     queue.send(move |mut cx| {
       let callback = callback.into_inner(&mut cx);
       let this = cx.undefined();
       let args = match result {
-        Ok(n) => vec![
+        Ok(_) => vec![
           cx.string("ok").upcast::<JsValue>(),
           cx.undefined().upcast::<JsValue>(),
         ],
@@ -345,55 +338,26 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       callback.call(&mut cx, this, args)?;
       Ok(())
     });
+
   });
 
   Ok(cx.undefined())
 }
 
 pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedCanvas>(0)?;
+  // let this = cx.argument::<BoxedCanvas>(0)?;
   let name_pattern = string_arg(&mut cx, 1, "filePath")?;
   let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
+  let padding = opt_float_arg(&mut cx, 2).unwrap_or(-1.0);
   let file_format = string_arg(&mut cx, 3, "format")?;
   let quality = float_arg(&mut cx, 4, "quality")?;
-  let mut pages = cx.argument::<JsArray>(5)?
-    .to_vec(&mut cx)?
-    .iter()
-    .map(|obj| obj.downcast::<BoxedContext2D, _>(&mut cx))
-    .filter( |ctx| ctx.is_ok() )
-    .map(|obj| obj.unwrap().borrow().get_page())
-    .collect::<Vec<Page>>();
-
-  let padding = match sequence{
-    true => match opt_float_arg(&mut cx, 2).unwrap_or(-1.0) as i32{
-      -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
-      pad => pad as usize
-    },
-    false => 0
-  };
+  let pages = pages_arg(&mut cx, 5)?;
 
   let result = {
     if sequence {
-      pages.reverse();
-
-      let mut status = Ok(());
-      for pp in 0..pages.len() {
-        let filename = name_pattern.replace("{}", format!("{:0width$}", pp+1, width=padding).as_str());
-        status = pages[pp].write(&filename, &file_format, quality);
-        if status.is_err(){ break }
-      }
-      status
+      write_sequence(&pages, &name_pattern, &file_format, padding, quality)
     } else if file_format == "pdf" {
-      pages.reverse();
-
-      let path = Path::new(&name_pattern);
-      let pagination = pages.iter().try_fold(pdf::new_document(None), |doc, page| page.append_to(doc));
-      match pagination{
-        Ok(document) => fs::write(path, document.close().as_bytes()).map_err(|why|
-          format!("{}: \"{}\"", why, path.display())
-        ),
-        Err(msg) => Err(msg)
-      }
+      write_pdf(&name_pattern, &pages)
     } else {
       pages[0].write(&name_pattern, &file_format, quality)
     }
