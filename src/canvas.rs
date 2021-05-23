@@ -163,7 +163,7 @@ impl Page{
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end())
       }else{
-        Err("Unknown image format".to_string())
+        Err(format!("Unsupported file format {}", format))
       }
 
     }

@@ -13,8 +13,6 @@ const BLACK = [0,0,0,255],
         pdf: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d])
       };
 
-
-
 describe("Canvas", ()=>{
   let canvas, ctx,
       WIDTH = 512, HEIGHT = 512,
@@ -42,6 +40,17 @@ describe("Canvas", ()=>{
       expect(canvas.height).toBe(456)
       expect(ctx.fillStyle).toBe('#000000')
       expect(pixel(0,0)).toEqual(CLEAR)
+    })
+
+    test('async i/o mode', async () => {
+      expect(canvas.async).toBe(true)
+
+      let promise = canvas.png
+      expect(promise).toBeInstanceOf(Promise)
+      await expect(promise).resolves.toBeInstanceOf(Buffer)
+
+      canvas.async = false
+      expect(canvas.png).toBeInstanceOf(Buffer)
     })
   })
 
@@ -105,21 +114,166 @@ describe("Canvas", ()=>{
       expect(pg.height).toBe(H)
     })
 
-    test("export file formats", () => {
+    test("export file formats", async () => {
       expect(() => canvas.saveAs(`${TMP}/output.gif`) ).toThrowError('Unsupported file format');
       expect(() => canvas.saveAs(`${TMP}/output.targa`) ).toThrowError('Unsupported file format');
       expect(() => canvas.saveAs(`${TMP}/output`) ).toThrowError('Cannot determine image format');
       expect(() => canvas.saveAs(`${TMP}/`) ).toThrowError('Cannot determine image format');
-      expect(() => canvas.saveAs(`${TMP}/output`, {format:'png'}) ).not.toThrow()
+      await expect(canvas.saveAs(`${TMP}/output`, {format:'png'}) ).resolves.not.toThrow();
     })
 
   })
 
-  describe("can create", ()=>{
+  describe("can create | async", ()=>{
     let TMP
     beforeEach(() => {
       TMP = tmp.dirSync().name
 
+      ctx.fillStyle = 'red'
+      ctx.arc(100, 100, 25, 0, Math.PI/2)
+      ctx.fill()
+    })
+    afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
+
+    test("JPEGs", async ()=>{
+      await canvas.saveAs(`${TMP}/output1.jpg`)
+      await canvas.saveAs(`${TMP}/output2.jpeg`)
+      await canvas.saveAs(`${TMP}/output3.JPG`)
+      await canvas.saveAs(`${TMP}/output4.JPEG`)
+      await canvas.saveAs(`${TMP}/output5`, {format:'jpg'})
+      await canvas.saveAs(`${TMP}/output6`, {format:'jpeg'})
+      await canvas.saveAs(`${TMP}/output6.png`, {format:'jpeg'})
+
+      let magic = MAGIC.jpg
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+
+    test("PNGs", async ()=>{
+      await canvas.saveAs(`${TMP}/output1.png`)
+      await canvas.saveAs(`${TMP}/output2.PNG`)
+      await canvas.saveAs(`${TMP}/output3`, {format:'png'})
+      await canvas.saveAs(`${TMP}/output4.svg`, {format:'png'})
+
+      let magic = MAGIC.png
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+
+    test("SVGs", async ()=>{
+      await canvas.saveAs(`${TMP}/output1.svg`)
+      await canvas.saveAs(`${TMP}/output2.SVG`)
+      await canvas.saveAs(`${TMP}/output3`, {format:'svg'})
+      await canvas.saveAs(`${TMP}/output4.jpeg`, {format:'svg'})
+
+      for (let path of glob(`${TMP}/*`)){
+        let svg = fs.readFileSync(path, 'utf-8')
+        expect(svg).toMatch(/^<\?xml version/)
+      }
+    })
+
+    test("PDFs", async ()=>{
+      await canvas.saveAs(`${TMP}/output1.pdf`)
+      await canvas.saveAs(`${TMP}/output2.PDF`)
+      await canvas.saveAs(`${TMP}/output3`, {format:'pdf'})
+      await canvas.saveAs(`${TMP}/output4.jpg`, {format:'pdf'})
+
+      let magic = MAGIC.pdf
+      for (let path of glob(`${TMP}/*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+
+    test("image-sequences", async () => {
+      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+      colors.forEach((color, i) => {
+        let dim = 512 + 100*i
+        ctx = i ? canvas.newPage(dim, dim) : canvas.newPage()
+        ctx.fillStyle = color
+        ctx.arc(100, 100, 25, 0, Math.PI + Math.PI/colors.length*(i+1))
+        ctx.fill()
+        expect(ctx.canvas.height).toEqual(dim)
+        expect(ctx.canvas.width).toEqual(dim)
+      })
+
+      canvas.async = true
+      await canvas.saveAs(`${TMP}/output-{2}.png`)
+
+      let files = glob(`${TMP}/output-0?.png`)
+      expect(files.length).toEqual(colors.length+1)
+
+      files.forEach((fn, i) => {
+        let img = new Image()
+        img.src = fn
+        expect(img.complete).toBe(true)
+
+        // second page inherits the first's size, then they increase
+        let dim = i<2 ? 512 : 512 + 100 * (i-1)
+        expect(img.width).toEqual(dim)
+        expect(img.height).toEqual(dim)
+      })
+
+    })
+
+    test("multi-page PDFs", async () => {
+      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+      colors.forEach((color, i) => {
+        ctx = canvas.newPage()
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = 'white'
+        ctx.textAlign = 'center'
+        ctx.fillText(i+1, canvas.width/2, canvas.height/2)
+      })
+
+      canvas.async = true
+      let path = `${TMP}/multipage.pdf`
+      await canvas.saveAs(path)
+
+      let header = fs.readFileSync(path).slice(0, MAGIC.pdf.length)
+      expect(header.equals(MAGIC.pdf)).toBe(true)
+    })
+
+    test("image Buffers", async () => {
+      canvas.async = true
+      for (ext of ["png", "jpg", "pdf"]){
+        let path = `${TMP}/output.${ext}`
+        let buf = await canvas.toBuffer(ext)
+        expect(buf).toBeInstanceOf(Buffer)
+
+        fs.writeFileSync(path, buf)
+        let header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
+        expect(header.equals(MAGIC[ext])).toBe(true)
+      }
+    })
+
+    test("sensible error messages", async () => {
+      ctx.fillStyle = 'lightskyblue'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      // invalid path
+      await expect(canvas.saveAs(`${TMP}/deep/path/that/doesn/not/exist.pdf`))
+                  .rejects.toThrow()
+
+      // canvas has a zero dimension
+      let width = 0, height = 128
+      Object.assign(canvas, {width, height})
+      expect(canvas).toMatchObject({width, height})
+      await expect(canvas.saveAs(`${TMP}/zeroed.png`)).rejects.toThrowError("must be non-zero")
+    })
+  })
+
+  describe("can create | sync", ()=>{
+    let TMP
+    beforeEach(() => {
+      TMP = tmp.dirSync().name
+
+      canvas.async = false
       ctx.fillStyle = 'red'
       ctx.arc(100, 100, 25, 0, Math.PI/2)
       ctx.fill()
@@ -209,35 +363,6 @@ describe("Canvas", ()=>{
       })
     })
 
-    test("image-sequences (async)", async done => {
-      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
-      colors.forEach((color, i) => {
-        let dim = 512 + 100*i
-        ctx = i ? canvas.newPage(dim, dim) : canvas.newPage()
-        ctx.fillStyle = color
-        ctx.arc(100, 100, 25, 0, Math.PI + Math.PI/colors.length*(i+1))
-        ctx.fill()
-        expect(ctx.canvas.height).toEqual(dim)
-        expect(ctx.canvas.width).toEqual(dim)
-      })
-
-      await canvas.saveAsync(`${TMP}/output-{2}.png`)
-
-      let files = glob(`${TMP}/output-0?.png`)
-      expect(files.length).toEqual(colors.length+1)
-
-      files.forEach((fn, i) => {
-        let img = new Image()
-        img.src = fn
-        expect(img.complete).toBe(true)
-
-        // second page inherits the first's size, then they increase
-        let dim = i<2 ? 512 : 512 + 100 * (i-1)
-        expect(img.width).toEqual(dim)
-        expect(img.height).toEqual(dim)
-      })
-      done()
-    })
 
     test("multi-page PDFs", () => {
       let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
@@ -252,37 +377,19 @@ describe("Canvas", ()=>{
       expect(() => canvas.saveAs(`${TMP}/multipage.pdf`) ).not.toThrow()
     })
 
-    test("multi-page PDFs (async)", async done => {
-      let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
-      colors.forEach((color, i) => {
-        ctx = canvas.newPage()
-        ctx.fillStyle = color
-        ctx.fillRect(0, 0, canvas.width, canvas.height)
-        ctx.fillStyle = 'white'
-        ctx.textAlign = 'center'
-        ctx.fillText(i+1, canvas.width/2, canvas.height/2)
-      })
-
-      let path = `${TMP}/multipage.pdf`
-      await canvas.saveAsync(path)
-      let header = fs.readFileSync(path).slice(0, MAGIC.pdf.length)
-      expect(header.equals(MAGIC.pdf)).toBe(true)
-      done()
-    })
-
-    test("image Buffers (async)", async done => {
+    test("image Buffers", () => {
       for (ext of ["png", "jpg", "pdf"]){
         let path = `${TMP}/output.${ext}`
-        let buf = await canvas.toBufferAsync(ext)
+        let buf = canvas.toBuffer(ext)
         expect(buf).toBeInstanceOf(Buffer)
+
         fs.writeFileSync(path, buf)
         let header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
         expect(header.equals(MAGIC[ext])).toBe(true)
       }
-      done()
     })
 
-    test("sensible errors for misbegotten exports", () => {
+    test("sensible error messages", () => {
       ctx.fillStyle = 'lightskyblue'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
@@ -295,8 +402,8 @@ describe("Canvas", ()=>{
       let width = 0, height = 128
       Object.assign(canvas, {width, height})
       expect(canvas).toMatchObject({width, height})
-      canvas.saveAs(`${TMP}/zeroed.pdf`)
       expect( () => canvas.saveAs(`${TMP}/zeroed.png`)).toThrowError("must be non-zero")
     })
   })
+
 })
