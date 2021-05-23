@@ -2,10 +2,6 @@ name: Run tests
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
-      - neon-napi
-      - gl
   pull_request:
     branches:
       - main
