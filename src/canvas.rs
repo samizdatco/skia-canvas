@@ -225,10 +225,10 @@ pub fn set_async(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   // let this = cx.argument::<BoxedCanvas>(0)?;
-  let file_format = string_arg(&mut cx, 1, "format")?;
-  let quality = float_arg(&mut cx, 2, "quality")?;
-  let callback = cx.argument::<JsFunction>(3)?.root(&mut cx);
-  let pages = pages_arg(&mut cx, 4)?;
+  let callback = cx.argument::<JsFunction>(1)?.root(&mut cx);
+  let pages = pages_arg(&mut cx, 2)?;
+  let file_format = string_arg(&mut cx, 3, "format")?;
+  let quality = float_arg(&mut cx, 4, "quality")?;
   let queue = cx.queue();
 
   std::thread::spawn(move || {
@@ -273,9 +273,9 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
   // let this = cx.argument::<BoxedCanvas>(0)?;
-  let file_format = string_arg(&mut cx, 1, "format")?;
-  let quality = float_arg(&mut cx, 2, "quality")?;
-  let pages = pages_arg(&mut cx, 3)?;
+  let pages = pages_arg(&mut cx, 1)?;
+  let file_format = string_arg(&mut cx, 2, "format")?;
+  let quality = float_arg(&mut cx, 3, "quality")?;
 
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
@@ -300,13 +300,13 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 
 pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   // let this = cx.argument::<BoxedCanvas>(0)?;
-  let name_pattern = string_arg(&mut cx, 1, "filePath")?;
-  let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
-  let padding = opt_float_arg(&mut cx, 2).unwrap_or(-1.0);
-  let file_format = string_arg(&mut cx, 3, "format")?;
-  let quality = float_arg(&mut cx, 4, "quality")?;
-  let callback = cx.argument::<JsFunction>(5)?.root(&mut cx);
-  let pages = pages_arg(&mut cx, 6)?;
+  let callback = cx.argument::<JsFunction>(1)?.root(&mut cx);
+  let pages = pages_arg(&mut cx, 2)?;
+  let name_pattern = string_arg(&mut cx, 3, "filePath")?;
+  let sequence = !cx.argument::<JsValue>(4)?.is_a::<JsUndefined, _>(&mut cx);
+  let padding = opt_float_arg(&mut cx, 4).unwrap_or(-1.0);
+  let file_format = string_arg(&mut cx, 5, "format")?;
+  let quality = float_arg(&mut cx, 6, "quality")?;
   let queue = cx.queue();
 
   std::thread::spawn(move || {
@@ -346,12 +346,12 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   // let this = cx.argument::<BoxedCanvas>(0)?;
-  let name_pattern = string_arg(&mut cx, 1, "filePath")?;
-  let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
-  let padding = opt_float_arg(&mut cx, 2).unwrap_or(-1.0);
-  let file_format = string_arg(&mut cx, 3, "format")?;
-  let quality = float_arg(&mut cx, 4, "quality")?;
-  let pages = pages_arg(&mut cx, 5)?;
+  let pages = pages_arg(&mut cx, 1)?;
+  let name_pattern = string_arg(&mut cx, 2, "filePath")?;
+  let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
+  let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
+  let file_format = string_arg(&mut cx, 4, "format")?;
+  let quality = float_arg(&mut cx, 5, "quality")?;
 
   let result = {
     if sequence {
