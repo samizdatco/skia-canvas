@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use skia_safe::{Rect, Matrix, Path as SkPath, Picture, PictureRecorder,
-                ISize, ClipOp, Surface, EncodedImageFormat, Data,
+                Size, ClipOp, Surface, EncodedImageFormat, Data,
                 pdf, svg, Document};
 
 use crate::utils::*;
@@ -64,13 +64,13 @@ impl Page{
     snapshot
   }
 
-  fn encoded_as(&self, format:&str, quality: f32) -> Result<Data, String> {
+  fn encoded_as(&self, format:&str, quality:f32, density:f32) -> Result<Data, String> {
     let picture = self.get_picture().ok_or("Could not generate an image")?;
 
     if self.bounds.is_empty(){
       Err("Width and height must be non-zero to generate an image".to_string())
     }else{
-      let img_dims:ISize = self.bounds.size().to_floor();
+      let img_dims = self.bounds.size();
       let img_format = match format {
         "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
         "png" => Some(EncodedImageFormat::PNG),
@@ -78,11 +78,17 @@ impl Page{
       };
 
       if let Some(img_format) = img_format{
+        let img_scale = Matrix::scale((density, density));
+        let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
         if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
-          surface.canvas().draw_picture(&picture, None, None);
-          let img = surface.image_snapshot();
-          img.encode_to_data_with_quality(img_format, (quality*100.0) as i32)
-             .ok_or(format!("Could not encode as {}", format))
+          surface
+            .canvas()
+            .set_matrix(&img_scale.into())
+            .draw_picture(&picture, None, None);
+          surface
+            .image_snapshot()
+            .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
+            .ok_or(format!("Could not encode as {}", format))
         }else{
           Err("Could not allocate new bitmap".to_string())
         }
@@ -103,9 +109,9 @@ impl Page{
 
   }
 
-  fn write(&self, filename: &str, file_format:&str, quality: f32) -> Result<(), String> {
+  fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32) -> Result<(), String> {
     let path = Path::new(&filename);
-    let data = self.encoded_as(&file_format, quality)?;
+    let data = self.encoded_as(&file_format, quality, density)?;
     fs::write(path, data.as_bytes()).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     )
@@ -124,9 +130,7 @@ impl Page{
       Err("Width and height must be non-zero to generate a PDF page".to_string())
     }
   }
-
 }
-
 
 fn to_pdf(pages:&[Page]) -> Result<Data, String>{
   pages
@@ -146,7 +150,7 @@ fn write_pdf(path:&str, pages:&[Page]) -> Result<(), String>{
   }
 }
 
-fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality:f32) -> Result<(), String>{
+fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality:f32, density:f32) -> Result<(), String>{
   let padding = match padding as i32{
     -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
     pad => pad as usize
@@ -158,7 +162,7 @@ fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality
     .try_for_each(|(pp, page)|{
       let folio = format!("{:0width$}", pp+1, width=padding);
       let filename = pattern.replace("{}", folio.as_str());
-      page.write(&filename, &format, quality)
+      page.write(&filename, &format, quality, density)
     })
 }
 
@@ -229,6 +233,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let pages = pages_arg(&mut cx, 2)?;
   let file_format = string_arg(&mut cx, 3, "format")?;
   let quality = float_arg(&mut cx, 4, "quality")?;
+  let density = float_arg(&mut cx, 5, "density")?;
   let queue = cx.queue();
 
   std::thread::spawn(move || {
@@ -237,7 +242,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       if file_format=="pdf" && pages.len() > 1 {
         to_pdf(&pages)
       }else{
-        pages[0].encoded_as(&file_format, quality)
+        pages[0].encoded_as(&file_format, quality, density)
       }
     };
 
@@ -276,12 +281,13 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
   let pages = pages_arg(&mut cx, 1)?;
   let file_format = string_arg(&mut cx, 2, "format")?;
   let quality = float_arg(&mut cx, 3, "quality")?;
+  let density = float_arg(&mut cx, 4, "density")?;
 
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
         to_pdf(&pages)
       }else{
-        pages[0].encoded_as(&file_format, quality)
+        pages[0].encoded_as(&file_format, quality, density)
       }
     };
 
@@ -307,17 +313,18 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let padding = opt_float_arg(&mut cx, 4).unwrap_or(-1.0);
   let file_format = string_arg(&mut cx, 5, "format")?;
   let quality = float_arg(&mut cx, 6, "quality")?;
+  let density = float_arg(&mut cx, 7, "density")?;
   let queue = cx.queue();
 
   std::thread::spawn(move || {
 
     let result = {
       if sequence {
-        write_sequence(&pages, &name_pattern, &file_format, padding, quality)
+        write_sequence(&pages, &name_pattern, &file_format, padding, quality, density)
       } else if file_format == "pdf" {
         write_pdf(&name_pattern, &pages)
       } else {
-        pages[0].write(&name_pattern, &file_format, quality)
+        pages[0].write(&name_pattern, &file_format, quality, density)
       }
     };
 
@@ -352,14 +359,15 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
   let file_format = string_arg(&mut cx, 4, "format")?;
   let quality = float_arg(&mut cx, 5, "quality")?;
+  let density = float_arg(&mut cx, 6, "density")?;
 
   let result = {
     if sequence {
-      write_sequence(&pages, &name_pattern, &file_format, padding, quality)
+      write_sequence(&pages, &name_pattern, &file_format, padding, quality, density)
     } else if file_format == "pdf" {
       write_pdf(&name_pattern, &pages)
     } else {
-      pages[0].write(&name_pattern, &file_format, quality)
+      pages[0].write(&name_pattern, &file_format, quality, density)
     }
   };
 
