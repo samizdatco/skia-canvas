@@ -125,7 +125,7 @@ impl Page{
         if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
           surface.canvas().draw_picture(&picture, None, None);
           let img = surface.image_snapshot();
-          img.encode_to_data_with_quality(img_format, quality as i32)
+          img.encode_to_data_with_quality(img_format, (quality*100.0) as i32)
              .ok_or(format!("Could not encode as {}", format))
         }else{
           Err("Could not allocate new bitmap".to_string())
