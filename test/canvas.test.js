@@ -249,13 +249,30 @@ describe("Canvas", ()=>{
 
     test("image Buffers", async () => {
       canvas.async = true
+      let mimes={
+        png: "image/png",
+        jpg: "image/jpeg",
+        pdf: "application/pdf",
+        svg: "image/svg+xml"
+      }
+
       for (ext of ["png", "jpg", "pdf"]){
+        // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = await canvas.toBuffer(ext)
         expect(buf).toBeInstanceOf(Buffer)
 
         fs.writeFileSync(path, buf)
         let header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
+        expect(header.equals(MAGIC[ext])).toBe(true)
+
+        // use mime to specify type
+        path = `${TMP}/bymime.${ext}`
+        buf = await canvas.toBuffer(mimes[ext])
+        expect(buf).toBeInstanceOf(Buffer)
+
+        fs.writeFileSync(path, buf)
+        header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
         expect(header.equals(MAGIC[ext])).toBe(true)
       }
     })
