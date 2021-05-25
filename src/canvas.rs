@@ -4,6 +4,7 @@ use std::path::Path;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use neon::prelude::*;
+use crc::{crc32, Hasher32};
 use skia_safe::{Rect, Matrix, Path as SkPath, Picture, PictureRecorder,
                 Size, ClipOp, Surface, EncodedImageFormat, Data,
                 pdf, svg, Document};
@@ -88,6 +89,7 @@ impl Page{
           surface
             .image_snapshot()
             .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
+            .map(|data| with_dpi(data, img_format, density))
             .ok_or(format!("Could not encode as {}", format))
         }else{
           Err("Could not allocate new bitmap".to_string())
@@ -164,6 +166,38 @@ fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality
       let filename = pattern.replace("{}", folio.as_str());
       page.write(&filename, &format, quality, density)
     })
+}
+
+fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{
+  let mut bytes = data.as_bytes().to_vec();
+  match format{
+    EncodedImageFormat::JPEG => {
+      let [l, r] = (72 * density as u16).to_be_bytes();
+      bytes.splice(13..18, [1, l, r, l, r].iter().cloned());
+      Data::new_copy(&bytes)
+    }
+    EncodedImageFormat::PNG => {
+      let mut digest = crc32::Digest::new(crc32::IEEE);
+      let length = 9u32.to_be_bytes().to_vec();
+
+      let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
+      let phys = vec![
+        b'p', b'H', b'Y', b's',
+        a, b, c, d, // dpiX
+        a, b, c, d, // dpiY
+        1, // dot per meter
+      ];
+      digest.write(&phys);
+
+      let checksum = digest.sum32().to_be_bytes().to_vec();
+      Data::new_copy(&[
+        bytes[0..33].to_vec(),
+        [length, phys, checksum].concat(),
+        bytes[33..].to_vec()
+      ].concat())
+    }
+    _ => data
+  }
 }
 
 use neon::result::Throw;
