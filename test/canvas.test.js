@@ -136,13 +136,15 @@ describe("Canvas", ()=>{
     afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
 
     test("JPEGs", async ()=>{
-      await canvas.saveAs(`${TMP}/output1.jpg`)
-      await canvas.saveAs(`${TMP}/output2.jpeg`)
-      await canvas.saveAs(`${TMP}/output3.JPG`)
-      await canvas.saveAs(`${TMP}/output4.JPEG`)
-      await canvas.saveAs(`${TMP}/output5`, {format:'jpg'})
-      await canvas.saveAs(`${TMP}/output6`, {format:'jpeg'})
-      await canvas.saveAs(`${TMP}/output6.png`, {format:'jpeg'})
+      await Promise.all([
+        canvas.saveAs(`${TMP}/output1.jpg`),
+        canvas.saveAs(`${TMP}/output2.jpeg`),
+        canvas.saveAs(`${TMP}/output3.JPG`),
+        canvas.saveAs(`${TMP}/output4.JPEG`),
+        canvas.saveAs(`${TMP}/output5`, {format:'jpg'}),
+        canvas.saveAs(`${TMP}/output6`, {format:'jpeg'}),
+        canvas.saveAs(`${TMP}/output6.png`, {format:'jpeg'}),
+      ])
 
       let magic = MAGIC.jpg
       for (let path of glob(`${TMP}/*`)){
@@ -152,10 +154,12 @@ describe("Canvas", ()=>{
     })
 
     test("PNGs", async ()=>{
-      await canvas.saveAs(`${TMP}/output1.png`)
-      await canvas.saveAs(`${TMP}/output2.PNG`)
-      await canvas.saveAs(`${TMP}/output3`, {format:'png'})
-      await canvas.saveAs(`${TMP}/output4.svg`, {format:'png'})
+      await Promise.all([
+        canvas.saveAs(`${TMP}/output1.png`),
+        canvas.saveAs(`${TMP}/output2.PNG`),
+        canvas.saveAs(`${TMP}/output3`, {format:'png'}),
+        canvas.saveAs(`${TMP}/output4.svg`, {format:'png'}),
+      ])
 
       let magic = MAGIC.png
       for (let path of glob(`${TMP}/*`)){
@@ -165,10 +169,12 @@ describe("Canvas", ()=>{
     })
 
     test("SVGs", async ()=>{
-      await canvas.saveAs(`${TMP}/output1.svg`)
-      await canvas.saveAs(`${TMP}/output2.SVG`)
-      await canvas.saveAs(`${TMP}/output3`, {format:'svg'})
-      await canvas.saveAs(`${TMP}/output4.jpeg`, {format:'svg'})
+      await Promise.all([
+        canvas.saveAs(`${TMP}/output1.svg`),
+        canvas.saveAs(`${TMP}/output2.SVG`),
+        canvas.saveAs(`${TMP}/output3`, {format:'svg'}),
+        canvas.saveAs(`${TMP}/output4.jpeg`, {format:'svg'}),
+      ])
 
       for (let path of glob(`${TMP}/*`)){
         let svg = fs.readFileSync(path, 'utf-8')
@@ -177,10 +183,12 @@ describe("Canvas", ()=>{
     })
 
     test("PDFs", async ()=>{
-      await canvas.saveAs(`${TMP}/output1.pdf`)
-      await canvas.saveAs(`${TMP}/output2.PDF`)
-      await canvas.saveAs(`${TMP}/output3`, {format:'pdf'})
-      await canvas.saveAs(`${TMP}/output4.jpg`, {format:'pdf'})
+      await Promise.all([
+        canvas.saveAs(`${TMP}/output1.pdf`),
+        canvas.saveAs(`${TMP}/output2.PDF`),
+        canvas.saveAs(`${TMP}/output3`, {format:'pdf'}),
+        canvas.saveAs(`${TMP}/output4.jpg`, {format:'pdf'}),
+      ])
 
       let magic = MAGIC.pdf
       for (let path of glob(`${TMP}/*`)){
