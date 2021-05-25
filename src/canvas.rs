@@ -173,6 +173,8 @@ fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality
 }
 
 fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{
+  if density as u32 == 1 { return data }
+
   let mut bytes = data.as_bytes().to_vec();
   match format{
     EncodedImageFormat::JPEG => {
@@ -182,23 +184,19 @@ fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{
     }
     EncodedImageFormat::PNG => {
       let mut digest = crc32::Digest::new(crc32::IEEE);
-      let length = 9u32.to_be_bytes().to_vec();
-
       let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
       let phys = vec![
         b'p', b'H', b'Y', b's',
-        a, b, c, d, // dpiX
-        a, b, c, d, // dpiY
-        1, // dot per meter
+        a, b, c, d, // x-dpi
+        a, b, c, d, // y-dpi
+        1, // dots per meter
       ];
       digest.write(&phys);
 
+      let length = 9u32.to_be_bytes().to_vec();
       let checksum = digest.sum32().to_be_bytes().to_vec();
-      Data::new_copy(&[
-        bytes[0..33].to_vec(),
-        [length, phys, checksum].concat(),
-        bytes[33..].to_vec()
-      ].concat())
+      bytes.splice(33..33, [length, phys, checksum].concat());
+      Data::new_copy(&bytes)
     }
     _ => data
   }
