@@ -4,6 +4,7 @@ use std::path::Path;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use neon::prelude::*;
+use rayon::prelude::*;
 use crc::{crc32, Hasher32};
 use skia_safe::{Rect, Matrix, Path as SkPath, Picture, PictureRecorder,
                 Size, ClipOp, Surface, EncodedImageFormat, Data,
@@ -39,6 +40,7 @@ pub struct Page{
 }
 
 unsafe impl Send for Page{}
+unsafe impl Sync for Page{}
 
 impl Page{
 
@@ -162,7 +164,8 @@ fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality
     pad => pad as usize
   };
 
-  pages.iter()
+  pages
+    .par_iter()
     .rev()
     .enumerate()
     .try_for_each(|(pp, page)|{
@@ -273,8 +276,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let fonts = bool_arg(&mut cx, 6, "fonts")?;
   let queue = cx.queue();
 
-  std::thread::spawn(move || {
-
+  rayon::spawn(move || {
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
         to_pdf(&pages)
@@ -307,7 +309,6 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       callback.call(&mut cx, this, args)?;
       Ok(())
     });
-
   });
 
   Ok(cx.undefined())
@@ -355,8 +356,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let fonts = bool_arg(&mut cx, 8, "fonts")?;
   let queue = cx.queue();
 
-  std::thread::spawn(move || {
-
+  rayon::spawn(move || {
     let result = {
       if sequence {
         write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, fonts)
@@ -384,7 +384,6 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       callback.call(&mut cx, this, args)?;
       Ok(())
     });
-
   });
 
   Ok(cx.undefined())
