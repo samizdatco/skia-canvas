@@ -34,13 +34,13 @@ app.get('/', function (req, res) {
   res.sendFile(path.join(__dirname, 'inspect.html'))
 })
 
-app.get('/render', function (req, res, next) {
+app.get('/render', async function (req, res, next) {
   var canvas = new Canvas(200, 200)
 
-  renderTest(canvas, req.query.name, function (err) {
+  renderTest(canvas, req.query.name, async function (err) {
     if (err) return next(err)
 
-    let data = canvas.png
+    let data = await canvas.png
     res.contentType('image/png');
     res.send(data)
 
@@ -48,13 +48,13 @@ app.get('/render', function (req, res, next) {
   })
 })
 
-app.get('/pdf', function (req, res, next) {
+app.get('/pdf', async function (req, res, next) {
   var canvas = new Canvas(200, 200)
 
-  renderTest(canvas, req.query.name, function (err) {
+  renderTest(canvas, req.query.name, async function (err) {
     if (err) return next(err)
 
-    let data = canvas.pdf
+    let data = await canvas.pdf
     res.contentType('application/pdf');
     res.send(data)
 
