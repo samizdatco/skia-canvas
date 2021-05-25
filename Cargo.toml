@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 crc = "1.8.1"
 css-color = "0.1.1"
 lazy_static = "1.4.0"
+rayon = "1.5.1"
 
 [dependencies.neon]
 version = "0.8"
