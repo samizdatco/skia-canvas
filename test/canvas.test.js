@@ -209,7 +209,6 @@ describe("Canvas", ()=>{
         expect(ctx.canvas.width).toEqual(dim)
       })
 
-      canvas.async = true
       await canvas.saveAs(`${TMP}/output-{2}.png`)
 
       let files = glob(`${TMP}/output-0?.png`)
@@ -239,7 +238,6 @@ describe("Canvas", ()=>{
         ctx.fillText(i+1, canvas.width/2, canvas.height/2)
       })
 
-      canvas.async = true
       let path = `${TMP}/multipage.pdf`
       await canvas.saveAs(path)
 
@@ -248,7 +246,6 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", async () => {
-      canvas.async = true
       let mimes={
         png: "image/png",
         jpg: "image/jpeg",
@@ -399,7 +396,12 @@ describe("Canvas", ()=>{
         ctx.textAlign = 'center'
         ctx.fillText(i+1, canvas.width/2, canvas.height/2)
       })
-      expect(() => canvas.saveAs(`${TMP}/multipage.pdf`) ).not.toThrow()
+
+      let path = `${TMP}/multipage.pdf`
+      expect(() => canvas.saveAs(path) ).not.toThrow()
+
+      let header = fs.readFileSync(path).slice(0, MAGIC.pdf.length)
+      expect(header.equals(MAGIC.pdf)).toBe(true)
     })
 
     test("image Buffers", () => {
