@@ -28,7 +28,6 @@ This project is newly-hatched and still has some obvious gaps to fill (feel free
 
 On the agenda for subsequent updates are:
   - Add SVG image loading using the [µsvg](https://crates.io/crates/usvg) parser
-  - Add a `density` argument to Canvas and/or the output methods to allow for scaling to other device-pixel-ratios
 
 ## Platform Support
 
@@ -177,9 +176,32 @@ You can then use these objects by passing them as the first argument to the cont
 | [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |
 
 
+### Canvas
 
+The Canvas object is a container that you’ll interact with at the beginning and the end of rendering an image. Its primary role is to establish the dimensions of the image and to create the ‘[context][CanvasRenderingContext2D]’ objects you’ll use to do your actual drawing. Once you’re ready to save or display what you’ve drawn, the canvas can [save][canvas_saveAs] it to a file, or hand it off to you as a [data buffer][canvas_toBuffer] or [string][canvas_toDataURL] to process manually. 
 
+| Image Dimensions            | Rendering Contexts            | Output                         |
+| --                          | --                            | --                              |
+| [**width**][canvas_width]   | [**pages** ⚡][canvas_pages]   | [**async** ⚡][canvas_async]       |
+| [**height**][canvas_height] | [getContext()][getContext]    | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡|
+|                             | [newPage() ⚡][canvas_newpage] | [saveAs() ⚡][canvas_saveAs]       |
+|                             |                               | [toBuffer()][canvas_toBuffer]   |
+|                             |                               | [toDataURL()][toDataURL] [⚡][canvas_toDataURL] |
 
+[canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
+[canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
+[getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
+[canvas_async]: #async
+[canvas_saveAs]: #saveAs
+[canvas_pdf]: #pdf
+[canvas_pages]: #pages
+[canvas_toBuffer]: #toBuffer
+[canvas_png]: #png
+[canvas_newpage]: #newpage
+[toDataURL]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
+[canvas_toDataURL]: #toDataURL
+[canvas_svg]: #svg
+[canvas_jpg]: #jpg
 
 
 
