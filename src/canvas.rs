@@ -65,7 +65,7 @@ impl Page{
     snapshot
   }
 
-  fn encoded_as(&self, format:&str, quality:f32, density:f32) -> Result<Data, String> {
+  fn encoded_as(&self, format:&str, quality:f32, density:f32, fonts:bool) -> Result<Data, String> {
     let picture = self.get_picture().ok_or("Could not generate an image")?;
 
     if self.bounds.is_empty(){
@@ -100,7 +100,11 @@ impl Page{
         canvas.draw_picture(&picture, None, None);
         Ok(document.end_page().close())
       }else if format == "svg"{
-        let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), None);
+        let flags = match fonts{
+          true => None,
+          false => Some(skia_safe::svg::canvas::Flags::CONVERT_TEXT_TO_PATHS)
+        };
+        let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end())
       }else{
@@ -111,9 +115,9 @@ impl Page{
 
   }
 
-  fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32) -> Result<(), String> {
+  fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, fonts:bool) -> Result<(), String> {
     let path = Path::new(&filename);
-    let data = self.encoded_as(&file_format, quality, density)?;
+    let data = self.encoded_as(&file_format, quality, density, fonts)?;
     fs::write(path, data.as_bytes()).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     )
@@ -152,7 +156,7 @@ fn write_pdf(path:&str, pages:&[Page]) -> Result<(), String>{
   }
 }
 
-fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality:f32, density:f32) -> Result<(), String>{
+fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality:f32, density:f32, fonts:bool) -> Result<(), String>{
   let padding = match padding as i32{
     -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
     pad => pad as usize
@@ -164,7 +168,7 @@ fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality
     .try_for_each(|(pp, page)|{
       let folio = format!("{:0width$}", pp+1, width=padding);
       let filename = pattern.replace("{}", folio.as_str());
-      page.write(&filename, &format, quality, density)
+      page.write(&filename, &format, quality, density, fonts)
     })
 }
 
@@ -268,6 +272,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let file_format = string_arg(&mut cx, 3, "format")?;
   let quality = float_arg(&mut cx, 4, "quality")?;
   let density = float_arg(&mut cx, 5, "density")?;
+  let fonts = bool_arg(&mut cx, 6, "fonts")?;
   let queue = cx.queue();
 
   std::thread::spawn(move || {
@@ -276,7 +281,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       if file_format=="pdf" && pages.len() > 1 {
         to_pdf(&pages)
       }else{
-        pages[0].encoded_as(&file_format, quality, density)
+        pages[0].encoded_as(&file_format, quality, density, fonts)
       }
     };
 
@@ -316,12 +321,13 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
   let file_format = string_arg(&mut cx, 2, "format")?;
   let quality = float_arg(&mut cx, 3, "quality")?;
   let density = float_arg(&mut cx, 4, "density")?;
+  let fonts = bool_arg(&mut cx, 5, "fonts")?;
 
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
         to_pdf(&pages)
       }else{
-        pages[0].encoded_as(&file_format, quality, density)
+        pages[0].encoded_as(&file_format, quality, density, fonts)
       }
     };
 
@@ -348,17 +354,18 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let file_format = string_arg(&mut cx, 5, "format")?;
   let quality = float_arg(&mut cx, 6, "quality")?;
   let density = float_arg(&mut cx, 7, "density")?;
+  let fonts = bool_arg(&mut cx, 8, "fonts")?;
   let queue = cx.queue();
 
   std::thread::spawn(move || {
 
     let result = {
       if sequence {
-        write_sequence(&pages, &name_pattern, &file_format, padding, quality, density)
+        write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, fonts)
       } else if file_format == "pdf" {
         write_pdf(&name_pattern, &pages)
       } else {
-        pages[0].write(&name_pattern, &file_format, quality, density)
+        pages[0].write(&name_pattern, &file_format, quality, density, fonts)
       }
     };
 
@@ -394,14 +401,15 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let file_format = string_arg(&mut cx, 4, "format")?;
   let quality = float_arg(&mut cx, 5, "quality")?;
   let density = float_arg(&mut cx, 6, "density")?;
+  let fonts = bool_arg(&mut cx, 7, "fonts")?;
 
   let result = {
     if sequence {
-      write_sequence(&pages, &name_pattern, &file_format, padding, quality, density)
+      write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, fonts)
     } else if file_format == "pdf" {
       write_pdf(&name_pattern, &pages)
     } else {
-      pages[0].write(&name_pattern, &file_format, quality, density)
+      pages[0].write(&name_pattern, &file_format, quality, density, fonts)
     }
   };
 
