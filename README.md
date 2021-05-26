@@ -115,12 +115,15 @@ Documentation for the key classes and their attributes are listed below—proper
 
 ## Canvas
 
-The Canvas object is a container that you’ll interact with at the beginning and the end of rendering an image. Its primary role is to establish the dimensions of the image and to create the ‘[context][CanvasRenderingContext2D]’ objects you’ll use to do your actual drawing. Once you’re ready to save or display what you’ve drawn, the canvas can [save][canvas_saveAs] it to a file, or hand it off to you as a [data buffer][canvas_toBuffer] or [string][canvas_toDataURL] to process manually.
+The Canvas object is a stand-in for the HTML `<canvas>` element. Rather than calling a DOM method to create a new canvas, you can simply call the `Canvas` constructor with the width and height (in pixels) of the image you’d like to being drawing.
 
 ```js
 let squareCanvas = new Canvas(512, 512) // creates a 512 px square at 72 dpi
-let defaultCanvas = new Canvas() // defaults to 300 × 150 px
+let defaultCanvas = new Canvas() // without arguments, defaults to 300 × 150 px
 ```
+
+Beyond defining image dimensions, the canvas’s role is mainly as a container that holds image data and creates the ‘[context][CanvasRenderingContext2D]’ objects you’ll use modify that image as you do your actual drawing. Once you’re ready to save or display what you’ve drawn, the canvas can [save][canvas_saveAs] it to a file, or hand it off to you as a [data buffer][canvas_toBuffer] or [string][canvas_toDataURL] to process manually.
+
 
 | Image Dimensions            | Rendering Contexts            | Output                                             |
 | --                          | --                            | --                                                 |
