@@ -10,7 +10,14 @@ const BLACK = [0,0,0,255],
       MAGIC = {
         jpg: Buffer.from([0xFF, 0xD8, 0xFF]),
         png: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
-        pdf: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d])
+        pdf: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d]),
+        svg: Buffer.from(`<?xml version`, 'utf-8')
+      },
+      MIME = {
+        png: "image/png",
+        jpg: "image/jpeg",
+        pdf: "application/pdf",
+        svg: "image/svg+xml"
       };
 
 describe("Canvas", ()=>{
@@ -246,14 +253,7 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", async () => {
-      let mimes={
-        png: "image/png",
-        jpg: "image/jpeg",
-        pdf: "application/pdf",
-        svg: "image/svg+xml"
-      }
-
-      for (ext of ["png", "jpg", "pdf"]){
+      for (ext of ["png", "jpg", "pdf", "svg"]){
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = await canvas.toBuffer(ext)
@@ -265,12 +265,28 @@ describe("Canvas", ()=>{
 
         // use mime to specify type
         path = `${TMP}/bymime.${ext}`
-        buf = await canvas.toBuffer(mimes[ext])
+        buf = await canvas.toBuffer(MIME[ext])
         expect(buf).toBeInstanceOf(Buffer)
 
         fs.writeFileSync(path, buf)
         header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
         expect(header.equals(MAGIC[ext])).toBe(true)
+      }
+    })
+
+    test("data URLs", async () => {
+      for (ext in MIME){
+        let magic = MAGIC[ext],
+            mime = MIME[ext],
+            [extURL, mimeURL] = await Promise.all([
+              canvas.toDataURL(ext),
+              canvas.toDataURL(mime),
+            ]),
+            header = `data:${mime};base64,`,
+            data = Buffer.from(extURL.substr(header.length), 'base64')
+        expect(extURL).toEqual(mimeURL)
+        expect(extURL.startsWith(header)).toBe(true)
+        expect(data.slice(0, magic.length)).toEqual(magic)
       }
     })
 
@@ -405,7 +421,8 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", () => {
-      for (ext of ["png", "jpg", "pdf"]){
+      for (ext of ["png", "jpg", "pdf", "svg"]){
+        // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = canvas.toBuffer(ext)
         expect(buf).toBeInstanceOf(Buffer)
@@ -413,6 +430,29 @@ describe("Canvas", ()=>{
         fs.writeFileSync(path, buf)
         let header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
         expect(header.equals(MAGIC[ext])).toBe(true)
+
+        // use mime to specify type
+        path = `${TMP}/bymime.${ext}`
+        buf = canvas.toBuffer(MIME[ext])
+        expect(buf).toBeInstanceOf(Buffer)
+
+        fs.writeFileSync(path, buf)
+        header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
+        expect(header.equals(MAGIC[ext])).toBe(true)
+      }
+    })
+
+    test("data URLs", () => {
+      for (ext in MIME){
+        let magic = MAGIC[ext],
+            mime = MIME[ext],
+            extURL = canvas.toDataURL(ext),
+            mimeURL = canvas.toDataURL(mime),
+            header = `data:${mime};base64,`,
+            data = Buffer.from(extURL.substr(header.length), 'base64')
+        expect(extURL).toEqual(mimeURL)
+        expect(extURL.startsWith(header)).toBe(true)
+        expect(data.slice(0, magic.length)).toEqual(magic)
       }
     })
 
