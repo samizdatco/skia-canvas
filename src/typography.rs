@@ -3,23 +3,121 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(non_snake_case)]
-use std::sync::{Arc, Mutex};
-use std::cell::RefCell;
+use std::sync::{Mutex};
 use std::fs;
+use std::ops::Range;
 use std::path::Path;
 use std::collections::HashMap;
 use neon::prelude::*;
 use neon::result::Throw;
-use neon::object::This;
 
-use skia_safe::{FontMgr, FontMetrics, FontArguments, Typeface, Data};
+use skia_safe::{FontMgr, FontMetrics, FontArguments, Typeface, Data, Paint, Point, Rect};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::{Coordinate}};
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
-                            TextDirection, ParagraphStyle};
+                            TextDirection, ParagraphStyle, Paragraph, ParagraphBuilder};
 
 use crate::FONT_LIBRARY;
 use crate::utils::*;
+use crate::context::State;
+
+//
+// Text layout and metrics
+//
+
+const GALLEY:f32 = 100_000.0;
+
+pub struct Typesetter{
+  text: String,
+  width: f32,
+  baseline: Baseline,
+  typefaces: FontCollection,
+  char_style: TextStyle,
+  graf_style: ParagraphStyle,
+}
+
+impl Typesetter{
+  pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
+    let mut library = FONT_LIBRARY.lock().unwrap();
+    let (char_style, mut graf_style, baseline, wrap) = state.typography();
+    let typefaces = library.collect_fonts(&char_style);
+    let width = width.unwrap_or(GALLEY);
+    let text = match wrap{
+      true => text.to_string(),
+      false => {
+        graf_style.set_max_lines(1);
+        text.replace("\n", " ")
+      }
+    };
+
+    Typesetter{text, width, baseline, typefaces, char_style, graf_style}
+  }
+
+  pub fn layout(&self, paint:&Paint) -> (Paragraph, Point) {
+    let mut char_style = self.char_style.clone();
+    char_style.set_foreground_color(Some(paint.clone()));
+
+    let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
+    paragraph_builder.push_style(&char_style);
+    paragraph_builder.add_text(&self.text);
+
+    let mut paragraph = paragraph_builder.build();
+    paragraph.layout(self.width);
+
+    let metrics = self.char_style.font_metrics();
+    let shift = get_baseline_offset(&metrics, self.baseline);
+    let offset = (
+      self.width * get_alignment_factor(&self.graf_style),
+      shift - paragraph.alphabetic_baseline(),
+    );
+
+    (paragraph, offset.into())
+  }
+
+  pub fn metrics(&self) -> Vec<Vec<f32>>{
+    let (paragraph, _) = self.layout(&Paint::default());
+    let font_metrics = self.char_style.font_metrics();
+    let offset = get_baseline_offset(&font_metrics, self.baseline);
+    let hang = get_baseline_offset(&font_metrics, Baseline::Hanging) - offset;
+    let norm = get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset;
+    let ideo = get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset;
+    let ascent = norm - font_metrics.ascent;
+    let descent = font_metrics.descent - norm;
+    let alignment = get_alignment_factor(&self.graf_style);
+
+    if paragraph.line_number() == 0 {
+      return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, ascent, descent, hang, norm, ideo]]
+    }
+
+    // find the bounds and text-range for each individual line
+    let origin = paragraph.get_line_metrics()[0].baseline;
+    let line_rects:Vec<(Rect, Range<usize>, f32)> = paragraph.get_line_metrics().iter().map(|line|{
+      let baseline = line.baseline - origin;
+      let rect = Rect::new(line.left as f32, (baseline - line.ascent) as f32,
+                          (line.width - line.left) as f32, (baseline + line.descent) as f32);
+      let range = string_idx_range(&self.text, line.start_index, line.end_excluding_whitespaces);
+      (rect.with_offset((alignment*rect.width(), offset)), range, baseline as f32)
+    }).collect();
+
+    // take their union to find the bounds for the whole text run
+    let (bounds, chars) = line_rects.iter().fold((Rect::new_empty(), 0), |(union, indices), (rect, range, _)|
+      (Rect::join2(union, rect), range.end)
+    );
+
+    // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
+    // line-rect/range values (with the js side responsible for restructuring the whole bundle)
+    let mut results = vec![vec![
+      bounds.width(), bounds.left, bounds.right, -bounds.top, bounds.bottom,
+      ascent, descent, ascent, descent, hang, norm, ideo
+    ]];
+    line_rects.iter().for_each(|(rect, range, baseline)|{
+      results.push(vec![rect.left, rect.top, rect.width(), rect.height(),
+                        *baseline, range.start as f32, range.end as f32])
+    });
+    results
+  }
+
+}
 
 pub struct FontSpec{
   families: Vec<String>,
