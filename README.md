@@ -8,9 +8,9 @@ In particular, Skia Canvas:
 
   - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
-  - can save images to [files](#saveasfilename-format-quality), return them as [Buffers](#tobufferformat-quality-page), or encode [dataURL](#todataurlformat-quality-page) strings
+  - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and [EventQueues](https://docs.rs/neon/0.8.2-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
-  - can create [multiple ‘pages’](#newpagewidth-height) on a given canvas and then [output](#saveasfilename-format-quality) them as a single, multi-page PDF or an image-sequence saved to multiple files
+  - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can simplify and combine bézier paths using efficient [boolean operations](https://www.youtube.com/watch?v=OmfliNQsk88)
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
@@ -34,7 +34,7 @@ This will download a pre-compiled library from the project’s most recent [rele
 
 Start by installing:
 
-  1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using `rustup`
+  1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using [`rustup`](https://rust-lang.github.io/rustup/)
   2. A C compiler toolchain like LLVM/Clang, GCC, or MSVC
 
 Once these dependencies are present, running `npm run build` will give you a useable library (after a fairly lengthy compilation process).
@@ -118,39 +118,39 @@ Documentation for the key classes and their attributes are listed below—proper
 The Canvas object is a stand-in for the HTML `<canvas>` element. Rather than calling a DOM method to create a new canvas, you can simply call the `Canvas` constructor with the width and height (in pixels) of the image you’d like to being drawing.
 
 ```js
-let squareCanvas = new Canvas(512, 512) // creates a 512 px square at 72 dpi
 let defaultCanvas = new Canvas() // without arguments, defaults to 300 × 150 px
+let squareCanvas = new Canvas(512, 512) // creates a 512 px square
 ```
 
-Beyond defining image dimensions, the canvas’s role is mainly as a container that holds image data and creates the ‘[context][CanvasRenderingContext2D]’ objects you’ll use modify that image as you do your actual drawing. Once you’re ready to save or display what you’ve drawn, the canvas can [save][canvas_saveAs] it to a file, or hand it off to you as a [data buffer][canvas_toBuffer] or [string][canvas_toDataURL] to process manually.
+Beyond defining image dimensions, the canvas’s role is mainly as a container that holds image data and creates the ‘[context][CanvasRenderingContext2D]’ objects you’ll use modify that image as you do your actual drawing. Once you’re ready to save or display what you’ve drawn, the canvas can [save][saveAs] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toDataURL_ext] to process manually.
 
 
 | Image Dimensions            | Rendering Contexts            | Output                                             |
 | --                          | --                            | --                                                 |
 | [**width**][canvas_width]   | [**pages** ⚡][canvas_pages]   | [**async** ⚡][canvas_async]                        |
-| [**height**][canvas_height] | [getContext()][getContext]    | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
-|                             | [newPage() ⚡][canvas_newpage] | [saveAs() ⚡][canvas_saveAs]                        |
-|                             |                               | [toBuffer() ⚡][canvas_toBuffer]                    |
-|                             |                               | [toDataURL()][toDataURL] [⚡][canvas_toDataURL]     |
+| [**height**][canvas_height] | [getContext()][getContext]    | [**pdf**, **png**, **svg**, **jpg** ⚡][shorthands] |
+|                             | [newPage() ⚡][newPage] | [saveAs() ⚡][saveAs]                        |
+|                             |                               | [toBuffer() ⚡][toBuffer]                    |
+|                             |                               | [toDataURL()][toDataURL_mdn] [⚡][toDataURL_ext]     |
 
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
-[getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
 [canvas_async]: #async
-[canvas_saveAs]: #saveAs
 [canvas_pages]: #pages
-[canvas_toBuffer]: #toBuffer
-[canvas_newpage]: #newpage
-[toDataURL]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
-[canvas_toDataURL]: #toDataURL
-
+[getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
+[saveAs]: #saveasfilename-page-format-density1-quality092-outlinefalse
+[toBuffer]: #tobufferformat-page-density-quality-outline
+[newPage]: #newpagewidth-height
+[toDataURL_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
+[toDataURL_ext]: #todataurlformat-page-density-quality-outline
+[shorthands]: #pdf-svg-jpg-and-png
 
 #### `.async`
 
 When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script. As a result you’ll generally want to deal with the canvas from within an `async` function and be sure to use the `await` keyword when accessing any of its output methods or shorthand properties:
   - [`saveAs()`][saveAs]
   - [`toBuffer()`][toBuffer]
-  - [`toDataURL()`][toDataURL]
+  - [`toDataURL()`][toDataURL_ext]
   - [`.pdf`, `.svg`, `.jpg`, and `.png`][shorthands]
 
 In cases where this is not the desired behavior, you can switch these methods into a synchronous mode for a particular canvas by setting its `async` property to `false`. For instance, both of the example functions below will generate PNG & PDF from the canvas, though the first will be more efficient (particularly for parallel contexts like request-handlers in an HTTP server or batch exports):
@@ -172,11 +172,6 @@ function synchronous(){
 ```
 
 
-
-[shorthands]: #pdf-svg-jpg-and-png
-[saveAs]: #saveasfilename-format-quality
-[toDataURL]: #todataurlformat-quality-page
-[toBuffer]: #tobufferformat-quality-page
 
 
 #### `.pages`
