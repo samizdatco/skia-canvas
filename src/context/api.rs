@@ -384,7 +384,7 @@ pub fn get_fillStyle(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow();
   let dye = this.state.fill_style.clone();
-  dye.value(&mut cx, Fill)
+  dye.value(&mut cx)
 }
 
 pub fn set_fillStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -392,7 +392,7 @@ pub fn set_fillStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
   let arg = cx.argument::<JsValue>(1)?;
 
-  if let Some(dye) = Dye::new(&mut cx, arg, Fill) {
+  if let Some(dye) = Dye::new(&mut cx, arg) {
     this.state.fill_style = dye;
   }
   Ok(cx.undefined())
@@ -402,7 +402,7 @@ pub fn get_strokeStyle(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow();
   let dye = this.state.stroke_style.clone();
-  dye.value(&mut cx, Stroke)
+  dye.value(&mut cx)
 }
 
 pub fn set_strokeStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -410,7 +410,7 @@ pub fn set_strokeStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
   let arg = cx.argument::<JsValue>(1)?;
 
-  if let Some(dye) = Dye::new(&mut cx, arg, Stroke) {
+  if let Some(dye) = Dye::new(&mut cx, arg) {
     this.state.stroke_style = dye;
   }
   Ok(cx.undefined())
