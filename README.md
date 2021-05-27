@@ -220,8 +220,7 @@ When generating SVG output containing text, you have two options for how to hand
 
 #### `toBuffer(format, {page, density, quality, outline})`
 
-Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. The optional arguments behave the same as in the `saveAs` method.
-
+Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the `saveAs` method.
 
 #### `toDataURL(format, {page, density, quality, outline})`
 
