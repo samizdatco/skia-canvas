@@ -116,8 +116,11 @@ impl Typesetter{
     });
     results
   }
-
 }
+
+//
+// Font argument packing & unpacking
+//
 
 pub struct FontSpec{
   families: Vec<String>,
@@ -343,6 +346,10 @@ impl CollectionKey{
     CollectionKey{ families, weight, slant }
   }
 }
+
+//
+// Font collection management
+//
 
 pub struct FontLibrary{
   pub fonts: Vec<(Typeface, Option<String>)>,
