@@ -143,7 +143,6 @@ impl Page{
 fn to_pdf(pages:&[Page]) -> Result<Data, String>{
   pages
     .iter()
-    .rev()
     .try_fold(pdf::new_document(None), |doc, page| page.append_to(doc))
     .map(|doc| doc.close())
 }
@@ -166,7 +165,6 @@ fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality
 
   pages
     .par_iter()
-    .rev()
     .enumerate()
     .try_for_each(|(pp, page)|{
       let folio = format!("{:0width$}", pp+1, width=padding);
