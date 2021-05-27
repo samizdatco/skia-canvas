@@ -1,6 +1,6 @@
 const _ = require('lodash'),
       {Canvas, DOMMatrix, loadImage} = require('../lib'),
-      {parseFont} = require('../lib/parse');
+      parse = require('../lib/parse');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -47,7 +47,7 @@ describe("Context2D", ()=>{
     test('font', () => {
       expect(ctx.font).toBe('10px sans-serif')
       let font = '16px Baskerville, serif',
-          canonical = parseFont(font).canonical;
+          canonical = parse.font(font).canonical;
       ctx.font = font
       expect(ctx.font).toBe(canonical)
       ctx.font = 'invalid'
@@ -556,7 +556,7 @@ describe("Context2D", ()=>{
 
       _.each(cases, (spec, font) => {
         let expected = _.defaults(spec, {style:"normal", stretch:"normal", variant:"normal"}),
-            parsed = parseFont(font);
+            parsed = parse.font(font);
         expect(parsed).toMatchObject(expected)
       })
 

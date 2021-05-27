@@ -1,20 +1,17 @@
-#![allow(unused_mut)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 #![allow(non_snake_case)]
-#![allow(clippy::needless_range_loop)]
 use std::fs;
 use std::path::Path;
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 use neon::prelude::*;
-use neon::result::Throw;
-use neon::object::This;
-use skia_safe::{Surface, Rect, Picture, EncodedImageFormat, Data, pdf, svg};
-
+use rayon::prelude::*;
+use crc::{crc32, Hasher32};
+use skia_safe::{Rect, Matrix, Path as SkPath, Picture, PictureRecorder,
+                Size, ClipOp, Surface, EncodedImageFormat, Data,
+                pdf, svg::{self, canvas::Flags}, Document};
 
 use crate::utils::*;
-use crate::context::{BoxedContext2D, Context2D};
+use crate::context::BoxedContext2D;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -22,66 +19,197 @@ impl Finalize for Canvas {}
 pub struct Canvas{
   pub width: f32,
   pub height: f32,
+  async_io: bool,
 }
 
 impl Canvas{
   pub fn new() -> Self{
-    Canvas{width:300.0, height:150.0}
+    Canvas{width:300.0, height:150.0, async_io:true}
   }
+}
 
-  fn encode_image(&self, picture: &Picture, format:&str, width: f32, height: f32, quality: f32) -> Option<Data> {
-    let img_format = match format {
-      "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
-      "png" => Some(EncodedImageFormat::PNG),
-      "webp" => Some(EncodedImageFormat::WEBP),
-      "gif" => Some(EncodedImageFormat::GIF),
-      "heic" => Some(EncodedImageFormat::HEIF),
-      _ => None
-    };
+//
+// -- File I/O ------------------------------------------------------------------------------------
+//
 
-    if let Some(format) = img_format{
-      let img_dims = (width as i32, height as i32);
-      if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
-        surface.canvas().draw_picture(&picture, None, None);
-        let img = surface.image_snapshot();
-        img.encode_to_data_with_quality(format, quality as i32)
-      }else{
-        None
+pub struct Page{
+  pub recorder: Arc<Mutex<PictureRecorder>>,
+  pub bounds: Rect,
+  pub clip: SkPath,
+  pub matrix: Matrix,
+}
+
+unsafe impl Send for Page{}
+unsafe impl Sync for Page{}
+
+impl Page{
+
+  fn get_picture(&self) -> Option<Picture> {
+    // stop the recorder to take a snapshot then restart it again
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
+    let snapshot = recorder.finish_recording_as_picture(Some(&self.bounds));
+    recorder.begin_recording(self.bounds, None);
+
+    if let Some(canvas) = recorder.recording_canvas() {
+      // fill the newly restarted recorder with the snapshot content...
+      if let Some(palimpsest) = &snapshot {
+        canvas.draw_picture(&palimpsest, None, None);
       }
-    }else if format == "pdf"{
-      let img_dims = (width as i32, height as i32);
-      let mut document = pdf::new_document(None).begin_page(img_dims, None);
-      let canvas = document.canvas();
-      canvas.draw_picture(&picture, None, None);
-      Some(document.end_page().close())
-    }else if format == "svg"{
-      let img_dims = (self.width as i32, self.height as i32);
-      let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), None);
-      canvas.draw_picture(&picture, None, None);
-      Some(canvas.end())
+
+      // ...and the current ctm/clip state
+      canvas.save();
+      canvas.set_matrix(&self.matrix.into());
+      if !self.clip.is_empty(){
+        canvas.clip_path(&self.clip, ClipOp::Intersect, true /* antialias */);
+      }
+    }
+    snapshot
+  }
+
+  fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool) -> Result<Data, String> {
+    let picture = self.get_picture().ok_or("Could not generate an image")?;
+
+    if self.bounds.is_empty(){
+      Err("Width and height must be non-zero to generate an image".to_string())
     }else{
-      None
+      let img_dims = self.bounds.size();
+      let img_format = match format {
+        "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
+        "png" => Some(EncodedImageFormat::PNG),
+        _ => None
+      };
+
+      if let Some(img_format) = img_format{
+        let img_scale = Matrix::scale((density, density));
+        let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
+        if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
+          surface
+            .canvas()
+            .set_matrix(&img_scale.into())
+            .draw_picture(&picture, None, None);
+          surface
+            .image_snapshot()
+            .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
+            .map(|data| with_dpi(data, img_format, density))
+            .ok_or(format!("Could not encode as {}", format))
+        }else{
+          Err("Could not allocate new bitmap".to_string())
+        }
+      }else if format == "pdf"{
+        let mut document = pdf::new_document(None).begin_page(img_dims, None);
+        let canvas = document.canvas();
+        canvas.draw_picture(&picture, None, None);
+        Ok(document.end_page().close())
+      }else if format == "svg"{
+        let flags = outline.then(|| Flags::CONVERT_TEXT_TO_PATHS);
+        let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
+        canvas.draw_picture(&picture, None, None);
+        Ok(canvas.end())
+      }else{
+        Err(format!("Unsupported file format {}", format))
+      }
+
     }
+
   }
 
-  fn write_page(&self, page: &mut Context2D, filename: &str, file_format:&str, quality: f32) -> Result<(), String> {
+  fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, outline:bool) -> Result<(), String> {
     let path = Path::new(&filename);
-    if page.width() == 0.0 || page.height() == 0.0 {
-      return Err("Width and height must be non-zero to generate an image".to_string())
-    }
+    let data = self.encoded_as(&file_format, quality, density, outline)?;
+    fs::write(path, data.as_bytes()).map_err(|why|
+      format!("{}: \"{}\"", why, path.display())
+    )
+  }
 
-    let data = match page.get_picture(None) {
-      Some(picture) => self.encode_image(&picture, &file_format, page.width(), page.height(), quality),
-      None => None
-    };
-
-    match data {
-      Some(data) => fs::write(path, data.as_bytes()).map_err(|why|
-        format!("{}: \"{}\"", why, path.display())
-      ),
-      None => Err(format!("Unsupported file format: {:?}", file_format))
+  fn append_to(&self, doc:Document) -> Result<Document, String>{
+    if !self.bounds.is_empty(){
+      let dims = (self.bounds.width() as i32, self.bounds.height() as i32);
+      let mut doc = doc.begin_page(dims, None);
+      let canvas = doc.canvas();
+      if let Some(picture) = self.get_picture(){
+        canvas.draw_picture(&picture, None, None);
+      }
+      Ok(doc.end_page())
+    }else{
+      Err("Width and height must be non-zero to generate a PDF page".to_string())
     }
   }
+}
+
+fn to_pdf(pages:&[Page]) -> Result<Data, String>{
+  pages
+    .iter()
+    .try_fold(pdf::new_document(None), |doc, page| page.append_to(doc))
+    .map(|doc| doc.close())
+}
+
+fn write_pdf(path:&str, pages:&[Page]) -> Result<(), String>{
+  let path = Path::new(&path);
+  match to_pdf(&pages){
+    Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
+      format!("{}: \"{}\"", why, path.display())
+    ),
+    Err(msg) => Err(msg)
+  }
+}
+
+fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality:f32, density:f32, outline:bool) -> Result<(), String>{
+  let padding = match padding as i32{
+    -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
+    pad => pad as usize
+  };
+
+  pages
+    .par_iter()
+    .enumerate()
+    .try_for_each(|(pp, page)|{
+      let folio = format!("{:0width$}", pp+1, width=padding);
+      let filename = pattern.replace("{}", folio.as_str());
+      page.write(&filename, &format, quality, density, outline)
+    })
+}
+
+fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{
+  if density as u32 == 1 { return data }
+
+  let mut bytes = data.as_bytes().to_vec();
+  match format{
+    EncodedImageFormat::JPEG => {
+      let [l, r] = (72 * density as u16).to_be_bytes();
+      bytes.splice(13..18, [1, l, r, l, r].iter().cloned());
+      Data::new_copy(&bytes)
+    }
+    EncodedImageFormat::PNG => {
+      let mut digest = crc32::Digest::new(crc32::IEEE);
+      let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
+      let phys = vec![
+        b'p', b'H', b'Y', b's',
+        a, b, c, d, // x-dpi
+        a, b, c, d, // y-dpi
+        1, // dots per meter
+      ];
+      digest.write(&phys);
+
+      let length = 9u32.to_be_bytes().to_vec();
+      let checksum = digest.sum32().to_be_bytes().to_vec();
+      bytes.splice(33..33, [length, phys, checksum].concat());
+      Data::new_copy(&bytes)
+    }
+    _ => data
+  }
+}
+
+use neon::result::Throw;
+fn pages_arg(cx: &mut FunctionContext, idx: i32) -> Result<Vec<Page>, Throw> {
+  let pages = cx.argument::<JsArray>(idx)?
+      .to_vec(cx)?
+      .iter()
+      .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
+      .filter( |ctx| ctx.is_ok() )
+      .map(|obj| obj.unwrap().borrow().get_page())
+      .collect::<Vec<Page>>();
+  Ok(pages)
 }
 
 
@@ -96,156 +224,189 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
 
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let this = this.borrow();
-
-  Ok(cx.number(this.width as f64))
+  let width = this.borrow().width;
+  Ok(cx.number(width as f64))
 }
 
 pub fn get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let this = this.borrow();
-
-  Ok(cx.number(this.height as f64))
+  let height = this.borrow().height;
+  Ok(cx.number(height as f64))
 }
 
 pub fn set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-
-  let width = float_arg(&mut cx, 1, "size")?.floor();
-  if width >= 0.0 {
-    let mut that = this.borrow_mut();
-    that.width = width;
-  }
-
+  let width = float_arg(&mut cx, 1, "size")?;
+  this.borrow_mut().width = width.floor();
   Ok(cx.undefined())
 }
 
 pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-
-  let height = float_arg(&mut cx, 1, "size")?.floor();
-  if height >= 0.0 {
-    let mut that = this.borrow_mut();
-    that.height = height;
-  }
-
+  let height = float_arg(&mut cx, 1, "size")?;
+  this.borrow_mut().height = height.floor();
   Ok(cx.undefined())
 }
 
-pub fn saveAs(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn get_async(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let name_pattern = string_arg(&mut cx, 1, "filePath")?;
-  let sequence = !cx.argument::<JsValue>(2)?.is_a::<JsUndefined, _>(&mut cx);
+  let this = this.borrow();
+  Ok(cx.boolean(this.async_io))
+}
+
+pub fn set_async(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let go_async = cx.argument::<JsBoolean>(1)?;
+  this.borrow_mut().async_io = go_async.value(&mut cx);
+  Ok(cx.undefined())
+}
+
+pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  // let this = cx.argument::<BoxedCanvas>(0)?;
+  let callback = cx.argument::<JsFunction>(1)?.root(&mut cx);
+  let pages = pages_arg(&mut cx, 2)?;
   let file_format = string_arg(&mut cx, 3, "format")?;
   let quality = float_arg(&mut cx, 4, "quality")?;
-  let mut pages = cx.argument::<JsArray>(5)?
-          .to_vec(&mut cx)?
-          .iter()
-          .map(|obj| obj.downcast::<BoxedContext2D, _>(&mut cx))
-          .filter( |ctx| ctx.is_ok() )
-          .map(|obj| obj.unwrap())
-          .collect::<Vec<Handle<BoxedContext2D>>>();
+  let density = float_arg(&mut cx, 5, "density")?;
+  let outline = bool_arg(&mut cx, 6, "outline")?;
+  let queue = cx.queue();
 
-  if sequence {
-    pages.reverse();
-
-    let padding = float_arg(&mut cx, 2, "padding")? as i32;
-    let padding = match padding {
-      -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
-      _ => padding as usize
+  rayon::spawn(move || {
+    let encoded = {
+      if file_format=="pdf" && pages.len() > 1 {
+        to_pdf(&pages)
+      }else{
+        pages[0].encoded_as(&file_format, quality, density, outline)
+      }
     };
 
-    for pp in 0..pages.len() {
-      let mut page = &mut pages[pp];
-      let filename = name_pattern.replace("{}", format!("{:0width$}", pp+1, width=padding).as_str());
-      let this = this.borrow();
-      let mut page = page.borrow_mut();
-      if let Err(why) = this.write_page(&mut page, &filename, &file_format, quality) {
-        return cx.throw_error(why)
-      }
-    }
-  } else if file_format == "pdf" {
-    pages.reverse();
+    queue.send(move |mut cx| {
+      let callback = callback.into_inner(&mut cx);
+      let this = cx.undefined();
 
-    let document = pages.iter_mut().fold(pdf::new_document(None), |doc, page|{
-      let mut page = page.borrow_mut();
-      let dims = (page.width() as i32, page.height() as i32);
-      if dims.0 > 0 && dims.1 > 0{
-        let mut doc = doc.begin_page(dims, None);
-        let canvas = doc.canvas();
-        if let Some(picture) = page.get_picture(None){
-          canvas.draw_picture(&picture, None, None);
-        }
-        doc.end_page()
-      }else{
-        let mut doc = doc.begin_page((1, 1), None);
-        doc.end_page()
-      }
+      let args = match encoded{
+        Ok(data) => {
+          let mut buffer = JsBuffer::new(&mut cx, data.len() as u32).unwrap();
+          cx.borrow_mut(&mut buffer, |buf_data| {
+            buf_data.as_mut_slice().copy_from_slice(&data);
+          });
+          vec![
+            cx.string("ok").upcast::<JsValue>(),
+            buffer.upcast::<JsValue>(),
+          ]
+        },
+        Err(msg) => vec![
+          cx.string("err").upcast::<JsValue>(),
+          cx.string(msg).upcast::<JsValue>(),
+        ]
+      };
+
+      callback.call(&mut cx, this, args)?;
+      Ok(())
     });
-
-    let path = Path::new(&name_pattern);
-    return match fs::write(path, document.close().as_bytes()){
-      Err(why) => cx.throw_error(format!("{}: \"{}\"", why, path.display())),
-      Ok(()) => Ok(cx.undefined())
-    }
-  } else {
-    let mut page = pages[0];
-    let this = this.borrow();
-    let mut page = page.borrow_mut();
-
-    if let Err(why) = this.write_page(&mut page, &name_pattern, &file_format, quality) {
-      return cx.throw_error(why)
-    }
-  }
+  });
 
   Ok(cx.undefined())
 }
 
-pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsBuffer> {
-  let this = cx.argument::<BoxedCanvas>(0)?;
-  let file_format = string_arg(&mut cx, 1, "format")?;
-  let quality = float_arg(&mut cx, 2, "quality")?;
-  let page_idx = opt_float_arg(&mut cx, 3);
-  let mut pages = cx.argument::<JsArray>(4)?
-          .to_vec(&mut cx)?
-          .iter()
-          .map(|obj| obj.downcast::<BoxedContext2D, _>(&mut cx))
-          .filter( |ctx| ctx.is_ok() )
-          .map(|obj| obj.unwrap())
-          .collect::<Vec<Handle<BoxedContext2D>>>();
+pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
+  // let this = cx.argument::<BoxedCanvas>(0)?;
+  let pages = pages_arg(&mut cx, 1)?;
+  let file_format = string_arg(&mut cx, 2, "format")?;
+  let quality = float_arg(&mut cx, 3, "quality")?;
+  let density = float_arg(&mut cx, 4, "density")?;
+  let outline = bool_arg(&mut cx, 5, "outline")?;
 
-  let data = {
-    if file_format=="pdf" && page_idx.is_none() {
-      Some(pages.iter_mut().rev().fold(pdf::new_document(None), |doc, page|{
-        let mut page = page.borrow_mut();
-        let dims = (page.width() as i32, page.height() as i32);
-        let mut doc = doc.begin_page(dims, None);
-        let canvas = doc.canvas();
-        if let Some(picture) = page.get_picture(None){
-          canvas.draw_picture(&picture, None, None);
-        }
-        doc.end_page()
-      }).close())
-    }else{
-      let page_idx = page_idx.unwrap_or(0.0);
-      let this = this.borrow();
-      let mut page = pages[page_idx as usize].borrow_mut();
-      match page.get_picture(None) {
-        Some(picture) => this.encode_image(&picture, &file_format, page.width(), page.height(), quality),
-        None => None
+    let encoded = {
+      if file_format=="pdf" && pages.len() > 1 {
+        to_pdf(&pages)
+      }else{
+        pages[0].encoded_as(&file_format, quality, density, outline)
       }
+    };
+
+    match encoded{
+      Ok(data) => {
+        let mut buffer = JsBuffer::new(&mut cx, data.len() as u32).unwrap();
+        cx.borrow_mut(&mut buffer, |buf_data| {
+          buf_data.as_mut_slice().copy_from_slice(&data);
+        });
+        Ok(buffer.upcast::<JsValue>())
+      },
+      Err(msg) => cx.throw_error(msg)
+    }
+}
+
+
+pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  // let this = cx.argument::<BoxedCanvas>(0)?;
+  let callback = cx.argument::<JsFunction>(1)?.root(&mut cx);
+  let pages = pages_arg(&mut cx, 2)?;
+  let name_pattern = string_arg(&mut cx, 3, "filePath")?;
+  let sequence = !cx.argument::<JsValue>(4)?.is_a::<JsUndefined, _>(&mut cx);
+  let padding = opt_float_arg(&mut cx, 4).unwrap_or(-1.0);
+  let file_format = string_arg(&mut cx, 5, "format")?;
+  let quality = float_arg(&mut cx, 6, "quality")?;
+  let density = float_arg(&mut cx, 7, "density")?;
+  let outline = bool_arg(&mut cx, 8, "outline")?;
+  let queue = cx.queue();
+
+  rayon::spawn(move || {
+    let result = {
+      if sequence {
+        write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, outline)
+      } else if file_format == "pdf" {
+        write_pdf(&name_pattern, &pages)
+      } else {
+        pages[0].write(&name_pattern, &file_format, quality, density, outline)
+      }
+    };
+
+    queue.send(move |mut cx| {
+      let callback = callback.into_inner(&mut cx);
+      let this = cx.undefined();
+      let args = match result {
+        Ok(_) => vec![
+          cx.string("ok").upcast::<JsValue>(),
+          cx.undefined().upcast::<JsValue>(),
+        ],
+        Err(msg) => vec![
+          cx.string("err").upcast::<JsValue>(),
+          cx.string(msg).upcast::<JsValue>(),
+        ]
+      };
+
+      callback.call(&mut cx, this, args)?;
+      Ok(())
+    });
+  });
+
+  Ok(cx.undefined())
+}
+
+pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  // let this = cx.argument::<BoxedCanvas>(0)?;
+  let pages = pages_arg(&mut cx, 1)?;
+  let name_pattern = string_arg(&mut cx, 2, "filePath")?;
+  let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
+  let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
+  let file_format = string_arg(&mut cx, 4, "format")?;
+  let quality = float_arg(&mut cx, 5, "quality")?;
+  let density = float_arg(&mut cx, 6, "density")?;
+  let outline = bool_arg(&mut cx, 7, "outline")?;
+
+  let result = {
+    if sequence {
+      write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, outline)
+    } else if file_format == "pdf" {
+      write_pdf(&name_pattern, &pages)
+    } else {
+      pages[0].write(&name_pattern, &file_format, quality, density, outline)
     }
   };
 
-  match data{
-    Some(data) => {
-      let mut buffer = JsBuffer::new(&mut cx, data.len() as u32)?;
-      cx.borrow_mut(&mut buffer, |buf_data| {
-        buf_data.as_mut_slice().copy_from_slice(&data);
-      });
-      Ok(buffer)
-    },
-    None => cx.throw_error(format!("Unsupported image format: {:?}", file_format))
+  match result{
+    Ok(_) => Ok(cx.undefined()),
+    Err(msg) => cx.throw_error(msg)
   }
-
 }

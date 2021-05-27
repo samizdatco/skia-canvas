@@ -9,6 +9,7 @@ In particular, Skia Canvas:
   - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files](#saveasfilename-format-quality), return them as [Buffers](#tobufferformat-quality-page), or encode [dataURL](#todataurlformat-quality-page) strings
+  - uses native threads and [EventQueues](https://docs.rs/neon/0.8.2-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’](#newpagewidth-height) on a given canvas and then [output](#saveasfilename-format-quality) them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can simplify and combine bézier paths using efficient [boolean operations](https://www.youtube.com/watch?v=OmfliNQsk88)
   - fully supports the [CSS filter effects][filter] image processing operators
@@ -21,27 +22,6 @@ In particular, Skia Canvas:
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
     - use of non-system fonts [loaded](#usefamilyname-fontpaths) from local files
 
-
-## Roadmap
-This project is newly-hatched and still has some obvious gaps to fill (feel free to pitch in!).
-
-On the agenda for subsequent updates are:
-  - Use neon [EventQueues](https://github.com/neon-bindings/neon/blob/main/src/event/event_queue.rs) to provide asynchronous file i/o
-  - Add SVG image loading using the [µsvg](https://crates.io/crates/usvg) parser
-  - Add a `density` argument to Canvas and/or the output methods to allow for scaling to other device-pixel-ratios
-
-## Platform Support
-
-The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions:
-  - 10.20+
-  - 12.17+
-  - 14.0 and later
-
-There are pre-compiled binaries for:
-
-  - Linux (x86)
-  - macOS (x86 & Apple silicon)
-  - Windows (x86)
 
 ## Installation
 
@@ -59,24 +39,18 @@ Start by installing:
 
 Once these dependencies are present, running `npm run build` will give you a useable library (after a fairly lengthy compilation process).
 
-## Module Contents
+### Platform Support
 
-The library exports a number of classes emulating familiar browser objects including:
+The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions:
+  - 10.20+
+  - 12.17+
+  - 14.0, 15.0, and later
 
- - [Canvas][Canvas]
- - [CanvasGradient][CanvasGradient]
- - [CanvasPattern][CanvasPattern]
- - [CanvasRenderingContext2D][CanvasRenderingContext2D]
- - [DOMMatrix][DOMMatrix]
- - [Image][Image]
- - [ImageData][ImageData]
- - [Path2D][Path2D]
+There are pre-compiled binaries for:
 
-In addition, the module contains:
-
-- [loadImage()](#loadimage) a utility function for loading `Image` objects asynchronously
-- [FontLibrary](#fontlibrary) a class allowing you to inspect the system’s installed fonts and load additional ones
-
+  - Linux (x86)
+  - macOS (x86 & Apple silicon)
+  - Windows (x86)
 
 
 
@@ -119,11 +93,143 @@ fs.writeFileSync("pilcrow.png", canvas.png)
 console.log(`<img src="${canvas.toDataURL("png")}">`)
 ```
 
-## API Documentation
+# API Documentation
 
-### CanvasRenderingContext2D
+The library exports a number of classes emulating familiar browser objects including:
 
-Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method. Documentation for each of the context’s attributes is linked below—properties are printed in **bold** and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a ⚡ symbol (see the next section for details).
+ - [Canvas][Canvas] ([⚡](#canvas))
+ - [CanvasGradient][CanvasGradient]
+ - [CanvasPattern][CanvasPattern]
+ - [CanvasRenderingContext2D][CanvasRenderingContext2D] ([⚡](#canvas))
+ - [DOMMatrix][DOMMatrix]
+ - [Image][Image]
+ - [ImageData][ImageData]
+ - [Path2D][Path2D] ([⚡](#canvas))
+
+In addition, the module contains:
+
+- [loadImage()](#loadimage) a utility function for loading `Image` objects asynchronously
+- [FontLibrary](#fontlibrary) a class allowing you to inspect the system’s installed fonts and load additional ones
+
+Documentation for the key classes and their attributes are listed below—properties are printed in **bold** and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a ⚡ symbol (see the next section for details).
+
+## Canvas
+
+The Canvas object is a stand-in for the HTML `<canvas>` element. Rather than calling a DOM method to create a new canvas, you can simply call the `Canvas` constructor with the width and height (in pixels) of the image you’d like to being drawing.
+
+```js
+let squareCanvas = new Canvas(512, 512) // creates a 512 px square at 72 dpi
+let defaultCanvas = new Canvas() // without arguments, defaults to 300 × 150 px
+```
+
+Beyond defining image dimensions, the canvas’s role is mainly as a container that holds image data and creates the ‘[context][CanvasRenderingContext2D]’ objects you’ll use modify that image as you do your actual drawing. Once you’re ready to save or display what you’ve drawn, the canvas can [save][canvas_saveAs] it to a file, or hand it off to you as a [data buffer][canvas_toBuffer] or [string][canvas_toDataURL] to process manually.
+
+
+| Image Dimensions            | Rendering Contexts            | Output                                             |
+| --                          | --                            | --                                                 |
+| [**width**][canvas_width]   | [**pages** ⚡][canvas_pages]   | [**async** ⚡][canvas_async]                        |
+| [**height**][canvas_height] | [getContext()][getContext]    | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
+|                             | [newPage() ⚡][canvas_newpage] | [saveAs() ⚡][canvas_saveAs]                        |
+|                             |                               | [toBuffer() ⚡][canvas_toBuffer]                    |
+|                             |                               | [toDataURL()][toDataURL] [⚡][canvas_toDataURL]     |
+
+[canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
+[canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
+[getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
+[canvas_async]: #async
+[canvas_saveAs]: #saveAs
+[canvas_pages]: #pages
+[canvas_toBuffer]: #toBuffer
+[canvas_newpage]: #newpage
+[toDataURL]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
+[canvas_toDataURL]: #toDataURL
+
+
+#### `.async`
+
+When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script. As a result you’ll generally want to deal with the canvas from within an `async` function and be sure to use the `await` keyword when accessing any of its output methods or shorthand properties:
+  - [`saveAs()`][saveAs]
+  - [`toBuffer()`][toBuffer]
+  - [`toDataURL()`][toDataURL]
+  - [`.pdf`, `.svg`, `.jpg`, and `.png`][shorthands]
+
+In cases where this is not the desired behavior, you can switch these methods into a synchronous mode for a particular canvas by setting its `async` property to `false`. For instance, both of the example functions below will generate PNG & PDF from the canvas, though the first will be more efficient (particularly for parallel contexts like request-handlers in an HTTP server or batch exports):
+```js
+
+let canvas = new Canvas()
+console.log(canvas.async) // -> true by default
+
+async function normal(){
+  let pngURL = await canvas.toDataURL("png")
+  let pdfBuffer = await canvas.pdf
+}
+
+function synchronous(){
+  canvas.async = false // switch into synchronous mode
+  let pngURL = canvas.toDataURL("png")
+  let pdfBuffer = canvas.pdf
+}
+```
+
+
+
+[shorthands]: #pdf-svg-jpg-and-png
+[saveAs]: #saveasfilename-format-quality
+[toDataURL]: #todataurlformat-quality-page
+[toBuffer]: #tobufferformat-quality-page
+
+
+#### `.pages`
+
+The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the `newPage()` method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
+
+#### `.pdf`, `.svg`, `.jpg`, and `.png`
+
+These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
+
+#### `newPage(width, height)`
+
+This method allows for the creation of additional drawing contexts that are fully independent of one another but will be part of the same output batch. It is primarily useful in the context of creating a multi-page PDF but can be used to create multi-file image-sequences in other formats as well. Creating a new page with a different size than the previous one will update the parent Canvas object’s `.width` and `.height` attributes but will not affect any other pages that have been created previously.
+
+The method’s return value is a `CanvasRenderingContext2D` object which you can either save a reference to or recover later from the `.pages` array.
+
+#### `saveAs(filename, {page, format, density=1, quality=0.92, outline=false})`
+
+The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
+
+The way multi-page documents are handled depends on the `filename` argument. If the filename contains the string `"{}"`, it will be used as template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formats it will contain only the most recently added page.
+
+An integer can optionally be placed between the braces to indicate the number of padding characters to use for numbering. For instance `"page-{}.svg"` will generate files of the form `page-1.svg` whereas `"frame-{4}.png"` will generate files like `frame-0001.png`.
+
+##### page
+The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.saveAs("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
+
+##### density
+By default, the images will be at a 1:1 ratio with the canvas's `width` and `height` dimensions (i.e., a 72 × 72 canvas will yield a 72 pixel × 72 pixel bitmap). But with screens increasingly operating at higher densities, you’ll frequently want to generate images where an on-canvas 'point' may occupy multiple pixels. The optional `density` argument allows you to specify this magnification factor using an integer ≥1. As a shorthand, you can also select a density by choosing a filename using the `@nx` naming convention:
+
+```js
+canvas.saveAs('image.png', {density:2}) // choose the density explicitly
+canvas.saveAs('image@3x.png') // equivalent to setting the density to 3
+```
+
+##### quality
+The `quality` option is a number between 0 and 1.0 that controls the level of JPEG compression both when making JPEG files directly and when embedding them in a PDF. If omitted, quality will default to 0.92.
+
+##### outline
+When generating SVG output containing text, you have two options for how to handle the fonts that were used. By default, SVG files will contain `<text>` elements that refer to the fonts by name in the embedded stylesheet. This requires that viewers of the SVG have the same fonts available on their system (or accessible as webfonts). Setting the optional `outline` argument to `true` will trace all the letterforms and ‘burn’ them into the file as bézier paths. This will result in a much larger file (and one in which the original text strings will be unrecoverable), but it will be viewable regardless of the specifics of the system it’s displayed on.
+
+#### `toBuffer(format, {page, density, quality, outline})`
+
+Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the `saveAs` method.
+
+#### `toDataURL(format, {page, density, quality, outline})`
+
+This method accepts the same arguments and behaves similarly to `.toBuffer`. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
+
+
+## CanvasRenderingContext2D
+
+Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method.
 
 
 | Canvas State                           | Drawing Primitives                          | Stroke & Fill Style                  | Compositing Effects                                      |
@@ -152,7 +258,50 @@ Most of your interaction with the canvas will actually be directed toward its �
 | [rect()][rect()]                         |                                                             | [putImageData()][putImageData()]                   |                                          |
 
 
-### Path2D
+#### `.font`
+
+By default any [`line-height`][lineHeight] value included in a font specification (separated from the font size by a `/`) will be preserved but ignored. If the `textWrap` property is set to `true`, the line-height will control the vertical spacing between lines.
+
+#### `.fontVariant`
+
+The context’s [`.font`][font] property follows the CSS 2.1 standard and allows the selection of only a single font-variant type: `normal` vs `small-caps`. The full range of CSS 3 [font-variant][font-variant] values can be used if assigned to the context’s `.fontVariant` property (presuming the currently selected font supports them). Note that setting `.font` will also update the current `.fontVariant` value, so be sure to set the variant *after* selecting a typeface.
+
+#### `.textTracking`
+
+To loosen or tighten letter-spacing, set the `.textTracking` property to an integer representing the amount of space to add/remove in terms of 1/1000’s of an ‘em’ (a.k.a. the current font size). Positive numbers will space out the text (e.g., `100` is a good value for setting all-caps) while negative values will pull the letters closer together (this is only rarely a good idea).
+
+The tracking value defaults to `0` and settings will persist across changes to the `.font` property.
+
+#### `.textWrap`
+
+The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()` methods as described below.
+
+#### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
+
+The text-drawing methods’ behavior is mostly standard unless `.textWrap` has been set to `true`, in which case there are 3 main effects:
+
+  1. Manual line breaking via `"\n"` escapes will be honored rather than converted to spaces
+  2. The optional `width` argument accepted by `fillText`, `strokeText` and `measureText` will be interpreted as a ‘column width’ and used to word-wrap long lines
+  3. The line-height setting in the `.font` value will be used to set the inter-line leading rather than simply being ignored.
+
+Even when `.textWrap` is `false`, the text-drawing methods will never choose a more-condensed weight or otherwise attempt to squeeze your entire string into the measure specified by `width`. Instead the text will be typeset up through the last word that fits and the rest will be omitted. This can be used in conjunction with the `.lines` property of the object returned by `measureText()` to incrementally lay out a long string into, for example, a multi-column layout with an even number of lines in each.
+
+#### `measureText(str, [width])`
+
+The `measureText()` method returns a [TextMetrics][TextMetrics] object describing the dimensions of a run of text *without* actually drawing it to the canvas. Skia Canvas adds an additional property to the metrics object called `.lines` which contains an array describing the geometry of each line individually.
+
+Each element of the array contains an object of the form:
+```
+{x, y, width, height, baseline, startIndex, endIndex}
+```
+The `x`, `y`, `width`, and `height` values define a rectangle that fully encloses the text of a given line relative to the ‘origin’ point you would pass to `fillText()` or `strokeText()` (and reflecting the context’s current `.textBaseline` setting).
+
+The `baseline` value is a y-axis offset from the text origin to that particular line’s baseline.
+
+The `startIndex` and `endIndex` values are the indices into the string of the first and last character that were typeset on that line.
+
+
+## Path2D
 
 The context object creates an implicit ‘current’ bézier path which is updated by commands like [lineTo()][lineTo()] and [arcTo()][arcTo()] and is drawn to the canvas by calling [fill()][fill()], [stroke()][stroke()], or [clip()][clip()] without any arguments (aside from an optional [winding][nonzero] [rule][evenodd]). If you start creating a second path by calling [beginPath()][beginPath()] the context discards the prior path, forcing you to recreate it by hand if you need it again later.
 
@@ -177,98 +326,7 @@ You can then use these objects by passing them as the first argument to the cont
 | [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |
 
 
-
-
-
-
-
-
-## Non-standard extensions
-
-### Canvas
-
-##### `.pages`
-
-The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the `newPage()` method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
-
-##### `.pdf`, `.svg`, `.jpg`, and `.png`
-
-These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
-
-##### `newPage(width, height)`
-
-This method allows for the creation of additional drawing contexts that are fully independent of one another but will be part of the same output batch. It is primarily useful in the context of creating a multi-page PDF but can be used to create multi-file image-sequences in other formats as well. Creating a new page with a different size than the previous one will update the parent Canvas object’s `.width` and `.height` attributes but will not affect any other pages that have been created previously.
-
-The method’s return value is a `CanvasRenderingContext2D` object which you can either save a reference to or recover later from the `.pages` array.
-
-##### `saveAs(filename, {format, quality})`
-
-The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
-
-The `quality` option is a number between 0 and 100 that controls the level of JPEG compression both when making JPEG files directly and when embedding them in a PDF. If omitted, quality will default to 100 (lossless).
-
-The way multi-page documents are handled depends on the filename argument. If the filename contains the string `"{}"`, it will be used as template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formats it will contain only the most recently added page.
-
-An integer can optionally be placed between the braces to indicate the number of padding characters to use for numbering. For instance `"page-{}.svg"` will generate files of the form `page-1.svg` whereas `"frame-{4}.png"` will generate files like `frame-0001.png`.
-
-##### `toBuffer(format, {quality, page})`
-
-Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. The optional `quality` argument behaves the same as in the `saveAs` method.
-
-The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.toBuffer("png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
-
-##### `toDataURL(format, {quality, page})`
-
-This method accepts the same arguments and behaves similarly to `.toBuffer`. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
-
-### CanvasRenderingContext2D
-
-##### `.font`
-
-By default any [`line-height`][lineHeight] value included in a font specification (separated from the font size by a `/`) will be preserved but ignored. If the `textWrap` property is set to `true`, the line-height will control the vertical spacing between lines.
-
-##### `.fontVariant`
-
-The context’s [`.font`][font] property follows the CSS 2.1 standard and allows the selection of only a single font-variant type: `normal` vs `small-caps`. The full range of CSS 3 [font-variant][font-variant] values can be used if assigned to the context’s `.fontVariant` property (presuming the currently selected font supports them). Note that setting `.font` will also update the current `.fontVariant` value, so be sure to set the variant *after* selecting a typeface.
-
-##### `.textTracking`
-
-To loosen or tighten letter-spacing, set the `.textTracking` property to an integer representing the amount of space to add/remove in terms of 1/1000’s of an ‘em’ (a.k.a. the current font size). Positive numbers will space out the text (e.g., `100` is a good value for setting all-caps) while negative values will pull the letters closer together (this is only rarely a good idea).
-
-The tracking value defaults to `0` and settings will persist across changes to the `.font` property.
-
-##### `.textWrap`
-
-The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()` methods as described below.
-
-##### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
-
-The text-drawing methods’ behavior is mostly standard unless `.textWrap` has been set to `true`, in which case there are 3 main effects:
-
-  1. Manual line breaking via `"\n"` escapes will be honored rather than converted to spaces
-  2. The optional `width` argument accepted by `fillText`, `strokeText` and `measureText` will be interpreted as a ‘column width’ and used to word-wrap long lines
-  3. The line-height setting in the `.font` value will be used to set the inter-line leading rather than simply being ignored.
-
-Even when `.textWrap` is `false`, the text-drawing methods will never choose a more-condensed weight or otherwise attempt to squeeze your entire string into the measure specified by `width`. Instead the text will be typeset up through the last word that fits and the rest will be omitted. This can be used in conjunction with the `.lines` property of the object returned by `measureText()` to incrementally lay out a long string into, for example, a multi-column layout with an even number of lines in each.
-
-##### `measureText(str, [width])`
-
-The `measureText()` method returns a [TextMetrics][TextMetrics] object describing the dimensions of a run of text *without* actually drawing it to the canvas. Skia Canvas adds an additional property to the metrics object called `.lines` which contains an array describing the geometry of each line individually.
-
-Each element of the array contains an object of the form:
-```
-{x, y, width, height, baseline, startIndex, endIndex}
-```
-The `x`, `y`, `width`, and `height` values define a rectangle that fully encloses the text of a given line relative to the ‘origin’ point you would pass to `fillText()` or `strokeText()` (and reflecting the context’s current `.textBaseline` setting).
-
-The `baseline` value is a y-axis offset from the text origin to that particular line’s baseline.
-
-The `startIndex` and `endIndex` values are the indices into the string of the first and last character that were typeset on that line.
-
-
-### Path2D
-
-##### `.bounds`
+#### `.bounds`
 
 In the browser, Path2D objects offer very little in the way of introspection—they are mostly-opaque recorders of drawing commands that can be ‘played back’ later on. Skia Canvas offers some additional transparency by allowing you to measure the total amount of space the lines will occupy (though you’ll need to account for the current `lineWidth` if you plan to draw the path with `stroke()`).
 
@@ -277,7 +335,7 @@ The `.bounds` property contains an object defining the minimal rectangle contain
 {top, left, bottom, right, width, height}
 ```
 
-##### `complement()`, `difference()`, `intersect()`, `union()`, and `xor()`
+#### `complement()`, `difference()`, `intersect()`, `union()`, and `xor()`
 In addition to creating `Path2D` objects through the constructor, you can use pairs of existing paths *in combination* to generate new paths based on their degree of overlap. Based on the method you choose, a different boolean relationship will be used to construct the new path. In all the following examples we’ll be starting off with a pair of overlapping shapes:
 ```js
 let oval = new Path2D()
@@ -300,7 +358,7 @@ let knockout = rect.complement(oval),
 Note that the `xor` operator is liable to create a path with lines that cross over one another so you’ll get different results when filling it using the [`"evenodd"`][evenodd] winding rule (as shown above) than with [`"nonzero"`][nonzero] (the canvas default).
 
 
-##### `simplify()`
+#### `simplify()`
 
 In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments:
 
@@ -309,7 +367,6 @@ let cross = new Path2D("M 10,50 h 100 v 20 h -100 Z M 50,10 h 20 v100 h -20 Z")
 let uncrossed = cross.simplify()
 ```
 ![different combinations](/test/assets/path-simplify@2x.png)
-
 
 
 

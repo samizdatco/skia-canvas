@@ -14,13 +14,14 @@ use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageIn
                 PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data,
                 PictureRecorder, Picture, Drawable, FilterQuality, SamplingOptions,
                 image_filters, color_filters, table_color_filter, dash_path_effect};
-use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow, RectHeightStyle, RectWidthStyle};
+use skia_safe::textlayout::{Paragraph, ParagraphBuilder, ParagraphStyle, TextStyle, TextShadow, RectHeightStyle, RectWidthStyle, FontCollection};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
 
 use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::typography::*;
+use crate::canvas::Page;
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 
@@ -458,6 +459,15 @@ impl Context2D{
     drobble
   }
 
+  pub fn get_page(&self) -> Page {
+    Page{
+      recorder: Arc::clone(&self.recorder),
+      bounds: self.bounds,
+      clip: self.state.clip.clone(),
+      matrix: self.state.matrix,
+    }
+  }
+
   pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
     // stop the recorder to take a snapshot then restart it again
     let recorder = Arc::clone(&self.recorder);
@@ -529,107 +539,18 @@ impl Context2D{
     self.state.char_style = new_style;
   }
 
-  pub fn typeset(&mut self, text: &str, width:f32, paint: Paint) -> Paragraph {
-    let mut char_style = self.state.char_style.clone();
-    char_style.set_foreground_color(Some(paint));
-
-    let mut graf_style = self.state.graf_style.clone();
-    let text = match self.state.text_wrap{
-      true => text.to_string(),
-      false => {
-        graf_style.set_max_lines(1);
-        text.replace("\n", " ")
-      }
-    };
-
-    let mut library = FONT_LIBRARY.lock().unwrap();
-    let collection = library.collect_fonts(&char_style);
-    let mut paragraph_builder = ParagraphBuilder::new(&graf_style, collection);
-    paragraph_builder.push_style(&char_style);
-    paragraph_builder.add_text(&text);
-
-    let mut paragraph = paragraph_builder.build();
-    paragraph.layout(width);
-    paragraph
-  }
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, paint: Paint){
-    let width = width.unwrap_or(GALLEY);
-
-    let mut text_paint = paint.clone();
-    text_paint.set_blend_mode(BlendMode::SrcOver);
-
-    let mut paragraph = self.typeset(&text, width, text_paint);
-    let mut point = Point::new(x, y);
-    let metrics = self.state.char_style.font_metrics();
-    let offset = get_baseline_offset(&metrics, self.state.text_baseline);
-    point.y += offset - paragraph.alphabetic_baseline();
-    point.x += width * get_alignment_factor(&self.state.graf_style);
-
-    let mut bounds = paragraph.get_rects_for_range(0..text.len(), RectHeightStyle::IncludeLineSpacingBottom, RectWidthStyle::Tight)
-      .iter().map(|textbox| textbox.rect)
-      .fold(Rect::new_empty(), Rect::join2);
-    bounds.outset((paint.stroke_width(), paint.stroke_width()));
-
-    // render the text once into a picture we can use for the shadow as well
-    let mut recorder = PictureRecorder::new();
-    recorder.begin_recording(bounds, None);
-    if let Some(canvas) = recorder.recording_canvas() {
-      paragraph.paint(canvas, (0.0,0.0));
-
-      if let Some(pict) = recorder.finish_recording_as_picture(Some(&bounds)){
-        let position = Matrix::translate(point);
-        self.render_to_canvas(&paint, |canvas, paint| {
-          canvas.draw_picture(&pict, Some(&position), Some(&paint));
-        });
-      }
-    }
-
+    let typesetter = Typesetter::new(&self.state, text, width);
+    self.render_to_canvas(&paint, |canvas, paint| {
+      let point = Point::new(x, y);
+      let (paragraph, offset) = typesetter.layout(&paint);
+      paragraph.paint(canvas, point + offset);
+    });
   }
 
   pub fn measure_text(&mut self, text: &str, width:Option<f32>) -> Vec<Vec<f32>>{
-    let paint = self.paint_for_fill();
-    let mut paragraph = self.typeset(&text, width.unwrap_or(GALLEY), paint);
-
-    let font_metrics = self.state.char_style.font_metrics();
-    let offset = get_baseline_offset(&font_metrics, self.state.text_baseline);
-    let hang = get_baseline_offset(&font_metrics, Baseline::Hanging) - offset;
-    let norm = get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset;
-    let ideo = get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset;
-    let ascent = norm - font_metrics.ascent;
-    let descent = font_metrics.descent - norm;
-    let alignment = get_alignment_factor(&self.state.graf_style);
-
-    if paragraph.line_number() == 0 {
-      return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, ascent, descent, hang, norm, ideo]]
-    }
-
-    // find the bounds and text-range for each individual line
-    let origin = paragraph.get_line_metrics()[0].baseline;
-    let line_rects:Vec<(Rect, Range<usize>, f32)> = paragraph.get_line_metrics().iter().map(|line|{
-      let baseline = line.baseline - origin;
-      let rect = Rect::new(line.left as f32, (baseline - line.ascent) as f32,
-                          (line.width - line.left) as f32, (baseline + line.descent) as f32);
-      let range = string_idx_range(text, line.start_index, line.end_excluding_whitespaces);
-      (rect.with_offset((alignment*rect.width(), offset)), range, baseline as f32)
-    }).collect();
-
-    // take their union to find the bounds for the whole text run
-    let (bounds, chars) = line_rects.iter().fold((Rect::new_empty(), 0), |(union, indices), (rect, range, _)|
-      (Rect::join2(union, rect), range.end)
-    );
-
-    // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
-    // line-rect/range values (with the js side responsible for restructuring the whole bundle)
-    let mut results = vec![vec![
-      bounds.width(), bounds.left, bounds.right, -bounds.top, bounds.bottom,
-      ascent, descent, ascent, descent, hang, norm, ideo
-    ]];
-    line_rects.iter().for_each(|(rect, range, baseline)|{
-      results.push(vec![rect.left, rect.top, rect.width(), rect.height(),
-                        *baseline, range.start as f32, range.end as f32])
-    });
-    results
+    Typesetter::new(&self.state, text, width).metrics()
   }
 
   pub fn set_filter(&mut self, filter_text:&str, specs:&[FilterSpec]){
@@ -835,4 +756,103 @@ impl Dye{
       }
     };
   }
+}
+
+//
+// Text layout and metrics
+//
+
+struct Typesetter{
+  text: String,
+  width: f32,
+  baseline: Baseline,
+  typography: FontCollection,
+  char_style: TextStyle,
+  graf_style: ParagraphStyle,
+}
+
+impl Typesetter{
+  pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
+    let baseline = state.text_baseline;
+    let width = width.unwrap_or(GALLEY);
+    let mut char_style = state.char_style.clone();
+    let mut graf_style = state.graf_style.clone();
+    let mut library = FONT_LIBRARY.lock().unwrap();
+    let typography = library.collect_fonts(&char_style);
+
+    let text = match state.text_wrap{
+      true => text.to_string(),
+      false => {
+        graf_style.set_max_lines(1);
+        text.replace("\n", " ")
+      }
+    };
+
+    Typesetter{text, typography, char_style, graf_style, width, baseline}
+  }
+
+  pub fn layout(&self, paint:&Paint) -> (Paragraph, Point) {
+    let mut char_style = self.char_style.clone();
+    char_style.set_foreground_color(Some(paint.clone()));
+
+    let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typography);
+    paragraph_builder.push_style(&char_style);
+    paragraph_builder.add_text(&self.text);
+
+    let mut paragraph = paragraph_builder.build();
+    paragraph.layout(self.width);
+
+    let metrics = self.char_style.font_metrics();
+    let shift = get_baseline_offset(&metrics, self.baseline);
+    let offset = (
+      self.width * get_alignment_factor(&self.graf_style),
+      shift - paragraph.alphabetic_baseline(),
+    );
+
+    (paragraph, offset.into())
+  }
+
+  pub fn metrics(&self) -> Vec<Vec<f32>>{
+    let (mut paragraph, _) = self.layout(&Paint::default());
+    let font_metrics = self.char_style.font_metrics();
+    let offset = get_baseline_offset(&font_metrics, self.baseline);
+    let hang = get_baseline_offset(&font_metrics, Baseline::Hanging) - offset;
+    let norm = get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset;
+    let ideo = get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset;
+    let ascent = norm - font_metrics.ascent;
+    let descent = font_metrics.descent - norm;
+    let alignment = get_alignment_factor(&self.graf_style);
+
+    if paragraph.line_number() == 0 {
+      return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, ascent, descent, hang, norm, ideo]]
+    }
+
+    // find the bounds and text-range for each individual line
+    let origin = paragraph.get_line_metrics()[0].baseline;
+    let line_rects:Vec<(Rect, Range<usize>, f32)> = paragraph.get_line_metrics().iter().map(|line|{
+      let baseline = line.baseline - origin;
+      let rect = Rect::new(line.left as f32, (baseline - line.ascent) as f32,
+                          (line.width - line.left) as f32, (baseline + line.descent) as f32);
+      let range = string_idx_range(&self.text, line.start_index, line.end_excluding_whitespaces);
+      (rect.with_offset((alignment*rect.width(), offset)), range, baseline as f32)
+    }).collect();
+
+    // take their union to find the bounds for the whole text run
+    let (bounds, chars) = line_rects.iter().fold((Rect::new_empty(), 0), |(union, indices), (rect, range, _)|
+      (Rect::join2(union, rect), range.end)
+    );
+
+    // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
+    // line-rect/range values (with the js side responsible for restructuring the whole bundle)
+    let mut results = vec![vec![
+      bounds.width(), bounds.left, bounds.right, -bounds.top, bounds.bottom,
+      ascent, descent, ascent, descent, hang, norm, ideo
+    ]];
+    line_rects.iter().for_each(|(rect, range, baseline)|{
+      results.push(vec![rect.left, rect.top, rect.width(), rect.height(),
+                        *baseline, range.start as f32, range.end as f32])
+    });
+    results
+  }
+
 }
