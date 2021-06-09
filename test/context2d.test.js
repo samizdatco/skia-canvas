@@ -1,3 +1,5 @@
+"use strict"
+
 const _ = require('lodash'),
       {Canvas, DOMMatrix, loadImage} = require('../lib'),
       parse = require('../lib/parse');
@@ -495,14 +497,22 @@ describe("Context2D", ()=>{
     })
 
     test("measureText()", () => {
-      let foo = ctx.measureText('foo').width,
+      ctx.font = "20px Arial, DejaVu Sans"
+
+      let ø = ctx.measureText('').width,
+          _ = ctx.measureText(' ').width,
+          __ = ctx.measureText('  ').width,
+          foo = ctx.measureText('foo').width,
           foobar = ctx.measureText('foobar').width,
-          __foo = ctx.measureText('  foo').width;
+          __foo = ctx.measureText('  foo').width,
+          __foo__ = ctx.measureText('  foo  ').width
+      expect(ø).toBeLessThan(_)
+      expect(_).toBeLessThan(__)
       expect(foo).toBeLessThan(foobar)
       expect(__foo).toBeGreaterThan(foo)
+      expect(__foo__).toBeGreaterThan(__foo)
 
       // start from the default, alphabetic baseline
-      ctx.font = "20px Arial, DejaVu Sans"
       var metrics = ctx.measureText("Lordran gypsum")
 
       // + means up, - means down when it comes to baselines
@@ -514,6 +524,7 @@ describe("Context2D", ()=>{
       expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(0)
       expect(metrics.actualBoundingBoxDescent).toBeGreaterThan(0)
 
+      // make sure the polarity has flipped for 'bottom' baseline
       ctx.textBaseline = "bottom"
       metrics = ctx.measureText("Lordran gypsum")
       expect(metrics.alphabeticBaseline).toBeGreaterThan(0)
