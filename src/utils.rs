@@ -134,14 +134,10 @@ pub fn strings_to_array<'a>(cx: &mut FunctionContext<'a>, strings: &[String]) ->
 
 /// Convert from byte-indices to char-indices for a given UTF-8 string
 pub fn string_idx_range(text: &str, begin: usize, end: usize) -> Range<usize>{
-  let mut start = 0;
-  for (idx, (chr, _)) in text.char_indices().enumerate(){
-    if chr==begin{ start = idx}
-    else if chr==end-1{ return Range{ start, end:idx } }
-  }
-  Range{ start, end:0 }
+  let start = text[0..begin].chars().count();
+  let end = start + text[begin..end].chars().count();
+  Range{ start, end }
 }
-
 
 //
 // bools
