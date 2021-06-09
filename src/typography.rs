@@ -95,7 +95,9 @@ impl Typesetter{
       let baseline = line.baseline - origin;
       let rect = Rect::new(line.left as f32, (baseline - line.ascent) as f32,
                           (line.width - line.left) as f32, (baseline + line.descent) as f32);
-      let range = string_idx_range(&self.text, line.start_index, line.end_excluding_whitespaces);
+      let range = string_idx_range(&self.text, line.start_index,
+        if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces }
+      );
       (rect.with_offset((alignment*rect.width(), offset)), range, baseline as f32)
     }).collect();
 
