@@ -125,14 +125,14 @@ Once these dependencies are present, running `npm run build` will give you a use
 
 The library exports a number of classes emulating familiar browser objects including:
 
- - [Canvas][Canvas] ([⚡](#canvas))
+ - [Canvas][Canvas] ⧸[⚡](#canvas)
  - [CanvasGradient][CanvasGradient]
  - [CanvasPattern][CanvasPattern]
- - [CanvasRenderingContext2D][CanvasRenderingContext2D] ([⚡](#canvasrenderingcontext2d))
+ - [CanvasRenderingContext2D][CanvasRenderingContext2D] ⧸[⚡](#canvasrenderingcontext2d)
  - [DOMMatrix][DOMMatrix]
  - [Image][Image]
  - [ImageData][ImageData]
- - [Path2D][Path2D] ([⚡](#path2d))
+ - [Path2D][Path2D] ⧸[⚡](#path2d)
 
 In addition, the module contains:
 
@@ -257,32 +257,32 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 
 ## CanvasRenderingContext2D
 
-Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) method.
+Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
 
-| Canvas State                           | Drawing Primitives                          | Stroke & Fill Style                  | Compositing Effects                                      |
-|----------------------------------------|---------------------------------------------|--------------------------------------|----------------------------------------------------------|
-| [**canvas**](#canvas) [⚡](#canvas)     | [clearRect()][clearRect()]                  | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
-| [**globalAlpha**][globalAlpha]         | [drawImage()][drawImage()]                  | [**lineCap**][lineCap]               | [**globalCompositeOperation**][globalCompositeOperation] |
-| [beginPath()][beginPath()]             | [fill()][fill()]                            | [**lineDashOffset**][lineDashOffset] | [**shadowBlur**][shadowBlur]                             |
-| [clip()][clip()]                       | [fillRect()][fillRect()]                    | [**lineJoin**][lineJoin]             | [**shadowColor**][shadowColor]                           |
-| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] [⚡][drawText]      | [**lineWidth**][lineWidth]           | [**shadowOffsetX**][shadowOffsetX]                       |
-| [isPointInStroke()][isPointInStroke()] | [stroke()][stroke()]                        | [**miterLimit**][miterLimit]         | [**shadowOffsetY**][shadowOffsetY]                       |
-| [restore()][restore()]                 | [strokeRect()][strokeRect()]                | [**strokeStyle**][strokeStyle]       |                                                          |
-| [save()][save()]                       | [strokeText()][strokeText()] [⚡][drawText]  | [getLineDash()][getLineDash()]       |                                                          |
-|                                        |                                             | [setLineDash()][setLineDash()]       |                                                          |
+| Canvas State                           | Drawing Primitives                           | Stroke & Fill Style                  | Compositing Effects                                      |
+|----------------------------------------|----------------------------------------------|--------------------------------------|----------------------------------------------------------|
+| [**canvas**](#canvas) ⧸[⚡](#canvas)   | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
+| [**globalAlpha**][globalAlpha]         | [drawImage()][drawImage()]                   | [**lineCap**][lineCap]               | [**globalCompositeOperation**][globalCompositeOperation] |
+| [beginPath()][beginPath()]             | [fill()][fill()]                             | [**lineDashOffset**][lineDashOffset] | [**shadowBlur**][shadowBlur]                             |
+| [clip()][clip()]                       | [fillRect()][fillRect()]                     | [**lineJoin**][lineJoin]             | [**shadowColor**][shadowColor]                           |
+| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[⚡][drawText]     | [**lineWidth**][lineWidth]           | [**shadowOffsetX**][shadowOffsetX]                       |
+| [isPointInStroke()][isPointInStroke()] | [stroke()][stroke()]                         | [**miterLimit**][miterLimit]         | [**shadowOffsetY**][shadowOffsetY]                       |
+| [restore()][restore()]                 | [strokeRect()][strokeRect()]                 | [**strokeStyle**][strokeStyle]       |                                                          |
+| [save()][save()]                       | [strokeText()][strokeText()] ⧸[⚡][drawText] | [getLineDash()][getLineDash()]       |                                                          |
+|                                        |                                              | [setLineDash()][setLineDash()]       |                                                          |
 
 
 | Bezier Paths                             | Typography                                                  | Pattern & Image                                    | Transform                                |
 |------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|------------------------------------------|
 | [arc()][arc()]                           | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
-| [arcTo()][arcTo()]                       | [**font**][font] [⚡](#font)                                 | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
+| [arcTo()][arcTo()]                       | [**font**][font] ⧸[⚡](#font)                                 | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
 | [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** ⚡](#fontvariant)                           | [createConicGradient()][createConicGradient()]     | [resetTransform()][resetTransform()]     |
 | [closePath()][closePath()]               | [**textAlign**][textAlign]                                  | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
 | [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                            | [createLinearGradient()][createLinearGradient()]   | [scale()][scale()]                       |
 | [lineTo()][lineTo()]                     | [**textTracking** ⚡](#texttracking)                         | [createPattern()][createPattern()]                 | [setTransform()][setTransform()]         |
 | [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                 | [createRadialGradient()][createRadialGradient()]   | [transform()][transform()]               |
-| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] [⚡](#measuretextstr-width)   | [getImageData()][getImageData()]                   | [translate()][translate()]               |
+| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width)   | [getImageData()][getImageData()]                   | [translate()][translate()]               |
 | [rect()][rect()]                         |                                                             | [putImageData()][putImageData()]                   |                                          |
 
 ##### PROPERTIES
