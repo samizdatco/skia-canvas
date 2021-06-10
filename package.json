@@ -22,16 +22,16 @@
     "test": "jest"
   },
   "dependencies": {
-    "@mapbox/node-pre-gyp": "^1.0.4",
+    "@mapbox/node-pre-gyp": "^1.0.5",
     "glob": "^7.1.7",
     "simple-get": "^4.0.0",
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
-    "aws-sdk": "^2.903.0",
+    "aws-sdk": "^2.925.0",
     "cargo-cp-artifact": "^0.1",
     "express": "^4.17.1",
-    "jest": "^26.6.3",
+    "jest": "^27.0.4",
     "lodash": "^4.17.21",
     "nodemon": "^2.0.7",
     "tmp": "^0.2.1"

@@ -17,10 +17,10 @@ lazy_static = "1.4.0"
 rayon = "1.5.1"
 
 [dependencies.neon]
-version = "0.8"
+version = "0.8.3"
 default-features = false
 features = ["napi-6", "event-queue-api"]
 
 [dependencies.skia-safe]
-version = "0.39.1"
+version = "0.40.0"
 features = ["textlayout"]
