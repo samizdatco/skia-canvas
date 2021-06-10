@@ -99,23 +99,11 @@ If prebuilt binaries aren’t available for your system you’ll need to compile
 Start by installing:
 
   1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using [`rustup`](https://rust-lang.github.io/rustup/)
-  2. A C compiler toolchain like LLVM/Clang, GCC, or MSVC
+  2. A C compiler toolchain like LLVM/Clang or MSVC
   3. Python 2.7 (used by Skia's [build process](https://skia.org/docs/user/build/))
-  4. The [fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library
+  4. On Linux: Fontconfig, OpenSSL, X11, and Mesa
 
-
-On Ubuntu, these can be fetched with the following:
-```console
-$ sudo apt install -y build-essential python libfontconfig1-dev
-```
-
-On the Mac, `fontconfig` is available from [Homebrew](https://brew.sh):
-```console
-$ brew install fontconfig
-```
-
-
-Once these dependencies are present, running `npm run build` will give you a useable library (after a fairly lengthy compilation process).
+[Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
 
 
 
