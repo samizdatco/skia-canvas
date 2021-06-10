@@ -63,7 +63,7 @@ describe("Image", () => {
       img.src = URL
     })
 
-    test("loadImage call", async done => {
+    test("loadImage call", async () => {
       expect(img).toMatchObject(FRESH)
 
       img = await loadImage(URL)
@@ -79,8 +79,6 @@ describe("Image", () => {
       expect(img).toMatchObject(LOADED)
 
       expect(async () => { await loadImage('http://nonesuch') }).rejects.toEqual("HTTP_ERROR_404")
-
-      done()
     })
   })
 
@@ -92,7 +90,7 @@ describe("Image", () => {
       expect(img.complete).toEqual(true)
     })
 
-    test(".onload callback", async done => {
+    test(".onload callback", done => {
       // ensure that the fetch process can be overwritten while in flight
       img.onload = loaded => { throw Error("should not be called") }
       img.src = URL
@@ -101,7 +99,7 @@ describe("Image", () => {
       img.src = 'http://test/assets/globe.jpg'
     })
 
-    test(".onerror callback", async done => {
+    test(".onerror callback", done => {
       img.onerror = err => {
         expect(err).toEqual("HTTP_ERROR_404")
         done()
@@ -109,7 +107,7 @@ describe("Image", () => {
       img.src = 'http://nonesuch'
     })
 
-    test(".decode promise", async done => {
+    test(".decode promise", async () => {
       expect(()=> img.decode() ).rejects.toEqual(new Error('Missing Source URL'))
 
       img.src = URL
@@ -123,8 +121,6 @@ describe("Image", () => {
 
       // autoresolves once loaded
       expect(img.decode()).resolves.toEqual(img)
-
-      done()
     })
   })
 
