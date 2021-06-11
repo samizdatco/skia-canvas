@@ -2,8 +2,11 @@
   "name": "skia-canvas",
   "version": "0.9.22",
   "description": "A canvas environment for Node",
-  "main": "lib/index.js",
-  "browser": "lib/browser.js",
+  "main": "lib",
+  "browser": {
+    "lib": "./lib/browser.js",
+    "path":"path-browserify"
+  },
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
   "repository": {
@@ -24,6 +27,7 @@
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.5",
     "glob": "^7.1.7",
+    "path-browserify": "^1.0.1",
     "simple-get": "^4.0.0",
     "string-split-by": "^1.0.0"
   },
