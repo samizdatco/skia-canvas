@@ -3,7 +3,7 @@
   "version": "0.9.22",
   "description": "A canvas environment for Node",
   "main": "lib/index.js",
-  "browser": "lib/stub.js",
+  "browser": "lib/browser.js",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
   "repository": {
