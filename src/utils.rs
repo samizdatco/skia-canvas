@@ -669,3 +669,14 @@ pub fn fit_bounds(width: f32, height: f32, src: Rect, dst: Rect) -> (Rect, Rect)
   (src, dst)
 }
 
+//
+// PDF creation
+//
+
+use skia_safe::{pdf, Document};
+
+pub fn pdf_document(quality:f32) -> Document{
+  let mut meta = pdf::Metadata::default();
+  meta.encoding_quality = Some((quality*100.0) as i32);
+  pdf::new_document(Some(&meta))
+}
