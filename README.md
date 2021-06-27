@@ -69,11 +69,11 @@ If you’re running on a supported platform, installation should be as simple as
 $ npm install skia-canvas
 ```
 
-This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases). 
+This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases).
 
 ### Dependencies
 
-Nearly everything you need is statically linked into the library. 
+Nearly everything you need is statically linked into the library.
 
 A notable exception is the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library (and its associated [FreeType](https://www.freetype.org) renderer) which must be installed separately if you’re running on Linux.
 
@@ -155,7 +155,7 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 
 #### Creating new `Canvas` objects
 
-Rather than calling a DOM method to create a new canvas, you can simply call the `Canvas` constructor with the width and height (in pixels) of the image you’d like to being drawing.
+Rather than calling a DOM method to create a new canvas, you can simply call the `Canvas` constructor with the width and height (in pixels) of the image you’d like to begin drawing.
 
 ```js
 let defaultCanvas = new Canvas() // without arguments, defaults to 300 × 150 px
