@@ -99,7 +99,7 @@ impl Page{
           Err("Could not allocate new bitmap".to_string())
         }
       }else if format == "pdf"{
-        let mut document = pdf_document(quality).begin_page(img_dims, None);
+        let mut document = pdf_document(quality, density).begin_page(img_dims, None);
         let canvas = document.canvas();
         canvas.draw_picture(&picture, None, None);
         Ok(document.end_page().close())
@@ -138,16 +138,16 @@ impl Page{
   }
 }
 
-fn to_pdf(pages:&[Page], quality:f32) -> Result<Data, String>{
+fn to_pdf(pages:&[Page], quality:f32, density:f32) -> Result<Data, String>{
   pages
     .iter()
-    .try_fold(pdf_document(quality), |doc, page| page.append_to(doc))
+    .try_fold(pdf_document(quality, density), |doc, page| page.append_to(doc))
     .map(|doc| doc.close())
 }
 
-fn write_pdf(path:&str, pages:&[Page], quality:f32) -> Result<(), String>{
+fn write_pdf(path:&str, pages:&[Page], quality:f32, density:f32) -> Result<(), String>{
   let path = Path::new(&path);
-  match to_pdf(&pages, quality){
+  match to_pdf(&pages, quality, density){
     Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     ),
@@ -276,7 +276,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   rayon::spawn(move || {
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        to_pdf(&pages, quality)
+        to_pdf(&pages, quality, density)
       }else{
         pages[0].encoded_as(&file_format, quality, density, outline, matte)
       }
@@ -322,7 +322,7 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        to_pdf(&pages, quality)
+        to_pdf(&pages, quality, density)
       }else{
         pages[0].encoded_as(&file_format, quality, density, outline, matte)
       }
@@ -360,7 +360,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       if sequence {
         write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, outline, matte)
       } else if file_format == "pdf" {
-        write_pdf(&name_pattern, &pages, quality)
+        write_pdf(&name_pattern, &pages, quality, density)
       } else {
         pages[0].write(&name_pattern, &file_format, quality, density, outline, matte)
       }
@@ -404,7 +404,7 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     if sequence {
       write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, outline, matte)
     } else if file_format == "pdf" {
-      write_pdf(&name_pattern, &pages, quality)
+      write_pdf(&name_pattern, &pages, quality, density)
     } else {
       pages[0].write(&name_pattern, &file_format, quality, density, outline, matte)
     }
