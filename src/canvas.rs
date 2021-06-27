@@ -126,8 +126,7 @@ impl Page{
 
   fn append_to(&self, doc:Document) -> Result<Document, String>{
     if !self.bounds.is_empty(){
-      let dims = (self.bounds.width() as i32, self.bounds.height() as i32);
-      let mut doc = doc.begin_page(dims, None);
+      let mut doc = doc.begin_page(self.bounds.size(), None);
       let canvas = doc.canvas();
       if let Some(picture) = self.get_picture(){
         canvas.draw_picture(&picture, None, None);
@@ -239,14 +238,14 @@ pub fn get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let width = float_arg(&mut cx, 1, "size")?;
-  this.borrow_mut().width = width.floor();
+  this.borrow_mut().width = width;
   Ok(cx.undefined())
 }
 
 pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let height = float_arg(&mut cx, 1, "size")?;
-  this.borrow_mut().height = height.floor();
+  this.borrow_mut().height = height;
   Ok(cx.undefined())
 }
 
