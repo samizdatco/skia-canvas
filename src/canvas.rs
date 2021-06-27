@@ -85,12 +85,9 @@ impl Page{
         let img_scale = Matrix::scale((density, density));
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
         if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
-          if let Some(color) = matte{
-            surface.canvas().clear(color);
-          }
-
           surface
             .canvas()
+            .clear(matte.unwrap_or(Color::TRANSPARENT))
             .set_matrix(&img_scale.into())
             .draw_picture(&picture, None, None);
           surface
