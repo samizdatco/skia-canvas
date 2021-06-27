@@ -2,11 +2,6 @@
   "name": "skia-canvas",
   "version": "0.9.22",
   "description": "A canvas environment for Node",
-  "main": "lib",
-  "browser": {
-    "lib": "./lib/browser.js",
-    "path":"path-browserify"
-  },
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
   "repository": {
@@ -17,6 +12,11 @@
     "url": "https://github.com/samizdatco/skia-canvas/issues"
   },
   "homepage": "https://github.com/samizdatco/skia-canvas#readme",
+  "main": "lib",
+  "browser": {
+    "lib": "./lib/browser.js",
+    "path":"path-browserify"
+  },
   "scripts": {
     "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
     "install": "node-pre-gyp install || npm run build -- --release",
