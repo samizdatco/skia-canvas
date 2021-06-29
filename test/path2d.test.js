@@ -7,9 +7,9 @@ const BLACK = [0,0,0,255],
 
 describe("Path2D", ()=>{
   let canvas, ctx,
-  WIDTH = 512, HEIGHT = 512,
-  pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data),
-  p;
+      WIDTH = 512, HEIGHT = 512,
+      pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data),
+      p;
 
   beforeEach(()=>{
     canvas = new Canvas(WIDTH, HEIGHT)
@@ -223,5 +223,88 @@ describe("Path2D", ()=>{
     })
 
   })
+
+  describe("supports path operation", () => {
+    let a, b,
+        top = () => pixel(60, 20),
+        left = () => pixel(20, 60),
+        center = () => pixel(60, 60),
+        right = () => pixel(100, 60),
+        bottom = () => pixel(60, 100)
+
+    beforeEach(()=>{
+      a = new Path2D("M 10,50 h 100 v 20 h -100 Z")
+      b = new Path2D("M 50,10 h 20 v100 h -20 Z")
+      ctx.fillStyle = 'black'
+    })
+
+    test("complement", () => {
+      let c = a.complement(b)
+      ctx.fill(c)
+      expect(top()).toEqual(BLACK)
+      expect(left()).toEqual(CLEAR)
+      expect(center()).toEqual(CLEAR)
+      expect(right()).toEqual(CLEAR)
+      expect(bottom()).toEqual(BLACK)
+    })
+
+    test("difference", () => {
+      let c = a.difference(b)
+      ctx.fill(c)
+      expect(top()).toEqual(CLEAR)
+      expect(left()).toEqual(BLACK)
+      expect(center()).toEqual(CLEAR)
+      expect(right()).toEqual(BLACK)
+      expect(bottom()).toEqual(CLEAR)
+    })
+
+    test("intersect", () => {
+      let c = a.intersect(b)
+      ctx.fill(c)
+      expect(top()).toEqual(CLEAR)
+      expect(left()).toEqual(CLEAR)
+      expect(center()).toEqual(BLACK)
+      expect(right()).toEqual(CLEAR)
+      expect(bottom()).toEqual(CLEAR)
+    })
+
+    test("union", () => {
+      let c = a.union(b)
+      ctx.fill(c)
+      expect(top()).toEqual(BLACK)
+      expect(left()).toEqual(BLACK)
+      expect(center()).toEqual(BLACK)
+      expect(right()).toEqual(BLACK)
+      expect(bottom()).toEqual(BLACK)
+    })
+
+    test("xor", () => {
+      let c = a.xor(b)
+      ctx.fill(c, 'evenodd')
+      expect(top()).toEqual(BLACK)
+      expect(left()).toEqual(BLACK)
+      expect(center()).toEqual(CLEAR)
+      expect(right()).toEqual(BLACK)
+      expect(bottom()).toEqual(BLACK)
+
+      ctx.fill(c, 'nonzero')
+      expect(center()).toEqual(BLACK)
+    })
+
+    test("simplify", () => {
+      let c = a.xor(b)
+      ctx.fill(c.simplify(), 'nonzero')
+      expect(top()).toEqual(BLACK)
+      expect(left()).toEqual(BLACK)
+      expect(center()).toEqual(CLEAR)
+      expect(right()).toEqual(BLACK)
+      expect(bottom()).toEqual(BLACK)
+
+      ctx.fill(c)
+      expect(center()).toEqual(BLACK)
+    })
+
+  })
+
 
 })
