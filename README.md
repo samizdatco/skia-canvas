@@ -93,7 +93,7 @@ Pre-compiled binaries are available for:
 
 ### Running in Docker
 
-The library is compatible with Linux systems using glibc 2.24 or later. Currently the `rust-skia` library [will not compile](https://github.com/rust-skia/rust-skia/issues/356) against the [musl](https://musl.libc.org) library used by Alpine Linux—though this may change in the future. For now, if you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, you’ll want to set your `FROM` image to one of the (Debian-derived) defaults like `node:14`, `node:16`, `node:buster`, `node:stretch`, or simply:
+The library is compatible with Linux systems using glibc 2.24 or later. Currently the `rust-skia` library [will not compile](https://github.com/rust-skia/rust-skia/issues/356) against the [musl](https://musl.libc.org) library used by Alpine Linux—though this may change in the future. For now, if you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, you’ll want to set your `FROM` image to one of the (Debian-derived) defaults like `node:16`, `node:14`, `node:12`, `node:buster`, `node:stretch`, or simply:
 ```dockerfile
 FROM node
 ```
