@@ -218,6 +218,10 @@ describe("Context2D", ()=>{
       })
 
       test("from Canvas", () => {
+        let blank = new Canvas()
+        ctx.fillStyle = ctx.createPattern(blank, 'repeat');
+        ctx.fillRect(0,0, 20,20);
+
         let checkers = new Canvas(2, 2),
             patCtx = checkers.getContext("2d");
         patCtx.fillStyle = 'white';
@@ -241,7 +245,6 @@ describe("Context2D", ()=>{
       })
 
       test("with local transform", () => {
-
         // call func with an ImageData-offset and pixel color value appropriate for a 4-quadrant pattern within
         // the width and height that's white in the upper-left & lower-right and black in the other corners
         function eachPixel(bmp, func){
