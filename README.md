@@ -91,6 +91,19 @@ Pre-compiled binaries are available for:
   - macOS (x86 & Apple silicon)
   - Windows (x86)
 
+### Running in Docker
+
+The library is compatible with Linux systems using glibc 2.24 or later. Currently the `rust-skia` library [will not compile](https://github.com/rust-skia/rust-skia/issues/356) against the [musl](https://musl.libc.org) library used by Alpine Linux—though this may change in the future. For now, if you are setting up a Dockerfile that uses the [`node`](https://hub.docker.com/_/node) image as its basis, you’ll want to set your Dockerfile’s `FROM` image to one of its default, Debian-derived systems like `node:16`, `node:buster`, `node:stretch`, or simply:
+```dockerfile
+FROM node
+```
+
+You can also use the ‘slim’ image if you manually install fontconfig:
+
+```dockerfile
+FROM node:slim
+RUN apt-get update && apt-get install -y -q --no-install-recommends libfontconfig1 
+```
 
 ### Compiling from source
 
