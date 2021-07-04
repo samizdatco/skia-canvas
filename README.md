@@ -261,30 +261,31 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
 
-| Canvas State                           | Drawing Primitives                           | Stroke & Fill Style                  | Compositing Effects                                      |
-|----------------------------------------|----------------------------------------------|--------------------------------------|----------------------------------------------------------|
-| [**canvas**](#canvas) ⧸[⚡](#canvas)   | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
-| [**globalAlpha**][globalAlpha]         | [drawImage()][drawImage()]                   | [**lineCap**][lineCap]               | [**globalCompositeOperation**][globalCompositeOperation] |
-| [beginPath()][beginPath()]             | [fill()][fill()]                             | [**lineDashOffset**][lineDashOffset] | [**shadowBlur**][shadowBlur]                             |
-| [clip()][clip()]                       | [fillRect()][fillRect()]                     | [**lineJoin**][lineJoin]             | [**shadowColor**][shadowColor]                           |
-| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[⚡][drawText]     | [**lineWidth**][lineWidth]           | [**shadowOffsetX**][shadowOffsetX]                       |
-| [isPointInStroke()][isPointInStroke()] | [stroke()][stroke()]                         | [**miterLimit**][miterLimit]         | [**shadowOffsetY**][shadowOffsetY]                       |
-| [restore()][restore()]                 | [strokeRect()][strokeRect()]                 | [**strokeStyle**][strokeStyle]       |                                                          |
-| [save()][save()]                       | [strokeText()][strokeText()] ⧸[⚡][drawText] | [getLineDash()][getLineDash()]       |                                                          |
-|                                        |                                              | [setLineDash()][setLineDash()]       |                                                          |
+| Canvas State                             | Drawing Primitives                           | Stroke & Fill Style                  | Compositing Effects                                      |
+|------------------------------------------|----------------------------------------------|--------------------------------------|----------------------------------------------------------|
+| [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [drawImage()][drawImage()]                   | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
+| [beginPath()][beginPath()]               | [clearRect()][clearRect()]                   | [**lineCap**][lineCap]               | [**globalAlpha**][globalAlpha]                           |
+| [isPointInPath()][isPointInPath()]       | [fillRect()][fillRect()]                     | [**lineDashOffset**][lineDashOffset] | [**globalCompositeOperation**][globalCompositeOperation] |
+| [isPointInStroke()][isPointInStroke()]   | [strokeRect()][strokeRect()]                 | [**lineJoin**][lineJoin]             | [**shadowBlur**][shadowBlur]                             |
+| [save()][save()]                         | [fillText()][fillText()] ⧸[⚡][drawText]     | [**lineWidth**][lineWidth]           | [**shadowColor**][shadowColor]                           |
+| [restore()][restore()]                   | [strokeText()][strokeText()] ⧸[⚡][drawText] | [**miterLimit**][miterLimit]         | [**shadowOffsetX**][shadowOffsetX]                       |
+| [clip()][clip()]                         | [fill()][fill()]                             | [**strokeStyle**][strokeStyle]       | [**shadowOffsetY**][shadowOffsetY]                       |
+|                                          | [stroke()][stroke()]                         | [getLineDash()][getLineDash()]       |                                                          |
+|                                          |                                              | [setLineDash()][setLineDash()]       |                                                          |
 
 
 | Bezier Paths                             | Typography                                                  | Pattern & Image                                    | Transform                                |
 |------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|------------------------------------------|
-| [arc()][arc()]                           | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
-| [arcTo()][arcTo()]                       | [**font**][font] ⧸[⚡](#font)                                 | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
-| [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** ⚡](#fontvariant)                           | [createConicGradient()][createConicGradient()]     | [resetTransform()][resetTransform()]     |
-| [closePath()][closePath()]               | [**textAlign**][textAlign]                                  | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
-| [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                            | [createLinearGradient()][createLinearGradient()]   | [scale()][scale()]                       |
-| [lineTo()][lineTo()]                     | [**textTracking** ⚡](#texttracking)                         | [createPattern()][createPattern()]                 | [setTransform()][setTransform()]         |
-| [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                 | [createRadialGradient()][createRadialGradient()]   | [transform()][transform()]               |
-| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width)   | [getImageData()][getImageData()]                   | [translate()][translate()]               |
-| [rect()][rect()]                         |                                                             | [putImageData()][putImageData()]                   |                                          |
+| [moveTo()][moveTo()]                     | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
+| [lineTo()][lineTo()]                     | [**font**][font] ⧸[⚡](#font)                               | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
+| [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createPattern()][createPattern()]                 | [setTransform()][setTransform()]         |
+| [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                  | [createConicGradient()][createConicGradient()]     | [resetTransform()][resetTransform()]     |
+| [conicCurveTo() ⚡][conicCurveTo]        | [**textBaseline**][textBaseline]                            | [createLinearGradient()][createLinearGradient()]   | [transform()][transform()]               |
+| [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [createRadialGradient()][createRadialGradient()]   | [translate()][translate()]               |
+| [closePath()][closePath()]               | [**textWrap** ⚡](#textwrap)                                | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
+| [arc()][arc()]                           | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) | [getImageData()][getImageData()]                   | [scale()][scale()]                       |
+| [ellipse()][ellipse()]                   |                                                             | [putImageData()][putImageData()]                   |                                          |
+| [rect()][rect()]                         |
 
 ##### PROPERTIES
 
@@ -342,15 +343,16 @@ The `startIndex` and `endIndex` values are the indices into the string of the fi
 The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
 
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡              | Introspection ⚡        |
-| --                                         | --                       | --                       | --                      | --                      |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [jitter()](#jitter)     | [**bounds**](#bounds)   |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [round()](#round)       | [**points**](#points)   |   
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [simplify()](#simplify) | [**verbs**](#verbs)     |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [trim()](#trim)         |
-| [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |                         |        
+| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                                    | Introspection ⚡          |
+| --                                         | --                       | --                       | --                                            | --                        |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [jitter()](#jittersegmentlength-amount-seed0) | [**bounds**](#bounds)     |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [round()](#roundradius)                       | [**edges**](#edges)       |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [simplify()](#simplify)                       |                           |
+| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [trim()](#trimstart-end-inverted)             |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        |                      
+| [closePath()][p2d_closePath]              
 
-<!-- [**bounds**](#bounds) -->
+
 #### Creating `Path2D` objects
 
 Its constructor can be called without any arguments to create a new, empty path object. It can also accept a string  using [SVG syntax][SVG_path_commands] or a reference to an existing `Path2D` object (which it will return a clone of):
@@ -447,7 +449,10 @@ let snake = spikes.round(80)
 In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments:
 
 ```js
-let cross = new Path2D("M 10,50 h 100 v 20 h -100 Z M 50,10 h 20 v100 h -20 Z")
+let cross = new Path2D(`
+  M 10,50 h 100 v 20 h -100 Z
+  M 50,10 h 20 v 100 h -20 Z
+`)
 let uncrossed = cross.simplify()
 ```
 ![different combinations](/test/assets/path/effect-simplify@2x.png)
@@ -605,7 +610,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [lineHeight]: https://developer.mozilla.org/en-US/docs/Web/CSS/line-height
 [font-variant]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant
 
-[canvas]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/canvas
+[canvas_attr]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/canvas
 [currentTransform]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/currentTransform
 [direction]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/direction
 [fillStyle]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillStyle
