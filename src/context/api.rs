@@ -256,6 +256,19 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+
+pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let nums = float_args(&mut cx, 1..6)?;
+  if let [p1x, p1y, p2x, p2y, weight] = nums.as_slice(){
+    if this.path.is_empty(){ this.path.move_to((*p1x, *p1y)); }
+    this.path.conic_to((*p1x, *p1y), (*p2x, *p2y), *weight);
+  }
+
+  Ok(cx.undefined())
+}
+
 pub fn closePath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();

@@ -8,7 +8,7 @@ use std::f32::consts::PI;
 use neon::prelude::*;
 use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp, StrokeRec};
 use skia_safe::{PathEffect, trim_path_effect};
-use skia_safe::path::{AddPathMode};
+use skia_safe::path::{self, AddPathMode, Verb};
 
 use crate::utils::*;
 
@@ -181,6 +181,19 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if let [cpx, cpy, x, y] = nums.as_slice(){
     this.scoot(*cpx, *cpy);
     this.path.quad_to((*cpx, *cpy), (*x, *y));
+  }
+
+  Ok(cx.undefined())
+}
+
+// Adds a conic-section curve to the current path.
+pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let mut this = this.borrow_mut();
+  let nums = float_args(&mut cx, 1..6)?;
+  if let [p1x, p1y, p2x, p2y, weight] = nums.as_slice(){
+    this.scoot(*p1x, *p1y);
+    this.path.conic_to((*p1x, *p1y), (*p2x, *p2y), *weight);
   }
 
   Ok(cx.undefined())
@@ -364,4 +377,59 @@ pub fn bounds(mut cx: FunctionContext) -> JsResult<JsObject> {
   js_object.set(&mut cx, "width", width)?;
   js_object.set(&mut cx, "height", height)?;
   Ok(js_object)
+}
+
+fn from_verb(verb:Verb) -> Option<String>{
+  let cmd = match verb{
+    Verb::Move => "moveTo",
+    Verb::Line => "lineTo",
+    Verb::Quad => "quadraticCurveTo",
+    Verb::Cubic => "bezierCurveTo",
+    Verb::Conic => "conicCurveTo",
+    Verb::Close => "closePath",
+    _ => return None
+  };
+  Some(cmd.to_string())
+}
+
+pub fn edges(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let this = this.borrow();
+
+  let mut weights = path::Iter::new(&this.path, false);
+  let iter = path::Iter::new(&this.path, false);
+
+  let mut edges = vec![];
+  for (verb, points) in iter{
+    weights.next();
+
+    if let Some(edge) = from_verb(verb){
+      let cmd = cx.string(edge);
+      let segment = JsArray::new(&mut cx, 1 + points.len() as u32);
+      segment.set(&mut cx, 0, cmd)?;
+
+      let at_point = if points.len()>1{ 1 }else{ 0 };
+      for (i, pt) in points.iter().skip(at_point).enumerate() {
+        let x = cx.number(pt.x);
+        let y = cx.number(pt.y);
+        segment.set(&mut cx, 1 + 2*i as u32, x)?;
+        segment.set(&mut cx, 2 + 2*i as u32, y)?;
+      }
+
+      if verb==Verb::Conic{
+        let weight = weights.conic_weight().unwrap();
+        let weight = cx.number(weight);
+        segment.set(&mut cx, 5, weight)?;
+      }
+
+      edges.push(segment);
+    }
+  }
+
+  let verbs = JsArray::new(&mut cx, edges.len() as u32);
+  for (i, segment) in edges.iter().enumerate(){
+    verbs.set(&mut cx, i as u32, *segment)?;
+  }
+
+  Ok(verbs)
 }

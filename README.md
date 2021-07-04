@@ -308,6 +308,10 @@ The standard canvas has a rather impoverished typesetting system, allowing for o
 
 ##### METHODS
 
+#### `conicCurveTo(cpx, cpy, x, y, weight)`
+
+Adds a line segment connecting the current point to *(x, y)* but curving toward the control point *(cpx, cpy)* along the way. The `weight` argument controls how close the curve will come to the control point. With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`.
+
 #### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 
 The text-drawing methods’ behavior is mostly standard unless `.textWrap` has been set to `true`, in which case there are 3 main effects:
@@ -582,6 +586,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_rect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect
 [bool-ops]: #complement-difference-intersect-union-and-xor
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
+[conicCurveTo]: #coniccurvetocpx-cpy-x-y-weight
 
 [Buffer]: https://nodejs.org/api/buffer.html
 [Canvas]: https://developer.mozilla.org/en-US/docs/Web/API/Canvas
