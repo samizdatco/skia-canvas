@@ -6,7 +6,8 @@
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp};
+use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp, StrokeRec};
+use skia_safe::{PathEffect, trim_path_effect};
 use skia_safe::path::{AddPathMode};
 
 use crate::utils::*;
@@ -246,6 +247,7 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+// Applies a boolean operator to this and a second path, returning a new Path2D with their combination
 pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let other_path = cx.argument::<BoxedPath2D>(1)?;
@@ -263,6 +265,7 @@ pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   }
 }
 
+// Returns a path whose internal intersections are converted into their `evenodd`-rule equivalents
 pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let this = this.borrow();
@@ -277,6 +280,66 @@ pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   Ok(cx.boxed(RefCell::new(new_path)))
 }
 
+// Returns a copy where every sharp junction to an arcTo-style rounded corner
+pub fn round(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let radius = float_arg(&mut cx, 1, "radius")?;
+
+  let this = this.borrow();
+  let bounds = this.path.bounds();
+  let stroke_rec = StrokeRec::new_hairline();
+
+  if let Some(rounder) = PathEffect::corner_path(radius){
+    if let Some((path, _)) = rounder.filter_path(&this.path, &stroke_rec, bounds){
+      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+    }
+  }
+
+  Ok(cx.boxed(RefCell::new(Path2D{path:this.path.clone()})))
+}
+
+// Clips a proportional segment out of the middle of the path (or the edges if invert=true)
+pub fn trim(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let begin = float_arg(&mut cx, 1, "begin")?;
+  let end = float_arg(&mut cx, 2, "end")?;
+  let invert = bool_arg_or(&mut cx, 3, false);
+
+  let this = this.borrow();
+  let bounds = this.path.bounds();
+  let stroke_rec = StrokeRec::new_hairline();
+  let mode = if invert{ trim_path_effect::Mode::Inverted }else{ trim_path_effect::Mode::Normal };
+
+  if let Some(trimmer) = PathEffect::trim(begin, end, mode){
+    if let Some((path, _)) = trimmer.filter_path(&this.path, &stroke_rec, bounds){
+      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+    }
+  }
+
+  Ok(cx.boxed(RefCell::new(Path2D{path:this.path.clone()})))
+}
+
+// Discretizes the path at a fixed segment length then randomly offsets the points
+pub fn jitter(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let seg_len = float_arg(&mut cx, 1, "segmentLength")?;
+  let std_dev = float_arg(&mut cx, 2, "variance")?;
+  let seed = float_arg_or(&mut cx, 3, 0.0) as u32;
+
+  let this = this.borrow();
+  let bounds = this.path.bounds();
+  let stroke_rec = StrokeRec::new_hairline();
+
+  if let Some(trimmer) = PathEffect::discrete(seg_len, std_dev, Some(seed)){
+    if let Some((path, _)) = trimmer.filter_path(&this.path, &stroke_rec, bounds){
+      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+    }
+  }
+
+  Ok(cx.boxed(RefCell::new(Path2D{path:this.path.clone()})))
+}
+
+// Returns the computed `tight` bounds that contain all the points, control points, and connecting contours
 pub fn bounds(mut cx: FunctionContext) -> JsResult<JsObject> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let this = this.borrow();

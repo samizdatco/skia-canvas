@@ -9,6 +9,7 @@ describe("Path2D", ()=>{
   let canvas, ctx,
       WIDTH = 512, HEIGHT = 512,
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data),
+      scrub = () => ctx.clearRect(0,0,WIDTH,HEIGHT),
       p;
 
   beforeEach(()=>{
@@ -224,7 +225,7 @@ describe("Path2D", ()=>{
 
   })
 
-  describe("supports path operation", () => {
+  describe("can combine using boolean", () => {
     let a, b,
         top = () => pixel(60, 20),
         left = () => pixel(20, 60),
@@ -306,5 +307,141 @@ describe("Path2D", ()=>{
 
   })
 
+  describe("can apply path effect", () => {
 
+    test("jitter", () => {
+      let line = new Path2D()
+      line.moveTo(100, 100)
+      line.lineTo(100, 200)
+
+      ctx.lineWidth = 4
+      ctx.stroke(line)
+      let allBlack = _.range(101, 199).map(y => _.isEqual(pixel(100, y), BLACK))
+      expect(allBlack).not.toContain(false)
+      scrub()
+
+      let zag = line.jitter(10, 20)
+      ctx.stroke(zag)
+      let notAllBlack = _.range(101, 199).map(y => _.isEqual(pixel(100, y), BLACK))
+      expect(notAllBlack).toContain(false)
+      expect(notAllBlack).toContain(true)
+    })
+
+    test("round", () => {
+      // hit by both
+      let alpha = () => pixel(50, 220),
+          omega = () => pixel(300, 30)
+
+      // hit by un-rounded lines
+      let topLeft = () => pixel(100, 30),
+          topRight = () => pixel(200, 30),
+          botLeft = () => pixel(150, 220),
+          botRight = () => pixel(250, 220)
+
+      // hit by rounded lines
+      let hiLeft = () => pixel(100, 64),
+          hiRight = () => pixel(200, 64),
+          loLeft = () => pixel(150, 186),
+          loRight = () => pixel(250, 186)
+
+      let lines = new Path2D()
+      lines.moveTo(50, 225)
+      lines.lineTo(100, 25)
+      lines.lineTo(150, 225)
+      lines.lineTo(200, 25)
+      lines.lineTo(250, 225)
+      lines.lineTo(300, 25)
+
+      ctx.lineWidth = 10
+      ctx.stroke(lines)
+      expect(alpha()).toEqual(BLACK)
+      expect(omega()).toEqual(BLACK)
+
+      expect(topLeft()).toEqual(BLACK)
+      expect(topRight()).toEqual(BLACK)
+      expect(botLeft()).toEqual(BLACK)
+      expect(botRight()).toEqual(BLACK)
+
+      expect(hiLeft()).toEqual(CLEAR)
+      expect(hiRight()).toEqual(CLEAR)
+      expect(loLeft()).toEqual(CLEAR)
+      expect(loRight()).toEqual(CLEAR)
+
+      let rounded = lines.round(80)
+      canvas.width = WIDTH
+      ctx.lineWidth = 10
+      ctx.stroke(rounded)
+      expect(alpha()).toEqual(BLACK)
+      expect(omega()).toEqual(BLACK)
+
+      expect(topLeft()).toEqual(CLEAR)
+      expect(topRight()).toEqual(CLEAR)
+      expect(botLeft()).toEqual(CLEAR)
+      expect(botRight()).toEqual(CLEAR)
+
+      expect(hiLeft()).toEqual(BLACK)
+      expect(hiRight()).toEqual(BLACK)
+      expect(loLeft()).toEqual(BLACK)
+      expect(loRight()).toEqual(BLACK)
+    })
+
+    test("trim", () => {
+      let left = () => pixel(64, 137),
+          mid = () => pixel(200, 50),
+          right = () => pixel(336, 137)
+
+      let orig = new Path2D()
+      orig.arc(200, 200, 150, Math.PI, 0)
+
+      let middle = orig.trim(.25, .75),
+          endpoints = orig.trim(.25, .75, true),
+          start = orig.trim(.25),
+          end = orig.trim(-.25),
+          none = orig.trim(.75, .25),
+          everythingAndMore = orig.trim(-12345, 98765)
+
+      ctx.lineWidth = 10
+      ctx.stroke(orig)
+      expect(left()).toEqual(BLACK)
+      expect(mid()).toEqual(BLACK)
+      expect(right()).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(middle)
+      expect(left()).toEqual(CLEAR)
+      expect(mid()).toEqual(BLACK)
+      expect(right()).toEqual(CLEAR)
+      scrub()
+
+      ctx.stroke(endpoints)
+      expect(left()).toEqual(BLACK)
+      expect(mid()).toEqual(CLEAR)
+      expect(right()).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start)
+      expect(left()).toEqual(BLACK)
+      expect(mid()).toEqual(CLEAR)
+      expect(right()).toEqual(CLEAR)
+      scrub()
+
+      ctx.stroke(end)
+      expect(left()).toEqual(CLEAR)
+      expect(mid()).toEqual(CLEAR)
+      expect(right()).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(none)
+      expect(left()).toEqual(CLEAR)
+      expect(mid()).toEqual(CLEAR)
+      expect(right()).toEqual(CLEAR)
+      scrub()
+
+      ctx.stroke(everythingAndMore)
+      expect(left()).toEqual(BLACK)
+      expect(mid()).toEqual(BLACK)
+      expect(right()).toEqual(BLACK)
+      scrub()
+    })
+  })
 })
