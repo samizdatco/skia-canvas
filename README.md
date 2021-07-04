@@ -382,6 +382,38 @@ The `.bounds` property returns an object defining the minimal rectangle containi
 {top, left, bottom, right, width, height}
 ```
 
+#### `.edges`
+
+Returns an array containing each path segment that has been added to the path so far. Each element of the list is an array of the form `["verb", ...points]`, mirroring the calling conventions of both Path2D and the rendering context. As a result, the `edges` may be used to ‘replay’ a sequence of commands such as:
+```js
+let original = new Path2D()
+// ... add some contours to the path
+
+// apply the original path’s edges to a new Path2D
+let clone = new Path2D()
+for (const [verb, ...pts] of original.edges){
+  clone[verb](...pts)
+}
+
+// or use the original path’s edges to draw directly to the context
+for (const [verb, ...pts] of original.edges){
+  ctx[verb](...pts)
+}
+```
+
+The array is not a verbtaim transcript of the drawing commands that have been called since some commands (e.g., `arc()`) will be converted into an equivalent sequence of bézier curves. The full range of verbs and numbers of point arguments is as follows:
+
+```js
+[
+  ["moveTo", x, y],
+  ["lineTo", x, y],
+  ["quadraticCurveTo", cpx, cpy, x, y],
+  ["bezierCurveTo", cx1, cy1, cx2, cy2, x, y],
+  ["conicCurveTo", cpx, cpy, x, y, weight],
+  ["closePath"]
+]
+```
+
 ##### METHODS
 
 #### `complement()`, `difference()`, `intersect()`, `union()`, and `xor()`
