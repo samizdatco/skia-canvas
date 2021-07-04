@@ -338,15 +338,15 @@ The `startIndex` and `endIndex` values are the indices into the string of the fi
 The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
 
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡            | Extents ⚡      |
-| --                                         | --                       | --                       | --            |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [**bounds**](#bounds)   |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [simplify()](#simplify)   |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | [union()][bool-ops]      |
-| [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |
+| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡              | Introspection ⚡        |
+| --                                         | --                       | --                       | --                      | --                      |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [jitter()](#jitter)     | [**bounds**](#bounds)   |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [round()](#round)       | [**points**](#points)   |   
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [simplify()](#simplify) | [**verbs**](#verbs)     |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [trim()](#trim)         |
+| [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |                         |        
 
-
+<!-- [**bounds**](#bounds) -->
 #### Creating `Path2D` objects
 
 Its constructor can be called without any arguments to create a new, empty path object. It can also accept a string  using [SVG syntax][SVG_path_commands] or a reference to an existing `Path2D` object (which it will return a clone of):
@@ -371,7 +371,7 @@ You can then use these objects by passing them as the first argument to the cont
 
 In the browser, Path2D objects offer very little in the way of introspection—they are mostly-opaque recorders of drawing commands that can be ‘played back’ later on. Skia Canvas offers some additional transparency by allowing you to measure the total amount of space the lines will occupy (though you’ll need to account for the current `lineWidth` if you plan to draw the path with `stroke()`).
 
-The `.bounds` property contains an object defining the minimal rectangle containing the path:
+The `.bounds` property returns an object defining the minimal rectangle containing the path:
 ```
 {top, left, bottom, right, width, height}
 ```
@@ -387,7 +387,7 @@ oval.arc(100, 100, 100, 0, 2*Math.PI)
 let rect = new Path2D()
 rect.rect(0, 100, 100, 100)
 ```
-![layered paths](/test/assets/path-operation-none.svg)
+![layered paths](/test/assets/path/operation-none.svg)
 
 We can then create a new path by using one of the boolean operations such as:
 ```js
@@ -396,10 +396,47 @@ let knockout = rect.complement(oval),
     footprint = rect.union(oval),
     ...
 ```
-![different combinations](/test/assets/path-operations@2x.png)
+![different combinations](/test/assets/path/operations@2x.png)
 
 Note that the `xor` operator is liable to create a path with lines that cross over one another so you’ll get different results when filling it using the [`"evenodd"`][evenodd] winding rule (as shown above) than with [`"nonzero"`][nonzero] (the canvas default).
 
+#### `jitter(segmentLength, amount, seed=0)`
+
+The `jitter()` method will return a new Path2D object obtained by breaking the original path into segments of a given length then applying random offsets to the resulting points. Though the modifications are random, they will be consistent between runs based on the specified `seed`. Try passing different integer values for the seed until you get results that you like.
+
+```js
+let cube = new Path2D()
+cube.rect(100, 100, 100, 100)
+cube.rect(150, 50, 100, 100)
+cube.moveTo(100, 100)
+cube.lineTo(150, 50)
+cube.moveTo(200, 100)
+cube.lineTo(250, 50)
+cube.moveTo(200, 200)
+cube.lineTo(250, 150)
+
+let jagged = cube.jitter(1, 2),
+    reseed = cube.jitter(1, 2, 1337),
+    sketchy = cube.jitter(10, 1)
+```
+![xkcd-style](/test/assets/path/effect-jitter@2x.png)
+
+#### `round(radius)`
+
+Calling `round()` will return a new Path2D derived from the original path whose corners have been rounded off to the specified radius.
+
+```js
+let spikes = new Path2D()
+spikes.moveTo(50, 225)
+spikes.lineTo(100, 25)
+spikes.lineTo(150, 225)
+spikes.lineTo(200, 25)
+spikes.lineTo(250, 225)
+spikes.lineTo(300, 25)
+
+let snake = spikes.round(80)
+```
+![no sharp edges](/test/assets/path/effect-round@2x.png)
 
 #### `simplify()`
 
@@ -409,10 +446,25 @@ In cases where the contours of a single path overlap one another, it’s often u
 let cross = new Path2D("M 10,50 h 100 v 20 h -100 Z M 50,10 h 20 v100 h -20 Z")
 let uncrossed = cross.simplify()
 ```
-![different combinations](/test/assets/path-simplify@2x.png)
+![different combinations](/test/assets/path/effect-simplify@2x.png)
 
+#### `trim(start, end, inverted)`
 
+The `trim()` method returns a new Path2D which contains only a portion of the original path. The `start` and `end` arguments specify percentages of the original contour as numbers between `0` and `1.0`. If both arguments are provided, the new path will be a continuous contour connecting those endpoints. If the `inverted` argument is set to `true`, the new path will contain everything from the original **except** the region between the specified endpoints.
 
+Passing a single positive number implicitly sets the starting point to `0.0` and uses the supplied argument as the `end`. Passing a negative value sets the ending point to `1.0` and uses the argument as the `start` value. In either case, you can include `inverted` as the second argument to flip the selected contour.
+
+```js
+let orig = new Path2D()
+orig.arc(100, 100, 50, Math.PI, 0)
+
+let middle = orig.trim(.25, .75),
+    endpoints = orig.trim(.25, .75, true),
+    left = orig.trim(.25),
+    right = orig.trim(-.25)
+
+```
+![trimmed subpaths](/test/assets/path/effect-trim@2x.png)
 
 ## Utilities
 
