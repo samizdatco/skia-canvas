@@ -311,7 +311,7 @@ The standard canvas has a rather impoverished typesetting system, allowing for o
 
 #### `conicCurveTo(cpx, cpy, x, y, weight)`
 
-Adds a line segment connecting the current point to *(x, y)* but curving toward the control point *(cpx, cpy)* along the way. The `weight` argument controls how close the curve will come to the control point. With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`.
+Adds a line segment connecting the current point to *(x, y)* but curving toward the control point *(cpx, cpy)* along the way. The `weight` argument controls how close the curve will come to the control point. If the weight is `0`, the result will be a straight line from the current point to *(x, y)*. With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`. Weights greater than `1.0` will pull the line segment ever closer to the control point.
 
 #### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 
