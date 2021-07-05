@@ -3,7 +3,8 @@ const _ = require('lodash'),
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
-      CLEAR = [0,0,0,0]
+      CLEAR = [0,0,0,0],
+      TAU = Math.PI * 2
 
 describe("Path2D", ()=>{
   let canvas, ctx,
@@ -38,6 +39,41 @@ describe("Path2D", ()=>{
       p1.rect(10, 10, 100, 100)
       let p2 = new Path2D("M 10,10 h 100 v 100 h -100 Z")
       expect(p1.bounds).toMatchObject(p2.bounds)
+    })
+
+    test('a stream of edges', () => {
+      let p = new Path2D()
+
+      p.moveTo(100, 100)
+      p.lineTo(200, 100)
+      p.lineTo(200, 200)
+      p.lineTo(100, 200)
+      p.closePath()
+      p.moveTo(250, 200)
+      p.arc(200, 200, 50, 0, TAU)
+      p.moveTo(300, 100)
+      p.bezierCurveTo(400, 100, 300, 200, 400, 200)
+      p.moveTo(400,220)
+      p.quadraticCurveTo(400, 320, 300, 320)
+
+      let clone = new Path2D()
+      for (const [verb, ...pts] of p.edges){
+        clone[verb](...pts)
+      }
+
+      ctx.fillStyle = 'white'
+      ctx.fillRect(0, 0, WIDTH, HEIGHT)
+
+      ctx.lineWidth = 1
+      ctx.stroke(p)
+      let pixels = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+      expect(pixels.data.every(px => px==255)).toBe(false)
+
+      ctx.lineWidth = 4
+      ctx.strokeStyle = 'white'
+      ctx.stroke(clone)
+      pixels = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+      expect(pixels.data.every(px => px==255)).toBe(true)
     })
   })
 
@@ -83,6 +119,37 @@ describe("Path2D", ()=>{
       expect(pixel(120, 199)).toEqual(BLACK)
       expect(() => p.quadraticCurveTo(120, 300) ).toThrowError("Not enough arguments")
       expect(() => p.quadraticCurveTo(120, 300, null, 'foo') ).toThrowError("Not enough arguments")
+    })
+
+    test("conicTo", () => {
+      ctx.lineWidth = 5
+
+      let withWeight = weight => {
+        let path = new Path2D()
+        path.moveTo(100,400)
+        path.conicCurveTo(250, 50, 400, 400, weight)
+        return path
+      }
+
+      ctx.stroke(withWeight(0))
+      expect(pixel(250, 400)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(withWeight(1))
+      expect(pixel(250, 225)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(withWeight(10))
+      expect(pixel(250, 81)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(withWeight(100))
+      expect(pixel(250, 54)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(withWeight(1000))
+      expect(pixel(250, 50)).toEqual(BLACK)
+      scrub()
     })
 
     test("arcTo", () => {
