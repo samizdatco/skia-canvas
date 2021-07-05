@@ -292,7 +292,7 @@ describe("Path2D", ()=>{
 
   })
 
-  describe("can combine using boolean", () => {
+  describe("can combine paths using", () => {
     let a, b,
         top = () => pixel(60, 20),
         left = () => pixel(20, 60),
@@ -370,6 +370,56 @@ describe("Path2D", ()=>{
 
       ctx.fill(c)
       expect(center()).toEqual(BLACK)
+    })
+
+    test("interpolate", () => {
+      let start = new Path2D()
+      start.moveTo(100, 100)
+      start.bezierCurveTo(100, 100, 100, 200, 100, 200)
+      start.bezierCurveTo(100, 200, 100, 300, 100, 300)
+
+      let finish = new Path2D()
+      finish.moveTo(300, 100)
+      finish.bezierCurveTo(400, 100, 300, 200, 400, 200)
+      finish.bezierCurveTo(300, 200, 400, 300, 300, 300)
+
+      ctx.lineWidth = 4
+
+      ctx.stroke(start.interpolate(finish, 0))
+      expect(pixel(100, 102)).toEqual(BLACK)
+      expect(pixel(100, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, .25))
+      expect(pixel(151, 101)).toEqual(BLACK)
+      expect(pixel(151, 200)).toEqual(CLEAR)
+      expect(pixel(171, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, .5))
+      expect(pixel(201, 101)).toEqual(BLACK)
+      expect(pixel(201, 200)).toEqual(CLEAR)
+      expect(pixel(243, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, .75))
+      expect(pixel(251, 101)).toEqual(BLACK)
+      expect(pixel(251, 200)).toEqual(CLEAR)
+      expect(pixel(322, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, 1))
+      expect(pixel(301, 101)).toEqual(BLACK)
+      expect(pixel(301, 200)).toEqual(CLEAR)
+      expect(pixel(395, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, 1.25))
+      expect(pixel(351, 101)).toEqual(BLACK)
+      expect(pixel(351, 200)).toEqual(CLEAR)
+      expect(pixel(470, 200)).toEqual(BLACK)
+      scrub()
+
     })
 
   })
