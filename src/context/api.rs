@@ -329,29 +329,23 @@ pub fn clip(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn fill(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-  let mut shift = 1;
-  if let Some(path) = path2d_arg_opt(&mut cx, shift){
-    this.path = path.with_transform(&this.state.matrix);
-    shift += 1;
-  }
-  let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
+  let path = path2d_arg_opt(&mut cx, 1);
+  let rule_idx = if path.is_some(){ 2 }else{ 1 };
+  let rule = fill_rule_arg_or(&mut cx, rule_idx, "nonzero")?;
 
+  let mut this = this.borrow_mut();
   let paint = this.paint_for_fill();
-  this.path.set_fill_type(rule);
-  this.draw_path(&paint);
+  this.draw_path(path, &paint, Some(rule));
   Ok(cx.undefined())
 }
 
 pub fn stroke(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-  if let Some(path) = path2d_arg_opt(&mut cx, 1){
-    this.path = path.with_transform(&this.state.matrix)
-  }
+  let path = path2d_arg_opt(&mut cx, 1);
 
+  let mut this = this.borrow_mut();
   let paint = this.paint_for_stroke();
-  this.draw_path(&paint);
+  this.draw_path(path, &paint, None);
   Ok(cx.undefined())
 }
 
