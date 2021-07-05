@@ -297,10 +297,19 @@ impl Context2D{
     }
   }
 
-  pub fn draw_path(&mut self, paint: &Paint){
-    // the current path has already incorporated its transform state
-    let inverse = self.state.matrix.invert().unwrap();
-    let path = self.path.with_transform(&inverse);
+  pub fn draw_path(&mut self, path:Option<Path>, paint: &Paint, rule:Option<FillType>){
+    let mut path = match path {
+      Some(path) => path,
+      None => {
+        // the current path has already incorporated its transform state
+        let inverse = self.state.matrix.invert().unwrap();
+        self.path.with_transform(&inverse)
+      }
+    };
+
+    if let Some(rule) = rule{
+      path.set_fill_type(rule);
+    }
 
     self.render_to_canvas(&paint, |canvas, paint| {
       canvas.draw_path(&path, &paint);
