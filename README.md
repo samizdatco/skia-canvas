@@ -345,11 +345,11 @@ The `Path2D` class allows you to create paths independent of a given [Canvas](#c
 
 | Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                                    | Introspection ⚡          |
 | --                                         | --                       | --                       | --                                            | --                        |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [jitter()](#jittersegmentlength-amount-seed0) | [**bounds**](#bounds)     |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [round()](#roundradius)                       | [**edges**](#edges)       |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [simplify()](#simplify)                       |                           |
-| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [trim()](#trimstart-end-inverted)             |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        |                      
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)     |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)       |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             |                           |
+| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               |                      
 | [closePath()][p2d_closePath]              
 
 
@@ -437,6 +437,26 @@ let knockout = rect.complement(oval),
 ![different combinations](/test/assets/path/operations@2x.png)
 
 Note that the `xor` operator is liable to create a path with lines that cross over one another so you’ll get different results when filling it using the [`"evenodd"`][evenodd] winding rule (as shown above) than with [`"nonzero"`][nonzero] (the canvas default).
+
+#### `interpolate(otherPath, weight)`
+
+When two similar paths share the same sequence of ‘verbs’ and differ only in the point arguments passed to them, the `interpolate()` method can combine them in different proportions to create a new path. The `weight` argument controls whether the resulting path resembles the original (at `0.0`), the `otherPath` (at `1.0`), or something in between.
+
+```js
+let start = new Path2D()
+start.moveTo(100, 100)
+start.bezierCurveTo(100, 100, 100, 150, 100, 150)
+start.bezierCurveTo(100, 150, 100, 200, 100, 200)
+
+let finish = new Path2D()
+finish.moveTo(300, 100)
+finish.bezierCurveTo(400, 100, 300, 200, 400, 200)
+finish.bezierCurveTo(300, 200, 400, 300, 300, 300)
+
+let midpoint = start.interpolate(finish, 0.5)
+```
+![merging similar paths](/test/assets/path/effect-interpolate@2x.png)
+
 
 #### `jitter(segmentLength, amount, seed=0)`
 
@@ -621,6 +641,11 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_arcTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arcTo
 [p2d_ellipse]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/ellipse
 [p2d_rect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect
+[p2d_jitter]: #jittersegmentlength-amount-seed0
+[p2d_round]: #roundradius
+[p2d_trim]: #trimstart-end-inverted
+[p2d_interpolate]: #interpolateotherpath-weight
+[p2d_simplify]: #simplify
 [bool-ops]: #complement-difference-intersect-union-and-xor
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
 [conicCurveTo]: #coniccurvetocpx-cpy-x-y-weight

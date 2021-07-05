@@ -278,6 +278,21 @@ pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   }
 }
 
+pub fn interpolate(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let other = cx.argument::<BoxedPath2D>(1)?;
+  let weight = float_arg(&mut cx, 2, "weight")?;
+
+  let this = this.borrow();
+  let other = other.borrow();
+  // reverse path order since 0..1 = this..other is a less non-sensical mapping than the default
+  if let Some(path) = other.path.interpolate(&this.path, weight){
+    Ok(cx.boxed(RefCell::new(Path2D{ path })))
+  }else{
+    cx.throw_type_error("Can only interpolate between two Path2D objects with the same number of points and control points")
+  }
+}
+
 // Returns a path whose internal intersections are converted into their `evenodd`-rule equivalents
 pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
