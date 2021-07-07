@@ -408,7 +408,7 @@ The array is not a verbtaim transcript of the drawing commands that have been ca
   ["moveTo", x, y],
   ["lineTo", x, y],
   ["quadraticCurveTo", cpx, cpy, x, y],
-  ["bezierCurveTo", cx1, cy1, cx2, cy2, x, y],
+  ["bezierCurveTo", cp1x, cp1y, cp2x, cp2y, x, y],
   ["conicCurveTo", cpx, cpy, x, y, weight],
   ["closePath"]
 ]
@@ -454,7 +454,7 @@ end.bezierCurveTo(300, 100, 200, 200, 300, 200)
 end.bezierCurveTo(200, 200, 300, 300, 200, 300)
 
 let left = start.interpolate(end, .25),
-    mid = start.interpolate(end, .5),
+    mean = start.interpolate(end, .5),
     right = start.interpolate(end, .75)
 ```
 ![merging similar paths](/test/assets/path/effect-interpolate@2x.png)
