@@ -444,16 +444,18 @@ When two similar paths share the same sequence of ‘verbs’ and differ only in
 
 ```js
 let start = new Path2D()
-start.moveTo(100, 100)
-start.bezierCurveTo(100, 100, 100, 150, 100, 150)
-start.bezierCurveTo(100, 150, 100, 200, 100, 200)
+start.moveTo(-200, 100)
+start.bezierCurveTo(-300, 100, -200, 200, -300, 200)
+start.bezierCurveTo(-200, 200, -300, 300, -200, 300)
 
-let finish = new Path2D()
-finish.moveTo(300, 100)
-finish.bezierCurveTo(400, 100, 300, 200, 400, 200)
-finish.bezierCurveTo(300, 200, 400, 300, 300, 300)
+let end = new Path2D()
+end.moveTo(200, 100)
+end.bezierCurveTo(300, 100, 200, 200, 300, 200)
+end.bezierCurveTo(200, 200, 300, 300, 200, 300)
 
-let midpoint = start.interpolate(finish, 0.5)
+let left = start.interpolate(end, .25),
+    mid = start.interpolate(end, .5),
+    right = start.interpolate(end, .75)
 ```
 ![merging similar paths](/test/assets/path/effect-interpolate@2x.png)
 
