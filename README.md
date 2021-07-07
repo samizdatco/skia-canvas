@@ -284,7 +284,7 @@ Most of your interaction with the canvas will actually be directed toward its �
 | [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [createRadialGradient()][createRadialGradient()]   | [translate()][translate()]               |
 | [closePath()][closePath()]               | [**textWrap** ⚡](#textwrap)                                | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
 | [arc()][arc()]                           | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) | [getImageData()][getImageData()]                   | [scale()][scale()]                       |
-| [ellipse()][ellipse()]                   |                                                             | [putImageData()][putImageData()]                   |                                          |
+| [ellipse()][ellipse()]                   | [outlineText() ⚡][outlineText()]                                                            | [putImageData()][putImageData()]                   |                                          |
 | [rect()][rect()]                         |
 
 ##### PROPERTIES
@@ -337,13 +337,27 @@ The `baseline` value is a y-axis offset from the text origin to that particular 
 
 The `startIndex` and `endIndex` values are the indices into the string of the first and last character that were typeset on that line.
 
+#### `outlineText(str)`
+
+A Path2D can be generated from a string using the `outlineText()` method. It will use the context’s current `font`, `textAlign`, and `textBaseline` settings to typeset the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods to position the path before drawing it to the canvas.
+
+```js
+ctx.textBaseline = 'top'
+ctx.font = 'bold 140px Helvetica'
+let path = ctx.outlineText('&')
+
+for (const [x, y] of path.points(6)){
+ ctx.fillRect(x, y, 2, 2)
+}
+```
+![text converted to a Path2D](/test/assets/path/outlineText@2x.png)
 
 ## Path2D
 
 The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
 
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Introspection ⚡          |
+| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡               |
 | --                                         | --                       | --                       | --                               | --                        |
 | [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)     |
 | [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)       |
@@ -666,8 +680,10 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_interpolate]: #interpolateotherpath-weight
 [p2d_simplify]: #simplify
 [bool-ops]: #complement-difference-intersect-union-and-xor
+
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
 [conicCurveTo]: #coniccurvetocpx-cpy-x-y-weight
+[outlineText()]: #outlinetextstr
 
 [Buffer]: https://nodejs.org/api/buffer.html
 [Canvas]: https://developer.mozilla.org/en-US/docs/Web/API/Canvas
