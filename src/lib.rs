@@ -167,6 +167,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_fillText", ctx::fillText)?;
   cx.export_function("CanvasRenderingContext2D_strokeText", ctx::strokeText)?;
   cx.export_function("CanvasRenderingContext2D_measureText", ctx::measureText)?;
+  cx.export_function("CanvasRenderingContext2D_outlineText", ctx::outlineText)?;
   cx.export_function("CanvasRenderingContext2D_get_font", ctx::get_font)?;
   cx.export_function("CanvasRenderingContext2D_set_font", ctx::set_font)?;
   cx.export_function("CanvasRenderingContext2D_get_textAlign", ctx::get_textAlign)?;
