@@ -343,11 +343,11 @@ The `startIndex` and `endIndex` values are the indices into the string of the fi
 The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
 
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                                    | Introspection ⚡          |
-| --                                         | --                       | --                       | --                                            | --                        |
+| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Introspection ⚡          |
+| --                                         | --                       | --                       | --                               | --                        |
 | [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)     |
 | [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)       |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             |                           |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [points()](#pointsstep1)  |
 | [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       |
 | [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               |                      
 | [closePath()][p2d_closePath]              
@@ -480,6 +480,23 @@ let jagged = cube.jitter(1, 2),
     sketchy = cube.jitter(10, 1)
 ```
 ![xkcd-style](/test/assets/path/effect-jitter@2x.png)
+
+#### `points(step=1)`
+
+The `points()` method breaks a path into evenly-sized steps and returns the *(x, y)* positions of the resulting vertices. The `step` argument determines the amount of distance between neighboring points and defaults to 1 px if omitted.
+
+
+```js
+let path = new Path2D()
+path.arc(100, 100, 50, 0, 2*Math.PI)
+path.rect(100, 50, 50, 50)
+path = path.simplify()
+
+for (const [x, y] of path.points(10)){
+  ctx.fillRect(x, y, 3, 3)
+}
+```
+![sampling points from a path](/test/assets/path/effect-points@2x.png)
 
 #### `round(radius)`
 
