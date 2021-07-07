@@ -339,7 +339,9 @@ The `startIndex` and `endIndex` values are the indices into the string of the fi
 
 #### `outlineText(str)`
 
-A Path2D can be generated from a string using the `outlineText()` method. It will use the context’s current `font`, `textAlign`, and `textBaseline` settings to typeset the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods to position the path before drawing it to the canvas.
+A Path2D can be generated from a string using the `outlineText()` method. It will use the context’s current `font`, `textAlign`, and `textBaseline` settings to typeset the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods or Path2D’s [addPath()][p2d_addPath] to position the path before drawing it to the canvas.
+
+Note that path-generation uses a more limited typesetting system than [`fillText()`][drawText] and [`strokeText()`][drawText]. As such, it ignores any settings made using the [`fontVariant`](#fontvariant) or [`textTracking`](#texttracking) properties and does not support multi-line text (regardless of the current [`textWrap`](#textwrap) setting).
 
 ```js
 ctx.textBaseline = 'top'
