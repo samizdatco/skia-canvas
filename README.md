@@ -11,7 +11,7 @@ In particular, Skia Canvas:
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and [EventQueues](https://docs.rs/neon/0.8.2-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
-  - can simplify and combine bézier paths using efficient [boolean operations](https://www.youtube.com/watch?v=OmfliNQsk88)
+  - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
 
@@ -311,7 +311,7 @@ The standard canvas has a rather impoverished typesetting system, allowing for o
 
 #### `conicCurveTo(cpx, cpy, x, y, weight)`
 
-Adds a line segment connecting the current point to *(x, y)* but curving toward the control point *(cpx, cpy)* along the way. The `weight` argument controls how close the curve will come to the control point. If the weight is `0`, the result will be a straight line from the current point to *(x, y)*. With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`. Weights greater than `1.0` will pull the line segment ever closer to the control point.
+Adds a line segment connecting the current point to (*x, y*) but curving toward the control point (*cpx, cpy*) along the way. The `weight` argument controls how close the curve will come to the control point. If the weight is `0`, the result will be a straight line from the current point to (*x, y*). With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`. Weights greater than `1.0` will pull the line segment ever closer to the control point.
 
 #### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 
@@ -339,16 +339,16 @@ The `startIndex` and `endIndex` values are the indices into the string of the fi
 
 #### `outlineText(str)`
 
-A Path2D can be generated from a string using the `outlineText()` method. It will use the context’s current `font`, `textAlign`, and `textBaseline` settings to typeset the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods or Path2D’s [addPath()][p2d_addPath] to position the path before drawing it to the canvas.
+The `outlineText()` method typesets a string and returns a Path2D containing the shapes of its character glyphs. It will use the context’s current [`.font`][font], [`.textAlign`][textAlign], and [`.textBaseline`][textBaseline] settings to style the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods or Path2D’s [addPath()][p2d_addPath] to position the path before drawing it to the canvas.
 
-Note that path-generation uses a more limited typesetting system than [`fillText()`][drawText] and [`strokeText()`][drawText]. As such, it ignores any settings made using the [`fontVariant`](#fontvariant) or [`textTracking`](#texttracking) properties and does not support multi-line text (regardless of the current [`textWrap`](#textwrap) setting).
+Note that path-generation uses a more limited typesetting system than [`fillText()`][drawText] and [`strokeText()`][drawText]. As such, it ignores any settings made using the [`.fontVariant`](#fontvariant) or [`.textTracking`](#texttracking) properties and does not support multi-line text (regardless of the current [`.textWrap`](#textwrap) setting).
 
 ```js
 ctx.textBaseline = 'top'
 ctx.font = 'bold 140px Helvetica'
-let path = ctx.outlineText('&')
+let ampersand = ctx.outlineText('&')
 
-for (const [x, y] of path.points(6)){
+for (const [x, y] of ampersand.points(6)){
  ctx.fillRect(x, y, 2, 2)
 }
 ```
@@ -363,7 +363,7 @@ The `Path2D` class allows you to create paths independent of a given [Canvas](#c
 | --                                         | --                       | --                       | --                               | --                        |
 | [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)     |
 | [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)       |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [points()](#pointsstep1)  |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [points()][p2d_points]    |
 | [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       |
 | [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               |                      
 | [closePath()][p2d_closePath]              
@@ -499,7 +499,7 @@ let jagged = cube.jitter(1, 2),
 
 #### `points(step=1)`
 
-The `points()` method breaks a path into evenly-sized steps and returns the *(x, y)* positions of the resulting vertices. The `step` argument determines the amount of distance between neighboring points and defaults to 1 px if omitted.
+The `points()` method breaks a path into evenly-sized steps and returns the (*x, y*) positions of the resulting vertices. The `step` argument determines the amount of distance between neighboring points and defaults to 1 px if omitted.
 
 
 ```js
@@ -681,6 +681,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_trim]: #trimstart-end-inverted
 [p2d_interpolate]: #interpolateotherpath-weight
 [p2d_simplify]: #simplify
+[p2d_points]: #pointsstep1
 [bool-ops]: #complement-difference-intersect-union-and-xor
 
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
