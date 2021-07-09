@@ -359,15 +359,14 @@ for (const [x, y] of ampersand.points(6)){
 The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
 
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡               |
-| --                                         | --                       | --                       | --                               | --                        |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)     |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)       |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [points()][p2d_points]    |
-| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       |
+| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                |
+| --                                         | --                       | --                       | --                               | --                         |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)      |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)        |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains] |
+| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]     |
 | [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               |                      
 | [closePath()][p2d_closePath]              
-
 
 #### Creating `Path2D` objects
 
@@ -431,6 +430,10 @@ The array is not a verbtaim transcript of the drawing commands that have been ca
 ```
 
 ##### METHODS
+
+#### `contains(x, y)`
+
+Returns true if the point (*x, y*) is either inside the path or intersects one of its contours.
 
 #### `complement()`, `difference()`, `intersect()`, `union()`, and `xor()`
 In addition to creating `Path2D` objects through the constructor, you can use pairs of existing paths *in combination* to generate new paths based on their degree of overlap. Based on the method you choose, a different boolean relationship will be used to construct the new path. In all the following examples we’ll be starting off with a pair of overlapping shapes:
@@ -682,6 +685,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_interpolate]: #interpolateotherpath-weight
 [p2d_simplify]: #simplify
 [p2d_points]: #pointsstep1
+[p2d_contains]: #containsx-y
 [bool-ops]: #complement-difference-intersect-union-and-xor
 
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width

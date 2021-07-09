@@ -57,6 +57,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_trim", path::trim)?;
   cx.export_function("Path2D_jitter", path::jitter)?;
   cx.export_function("Path2D_bounds", path::bounds)?;
+  cx.export_function("Path2D_contains", path::contains)?;
   cx.export_function("Path2D_edges", path::edges)?;
 
   // -- CanvasGradient ----------------------------------------------------------------------------

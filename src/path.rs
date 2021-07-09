@@ -394,6 +394,15 @@ pub fn bounds(mut cx: FunctionContext) -> JsResult<JsObject> {
   Ok(js_object)
 }
 
+pub fn contains(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let x = float_arg(&mut cx, 1, "x")?;
+  let y = float_arg(&mut cx, 2, "y")?;
+  let this = this.borrow();
+
+  Ok(cx.boolean(this.path.contains((x,y))))
+}
+
 fn from_verb(verb:Verb) -> Option<String>{
   let cmd = match verb{
     Verb::Move => "moveTo",
