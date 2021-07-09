@@ -348,8 +348,11 @@ ctx.textBaseline = 'top'
 ctx.font = 'bold 140px Helvetica'
 let ampersand = ctx.outlineText('&')
 
-for (const [x, y] of ampersand.points(6)){
- ctx.fillRect(x, y, 2, 2)
+for (let i=0; i<8000; i++){
+  let x = Math.random() * 100,
+      y = Math.random() * 120;
+  ctx.fillStyle = path.contains(x, y) ? 'tomato' : 'lightblue'
+  ctx.fillRect(x, y, 2, 2)
 }
 ```
 ![text converted to a Path2D](/test/assets/path/outlineText@2x.png)
