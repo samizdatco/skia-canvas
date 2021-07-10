@@ -351,7 +351,7 @@ let ampersand = ctx.outlineText('&')
 for (let i=0; i<8000; i++){
   let x = Math.random() * 100,
       y = Math.random() * 120;
-  ctx.fillStyle = path.contains(x, y) ? 'tomato' : 'lightblue'
+  ctx.fillStyle = path.contains(x, y) ? 'lightblue' : '#eee'
   ctx.fillRect(x, y, 2, 2)
 }
 ```
