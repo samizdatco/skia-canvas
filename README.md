@@ -362,14 +362,14 @@ for (let i=0; i<8000; i++){
 The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
 
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                |
-| --                                         | --                       | --                       | --                               | --                         |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)      |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)        |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains] |
-| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]     |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               |                      
-| [closePath()][p2d_closePath]              
+| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                  |
+| --                                         | --                       | --                       | --                               | --                           |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)          |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains]   |
+| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]       |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               | [offset()][p2d_offset]       |
+| [closePath()][p2d_closePath]               |                          |                          |                                  | [transform()][p2d_transform] |
 
 #### Creating `Path2D` objects
 
@@ -503,6 +503,10 @@ let jagged = cube.jitter(1, 2),
 ```
 ![xkcd-style](/test/assets/path/effect-jitter@2x.png)
 
+#### `offset(dx, dy)`
+
+Returns a copy of the path whose points have been shifted horizontally by `dx` and vertically by `dy`.
+
 #### `points(step=1)`
 
 The `points()` method breaks a path into evenly-sized steps and returns the (*x, y*) positions of the resulting vertices. The `step` argument determines the amount of distance between neighboring points and defaults to 1 px if omitted.
@@ -549,6 +553,10 @@ let cross = new Path2D(`
 let uncrossed = cross.simplify()
 ```
 ![different combinations](/test/assets/path/effect-simplify@2x.png)
+
+#### `transform(matrix)` or `transform(a, b, c, d, e, f)`
+
+Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix’s terms can be passed individually as 6 numbers or as a [DOMMatrix][DOMMatrix] object. The original path remains unmodified.
 
 #### `trim(start, end, inverted)`
 
@@ -689,6 +697,8 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_simplify]: #simplify
 [p2d_points]: #pointsstep1
 [p2d_contains]: #containsx-y
+[p2d_offset]: #offsetdx-dy
+[p2d_transform]: #transformmatrix-or-transforma-b-c-d-e-f
 [bool-ops]: #complement-difference-intersect-union-and-xor
 
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width

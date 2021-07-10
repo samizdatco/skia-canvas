@@ -308,6 +308,27 @@ pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   Ok(cx.boxed(RefCell::new(new_path)))
 }
 
+// Returns a copy whose points have been shifted by (dx, dy)
+pub fn offset(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let dx = float_arg(&mut cx, 1, "dx")?;
+  let dy = float_arg(&mut cx, 2, "dy")?;
+
+  let this = this.borrow();
+  let path = this.path.with_offset((dx, dy));
+  Ok(cx.boxed(RefCell::new(Path2D{path})))
+}
+
+// Returns a copy whose points have been transformed by a given matrix
+pub fn transform(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let matrix = matrix_arg(&mut cx, 1)?;
+
+  let this = this.borrow();
+  let path = this.path.with_transform(&matrix);
+  Ok(cx.boxed(RefCell::new(Path2D{path})))
+}
+
 // Returns a copy where every sharp junction to an arcTo-style rounded corner
 pub fn round(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;

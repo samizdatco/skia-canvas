@@ -502,6 +502,42 @@ describe("Path2D", ()=>{
       expect(loRight()).toEqual(BLACK)
     })
 
+    test("offset", () => {
+      let orig = new Path2D()
+      orig.rect(10, 10, 40, 40)
+      expect(orig.bounds).toMatchObject({left:10, top:10, right:50, bottom:50})
+
+      let shifted = orig.offset(-10, -10)
+      expect(shifted.bounds).toMatchObject({left:0, top:0, right:40, bottom:40})
+
+      shifted = shifted.offset(-40, -40)
+      expect(shifted.bounds).toMatchObject({left:-40, top:-40, right:0, bottom:0})
+
+      // orig path should be unchanged
+      expect(orig.bounds).toMatchObject({left:10, top:10, right:50, bottom:50})
+    })
+
+    test("transform", () => {
+      let orig = new Path2D()
+      orig.rect(-10, -10, 20, 20)
+      expect(orig.bounds).toMatchObject({left:-10, top:-10, right:10, bottom:10})
+
+      let shifted = orig.transform(new DOMMatrix().translate(10, 10))
+      expect(shifted.bounds).toMatchObject({left:0, top:0, right:20, bottom:20})
+
+      let shiftedByHand = orig.transform(1, 0, 0, 1, 10, 10)
+      expect(shifted.edges).toEqual(shiftedByHand.edges)
+
+      let embiggened = orig.transform(new DOMMatrix().scale(2, .5)),
+          bigBounds = embiggened.bounds,
+          origBounds = orig.bounds
+      expect(bigBounds.left).toBeLessThan(origBounds.left)
+      expect(bigBounds.right).toBeGreaterThan(origBounds.right)
+
+      // orig path should be unchanged
+      expect(orig.bounds).toMatchObject({left:-10, top:-10, right:10, bottom:10})
+    })
+
     test("trim", () => {
       let left = () => pixel(64, 137),
           mid = () => pixel(200, 50),
