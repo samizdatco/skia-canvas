@@ -32,12 +32,12 @@
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
-    "aws-sdk": "^2.925.0",
+    "aws-sdk": "^2.943.0",
     "cargo-cp-artifact": "^0.1",
     "express": "^4.17.1",
-    "jest": "^27.0.4",
+    "jest": "^27.0.6",
     "lodash": "^4.17.21",
-    "nodemon": "^2.0.7",
+    "nodemon": "^2.0.12",
     "tmp": "^0.2.1"
   },
   "binary": {
