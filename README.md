@@ -9,9 +9,9 @@ In particular, Skia Canvas:
   - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
-  - uses native threads and [EventQueues](https://docs.rs/neon/0.8.2-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
+  - uses native threads and [EventQueues](https://docs.rs/neon/0.8.3-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
-  - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
+  - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
 
