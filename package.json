@@ -15,7 +15,7 @@
   "main": "lib",
   "browser": {
     "lib": "./lib/browser.js",
-    "path":"path-browserify"
+    "path": "path-browserify"
   },
   "scripts": {
     "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
