@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use neon::prelude::*;
 use neon::result::Throw;
 
-use skia_safe::{FontMgr, FontMetrics, FontArguments, Typeface, Data, Paint, Point, Rect};
+use skia_safe::{Font, FontMgr, FontMetrics, FontArguments, Typeface, Data, Paint, Point, Rect, Path as SkPath};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::{Coordinate}};
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
@@ -117,6 +117,24 @@ impl Typesetter{
                         *baseline, range.start as f32, range.end as f32])
     });
     results
+  }
+
+  pub fn path(&mut self) -> Option<SkPath> {
+    let families:Vec<String> = self.char_style.font_families().iter().map(|fam| fam.to_string()).collect();
+    let matches = self.typefaces.find_typefaces(&families, self.char_style.font_style());
+    if let Some(typeface) = matches.first(){
+      let font = Font::from_typeface(typeface, self.char_style.font_size());
+      let (leading, metrics) = font.metrics();
+      let (width, bounds) = font.measure_str(&self.text, None);
+      let offset = (
+        width * get_alignment_factor(&self.graf_style),
+        get_baseline_offset(&metrics, self.baseline)
+      );
+
+      Some(SkPath::from_str(&self.text, offset, &font))
+    }else{
+      None
+    }
   }
 }
 

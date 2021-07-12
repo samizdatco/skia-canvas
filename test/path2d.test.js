@@ -3,12 +3,14 @@ const _ = require('lodash'),
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
-      CLEAR = [0,0,0,0]
+      CLEAR = [0,0,0,0],
+      TAU = Math.PI * 2
 
 describe("Path2D", ()=>{
   let canvas, ctx,
       WIDTH = 512, HEIGHT = 512,
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data),
+      scrub = () => ctx.clearRect(0,0,WIDTH,HEIGHT),
       p;
 
   beforeEach(()=>{
@@ -37,6 +39,41 @@ describe("Path2D", ()=>{
       p1.rect(10, 10, 100, 100)
       let p2 = new Path2D("M 10,10 h 100 v 100 h -100 Z")
       expect(p1.bounds).toMatchObject(p2.bounds)
+    })
+
+    test('a stream of edges', () => {
+      let p = new Path2D()
+
+      p.moveTo(100, 100)
+      p.lineTo(200, 100)
+      p.lineTo(200, 200)
+      p.lineTo(100, 200)
+      p.closePath()
+      p.moveTo(250, 200)
+      p.arc(200, 200, 50, 0, TAU)
+      p.moveTo(300, 100)
+      p.bezierCurveTo(400, 100, 300, 200, 400, 200)
+      p.moveTo(400,220)
+      p.quadraticCurveTo(400, 320, 300, 320)
+
+      let clone = new Path2D()
+      for (const [verb, ...pts] of p.edges){
+        clone[verb](...pts)
+      }
+
+      ctx.fillStyle = 'white'
+      ctx.fillRect(0, 0, WIDTH, HEIGHT)
+
+      ctx.lineWidth = 1
+      ctx.stroke(p)
+      let pixels = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+      expect(pixels.data.every(px => px==255)).toBe(false)
+
+      ctx.lineWidth = 4
+      ctx.strokeStyle = 'white'
+      ctx.stroke(clone)
+      pixels = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+      expect(pixels.data.every(px => px==255)).toBe(true)
     })
   })
 
@@ -82,6 +119,37 @@ describe("Path2D", ()=>{
       expect(pixel(120, 199)).toEqual(BLACK)
       expect(() => p.quadraticCurveTo(120, 300) ).toThrowError("Not enough arguments")
       expect(() => p.quadraticCurveTo(120, 300, null, 'foo') ).toThrowError("Not enough arguments")
+    })
+
+    test("conicTo", () => {
+      ctx.lineWidth = 5
+
+      let withWeight = weight => {
+        let path = new Path2D()
+        path.moveTo(100,400)
+        path.conicCurveTo(250, 50, 400, 400, weight)
+        return path
+      }
+
+      ctx.stroke(withWeight(0))
+      expect(pixel(250, 400)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(withWeight(1))
+      expect(pixel(250, 225)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(withWeight(10))
+      expect(pixel(250, 81)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(withWeight(100))
+      expect(pixel(250, 54)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(withWeight(1000))
+      expect(pixel(250, 50)).toEqual(BLACK)
+      scrub()
     })
 
     test("arcTo", () => {
@@ -224,7 +292,7 @@ describe("Path2D", ()=>{
 
   })
 
-  describe("supports path operation", () => {
+  describe("can combine paths using", () => {
     let a, b,
         top = () => pixel(60, 20),
         left = () => pixel(20, 60),
@@ -304,7 +372,229 @@ describe("Path2D", ()=>{
       expect(center()).toEqual(BLACK)
     })
 
+    test("interpolate", () => {
+      let start = new Path2D()
+      start.moveTo(100, 100)
+      start.bezierCurveTo(100, 100, 100, 200, 100, 200)
+      start.bezierCurveTo(100, 200, 100, 300, 100, 300)
+
+      let finish = new Path2D()
+      finish.moveTo(300, 100)
+      finish.bezierCurveTo(400, 100, 300, 200, 400, 200)
+      finish.bezierCurveTo(300, 200, 400, 300, 300, 300)
+
+      ctx.lineWidth = 4
+
+      ctx.stroke(start.interpolate(finish, 0))
+      expect(pixel(100, 102)).toEqual(BLACK)
+      expect(pixel(100, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, .25))
+      expect(pixel(151, 101)).toEqual(BLACK)
+      expect(pixel(151, 200)).toEqual(CLEAR)
+      expect(pixel(171, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, .5))
+      expect(pixel(201, 101)).toEqual(BLACK)
+      expect(pixel(201, 200)).toEqual(CLEAR)
+      expect(pixel(243, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, .75))
+      expect(pixel(251, 101)).toEqual(BLACK)
+      expect(pixel(251, 200)).toEqual(CLEAR)
+      expect(pixel(322, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, 1))
+      expect(pixel(301, 101)).toEqual(BLACK)
+      expect(pixel(301, 200)).toEqual(CLEAR)
+      expect(pixel(395, 200)).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start.interpolate(finish, 1.25))
+      expect(pixel(351, 101)).toEqual(BLACK)
+      expect(pixel(351, 200)).toEqual(CLEAR)
+      expect(pixel(470, 200)).toEqual(BLACK)
+      scrub()
+
+    })
+
   })
 
+  describe("can apply path effect", () => {
 
+    test("jitter", () => {
+      let line = new Path2D()
+      line.moveTo(100, 100)
+      line.lineTo(100, 200)
+
+      ctx.lineWidth = 4
+      ctx.stroke(line)
+      let allBlack = _.range(101, 199).map(y => _.isEqual(pixel(100, y), BLACK))
+      expect(allBlack).not.toContain(false)
+      scrub()
+
+      let zag = line.jitter(10, 20)
+      ctx.stroke(zag)
+      let notAllBlack = _.range(101, 199).map(y => _.isEqual(pixel(100, y), BLACK))
+      expect(notAllBlack).toContain(false)
+      expect(notAllBlack).toContain(true)
+    })
+
+    test("round", () => {
+      // hit by both
+      let alpha = () => pixel(50, 220),
+          omega = () => pixel(300, 30)
+
+      // hit by un-rounded lines
+      let topLeft = () => pixel(100, 30),
+          topRight = () => pixel(200, 30),
+          botLeft = () => pixel(150, 220),
+          botRight = () => pixel(250, 220)
+
+      // hit by rounded lines
+      let hiLeft = () => pixel(100, 64),
+          hiRight = () => pixel(200, 64),
+          loLeft = () => pixel(150, 186),
+          loRight = () => pixel(250, 186)
+
+      let lines = new Path2D()
+      lines.moveTo(50, 225)
+      lines.lineTo(100, 25)
+      lines.lineTo(150, 225)
+      lines.lineTo(200, 25)
+      lines.lineTo(250, 225)
+      lines.lineTo(300, 25)
+
+      ctx.lineWidth = 10
+      ctx.stroke(lines)
+      expect(alpha()).toEqual(BLACK)
+      expect(omega()).toEqual(BLACK)
+
+      expect(topLeft()).toEqual(BLACK)
+      expect(topRight()).toEqual(BLACK)
+      expect(botLeft()).toEqual(BLACK)
+      expect(botRight()).toEqual(BLACK)
+
+      expect(hiLeft()).toEqual(CLEAR)
+      expect(hiRight()).toEqual(CLEAR)
+      expect(loLeft()).toEqual(CLEAR)
+      expect(loRight()).toEqual(CLEAR)
+
+      let rounded = lines.round(80)
+      canvas.width = WIDTH
+      ctx.lineWidth = 10
+      ctx.stroke(rounded)
+      expect(alpha()).toEqual(BLACK)
+      expect(omega()).toEqual(BLACK)
+
+      expect(topLeft()).toEqual(CLEAR)
+      expect(topRight()).toEqual(CLEAR)
+      expect(botLeft()).toEqual(CLEAR)
+      expect(botRight()).toEqual(CLEAR)
+
+      expect(hiLeft()).toEqual(BLACK)
+      expect(hiRight()).toEqual(BLACK)
+      expect(loLeft()).toEqual(BLACK)
+      expect(loRight()).toEqual(BLACK)
+    })
+
+    test("offset", () => {
+      let orig = new Path2D()
+      orig.rect(10, 10, 40, 40)
+      expect(orig.bounds).toMatchObject({left:10, top:10, right:50, bottom:50})
+
+      let shifted = orig.offset(-10, -10)
+      expect(shifted.bounds).toMatchObject({left:0, top:0, right:40, bottom:40})
+
+      shifted = shifted.offset(-40, -40)
+      expect(shifted.bounds).toMatchObject({left:-40, top:-40, right:0, bottom:0})
+
+      // orig path should be unchanged
+      expect(orig.bounds).toMatchObject({left:10, top:10, right:50, bottom:50})
+    })
+
+    test("transform", () => {
+      let orig = new Path2D()
+      orig.rect(-10, -10, 20, 20)
+      expect(orig.bounds).toMatchObject({left:-10, top:-10, right:10, bottom:10})
+
+      let shifted = orig.transform(new DOMMatrix().translate(10, 10))
+      expect(shifted.bounds).toMatchObject({left:0, top:0, right:20, bottom:20})
+
+      let shiftedByHand = orig.transform(1, 0, 0, 1, 10, 10)
+      expect(shifted.edges).toEqual(shiftedByHand.edges)
+
+      let embiggened = orig.transform(new DOMMatrix().scale(2, .5)),
+          bigBounds = embiggened.bounds,
+          origBounds = orig.bounds
+      expect(bigBounds.left).toBeLessThan(origBounds.left)
+      expect(bigBounds.right).toBeGreaterThan(origBounds.right)
+
+      // orig path should be unchanged
+      expect(orig.bounds).toMatchObject({left:-10, top:-10, right:10, bottom:10})
+    })
+
+    test("trim", () => {
+      let left = () => pixel(64, 137),
+          mid = () => pixel(200, 50),
+          right = () => pixel(336, 137)
+
+      let orig = new Path2D()
+      orig.arc(200, 200, 150, Math.PI, 0)
+
+      let middle = orig.trim(.25, .75),
+          endpoints = orig.trim(.25, .75, true),
+          start = orig.trim(.25),
+          end = orig.trim(-.25),
+          none = orig.trim(.75, .25),
+          everythingAndMore = orig.trim(-12345, 98765)
+
+      ctx.lineWidth = 10
+      ctx.stroke(orig)
+      expect(left()).toEqual(BLACK)
+      expect(mid()).toEqual(BLACK)
+      expect(right()).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(middle)
+      expect(left()).toEqual(CLEAR)
+      expect(mid()).toEqual(BLACK)
+      expect(right()).toEqual(CLEAR)
+      scrub()
+
+      ctx.stroke(endpoints)
+      expect(left()).toEqual(BLACK)
+      expect(mid()).toEqual(CLEAR)
+      expect(right()).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(start)
+      expect(left()).toEqual(BLACK)
+      expect(mid()).toEqual(CLEAR)
+      expect(right()).toEqual(CLEAR)
+      scrub()
+
+      ctx.stroke(end)
+      expect(left()).toEqual(CLEAR)
+      expect(mid()).toEqual(CLEAR)
+      expect(right()).toEqual(BLACK)
+      scrub()
+
+      ctx.stroke(none)
+      expect(left()).toEqual(CLEAR)
+      expect(mid()).toEqual(CLEAR)
+      expect(right()).toEqual(CLEAR)
+      scrub()
+
+      ctx.stroke(everythingAndMore)
+      expect(left()).toEqual(BLACK)
+      expect(mid()).toEqual(BLACK)
+      expect(right()).toEqual(BLACK)
+      scrub()
+    })
+  })
 })

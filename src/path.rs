@@ -6,8 +6,9 @@
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp};
-use skia_safe::path::{AddPathMode};
+use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp, StrokeRec};
+use skia_safe::{PathEffect, trim_path_effect};
+use skia_safe::path::{self, AddPathMode, Verb};
 
 use crate::utils::*;
 
@@ -185,6 +186,19 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+// Adds a conic-section curve to the current path.
+pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let mut this = this.borrow_mut();
+  let nums = float_args(&mut cx, 1..6)?;
+  if let [p1x, p1y, p2x, p2y, weight] = nums.as_slice(){
+    this.scoot(*p1x, *p1y);
+    this.path.conic_to((*p1x, *p1y), (*p2x, *p2y), *weight);
+  }
+
+  Ok(cx.undefined())
+}
+
 // Adds an arc to the path which is centered at (x, y) position with radius r starting at startAngle and ending at endAngle going in the given direction by anticlockwise (defaulting to clockwise).
 pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
@@ -246,6 +260,7 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+// Applies a boolean operator to this and a second path, returning a new Path2D with their combination
 pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let other_path = cx.argument::<BoxedPath2D>(1)?;
@@ -263,6 +278,22 @@ pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   }
 }
 
+pub fn interpolate(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let other = cx.argument::<BoxedPath2D>(1)?;
+  let weight = float_arg(&mut cx, 2, "weight")?;
+
+  let this = this.borrow();
+  let other = other.borrow();
+  // reverse path order since 0..1 = this..other is a less non-sensical mapping than the default
+  if let Some(path) = other.path.interpolate(&this.path, weight){
+    Ok(cx.boxed(RefCell::new(Path2D{ path })))
+  }else{
+    cx.throw_type_error("Can only interpolate between two Path2D objects with the same number of points and control points")
+  }
+}
+
+// Returns a path whose internal intersections are converted into their `evenodd`-rule equivalents
 pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let this = this.borrow();
@@ -277,6 +308,87 @@ pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   Ok(cx.boxed(RefCell::new(new_path)))
 }
 
+// Returns a copy whose points have been shifted by (dx, dy)
+pub fn offset(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let dx = float_arg(&mut cx, 1, "dx")?;
+  let dy = float_arg(&mut cx, 2, "dy")?;
+
+  let this = this.borrow();
+  let path = this.path.with_offset((dx, dy));
+  Ok(cx.boxed(RefCell::new(Path2D{path})))
+}
+
+// Returns a copy whose points have been transformed by a given matrix
+pub fn transform(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let matrix = matrix_arg(&mut cx, 1)?;
+
+  let this = this.borrow();
+  let path = this.path.with_transform(&matrix);
+  Ok(cx.boxed(RefCell::new(Path2D{path})))
+}
+
+// Returns a copy where every sharp junction to an arcTo-style rounded corner
+pub fn round(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let radius = float_arg(&mut cx, 1, "radius")?;
+
+  let this = this.borrow();
+  let bounds = this.path.bounds();
+  let stroke_rec = StrokeRec::new_hairline();
+
+  if let Some(rounder) = PathEffect::corner_path(radius){
+    if let Some((path, _)) = rounder.filter_path(&this.path, &stroke_rec, bounds){
+      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+    }
+  }
+
+  Ok(cx.boxed(RefCell::new(Path2D{path:this.path.clone()})))
+}
+
+// Clips a proportional segment out of the middle of the path (or the edges if invert=true)
+pub fn trim(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let begin = float_arg(&mut cx, 1, "begin")?;
+  let end = float_arg(&mut cx, 2, "end")?;
+  let invert = bool_arg_or(&mut cx, 3, false);
+
+  let this = this.borrow();
+  let bounds = this.path.bounds();
+  let stroke_rec = StrokeRec::new_hairline();
+  let mode = if invert{ trim_path_effect::Mode::Inverted }else{ trim_path_effect::Mode::Normal };
+
+  if let Some(trimmer) = PathEffect::trim(begin, end, mode){
+    if let Some((path, _)) = trimmer.filter_path(&this.path, &stroke_rec, bounds){
+      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+    }
+  }
+
+  Ok(cx.boxed(RefCell::new(Path2D{path:this.path.clone()})))
+}
+
+// Discretizes the path at a fixed segment length then randomly offsets the points
+pub fn jitter(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let seg_len = float_arg(&mut cx, 1, "segmentLength")?;
+  let std_dev = float_arg(&mut cx, 2, "variance")?;
+  let seed = float_arg_or(&mut cx, 3, 0.0) as u32;
+
+  let this = this.borrow();
+  let bounds = this.path.bounds();
+  let stroke_rec = StrokeRec::new_hairline();
+
+  if let Some(trimmer) = PathEffect::discrete(seg_len, std_dev, Some(seed)){
+    if let Some((path, _)) = trimmer.filter_path(&this.path, &stroke_rec, bounds){
+      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+    }
+  }
+
+  Ok(cx.boxed(RefCell::new(Path2D{path:this.path.clone()})))
+}
+
+// Returns the computed `tight` bounds that contain all the points, control points, and connecting contours
 pub fn bounds(mut cx: FunctionContext) -> JsResult<JsObject> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let this = this.borrow();
@@ -301,4 +413,68 @@ pub fn bounds(mut cx: FunctionContext) -> JsResult<JsObject> {
   js_object.set(&mut cx, "width", width)?;
   js_object.set(&mut cx, "height", height)?;
   Ok(js_object)
+}
+
+pub fn contains(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let x = float_arg(&mut cx, 1, "x")?;
+  let y = float_arg(&mut cx, 2, "y")?;
+  let this = this.borrow();
+
+  Ok(cx.boolean(this.path.contains((x,y))))
+}
+
+fn from_verb(verb:Verb) -> Option<String>{
+  let cmd = match verb{
+    Verb::Move => "moveTo",
+    Verb::Line => "lineTo",
+    Verb::Quad => "quadraticCurveTo",
+    Verb::Cubic => "bezierCurveTo",
+    Verb::Conic => "conicCurveTo",
+    Verb::Close => "closePath",
+    _ => return None
+  };
+  Some(cmd.to_string())
+}
+
+pub fn edges(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let this = this.borrow();
+
+  let mut weights = path::Iter::new(&this.path, false);
+  let iter = path::Iter::new(&this.path, false);
+
+  let mut edges = vec![];
+  for (verb, points) in iter{
+    weights.next();
+
+    if let Some(edge) = from_verb(verb){
+      let cmd = cx.string(edge);
+      let segment = JsArray::new(&mut cx, 1 + points.len() as u32);
+      segment.set(&mut cx, 0, cmd)?;
+
+      let at_point = if points.len()>1{ 1 }else{ 0 };
+      for (i, pt) in points.iter().skip(at_point).enumerate() {
+        let x = cx.number(pt.x);
+        let y = cx.number(pt.y);
+        segment.set(&mut cx, 1 + 2*i as u32, x)?;
+        segment.set(&mut cx, 2 + 2*i as u32, y)?;
+      }
+
+      if verb==Verb::Conic{
+        let weight = weights.conic_weight().unwrap();
+        let weight = cx.number(weight);
+        segment.set(&mut cx, 5, weight)?;
+      }
+
+      edges.push(segment);
+    }
+  }
+
+  let verbs = JsArray::new(&mut cx, edges.len() as u32);
+  for (i, segment) in edges.iter().enumerate(){
+    verbs.set(&mut cx, i as u32, *segment)?;
+  }
+
+  Ok(verbs)
 }
