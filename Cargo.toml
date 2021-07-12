@@ -22,5 +22,5 @@ default-features = false
 features = ["napi-6", "event-queue-api"]
 
 [dependencies.skia-safe]
-version = "0.40.0"
+version = "0.40.2"
 features = ["textlayout"]
