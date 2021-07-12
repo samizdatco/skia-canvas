@@ -11,7 +11,7 @@ In particular, Skia Canvas:
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and [EventQueues](https://docs.rs/neon/0.8.2-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
-  - can simplify and combine bézier paths using efficient [boolean operations](https://www.youtube.com/watch?v=OmfliNQsk88)
+  - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
 
@@ -261,30 +261,31 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
 
-| Canvas State                           | Drawing Primitives                           | Stroke & Fill Style                  | Compositing Effects                                      |
-|----------------------------------------|----------------------------------------------|--------------------------------------|----------------------------------------------------------|
-| [**canvas**](#canvas) ⧸[⚡](#canvas)   | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
-| [**globalAlpha**][globalAlpha]         | [drawImage()][drawImage()]                   | [**lineCap**][lineCap]               | [**globalCompositeOperation**][globalCompositeOperation] |
-| [beginPath()][beginPath()]             | [fill()][fill()]                             | [**lineDashOffset**][lineDashOffset] | [**shadowBlur**][shadowBlur]                             |
-| [clip()][clip()]                       | [fillRect()][fillRect()]                     | [**lineJoin**][lineJoin]             | [**shadowColor**][shadowColor]                           |
-| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[⚡][drawText]     | [**lineWidth**][lineWidth]           | [**shadowOffsetX**][shadowOffsetX]                       |
-| [isPointInStroke()][isPointInStroke()] | [stroke()][stroke()]                         | [**miterLimit**][miterLimit]         | [**shadowOffsetY**][shadowOffsetY]                       |
-| [restore()][restore()]                 | [strokeRect()][strokeRect()]                 | [**strokeStyle**][strokeStyle]       |                                                          |
-| [save()][save()]                       | [strokeText()][strokeText()] ⧸[⚡][drawText] | [getLineDash()][getLineDash()]       |                                                          |
-|                                        |                                              | [setLineDash()][setLineDash()]       |                                                          |
+| Canvas State                             | Drawing Primitives                           | Stroke & Fill Style                  | Compositing Effects                                      |
+|------------------------------------------|----------------------------------------------|--------------------------------------|----------------------------------------------------------|
+| [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [drawImage()][drawImage()]                   | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
+| [beginPath()][beginPath()]               | [clearRect()][clearRect()]                   | [**lineCap**][lineCap]               | [**globalAlpha**][globalAlpha]                           |
+| [isPointInPath()][isPointInPath()]       | [fillRect()][fillRect()]                     | [**lineDashOffset**][lineDashOffset] | [**globalCompositeOperation**][globalCompositeOperation] |
+| [isPointInStroke()][isPointInStroke()]   | [strokeRect()][strokeRect()]                 | [**lineJoin**][lineJoin]             | [**shadowBlur**][shadowBlur]                             |
+| [save()][save()]                         | [fillText()][fillText()] ⧸[⚡][drawText]     | [**lineWidth**][lineWidth]           | [**shadowColor**][shadowColor]                           |
+| [restore()][restore()]                   | [strokeText()][strokeText()] ⧸[⚡][drawText] | [**miterLimit**][miterLimit]         | [**shadowOffsetX**][shadowOffsetX]                       |
+| [clip()][clip()]                         | [fill()][fill()]                             | [**strokeStyle**][strokeStyle]       | [**shadowOffsetY**][shadowOffsetY]                       |
+|                                          | [stroke()][stroke()]                         | [getLineDash()][getLineDash()]       |                                                          |
+|                                          |                                              | [setLineDash()][setLineDash()]       |                                                          |
 
 
 | Bezier Paths                             | Typography                                                  | Pattern & Image                                    | Transform                                |
 |------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|------------------------------------------|
-| [arc()][arc()]                           | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
-| [arcTo()][arcTo()]                       | [**font**][font] ⧸[⚡](#font)                                 | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
-| [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** ⚡](#fontvariant)                           | [createConicGradient()][createConicGradient()]     | [resetTransform()][resetTransform()]     |
-| [closePath()][closePath()]               | [**textAlign**][textAlign]                                  | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
-| [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                            | [createLinearGradient()][createLinearGradient()]   | [scale()][scale()]                       |
-| [lineTo()][lineTo()]                     | [**textTracking** ⚡](#texttracking)                         | [createPattern()][createPattern()]                 | [setTransform()][setTransform()]         |
-| [moveTo()][moveTo()]                     | [**textWrap** ⚡](#textwrap)                                 | [createRadialGradient()][createRadialGradient()]   | [transform()][transform()]               |
-| [quadraticCurveTo()][quadraticCurveTo()] | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width)   | [getImageData()][getImageData()]                   | [translate()][translate()]               |
-| [rect()][rect()]                         |                                                             | [putImageData()][putImageData()]                   |                                          |
+| [moveTo()][moveTo()]                     | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
+| [lineTo()][lineTo()]                     | [**font**][font] ⧸[⚡](#font)                               | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
+| [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createPattern()][createPattern()]                 | [setTransform()][setTransform()]         |
+| [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                  | [createConicGradient()][createConicGradient()]     | [resetTransform()][resetTransform()]     |
+| [conicCurveTo() ⚡][conicCurveTo]        | [**textBaseline**][textBaseline]                            | [createLinearGradient()][createLinearGradient()]   | [transform()][transform()]               |
+| [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [createRadialGradient()][createRadialGradient()]   | [translate()][translate()]               |
+| [closePath()][closePath()]               | [**textWrap** ⚡](#textwrap)                                | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
+| [arc()][arc()]                           | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) | [getImageData()][getImageData()]                   | [scale()][scale()]                       |
+| [ellipse()][ellipse()]                   | [outlineText() ⚡][outlineText()]                                                            | [putImageData()][putImageData()]                   |                                          |
+| [rect()][rect()]                         |
 
 ##### PROPERTIES
 
@@ -307,6 +308,10 @@ The tracking value defaults to `0` and settings will persist across changes to t
 The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()`
 
 ##### METHODS
+
+#### `conicCurveTo(cpx, cpy, x, y, weight)`
+
+Adds a line segment connecting the current point to (*x, y*) but curving toward the control point (*cpx, cpy*) along the way. The `weight` argument controls how close the curve will come to the control point. If the weight is `0`, the result will be a straight line from the current point to (*x, y*). With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`. Weights greater than `1.0` will pull the line segment ever closer to the control point.
 
 #### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 
@@ -332,20 +337,39 @@ The `baseline` value is a y-axis offset from the text origin to that particular 
 
 The `startIndex` and `endIndex` values are the indices into the string of the first and last character that were typeset on that line.
 
+#### `outlineText(str)`
+
+The `outlineText()` method typesets a string and returns a Path2D containing the shapes of its character glyphs. It will use the context’s current [`.font`][font], [`.textAlign`][textAlign], and [`.textBaseline`][textBaseline] settings to style the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods or Path2D’s [`offset()`][p2d_offset] and [`transform()`][p2d_transform] to position the path before drawing it to the canvas.
+
+Note that path-generation uses a more limited typesetting system than [`fillText()`][drawText] and [`strokeText()`][drawText]. As such, it ignores any settings made using the [`.fontVariant`](#fontvariant) or [`.textTracking`](#texttracking) properties and does not support multi-line text (regardless of the current [`.textWrap`](#textwrap) setting).
+
+```js
+ctx.textBaseline = 'top'
+ctx.font = 'bold 140px Helvetica'
+let ampersand = ctx.outlineText('&')
+
+for (let i=0; i<8000; i++){
+  let x = Math.random() * 100,
+      y = Math.random() * 120;
+  ctx.fillStyle = path.contains(x, y) ? 'lightblue' : '#eee'
+  ctx.fillRect(x, y, 2, 2)
+}
+```
+![text converted to a Path2D](/test/assets/path/outlineText@2x.png)
 
 ## Path2D
 
 The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
 
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡            | Extents ⚡      |
-| --                                         | --                       | --                       | --            |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [**bounds**](#bounds)   |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [simplify()](#simplify)   |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] | [ellipse()][p2d_ellipse] | [union()][bool-ops]      |
-| [closePath()][p2d_closePath]               | [rect()][p2d_rect]       | [xor()][bool-ops]        |
-
+| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                  |
+| --                                         | --                       | --                       | --                               | --                           |
+| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
+| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)          |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains]   |
+| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]       |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               | [offset()][p2d_offset]       |
+| [closePath()][p2d_closePath]               |                          |                          |                                  | [transform()][p2d_transform] |
 
 #### Creating `Path2D` objects
 
@@ -371,12 +395,48 @@ You can then use these objects by passing them as the first argument to the cont
 
 In the browser, Path2D objects offer very little in the way of introspection—they are mostly-opaque recorders of drawing commands that can be ‘played back’ later on. Skia Canvas offers some additional transparency by allowing you to measure the total amount of space the lines will occupy (though you’ll need to account for the current `lineWidth` if you plan to draw the path with `stroke()`).
 
-The `.bounds` property contains an object defining the minimal rectangle containing the path:
+The `.bounds` property returns an object defining the minimal rectangle containing the path:
 ```
 {top, left, bottom, right, width, height}
 ```
 
+#### `.edges`
+
+Returns an array containing each path segment that has been added to the path so far. Each element of the list is an array of the form `["verb", ...points]`, mirroring the calling conventions of both Path2D and the rendering context. As a result, the `edges` may be used to ‘replay’ a sequence of commands such as:
+```js
+let original = new Path2D()
+// ... add some contours to the path
+
+// apply the original path’s edges to a new Path2D
+let clone = new Path2D()
+for (const [verb, ...pts] of original.edges){
+  clone[verb](...pts)
+}
+
+// or use the original path’s edges to draw directly to the context
+for (const [verb, ...pts] of original.edges){
+  ctx[verb](...pts)
+}
+```
+
+The array is not a verbtaim transcript of the drawing commands that have been called since some commands (e.g., `arc()`) will be converted into an equivalent sequence of bézier curves. The full range of verbs and numbers of point arguments is as follows:
+
+```js
+[
+  ["moveTo", x, y],
+  ["lineTo", x, y],
+  ["quadraticCurveTo", cpx, cpy, x, y],
+  ["bezierCurveTo", cp1x, cp1y, cp2x, cp2y, x, y],
+  ["conicCurveTo", cpx, cpy, x, y, weight],
+  ["closePath"]
+]
+```
+
 ##### METHODS
+
+#### `contains(x, y)`
+
+Returns true if the point (*x, y*) is either inside the path or intersects one of its contours.
 
 #### `complement()`, `difference()`, `intersect()`, `union()`, and `xor()`
 In addition to creating `Path2D` objects through the constructor, you can use pairs of existing paths *in combination* to generate new paths based on their degree of overlap. Based on the method you choose, a different boolean relationship will be used to construct the new path. In all the following examples we’ll be starting off with a pair of overlapping shapes:
@@ -387,7 +447,7 @@ oval.arc(100, 100, 100, 0, 2*Math.PI)
 let rect = new Path2D()
 rect.rect(0, 100, 100, 100)
 ```
-![layered paths](/test/assets/path-operation-none.svg)
+![layered paths](/test/assets/path/operation-none.svg)
 
 We can then create a new path by using one of the boolean operations such as:
 ```js
@@ -396,23 +456,125 @@ let knockout = rect.complement(oval),
     footprint = rect.union(oval),
     ...
 ```
-![different combinations](/test/assets/path-operations@2x.png)
+![different combinations](/test/assets/path/operations@2x.png)
 
 Note that the `xor` operator is liable to create a path with lines that cross over one another so you’ll get different results when filling it using the [`"evenodd"`][evenodd] winding rule (as shown above) than with [`"nonzero"`][nonzero] (the canvas default).
 
+#### `interpolate(otherPath, weight)`
+
+When two similar paths share the same sequence of ‘verbs’ and differ only in the point arguments passed to them, the `interpolate()` method can combine them in different proportions to create a new path. The `weight` argument controls whether the resulting path resembles the original (at `0.0`), the `otherPath` (at `1.0`), or something in between.
+
+```js
+let start = new Path2D()
+start.moveTo(-200, 100)
+start.bezierCurveTo(-300, 100, -200, 200, -300, 200)
+start.bezierCurveTo(-200, 200, -300, 300, -200, 300)
+
+let end = new Path2D()
+end.moveTo(200, 100)
+end.bezierCurveTo(300, 100, 200, 200, 300, 200)
+end.bezierCurveTo(200, 200, 300, 300, 200, 300)
+
+let left = start.interpolate(end, .25),
+    mean = start.interpolate(end, .5),
+    right = start.interpolate(end, .75)
+```
+![merging similar paths](/test/assets/path/effect-interpolate@2x.png)
+
+
+#### `jitter(segmentLength, amount, seed=0)`
+
+The `jitter()` method will return a new Path2D object obtained by breaking the original path into segments of a given length then applying random offsets to the resulting points. Though the modifications are random, they will be consistent between runs based on the specified `seed`. Try passing different integer values for the seed until you get results that you like.
+
+```js
+let cube = new Path2D()
+cube.rect(100, 100, 100, 100)
+cube.rect(150, 50, 100, 100)
+cube.moveTo(100, 100)
+cube.lineTo(150, 50)
+cube.moveTo(200, 100)
+cube.lineTo(250, 50)
+cube.moveTo(200, 200)
+cube.lineTo(250, 150)
+
+let jagged = cube.jitter(1, 2),
+    reseed = cube.jitter(1, 2, 1337),
+    sketchy = cube.jitter(10, 1)
+```
+![xkcd-style](/test/assets/path/effect-jitter@2x.png)
+
+#### `offset(dx, dy)`
+
+Returns a copy of the path whose points have been shifted horizontally by `dx` and vertically by `dy`.
+
+#### `points(step=1)`
+
+The `points()` method breaks a path into evenly-sized steps and returns the (*x, y*) positions of the resulting vertices. The `step` argument determines the amount of distance between neighboring points and defaults to 1 px if omitted.
+
+
+```js
+let path = new Path2D()
+path.arc(100, 100, 50, 0, 2*Math.PI)
+path.rect(100, 50, 50, 50)
+path = path.simplify()
+
+for (const [x, y] of path.points(10)){
+  ctx.fillRect(x, y, 3, 3)
+}
+```
+![sampling points from a path](/test/assets/path/effect-points@2x.png)
+
+#### `round(radius)`
+
+Calling `round()` will return a new Path2D derived from the original path whose corners have been rounded off to the specified radius.
+
+```js
+let spikes = new Path2D()
+spikes.moveTo(50, 225)
+spikes.lineTo(100, 25)
+spikes.lineTo(150, 225)
+spikes.lineTo(200, 25)
+spikes.lineTo(250, 225)
+spikes.lineTo(300, 25)
+
+let snake = spikes.round(80)
+```
+![no sharp edges](/test/assets/path/effect-round@2x.png)
 
 #### `simplify()`
 
 In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments:
 
 ```js
-let cross = new Path2D("M 10,50 h 100 v 20 h -100 Z M 50,10 h 20 v100 h -20 Z")
+let cross = new Path2D(`
+  M 10,50 h 100 v 20 h -100 Z
+  M 50,10 h 20 v 100 h -20 Z
+`)
 let uncrossed = cross.simplify()
 ```
-![different combinations](/test/assets/path-simplify@2x.png)
+![different combinations](/test/assets/path/effect-simplify@2x.png)
 
+#### `transform(matrix)` or `transform(a, b, c, d, e, f)`
 
+Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix’s terms can be passed individually as 6 numbers or as a [DOMMatrix][DOMMatrix] object. The original path remains unmodified.
 
+#### `trim(start, end, inverted)`
+
+The `trim()` method returns a new Path2D which contains only a portion of the original path. The `start` and `end` arguments specify percentages of the original contour as numbers between `0` and `1.0`. If both arguments are provided, the new path will be a continuous contour connecting those endpoints. If the `inverted` argument is set to `true`, the new path will contain everything from the original **except** the region between the specified endpoints.
+
+Passing a single positive number implicitly sets the starting point to `0.0` and uses the supplied argument as the `end`. Passing a negative value sets the ending point to `1.0` and uses the argument as the `start` value. In either case, you can include `inverted` as the second argument to flip the selected contour.
+
+```js
+let orig = new Path2D()
+orig.arc(100, 100, 50, Math.PI, 0)
+
+let middle = orig.trim(.25, .75),
+    endpoints = orig.trim(.25, .75, true),
+    left = orig.trim(.25),
+    right = orig.trim(-.25)
+
+```
+![trimmed subpaths](/test/assets/path/effect-trim@2x.png)
 
 ## Utilities
 
@@ -528,8 +690,20 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_arcTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arcTo
 [p2d_ellipse]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/ellipse
 [p2d_rect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect
+[p2d_jitter]: #jittersegmentlength-amount-seed0
+[p2d_round]: #roundradius
+[p2d_trim]: #trimstart-end-inverted
+[p2d_interpolate]: #interpolateotherpath-weight
+[p2d_simplify]: #simplify
+[p2d_points]: #pointsstep1
+[p2d_contains]: #containsx-y
+[p2d_offset]: #offsetdx-dy
+[p2d_transform]: #transformmatrix-or-transforma-b-c-d-e-f
 [bool-ops]: #complement-difference-intersect-union-and-xor
+
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
+[conicCurveTo]: #coniccurvetocpx-cpy-x-y-weight
+[outlineText()]: #outlinetextstr
 
 [Buffer]: https://nodejs.org/api/buffer.html
 [Canvas]: https://developer.mozilla.org/en-US/docs/Web/API/Canvas
@@ -548,7 +722,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [lineHeight]: https://developer.mozilla.org/en-US/docs/Web/CSS/line-height
 [font-variant]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant
 
-[canvas]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/canvas
+[canvas_attr]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/canvas
 [currentTransform]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/currentTransform
 [direction]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/direction
 [fillStyle]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillStyle

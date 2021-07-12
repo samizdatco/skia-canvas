@@ -45,13 +45,22 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_lineTo", path::lineTo)?;
   cx.export_function("Path2D_bezierCurveTo", path::bezierCurveTo)?;
   cx.export_function("Path2D_quadraticCurveTo", path::quadraticCurveTo)?;
+  cx.export_function("Path2D_conicCurveTo", path::conicCurveTo)?;
   cx.export_function("Path2D_arc", path::arc)?;
   cx.export_function("Path2D_arcTo", path::arcTo)?;
   cx.export_function("Path2D_ellipse", path::ellipse)?;
   cx.export_function("Path2D_rect", path::rect)?;
   cx.export_function("Path2D_op", path::op)?;
+  cx.export_function("Path2D_interpolate", path::interpolate)?;
   cx.export_function("Path2D_simplify", path::simplify)?;
+  cx.export_function("Path2D_round", path::round)?;
+  cx.export_function("Path2D_trim", path::trim)?;
+  cx.export_function("Path2D_jitter", path::jitter)?;
+  cx.export_function("Path2D_offset", path::offset)?;
+  cx.export_function("Path2D_transform", path::transform)?;
   cx.export_function("Path2D_bounds", path::bounds)?;
+  cx.export_function("Path2D_contains", path::contains)?;
+  cx.export_function("Path2D_edges", path::edges)?;
 
   // -- CanvasGradient ----------------------------------------------------------------------------
 
@@ -116,6 +125,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_arcTo", ctx::arcTo)?;
   cx.export_function("CanvasRenderingContext2D_bezierCurveTo", ctx::bezierCurveTo)?;
   cx.export_function("CanvasRenderingContext2D_quadraticCurveTo", ctx::quadraticCurveTo)?;
+  cx.export_function("CanvasRenderingContext2D_conicCurveTo", ctx::conicCurveTo)?;
   cx.export_function("CanvasRenderingContext2D_closePath", ctx::closePath)?;
   cx.export_function("CanvasRenderingContext2D_isPointInPath", ctx::isPointInPath)?;
   cx.export_function("CanvasRenderingContext2D_isPointInStroke", ctx::isPointInStroke)?;
@@ -160,6 +170,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_fillText", ctx::fillText)?;
   cx.export_function("CanvasRenderingContext2D_strokeText", ctx::strokeText)?;
   cx.export_function("CanvasRenderingContext2D_measureText", ctx::measureText)?;
+  cx.export_function("CanvasRenderingContext2D_outlineText", ctx::outlineText)?;
   cx.export_function("CanvasRenderingContext2D_get_font", ctx::get_font)?;
   cx.export_function("CanvasRenderingContext2D_set_font", ctx::set_font)?;
   cx.export_function("CanvasRenderingContext2D_get_textAlign", ctx::get_textAlign)?;
