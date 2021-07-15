@@ -388,7 +388,7 @@ pub fn matrix_arg(cx: &mut FunctionContext, idx:usize) -> Result<Matrix, Throw> 
 
 use crate::path::{BoxedPath2D};
 
-pub fn path2d_arg_opt(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
+pub fn opt_path2d_arg(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
   if let Some(arg) = cx.argument_opt(idx as i32){
     if let Ok(arg) = arg.downcast::<BoxedPath2D, _>(cx){
       let arg = arg.borrow();
