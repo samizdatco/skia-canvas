@@ -332,43 +332,35 @@ pub fn fill(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let path = opt_path2d_arg(&mut cx, 1);
   let rule_idx = if path.is_some(){ 2 }else{ 1 };
   let rule = fill_rule_arg_or(&mut cx, rule_idx, "nonzero")?;
-
-  let mut this = this.borrow_mut();
-  let paint = this.paint_for_fill();
-  this.draw_path(path, &paint, Some(rule));
+  this.borrow_mut().draw_path(path, PaintStyle::Fill, Some(rule));
   Ok(cx.undefined())
 }
 
 pub fn stroke(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-
-  let mut this = this.borrow_mut();
-  let paint = this.paint_for_stroke();
-  this.draw_path(path, &paint, None);
   let path = opt_path2d_arg(&mut cx, 1);
+  this.borrow_mut().draw_path(path, PaintStyle::Stroke, None);
   Ok(cx.undefined())
 }
 
 pub fn fillRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
   let nums = float_args(&mut cx, 1..5)?;
   if let [x, y, w, h] = nums.as_slice() {
     let rect = Rect::from_xywh(*x, *y, *w, *h);
-    let paint =  this.paint_for_fill();
-    this.draw_rect(&rect, &paint);
+    let path = Path::rect(rect, None);
+    this.borrow_mut().draw_path(Some(path), PaintStyle::Fill, None);
   }
   Ok(cx.undefined())
 }
 
 pub fn strokeRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
   let nums = float_args(&mut cx, 1..5)?;
   if let [x, y, w, h] = nums.as_slice() {
     let rect = Rect::from_xywh(*x, *y, *w, *h);
-    let paint =  this.paint_for_stroke();
-    this.draw_rect(&rect, &paint);
+    let path = Path::rect(rect, None);
+    this.borrow_mut().draw_path(Some(path), PaintStyle::Stroke, None);
   }
   Ok(cx.undefined())
 }
@@ -724,7 +716,7 @@ pub fn strokeText(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   _draw_text(cx, Stroke)
 }
 
-fn _draw_text(mut cx: FunctionContext, ink:PaintStyle) -> JsResult<JsUndefined> {
+fn _draw_text(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
   let text = string_arg(&mut cx, 1, "text")?;
@@ -737,11 +729,7 @@ fn _draw_text(mut cx: FunctionContext, ink:PaintStyle) -> JsResult<JsUndefined> 
     return Ok(cx.undefined())
   }
 
-  let paint = match ink{
-    Stroke => this.paint_for_stroke(),
-    _ => this.paint_for_fill(),
-  };
-  this.draw_text(&text, x, y, width, paint);
+  this.draw_text(&text, x, y, width, style);
   Ok(cx.undefined())
 }
 

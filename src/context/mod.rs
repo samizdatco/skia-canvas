@@ -20,6 +20,7 @@ use crate::typography::*;
 use crate::canvas::Page;
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
+use crate::texture::{CanvasTexture, BoxedCanvasTexture};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;
@@ -127,6 +128,19 @@ impl State{
       self.text_wrap
     )
   }
+
+  fn dye(&self, style:PaintStyle) -> &Dye{
+    if style == PaintStyle::Stroke{ &self.stroke_style }
+    else{ &self.fill_style }
+  }
+
+  fn texture(&self, style:PaintStyle) -> Option<&CanvasTexture>{
+    match self.dye(style) {
+      Dye::Texture(texture) => Some(texture),
+      _ => None
+    }
+  }
+
 }
 
 impl Context2D{
@@ -297,7 +311,7 @@ impl Context2D{
     }
   }
 
-  pub fn draw_path(&mut self, path:Option<Path>, paint: &Paint, rule:Option<FillType>){
+  pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<FillType>){
     let mut path = match path {
       Some(path) => path,
       None => {
@@ -311,9 +325,34 @@ impl Context2D{
       path.set_fill_type(rule);
     }
 
+    let mut paint = self.paint_for(style);
+    let texture = self.state.texture(style);
+
     self.render_to_canvas(&paint, |canvas, paint| {
-      canvas.draw_path(&path, &paint);
+      if let Some(tile) = texture{
+        canvas.save();
+        let spacing = tile.spacing();
+        let tile_bounds = match style{
+          PaintStyle::Stroke => {
+            let clip = paint.get_fill_path(&path, None, None).unwrap();
+            canvas.clip_path(&clip, ClipOp::Intersect, true);
+            clip.bounds().with_outset(spacing)
+          },
+          _ => {
+            canvas.clip_path(&path, ClipOp::Intersect, true);
+            path.bounds().with_outset(spacing)
+          }
+        };
+
+        let mut tile_paint = paint.clone();
+        tile.mix_into(&mut tile_paint, self.state.global_alpha);
+        canvas.draw_path(&Path::rect(tile_bounds, None), &tile_paint);
+        canvas.restore();
+      }else{
+        canvas.draw_path(&path, &paint);
+      }
     });
+
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
@@ -347,7 +386,7 @@ impl Context2D{
 
     let is_in = match style{
       PaintStyle::Stroke => {
-        let paint = self.paint_for_stroke();
+        let paint = self.paint_for(PaintStyle::Stroke);
         let precision = 0.3; // this is what Chrome uses to compute this
         match paint.get_fill_path(&path, None, Some(precision)){
           Some(traced_path) => traced_path.contains(point),
@@ -359,13 +398,6 @@ impl Context2D{
 
     path.set_fill_type(prev_rule);
     is_in
-  }
-
-
-  pub fn draw_rect(&mut self, rect:&Rect, paint: &Paint){
-    self.render_to_canvas(&paint, |canvas, paint| {
-      canvas.draw_rect(&rect, &paint);
-    });
   }
 
   pub fn clear_rect(&mut self, rect:&Rect){
@@ -555,7 +587,9 @@ impl Context2D{
   }
 
 
-  pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, paint: Paint){
+  pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, style:PaintStyle){
+    let paint = self.paint_for(style);
+
     let typesetter = Typesetter::new(&self.state, text, width);
     self.render_to_canvas(&paint, |canvas, paint| {
       let point = Point::new(x, y);
@@ -682,26 +716,14 @@ impl Context2D{
     color.to_color()
   }
 
-  pub fn paint_for_fill(&self) -> Paint{
+  pub fn paint_for(&self, style:PaintStyle) -> Paint{
     let mut paint = self.state.paint.clone();
-    let dye = &self.state.fill_style;
     let alpha = self.state.global_alpha;
     let smoothing = self.state.image_smoothing_enabled;
-    dye.mix_into(&mut paint, alpha, smoothing);
+    self.state.dye(style).mix_into(&mut paint, alpha, smoothing);
+    paint.set_style(style);
 
-    paint
-  }
-
-  pub fn paint_for_stroke(&self) -> Paint{
-    let mut paint = self.state.paint.clone();
-    paint.set_style(PaintStyle::Stroke);
-
-    let dye = &self.state.stroke_style;
-    let alpha = self.state.global_alpha;
-    let smoothing = self.state.image_smoothing_enabled;
-    dye.mix_into(&mut paint, alpha, smoothing);
-
-    if !self.state.line_dash_list.is_empty() {
+    if style==PaintStyle::Stroke && !self.state.line_dash_list.is_empty(){
       let dash = dash_path_effect::new(&self.state.line_dash_list, self.state.line_dash_offset);
       paint.set_path_effect(dash);
     }
@@ -735,7 +757,8 @@ impl Context2D{
 pub enum Dye{
   Color(Color),
   Gradient(CanvasGradient),
-  Pattern(CanvasPattern)
+  Pattern(CanvasPattern),
+  Texture(CanvasTexture)
 }
 
 impl Dye{
@@ -744,6 +767,8 @@ impl Dye{
       Some(Dye::Gradient(gradient.borrow().clone()) )
     }else if let Ok(pattern) = value.downcast::<BoxedCanvasPattern, _>(cx){
       Some(Dye::Pattern(pattern.borrow().clone()) )
+    }else if let Ok(texture) = value.downcast::<BoxedCanvasTexture, _>(cx){
+      Some(Dye::Texture(texture.borrow().clone()) )
     }else if let Some(color) = color_in(cx, value){
       Some(Dye::Color(color))
     }else{
@@ -772,6 +797,9 @@ impl Dye{
       Dye::Pattern(pattern) =>{
         paint.set_shader(pattern.shader(smoothing))
              .set_alpha_f(alpha);
+      }
+      Dye::Texture(texture) =>{
+        paint.set_color(texture.to_color(alpha));
       }
     };
   }

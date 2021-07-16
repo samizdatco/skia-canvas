@@ -11,6 +11,7 @@ mod path;
 mod image;
 mod gradient;
 mod pattern;
+mod texture;
 mod typography;
 mod utils;
 
@@ -76,6 +77,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
   cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
   cx.export_function("CanvasPattern_repr", pattern::repr)?;
+
+  // -- CanvasTexture -----------------------------------------------------------------------------
+
+  cx.export_function("CanvasTexture_new", texture::new)?;
+  cx.export_function("CanvasTexture_repr", texture::repr)?;
 
   // -- FontLibrary -------------------------------------------------------------------------------
 
