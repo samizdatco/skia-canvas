@@ -45,15 +45,19 @@ impl CanvasTexture{
     let mut matrix = Matrix::new_identity();
     matrix
       .pre_translate(tile.shift)
-      .pre_rotate(180.0 * tile.angle / PI, None)
-      .pre_scale(tile.scale, None);
+      .pre_rotate(180.0 * tile.angle / PI, None);
 
     match &tile.path {
       Some(path) => {
         let path = path.with_transform(&Matrix::rotate_rad(tile.angle));
-        paint.set_path_effect(path_2d_path_effect::new(&matrix, &path))
-      },
-      None => paint.set_path_effect(line_2d_path_effect::new(tile.line, &matrix))
+        paint.set_path_effect(path_2d_path_effect::new(&matrix, &path));
+        matrix.pre_scale(tile.scale, None);
+      }
+      None => {
+        let scale = tile.scale.0.max(tile.scale.1);
+        paint.set_path_effect(line_2d_path_effect::new(tile.line, &matrix));
+        matrix.pre_scale((scale, scale), None);
+      }
     };
 
     if tile.line > 0.0{
