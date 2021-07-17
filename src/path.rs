@@ -293,10 +293,13 @@ pub fn interpolate(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   }
 }
 
-// Returns a path whose internal intersections are converted into their `evenodd`-rule equivalents
+// Returns a path with only non-overlapping contours that describe the same area as the original path
 pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let this = this.borrow();
+  let rule = fill_rule_arg_or(&mut cx, 1, "nonzero")?;
+  let mut this = this.borrow_mut();
+
+  this.path.set_fill_type(rule);
 
   let new_path = Path2D{
     path:match this.path.simplify(){

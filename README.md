@@ -544,9 +544,9 @@ let snake = spikes.round(80)
 ```
 ![no sharp edges](/test/assets/path/effect-round@2x.png)
 
-#### `simplify()`
+#### `simplify(rule="nonzero")`
 
-In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments:
+In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments. When called with no arguments it defaults to the `"nonzero"` winding rule, but can also be called with `"evenodd"` to preserve overlap regions while still removing edge-crossings.
 
 ```js
 let cross = new Path2D(`
@@ -697,7 +697,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_round]: #roundradius
 [p2d_trim]: #trimstart-end-inverted
 [p2d_interpolate]: #interpolateotherpath-weight
-[p2d_simplify]: #simplify
+[p2d_simplify]: #simplifyrulenonzero
 [p2d_points]: #pointsstep1
 [p2d_contains]: #containsx-y
 [p2d_offset]: #offsetdx-dy
