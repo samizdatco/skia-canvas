@@ -361,7 +361,7 @@ describe("Path2D", ()=>{
 
     test("simplify", () => {
       let c = a.xor(b)
-      ctx.fill(c.simplify(), 'nonzero')
+      ctx.fill(c.simplify('evenodd'))
       expect(top()).toEqual(BLACK)
       expect(left()).toEqual(BLACK)
       expect(center()).toEqual(CLEAR)
