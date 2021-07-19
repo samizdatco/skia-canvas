@@ -419,6 +419,48 @@ pub fn set_strokeStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 // Line Style
 //
 
+pub fn set_lineDashMarker(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let marker = opt_path2d_arg(&mut cx, 1);
+
+  if marker.is_none(){
+    let val = cx.argument::<JsValue>(1)?;
+    if !(val.is_a::<JsNull, _>(&mut cx) || val.is_a::<JsNull, _>(&mut cx)){
+      return cx.throw_type_error("Expected a Path2D object (or null)");
+    }
+  }
+
+  this.borrow_mut().state.line_dash_marker = marker;
+  Ok(cx.undefined())
+}
+
+pub fn get_lineDashMarker(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow();
+
+  match &this.state.line_dash_marker{
+    Some(marker) => Ok(cx.boxed(RefCell::new(Path2D{path:marker.clone()})).upcast()),
+    None => Ok(cx.null().upcast())
+  }
+}
+
+pub fn set_lineDashFit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let style = string_arg(&mut cx, 1, "fitStyle")?;
+
+  if let Some(fit) = to_1d_style(&style){
+    this.borrow_mut().state.line_dash_fit = fit;
+  }
+  Ok(cx.undefined())
+}
+
+pub fn get_lineDashFit(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+
+  let fit = from_1d_style(this.borrow().state.line_dash_fit);
+  Ok(cx.string(fit))
+}
+
 pub fn getLineDash(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();

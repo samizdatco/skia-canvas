@@ -9,7 +9,7 @@ use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageIn
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data, Font,
                 PictureRecorder, Picture, Drawable, FilterQuality, SamplingOptions,
-                image_filters, color_filters, table_color_filter, dash_path_effect};
+                image_filters, color_filters, table_color_filter, dash_path_effect, path_1d_path_effect};
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
@@ -55,6 +55,8 @@ pub struct State{
   stroke_width: f32,
   line_dash_offset: f32,
   line_dash_list: Vec<f32>,
+  line_dash_marker: Option<Path>,
+  line_dash_fit: path_1d_path_effect::Style,
 
   global_alpha: f32,
   global_composite_operation: BlendMode,
@@ -96,6 +98,8 @@ impl Default for State {
       stroke_width: 1.0,
       line_dash_offset: 0.0,
       line_dash_list: vec![],
+      line_dash_marker: None,
+      line_dash_fit: path_1d_path_effect::Style::Rotate,
 
       global_alpha: 1.0,
       global_composite_operation: BlendMode::SrcOver,
@@ -712,8 +716,24 @@ impl Context2D{
     paint.set_style(style);
 
     if style==PaintStyle::Stroke && !self.state.line_dash_list.is_empty(){
-      let dash = dash_path_effect::new(&self.state.line_dash_list, self.state.line_dash_offset);
-      paint.set_path_effect(dash);
+      // if marker is set, apply the 1d_path_effect instead of the dash_path_effect
+      let effect = match &self.state.line_dash_marker{
+        Some(path) => {
+          let marker = match path.is_last_contour_closed(){
+            true => path.clone(),
+            false => paint.get_fill_path(path, None, None).unwrap()
+          };
+          path_1d_path_effect::new(
+            &marker,
+            self.state.line_dash_list[0],
+            self.state.line_dash_offset,
+            self.state.line_dash_fit
+          )
+        }
+        None => dash_path_effect::new(&self.state.line_dash_list, self.state.line_dash_offset)
+      };
+
+      paint.set_path_effect(effect);
     }
 
     paint
