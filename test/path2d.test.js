@@ -361,15 +361,29 @@ describe("Path2D", ()=>{
 
     test("simplify", () => {
       let c = a.xor(b)
-      ctx.fill(c.simplify(), 'nonzero')
+      ctx.fill(c.simplify('evenodd'))
       expect(top()).toEqual(BLACK)
       expect(left()).toEqual(BLACK)
       expect(center()).toEqual(CLEAR)
       expect(right()).toEqual(BLACK)
       expect(bottom()).toEqual(BLACK)
 
-      ctx.fill(c)
+      ctx.fill(c.simplify())
       expect(center()).toEqual(BLACK)
+    })
+
+    test("unwind", () => {
+      let d = new Path2D()
+      d.rect(0,0,30,30)
+      d.rect(10,10,10,10)
+      ctx.fill(d.offset(50,40))
+      expect(pixel(65, 55)).toEqual(BLACK)
+      ctx.fill(d.offset(100,40), 'evenodd')
+      expect(pixel(115, 55)).toEqual(CLEAR)
+      ctx.fill(d.simplify().offset(150,40), 'evenodd')
+      expect(pixel(165, 55)).toEqual(BLACK)
+      ctx.fill(d.unwind().offset(200,40))
+      expect(pixel(215, 55)).toEqual(CLEAR)
     })
 
     test("interpolate", () => {

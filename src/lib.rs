@@ -57,6 +57,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_op", path::op)?;
   cx.export_function("Path2D_interpolate", path::interpolate)?;
   cx.export_function("Path2D_simplify", path::simplify)?;
+  cx.export_function("Path2D_unwind", path::unwind)?;
   cx.export_function("Path2D_round", path::round)?;
   cx.export_function("Path2D_trim", path::trim)?;
   cx.export_function("Path2D_jitter", path::jitter)?;

@@ -372,7 +372,7 @@ The `Path2D` class allows you to create paths independent of a given [Canvas](#c
 | [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains]   |
 | [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]       |
 | [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               | [offset()][p2d_offset]       |
-| [closePath()][p2d_closePath]               |                          |                          |                                  | [transform()][p2d_transform] |
+| [closePath()][p2d_closePath]               |                          |                          | [unwind()][p2d_unwind]           | [transform()][p2d_transform] |
 
 #### Creating `Path2D` objects
 
@@ -544,9 +544,9 @@ let snake = spikes.round(80)
 ```
 ![no sharp edges](/test/assets/path/effect-round@2x.png)
 
-#### `simplify()`
+#### `simplify(rule="nonzero")`
 
-In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments:
+In cases where the contours of a single path overlap one another, it’s often useful to have a way of effectively applying a `union` operation *within* the path itself. The `simplify` method traces the path and returns a new copy that removes any overlapping segments. When called with no arguments it defaults to the `"nonzero"` winding rule, but can also be called with `"evenodd"` to preserve overlap regions while still removing edge-crossings.
 
 ```js
 let cross = new Path2D(`
@@ -578,6 +578,22 @@ let middle = orig.trim(.25, .75),
 
 ```
 ![trimmed subpaths](/test/assets/path/effect-trim@2x.png)
+
+#### `unwind()`
+
+The `unwind()` method interprets the current path using the `"evenodd"` winding rule then returns a new path that covers an equivalent area when filled using the `"nonzero"` rule (i.e., the default behavior of the context’s [`fill()`][fill()] method).
+
+This conversion can be useful in situations where a single path contains multiple, overlapping contours and the resulting shape depends on the [nesting-depth and direction](https://oreillymedia.github.io/Using_SVG/extras/ch06-fill-rule.html) of the contours.
+
+```js
+let orig = new Path2D(`
+  M 0 0 h 100 v 100 h -100 Z
+  M 50 30 l 20 20 l -20 20 l -20 -20 Z
+`)
+
+let unwound = orig.unwind()
+```
+![convert winding rule subpaths](/test/assets/path/effect-unwind@2x.png)
 
 ## Utilities
 
@@ -697,7 +713,8 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [p2d_round]: #roundradius
 [p2d_trim]: #trimstart-end-inverted
 [p2d_interpolate]: #interpolateotherpath-weight
-[p2d_simplify]: #simplify
+[p2d_simplify]: #simplifyrulenonzero
+[p2d_unwind]: #unwind
 [p2d_points]: #pointsstep1
 [p2d_contains]: #containsx-y
 [p2d_offset]: #offsetdx-dy

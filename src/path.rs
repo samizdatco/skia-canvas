@@ -6,9 +6,9 @@
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp, StrokeRec};
+use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp, StrokeRec,};
 use skia_safe::{PathEffect, trim_path_effect};
-use skia_safe::path::{self, AddPathMode, Verb};
+use skia_safe::path::{self, AddPathMode, Verb, FillType};
 
 use crate::utils::*;
 
@@ -293,14 +293,34 @@ pub fn interpolate(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   }
 }
 
-// Returns a path whose internal intersections are converted into their `evenodd`-rule equivalents
+// Returns a path with only non-overlapping contours that describe the same area as the original path
 pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let this = this.borrow();
+  let rule = fill_rule_arg_or(&mut cx, 1, "nonzero")?;
+  let mut this = this.borrow_mut();
+
+  this.path.set_fill_type(rule);
 
   let new_path = Path2D{
     path:match this.path.simplify(){
       Some(simpler) => simpler,
+      None => this.path.clone()
+    }
+  };
+
+  Ok(cx.boxed(RefCell::new(new_path)))
+}
+
+// Returns a path that can be drawn with a nonzero fill but looks like the original drawn with evenodd
+pub fn unwind(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let mut this = this.borrow_mut();
+
+  this.path.set_fill_type(FillType::EvenOdd);
+
+  let new_path = Path2D{
+    path:match this.path.as_winding(){
+      Some(rewound) => rewound,
       None => this.path.clone()
     }
   };
