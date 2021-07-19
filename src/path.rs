@@ -6,9 +6,9 @@
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp, StrokeRec};
+use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp, StrokeRec,};
 use skia_safe::{PathEffect, trim_path_effect};
-use skia_safe::path::{self, AddPathMode, Verb};
+use skia_safe::path::{self, AddPathMode, Verb, FillType};
 
 use crate::utils::*;
 
@@ -304,6 +304,23 @@ pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let new_path = Path2D{
     path:match this.path.simplify(){
       Some(simpler) => simpler,
+      None => this.path.clone()
+    }
+  };
+
+  Ok(cx.boxed(RefCell::new(new_path)))
+}
+
+// Returns a path that can be drawn with a nonzero fill but looks like the original drawn with evenodd
+pub fn unwind(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let mut this = this.borrow_mut();
+
+  this.path.set_fill_type(FillType::EvenOdd);
+
+  let new_path = Path2D{
+    path:match this.path.as_winding(){
+      Some(rewound) => rewound,
       None => this.path.clone()
     }
   };
