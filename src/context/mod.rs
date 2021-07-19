@@ -332,15 +332,16 @@ impl Context2D{
       if let Some(tile) = texture{
         canvas.save();
         let spacing = tile.spacing();
+        let offset = (-spacing.0/2.0, -spacing.1/2.0);
         let tile_bounds = match style{
           PaintStyle::Stroke => {
             let clip = paint.get_fill_path(&path, None, None).unwrap();
             canvas.clip_path(&clip, ClipOp::Intersect, true);
-            clip.bounds().with_outset(spacing)
+            clip.bounds().with_offset(offset).with_outset(spacing)
           },
           _ => {
             canvas.clip_path(&path, ClipOp::Intersect, true);
-            path.bounds().with_outset(spacing)
+            path.bounds().with_offset(offset).with_outset(spacing)
           }
         };
 
