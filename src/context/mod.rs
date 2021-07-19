@@ -346,13 +346,11 @@ impl Context2D{
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
-    let mut clip = match path{
-      Some(path) => path,
-      None => {
-        let inverse = self.state.matrix.invert().unwrap();
-        self.path.with_transform(&inverse)
-      }
-    };
+    let mut clip = path.unwrap_or_else(|| {
+      // the current path has already incorporated its transform state
+      let inverse = self.state.matrix.invert().unwrap();
+      self.path.with_transform(&inverse)
+    });
 
     clip.set_fill_type(rule);
     if self.state.clip.is_empty(){
