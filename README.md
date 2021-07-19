@@ -281,14 +281,14 @@ Most of your interaction with the canvas will actually be directed toward its �
 |------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|------------------------------------------|
 | [moveTo()][moveTo()]                     | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
 | [lineTo()][lineTo()]                     | [**font**][font] ⧸[⚡](#font)                               | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
-| [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createPattern()][createPattern()]                 | [setTransform()][setTransform()]         |
-| [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                  | [createConicGradient()][createConicGradient()]     | [resetTransform()][resetTransform()]     |
-| [conicCurveTo() ⚡][conicCurveTo]        | [**textBaseline**][textBaseline]                            | [createLinearGradient()][createLinearGradient()]   | [transform()][transform()]               |
-| [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [createRadialGradient()][createRadialGradient()]   | [translate()][translate()]               |
-| [closePath()][closePath()]               | [**textWrap** ⚡](#textwrap)                                | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
-| [arc()][arc()]                           | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) | [getImageData()][getImageData()]                   | [scale()][scale()]                       |
-| [ellipse()][ellipse()]                   | [outlineText() ⚡][outlineText()]                                                            | [putImageData()][putImageData()]                   |                                          |
-| [rect()][rect()]                         |
+| [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createConicGradient()][createConicGradient()]     | [setTransform()][setTransform()]         |
+| [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                  | [createLinearGradient()][createLinearGradient()]   | [resetTransform()][resetTransform()]     |
+| [conicCurveTo() ⚡][conicCurveTo]        | [**textBaseline**][textBaseline]                            | [createRadialGradient()][createRadialGradient()]   | [transform()][transform()]               |
+| [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [createPattern()][createPattern()]                 | [translate()][translate()]               |
+| [closePath()][closePath()]               | [**textWrap** ⚡](#textwrap)                                | [createTexture()][createTexture()]                 | [rotate()][rotate()]                     |
+| [arc()][arc()]                           | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) | [createImageData()][createImageData()]             | [scale()][scale()]                       |
+| [ellipse()][ellipse()]                   | [outlineText() ⚡][outlineText()]                           | [getImageData()][getImageData()]                   |                                          |
+| [rect()][rect()]                         |                                                             | [putImageData()][putImageData()]                   |
 
 ##### PROPERTIES
 
@@ -315,6 +315,10 @@ The standard canvas has a rather impoverished typesetting system, allowing for o
 #### `conicCurveTo(cpx, cpy, x, y, weight)`
 
 Adds a line segment connecting the current point to (*x, y*) but curving toward the control point (*cpx, cpy*) along the way. The `weight` argument controls how close the curve will come to the control point. If the weight is `0`, the result will be a straight line from the current point to (*x, y*). With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`. Weights greater than `1.0` will pull the line segment ever closer to the control point.
+
+#### `createTexture()`
+
+TKTKTKTKTK
 
 #### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 
@@ -724,6 +728,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
 [conicCurveTo]: #coniccurvetocpx-cpy-x-y-weight
 [outlineText()]: #outlinetextstr
+[createTexture()]: #createtexture
 
 [Buffer]: https://nodejs.org/api/buffer.html
 [Canvas]: https://developer.mozilla.org/en-US/docs/Web/API/Canvas
