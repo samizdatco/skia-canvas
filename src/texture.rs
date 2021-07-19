@@ -50,13 +50,13 @@ impl CanvasTexture{
     match &tile.path {
       Some(path) => {
         let path = path.with_transform(&Matrix::rotate_rad(tile.angle));
-        paint.set_path_effect(path_2d_path_effect::new(&matrix, &path));
         matrix.pre_scale(tile.scale, None);
+        paint.set_path_effect(path_2d_path_effect::new(&matrix, &path));
       }
       None => {
         let scale = tile.scale.0.max(tile.scale.1);
-        paint.set_path_effect(line_2d_path_effect::new(tile.line, &matrix));
         matrix.pre_scale((scale, scale), None);
+        paint.set_path_effect(line_2d_path_effect::new(tile.line, &matrix));
       }
     };
 
