@@ -312,18 +312,12 @@ impl Context2D{
   }
 
   pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<FillType>){
-    let mut path = match path {
-      Some(path) => path,
-      None => {
-        // the current path has already incorporated its transform state
-        let inverse = self.state.matrix.invert().unwrap();
-        self.path.with_transform(&inverse)
-      }
-    };
-
-    if let Some(rule) = rule{
-      path.set_fill_type(rule);
-    }
+    let mut path = path.unwrap_or_else(|| {
+      // the current path has already incorporated its transform state
+      let inverse = self.state.matrix.invert().unwrap();
+      self.path.with_transform(&inverse)
+    });
+    path.set_fill_type(rule.unwrap_or(FillType::Winding));
 
     let mut paint = self.paint_for(style);
     let texture = self.state.texture(style);
@@ -333,27 +327,22 @@ impl Context2D{
         canvas.save();
         let spacing = tile.spacing();
         let offset = (-spacing.0/2.0, -spacing.1/2.0);
-        let tile_bounds = match style{
-          PaintStyle::Stroke => {
-            let clip = paint.get_fill_path(&path, None, None).unwrap();
-            canvas.clip_path(&clip, ClipOp::Intersect, true);
-            clip.bounds().with_offset(offset).with_outset(spacing)
-          },
-          _ => {
-            canvas.clip_path(&path, ClipOp::Intersect, true);
-            path.bounds().with_offset(offset).with_outset(spacing)
-          }
-        };
+        let stencil = paint.get_fill_path(&path, None, None).unwrap();
+        let stencil_frame = &Path::rect(stencil.bounds().with_offset(offset).with_outset(spacing), None);
 
         let mut tile_paint = paint.clone();
         tile.mix_into(&mut tile_paint, self.state.global_alpha);
-        canvas.draw_path(&Path::rect(tile_bounds, None), &tile_paint);
-        canvas.restore();
+        let tile_path = tile_paint.get_fill_path(stencil_frame, None, None).unwrap();
+
+        let mut fill_paint = paint.clone();
+        fill_paint.set_style(PaintStyle::Fill);
+        if let Some(fill_path) = stencil.op(&tile_path, PathOp::Intersect){
+          canvas.draw_path(&fill_path, &fill_paint);
+        }
       }else{
         canvas.draw_path(&path, &paint);
       }
     });
-
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
