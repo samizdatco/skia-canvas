@@ -498,3 +498,9 @@ pub fn edges(mut cx: FunctionContext) -> JsResult<JsArray> {
 
   Ok(verbs)
 }
+
+pub fn toString(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let this = this.borrow();
+  Ok(cx.string(this.path.to_svg()))
+}
