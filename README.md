@@ -314,9 +314,55 @@ The standard canvas has a rather impoverished typesetting system, allowing for o
 
 #### `.lineDashMarker`
 
-If a Path2D object is assigned to the context’s `lineDashMarker` property, it will be used instead of the default ‘broken line’ when [`setLineDash`][setLineDash()] has been set to a non-empty value. The marker will be drawn at evenly spaced intervals along the path with the distance controlled by the first number in the `setLineDash` array—any subsequent values are ignored.
+If a Path2D object is assigned to the context’s `lineDashMarker` property, it will be used instead of the default dash pattern when [`setLineDash`][setLineDash()] has been set to a non-empty value. The marker will be drawn at evenly spaced intervals along the path with the distance controlled by the first number in the `setLineDash` array—any subsequent values are ignored.
 
-The marker should be a Path2D object centered on (0, 0). Points to the right of the origin will run parallel to the path being stroked. If the marker path ends with a [`closePath()`][p2d_closePath], the marker will be filled using the current [`strokeStyle`][strokeStyle]. if the path is not closed, it will be stroked using the current [`lineWidth`][lineWidth], [`lineJoin`][lineJoin], [`lineCap`][lineCap], and [`strokeStyle`][strokeStyle].
+The marker should be a Path2D object centered on (0, 0). Points to the right of the origin will run parallel to the path being stroked. If the marker path ends with a [`closePath()`][p2d_closePath], the marker will be filled using the current [`strokeStyle`][strokeStyle]. if the path is not closed, it will be stroked using the current [`lineWidth`][lineWidth]/[`join`][lineJoin]/[`cap`][lineCap], and [`strokeStyle`][strokeStyle].
+
+```js
+let {PI} = Math
+
+function drawArc(start, end){
+  ctx.beginPath()
+  ctx.arc(120, 120, 100, start, end)
+  ctx.stroke()
+}
+
+// define marker paths
+let caret = new Path2D()
+caret.moveTo(-8,-8)
+caret.lineTo(0,0)
+caret.lineTo(-8,8)
+
+let dots = new Path2D()
+dots.arc(0, 0, 4, 0, 2*PI)
+dots.closePath() // fill rather than stroke the marker
+
+let cross = new Path2D()
+cross.moveTo(-6, -6)
+cross.lineTo(6, 6)
+cross.moveTo(-6, 6)
+cross.lineTo(6, -6)
+
+// draw quadrants using different markers
+ctx.lineWidth = 4
+ctx.strokeStyle = 'orange'
+ctx.setLineDash([20])
+drawArc(-PI/2, 0)
+
+ctx.strokeStyle = 'deepskyblue'
+ctx.lineDashMarker = caret
+drawArc(0, PI/2)
+
+ctx.strokeStyle = 'limegreen'
+ctx.lineDashMarker = dots
+drawArc(PI/2, PI)
+
+ctx.strokeStyle = 'red'
+ctx.lineDashMarker = cross
+drawArc(-PI, -PI/2)
+```
+![custom dash markers](/test/assets/path/lineDashMarker@2x.png)
+
 
 #### `.lineDashFit`
 
