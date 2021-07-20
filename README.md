@@ -367,7 +367,7 @@ The `Path2D` class allows you to create paths independent of a given [Canvas](#c
 
 | Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                  |
 | --                                         | --                       | --                       | --                               | --                           |
-| [**d**](#d)                                | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
+| [**d** ⚡](#d)                             | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
 | [moveTo()][p2d_moveTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)          |
 | [lineTo()][p2d_lineTo]                     | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains]   |
 | [bezierCurveTo()][p2d_bezierCurveTo]       | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]       |
