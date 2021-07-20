@@ -499,8 +499,22 @@ pub fn edges(mut cx: FunctionContext) -> JsResult<JsArray> {
   Ok(verbs)
 }
 
-pub fn toString(mut cx: FunctionContext) -> JsResult<JsString> {
+pub fn get_d(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let this = this.borrow();
   Ok(cx.string(this.path.to_svg()))
+}
+
+pub fn set_d(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let svg_string = string_arg(&mut cx, 1, "svgPath")?;
+  let mut this = this.borrow_mut();
+
+  if let Some(path) = Path::from_svg(svg_string){
+    this.path.rewind();
+    this.path.add_path(&path, (0,0), None);
+    Ok(cx.undefined())
+  }else{
+    cx.throw_type_error("Expected a valid SVG path string")
+  }
 }

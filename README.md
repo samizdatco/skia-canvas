@@ -369,14 +369,14 @@ The `Path2D` class allows you to create paths independent of a given [Canvas](#c
 | --                                         | --                       | --                       | --                               | --                           |
 | [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
 | [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)          |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains]   |
-| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]       |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               | [offset()][p2d_offset]       |
-| [closePath()][p2d_closePath]               |                          |                          | [unwind()][p2d_unwind]           | [transform()][p2d_transform] |
-
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [**d**](#d)                  |
+| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [contains()][p2d_contains]   |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               | [points()][p2d_points]       |
+| [closePath()][p2d_closePath]               |                          |                          | [unwind()][p2d_unwind]           | [offset()][p2d_offset]       |
+|                                            |                          |                          |                                  | [transform()][p2d_transform] |
 #### Creating `Path2D` objects
 
-Its constructor can be called without any arguments to create a new, empty path object. It can also accept a string  using [SVG syntax][SVG_path_commands] or a reference to an existing `Path2D` object (which it will return a clone of):
+Its constructor can be called without any arguments to create a new, empty path object. It can also accept a string using [SVG syntax][SVG_path_commands] or a reference to an existing `Path2D` object (which it will return a clone of):
 ```js
 // three identical (but independent) paths
 let p1 = new Path2D("M 10,10 h 100 v 100 h -100 Z")
@@ -402,6 +402,10 @@ The `.bounds` property returns an object defining the minimal rectangle containi
 ```
 {top, left, bottom, right, width, height}
 ```
+
+#### `.d`
+
+Contains a string describing the path’s edges using [SVG syntax][SVG_path_commands]. This property is both readable and writeable (and can be appended to using the `+=` operator).
 
 #### `.edges`
 
