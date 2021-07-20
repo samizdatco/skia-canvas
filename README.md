@@ -367,13 +367,14 @@ The `Path2D` class allows you to create paths independent of a given [Canvas](#c
 
 | Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                  |
 | --                                         | --                       | --                       | --                               | --                           |
-| [moveTo()][p2d_moveTo]                     | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
-| [lineTo()][p2d_lineTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)          |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [**d**](#d)                  |
-| [conicCurveTo() ⚡][conicCurveTo]          | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [contains()][p2d_contains]   |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               | [points()][p2d_points]       |
-| [closePath()][p2d_closePath]               |                          |                          | [unwind()][p2d_unwind]           | [offset()][p2d_offset]       |
-|                                            |                          |                          |                                  | [transform()][p2d_transform] |
+| [**d**](#d)                                | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
+| [moveTo()][p2d_moveTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)          |
+| [lineTo()][p2d_lineTo]                     | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains]   |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]       |
+| [conicCurveTo() ⚡][conicCurveTo]          | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               | [offset()][p2d_offset]       |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] |                          |                          | [unwind()][p2d_unwind]           | [transform()][p2d_transform] |
+| [closePath()][p2d_closePath]               |
+
 #### Creating `Path2D` objects
 
 Its constructor can be called without any arguments to create a new, empty path object. It can also accept a string using [SVG syntax][SVG_path_commands] or a reference to an existing `Path2D` object (which it will return a clone of):
@@ -390,7 +391,6 @@ p3.rect(10, 10, 100, 100)
 A canvas’s context always contains an implicit ‘current’ bézier path which is updated by commands like [lineTo()][lineTo()] and [arcTo()][arcTo()] and is drawn to the canvas by calling [fill()][fill()], [stroke()][stroke()], or [clip()][clip()] without any arguments (aside from an optional [winding][nonzero] [rule][evenodd]). If you start creating a second path by calling [beginPath()][beginPath()] the context discards the prior path, forcing you to recreate it by hand if you need it again later.
 
 You can then use these objects by passing them as the first argument to the context’s `fill()`, `stroke()`, and `clip()` methods (along with an optional second argument specifying the winding rule).
-
 
 ##### PROPERTIES
 
