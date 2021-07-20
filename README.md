@@ -264,7 +264,7 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
 
-| Canvas State                             | Drawing Primitives                           | Colors & Patterns                                 | Line Style                              | Transform                                |
+| Canvas State                             | Drawing                                      | Pattern & Color                                   | Line Style                              | Transform                                |
 |------------------------------------------|----------------------------------------------|---------------------------------------------------|-----------------------------------------|------------------------------------------|
 | [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                        | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform] |
 | [beginPath()][beginPath()]               | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [getTransform()][getTransform()]         |
@@ -375,9 +375,29 @@ The `lineDashFit` attribute can be set to `"move"`, `"turn"`, or `"follow"` and 
 
 Adds a line segment connecting the current point to (*x, y*) but curving toward the control point (*cpx, cpy*) along the way. The `weight` argument controls how close the curve will come to the control point. If the weight is `0`, the result will be a straight line from the current point to (*x, y*). With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`. Weights greater than `1.0` will pull the line segment ever closer to the control point.
 
-#### `createTexture()`
+#### `createTexture(spacing, {path, line, color, angle, offset=0})`
 
-TKTKTKTKTK
+The `createTexture()` method returns a `CanvasTexture` object that can be assigned to the context’s `strokeStyle` or `fillStyle` property. Similar to a `CanvasPattern`, a `CanvasTexture` defines a repeating pattern that will be drawn instead of a flat color, but textures define their content using *vectors* rather than bitmaps.
+
+Textures can be based on a user-provided Path2D object or will draw a stripe pattern of parallel lines if a path isn’t provided. The `spacing` argument is required and defines the rectangular area that each repeating ‘tile’ in the pattern will occupy. It can either be a single number (which will be used for both its width and height) or an array with two numbers (width and height). When creating a stripe pattern, the `spacing` argument defines the distance between neighboring lines, so providing more than one value is unnecessary.
+
+The optional second argument can be an object with one or more of the following attributes:
+
+##### `path`
+If set to a Path2D object, the `path` will be drawn once per tile with its origin in the upper left corner of each tile. Note that the path will not be clipped even if it extends beyond the bounds of the current tile, allowing you to overlap the texture with neighboring tiles.
+
+##### `line`
+If set to a positive number, the path will be stroked rather than filled and the `line` value will set the width of the stroke.
+
+##### `color`
+By default the texture will be drawn in black (filled if `line` is undefined, stroked otherwise). The `color` argument can be set to a string defining the stroke/fill color to be used instead.
+
+##### `angle`
+The rectangle defined by the `spacing` argument will be aligned with the canvas’s horizontal and vertical axes by default. Specifying an `angle` value (in radians) allows you to rotate this tile grid clockwise relative to its default orientation.
+
+##### `offset`
+As with `CanvasPattern` objects, textures are positioned globally relative to the upper left corner of the canvas—not the corner of the object currently being filled or stroked. To fine-tune the texture’s alignment with individual objects, set the `offset` argument to an `[x, y]` array with two numbers that will shift the texture relative to its origin.
+
 
 #### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 
@@ -787,7 +807,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
 [conicCurveTo]: #coniccurvetocpx-cpy-x-y-weight
 [outlineText()]: #outlinetextstr
-[createTexture()]: #createtexture
+[createTexture()]: #createtexturespacing-path-line-color-angle-offset0
 [lineDashMarker]: #linedashmarker
 [lineDashFit]: #linedashfit
 
