@@ -316,50 +316,49 @@ The standard canvas has a rather impoverished typesetting system, allowing for o
 
 If a Path2D object is assigned to the context’s `lineDashMarker` property, it will be used instead of the default dash pattern when [`setLineDash`][setLineDash()] has been set to a non-empty value. The marker will be drawn at evenly spaced intervals along the path with the distance controlled by the first number in the `setLineDash` array—any subsequent values are ignored.
 
-The marker should be a Path2D object centered on (0, 0). Points to the right of the origin will run parallel to the path being stroked. If the marker path ends with a [`closePath()`][p2d_closePath], the marker will be filled using the current [`strokeStyle`][strokeStyle]. if the path is not closed, it will be stroked using the current [`lineWidth`][lineWidth]/[`join`][lineJoin]/[`cap`][lineCap], and [`strokeStyle`][strokeStyle].
+The marker should be a Path2D object centered on (0, 0). Points to the right of the origin will run parallel to the path being stroked. If the marker path ends with a [`closePath()`][p2d_closePath], the marker will be filled using the current [`strokeStyle`][strokeStyle]. if the path is not closed, it will be stroked using the current [`lineWidth`][lineWidth]/[`join`][lineJoin]/[`cap`][lineCap], [`miterLimit`][miterLimit], and [`strokeStyle`][strokeStyle].
 
 ```js
-let {PI} = Math
-
-function drawArc(start, end){
-  ctx.beginPath()
-  ctx.arc(120, 120, 100, start, end)
-  ctx.stroke()
-}
-
 // define marker paths
 let caret = new Path2D()
 caret.moveTo(-8,-8)
-caret.lineTo(0,0)
-caret.lineTo(-8,8)
+caret.lineTo( 0, 0)
+caret.lineTo(-8, 8)
 
-let dots = new Path2D()
-dots.arc(0, 0, 4, 0, 2*PI)
-dots.closePath() // fill rather than stroke the marker
+let dot = new Path2D()
+dot.arc(0, 0, 4, 0, 2*Math.PI)
+dot.closePath() // use fill rather than stroke
 
 let cross = new Path2D()
-cross.moveTo(-6, -6)
-cross.lineTo(6, 6)
+cross.moveTo(-6,-6)
+cross.lineTo( 6, 6)
 cross.moveTo(-6, 6)
-cross.lineTo(6, -6)
+cross.lineTo( 6,-6)
 
-// draw quadrants using different markers
-ctx.lineWidth = 4
-ctx.strokeStyle = 'orange'
+// draw arcs using different markers
+function drawArc(x, color){
+  ctx.strokeStyle = color
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.arc(x + 120, 120, 100, -Math.PI, -Math.PI/2)
+  ctx.stroke()
+}
+
 ctx.setLineDash([20])
-drawArc(-PI/2, 0)
+drawArc(0, "orange")
 
-ctx.strokeStyle = 'deepskyblue'
 ctx.lineDashMarker = caret
-drawArc(0, PI/2)
+drawArc(100, "deepskyblue")
 
-ctx.strokeStyle = 'limegreen'
-ctx.lineDashMarker = dots
-drawArc(PI/2, PI)
+ctx.lineDashMarker = dot
+drawArc(200, "limegreen")
 
-ctx.strokeStyle = 'red'
 ctx.lineDashMarker = cross
-drawArc(-PI, -PI/2)
+drawArc(300, "red")
+
+ctx.setLineDash([])
+drawArc(400, "#aaa")
+
 ```
 ![custom dash markers](/test/assets/path/lineDashMarker@2x.png)
 
@@ -379,7 +378,7 @@ Adds a line segment connecting the current point to (*x, y*) but curving toward 
 
 The `createTexture()` method returns a `CanvasTexture` object that can be assigned to the context’s `strokeStyle` or `fillStyle` property. Similar to a `CanvasPattern`, a `CanvasTexture` defines a repeating pattern that will be drawn instead of a flat color, but textures define their content using *vectors* rather than bitmaps.
 
-Textures can be based on a user-provided Path2D object or will draw a stripe pattern of parallel lines if a path isn’t provided. The `spacing` argument is required and defines the rectangular area that each repeating ‘tile’ in the pattern will occupy. It can either be a single number (which will be used for both its width and height) or an array with two numbers (width and height). When creating a stripe pattern, the `spacing` argument defines the distance between neighboring lines, so providing more than one value is unnecessary.
+Textures can be based on a user-provided Path2D object or will draw a stripe pattern of parallel lines if a path isn’t provided. The `spacing` argument is required and defines the rectangular area that each repeating ‘tile’ in the pattern will occupy. It can either be a single number (which will be used for both dimensions) or an array with two numbers (width and height). When creating a stripe pattern, the `spacing` argument defines the distance between neighboring lines, so providing more than one value is unnecessary.
 
 The optional second argument can be an object with one or more of the following attributes:
 
@@ -445,7 +444,7 @@ for (let i=0; i<8000; i++){
 
 ## Path2D
 
-The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
+The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases). `Path2D` objects can also be used as [lineDashMarker][lineDashMarker]s or as the repeating pattern in a [CanvasTexture][createTexture()].
 
 
 | Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                  |
