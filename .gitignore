@@ -1,11 +1,6 @@
 .DS_Store
 .vscode
 .env
-/*.png
-/*.jpg
-/*.js
-/*.html
-/*.txt
 _arc
 build
 lib/v*/*.node
@@ -16,3 +11,4 @@ native/*.node
 target
 test/assets/Oswald
 test/assets/Raleway
+/*.*

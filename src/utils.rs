@@ -388,7 +388,7 @@ pub fn matrix_arg(cx: &mut FunctionContext, idx:usize) -> Result<Matrix, Throw> 
 
 use crate::path::{BoxedPath2D};
 
-pub fn path2d_arg_opt(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
+pub fn opt_path2d_arg(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
   if let Some(arg) = cx.argument_opt(idx as i32){
     if let Ok(arg) = arg.downcast::<BoxedPath2D, _>(cx){
       let arg = arg.borrow();
@@ -397,7 +397,6 @@ pub fn path2d_arg_opt(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
   }
   None
 }
-
 
 //
 // Filters
@@ -609,6 +608,24 @@ pub fn to_path_op(op_name:&str) -> Option<PathOp> {
   Some(op)
 }
 
+use skia_safe::path_1d_path_effect;
+pub fn to_1d_style(mode_name:&str) -> Option<path_1d_path_effect::Style>{
+  let mode = match mode_name.to_lowercase().as_str(){
+    "move" => path_1d_path_effect::Style::Translate,
+    "turn" => path_1d_path_effect::Style::Rotate,
+    "follow" => path_1d_path_effect::Style::Morph,
+    _ => return None
+  };
+  Some(mode)
+}
+
+pub fn from_1d_style(mode:path_1d_path_effect::Style) -> String{
+  match mode{
+    path_1d_path_effect::Style::Translate => "move",
+    path_1d_path_effect::Style::Rotate => "turn",
+    path_1d_path_effect::Style::Morph => "follow"
+  }.to_string()
+}
 
 use skia_safe::path::FillType;
 

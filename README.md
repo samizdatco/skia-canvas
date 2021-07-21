@@ -12,6 +12,7 @@ In particular, Skia Canvas:
   - uses native threads and [EventQueues](https://docs.rs/neon/0.8.3-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
+  - can fill shapes with vector-based [Textures][createTexture()] in addition to bitmap-based [Patterns][createPattern()] and supports line-drawing with custom [markers][lineDashMarker]
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
 
@@ -264,31 +265,32 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
 
-| Canvas State                             | Drawing Primitives                           | Stroke & Fill Style                  | Compositing Effects                                      |
-|------------------------------------------|----------------------------------------------|--------------------------------------|----------------------------------------------------------|
-| [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [drawImage()][drawImage()]                   | [**fillStyle**][fillStyle]           | [**filter**][filter]                                     |
-| [beginPath()][beginPath()]               | [clearRect()][clearRect()]                   | [**lineCap**][lineCap]               | [**globalAlpha**][globalAlpha]                           |
-| [isPointInPath()][isPointInPath()]       | [fillRect()][fillRect()]                     | [**lineDashOffset**][lineDashOffset] | [**globalCompositeOperation**][globalCompositeOperation] |
-| [isPointInStroke()][isPointInStroke()]   | [strokeRect()][strokeRect()]                 | [**lineJoin**][lineJoin]             | [**shadowBlur**][shadowBlur]                             |
-| [save()][save()]                         | [fillText()][fillText()] ⧸[⚡][drawText]     | [**lineWidth**][lineWidth]           | [**shadowColor**][shadowColor]                           |
-| [restore()][restore()]                   | [strokeText()][strokeText()] ⧸[⚡][drawText] | [**miterLimit**][miterLimit]         | [**shadowOffsetX**][shadowOffsetX]                       |
-| [clip()][clip()]                         | [fill()][fill()]                             | [**strokeStyle**][strokeStyle]       | [**shadowOffsetY**][shadowOffsetY]                       |
-|                                          | [stroke()][stroke()]                         | [getLineDash()][getLineDash()]       |                                                          |
-|                                          |                                              | [setLineDash()][setLineDash()]       |                                                          |
+| Canvas State                             | Drawing                                      | Pattern & Color                                   | Line Style                              | Transform                                |
+|------------------------------------------|----------------------------------------------|---------------------------------------------------|-----------------------------------------|------------------------------------------|
+| [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                        | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform] |
+| [beginPath()][beginPath()]               | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [getTransform()][getTransform()]         |
+| [isPointInPath()][isPointInPath()]       | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [setTransform()][setTransform()]         |
+| [isPointInStroke()][isPointInStroke()]   | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]    | [resetTransform()][resetTransform()]     |
+| [save()][save()]                         | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                | [transform()][transform()]               |
+| [restore()][restore()]                   | [fill()][fill()]                             | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]              | [translate()][translate()]               |
+| [clip()][clip()]                         | [stroke()][stroke()]                         | [createTexture() ⚡][createTexture()]             | [**miterLimit**][miterLimit]            | [rotate()][rotate()]                     |
+|                                          |                                              |                                                   | [getLineDash()][getLineDash()]          | [scale()][scale()]                       |
+|                                          |                                              |                                                   | [setLineDash()][setLineDash()]          |                                          |
 
 
-| Bezier Paths                             | Typography                                                  | Pattern & Image                                    | Transform                                |
-|------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|------------------------------------------|
-| [moveTo()][moveTo()]                     | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**currentTransform**][currentTransform] |
-| [lineTo()][lineTo()]                     | [**font**][font] ⧸[⚡](#font)                               | [**imageSmoothingQuality**][imageSmoothingQuality] | [getTransform()][getTransform()]         |
-| [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createPattern()][createPattern()]                 | [setTransform()][setTransform()]         |
-| [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                  | [createConicGradient()][createConicGradient()]     | [resetTransform()][resetTransform()]     |
-| [conicCurveTo() ⚡][conicCurveTo]        | [**textBaseline**][textBaseline]                            | [createLinearGradient()][createLinearGradient()]   | [transform()][transform()]               |
-| [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [createRadialGradient()][createRadialGradient()]   | [translate()][translate()]               |
-| [closePath()][closePath()]               | [**textWrap** ⚡](#textwrap)                                | [createImageData()][createImageData()]             | [rotate()][rotate()]                     |
-| [arc()][arc()]                           | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) | [getImageData()][getImageData()]                   | [scale()][scale()]                       |
-| [ellipse()][ellipse()]                   | [outlineText() ⚡][outlineText()]                                                            | [putImageData()][putImageData()]                   |                                          |
-| [rect()][rect()]                         |
+| Bezier Paths                             | Typography                                                  | Images                                             | Compositing Effects                                      |
+|------------------------------------------|-------------------------------------------------------------|----------------------------------------------------|----------------------------------------------------------|
+| [moveTo()][moveTo()]                     | [**direction**][direction]                                  | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**filter**][filter]                                     |
+| [lineTo()][lineTo()]                     | [**font**][font] ⧸[⚡](#font)                               | [**imageSmoothingQuality**][imageSmoothingQuality] | [**globalAlpha**][globalAlpha]                           |
+| [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createImageData()][createImageData()]             | [**globalCompositeOperation**][globalCompositeOperation] |
+| [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                  | [getImageData()][getImageData()]                   | [**shadowBlur**][shadowBlur]                             |
+| [conicCurveTo() ⚡][conicCurveTo]        | [**textBaseline**][textBaseline]                            | [putImageData()][putImageData()]                   | [**shadowColor**][shadowColor]                           |
+| [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [drawImage()][drawImage()]                         | [**shadowOffsetX**][shadowOffsetX]                       |
+| [closePath()][closePath()]               | [**textWrap** ⚡](#textwrap)                                |                                                    | [**shadowOffsetY**][shadowOffsetY]                       |
+| [arc()][arc()]                           | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) |                                                    |                                                          |
+| [ellipse()][ellipse()]                   | [outlineText() ⚡][outlineText()]                           |                                                    |                                                          |
+| [rect()][rect()]                         |                                                             |                                                    |
+
 
 ##### PROPERTIES
 
@@ -310,11 +312,92 @@ The tracking value defaults to `0` and settings will persist across changes to t
 
 The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()`
 
+
+#### `.lineDashMarker`
+
+If a Path2D object is assigned to the context’s `lineDashMarker` property, it will be used instead of the default dash pattern when [`setLineDash`][setLineDash()] has been set to a non-empty value. The marker will be drawn at evenly spaced intervals along the path with the distance controlled by the first number in the `setLineDash` array—any subsequent values are ignored.
+
+The marker should be a Path2D object centered on (0, 0). Points to the right of the origin will run parallel to the path being stroked. If the marker path ends with a [`closePath()`][p2d_closePath], the marker will be filled using the current [`strokeStyle`][strokeStyle]. if the path is not closed, it will be stroked using the current [`lineWidth`][lineWidth]/[`join`][lineJoin]/[`cap`][lineCap], [`miterLimit`][miterLimit], and [`strokeStyle`][strokeStyle].
+
+```js
+// define marker paths
+let caret = new Path2D()
+caret.moveTo(-8,-8)
+caret.lineTo( 0, 0)
+caret.lineTo(-8, 8)
+
+let dot = new Path2D()
+dot.arc(0, 0, 4, 0, 2*Math.PI)
+dot.closePath() // use fill rather than stroke
+
+let cross = new Path2D()
+cross.moveTo(-6,-6)
+cross.lineTo( 6, 6)
+cross.moveTo(-6, 6)
+cross.lineTo( 6,-6)
+
+// draw arcs using different markers
+function drawArc(x, color){
+  ctx.strokeStyle = color
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.arc(x + 120, 120, 100, -Math.PI, -Math.PI/2)
+  ctx.stroke()
+}
+
+ctx.setLineDash([20])
+drawArc(0, "orange")
+
+ctx.lineDashMarker = caret
+drawArc(100, "deepskyblue")
+
+ctx.lineDashMarker = dot
+drawArc(200, "limegreen")
+
+ctx.lineDashMarker = cross
+drawArc(300, "red")
+
+ctx.setLineDash([])
+drawArc(400, "#aaa")
+
+```
+![custom dash markers](/test/assets/path/lineDashMarker@2x.png)
+
+
+#### `.lineDashFit`
+
+The `lineDashFit` attribute can be set to `"move"`, `"turn"`, or `"follow"` and controls how the marker is transformed with each repetition along the path. `"move"`  and `"turn"` use simple translation and rotation, whereas `"follow"` will bend the marker to match the dashed path's contours.
+
+
 ##### METHODS
 
 #### `conicCurveTo(cpx, cpy, x, y, weight)`
 
 Adds a line segment connecting the current point to (*x, y*) but curving toward the control point (*cpx, cpy*) along the way. The `weight` argument controls how close the curve will come to the control point. If the weight is `0`, the result will be a straight line from the current point to (*x, y*). With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`. Weights greater than `1.0` will pull the line segment ever closer to the control point.
+
+#### `createTexture(spacing, {path, line, color, angle, offset=0})`
+
+The `createTexture()` method returns a `CanvasTexture` object that can be assigned to the context’s `strokeStyle` or `fillStyle` property. Similar to a `CanvasPattern`, a `CanvasTexture` defines a repeating pattern that will be drawn instead of a flat color, but textures define their content using *vectors* rather than bitmaps.
+
+Textures can be based on a user-provided Path2D object or will draw a stripe pattern of parallel lines if a path isn’t provided. The `spacing` argument is required and defines the rectangular area that each repeating ‘tile’ in the pattern will occupy. It can either be a single number (which will be used for both dimensions) or an array with two numbers (width and height). When creating a stripe pattern, the `spacing` argument defines the distance between neighboring lines, so providing more than one value is unnecessary.
+
+The optional second argument can be an object with one or more of the following attributes:
+
+##### `path`
+If set to a Path2D object, the `path` will be drawn once per tile with its origin in the upper left corner of each tile. Note that the path will not be clipped even if it extends beyond the bounds of the current tile, allowing you to overlap the texture with neighboring tiles.
+
+##### `line`
+If set to a positive number, the path will be stroked rather than filled and the `line` value will set the width of the stroke.
+
+##### `color`
+By default the texture will be drawn in black (filled if `line` is undefined, stroked otherwise). The `color` argument can be set to a string defining the stroke/fill color to be used instead.
+
+##### `angle`
+The rectangle defined by the `spacing` argument will be aligned with the canvas’s horizontal and vertical axes by default. Specifying an `angle` value (in radians) allows you to rotate this tile grid clockwise relative to its default orientation.
+
+##### `offset`
+As with `CanvasPattern` objects, textures are positioned globally relative to the upper left corner of the canvas—not the corner of the object currently being filled or stroked. To fine-tune the texture’s alignment with individual objects, set the `offset` argument to an `[x, y]` array with two numbers that will shift the texture relative to its origin.
+
 
 #### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 
@@ -362,7 +445,7 @@ for (let i=0; i<8000; i++){
 
 ## Path2D
 
-The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases).
+The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases). `Path2D` objects can also be used as [lineDashMarker][lineDashMarker]s or as the repeating pattern in a [CanvasTexture][createTexture()].
 
 
 | Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                  |
@@ -728,6 +811,9 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [drawText]: #filltextstr-x-y-width--stroketextstr-x-y-width
 [conicCurveTo]: #coniccurvetocpx-cpy-x-y-weight
 [outlineText()]: #outlinetextstr
+[createTexture()]: #createtexturespacing-path-line-color-angle-offset0
+[lineDashMarker]: #linedashmarker
+[lineDashFit]: #linedashfit
 
 [Buffer]: https://nodejs.org/api/buffer.html
 [Canvas]: https://developer.mozilla.org/en-US/docs/Web/API/Canvas

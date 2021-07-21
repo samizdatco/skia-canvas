@@ -11,6 +11,7 @@ mod path;
 mod image;
 mod gradient;
 mod pattern;
+mod texture;
 mod typography;
 mod utils;
 
@@ -83,6 +84,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
   cx.export_function("CanvasPattern_repr", pattern::repr)?;
 
+  // -- CanvasTexture -----------------------------------------------------------------------------
+
+  cx.export_function("CanvasTexture_new", texture::new)?;
+  cx.export_function("CanvasTexture_repr", texture::repr)?;
+
   // -- FontLibrary -------------------------------------------------------------------------------
 
   cx.export_function("FontLibrary_get_families", typography::get_families)?;
@@ -153,6 +159,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_setLineDash", ctx::setLineDash)?;
   cx.export_function("CanvasRenderingContext2D_get_lineCap", ctx::get_lineCap)?;
   cx.export_function("CanvasRenderingContext2D_set_lineCap", ctx::set_lineCap)?;
+  cx.export_function("CanvasRenderingContext2D_get_lineDashFit", ctx::get_lineDashFit)?;
+  cx.export_function("CanvasRenderingContext2D_set_lineDashFit", ctx::set_lineDashFit)?;
+  cx.export_function("CanvasRenderingContext2D_get_lineDashMarker", ctx::get_lineDashMarker)?;
+  cx.export_function("CanvasRenderingContext2D_set_lineDashMarker", ctx::set_lineDashMarker)?;
   cx.export_function("CanvasRenderingContext2D_get_lineDashOffset", ctx::get_lineDashOffset)?;
   cx.export_function("CanvasRenderingContext2D_set_lineDashOffset", ctx::set_lineDashOffset)?;
   cx.export_function("CanvasRenderingContext2D_get_lineJoin", ctx::get_lineJoin)?;
