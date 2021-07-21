@@ -379,9 +379,13 @@ Adds a line segment connecting the current point to (*x, y*) but curving toward 
 
 The `createTexture()` method returns a `CanvasTexture` object that can be assigned to the context’s `strokeStyle` or `fillStyle` property. Similar to a `CanvasPattern`, a `CanvasTexture` defines a repeating pattern that will be drawn instead of a flat color, but textures define their content using *vectors* rather than bitmaps.
 
-Textures can be based on a user-provided Path2D object or will draw a stripe pattern of parallel lines if a path isn’t provided. The `spacing` argument is required and defines the rectangular area that each repeating ‘tile’ in the pattern will occupy. It can either be a single number (which will be used for both dimensions) or an array with two numbers (width and height). When creating a stripe pattern, the `spacing` argument defines the distance between neighboring lines, so providing more than one value is unnecessary.
+Textures can be based on a user-provided Path2D object or will draw a stripe pattern of parallel lines if a path isn’t provided. 
 
-The optional second argument can be an object with one or more of the following attributes:
+##### `spacing`
+
+The `spacing` argument is required and defines the rectangular area that each repeating ‘tile’ in the pattern will occupy. It can either be a single number (which will be used for both dimensions) or an array with two numbers (width and height). When creating a stripe pattern, the `spacing` argument defines the distance between neighboring lines, so providing more than one value is unnecessary.
+
+**The optional second argument can be an object with one or more of the following attributes:**
 
 ##### `path`
 If set to a Path2D object, the `path` will be drawn once per tile with its origin in the upper left corner of each tile. Note that the path will not be clipped even if it extends beyond the bounds of the current tile, allowing you to overlap the texture with neighboring tiles.
