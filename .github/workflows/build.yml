@@ -57,7 +57,7 @@ jobs:
 
     - name: Build module
       env:
-        MACOSX_DEPLOYMENT_TARGET: 10.12
+        MACOSX_DEPLOYMENT_TARGET: 10.13
       run: |
         npm ci --ignore-scripts
         npm run build -- --release
