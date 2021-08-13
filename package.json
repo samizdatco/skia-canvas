@@ -32,7 +32,7 @@
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
-    "aws-sdk": "^2.943.0",
+    "aws-sdk": "^2.967.0",
     "cargo-cp-artifact": "^0.1",
     "express": "^4.17.1",
     "jest": "^27.0.6",
