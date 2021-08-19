@@ -8,7 +8,8 @@ use neon::prelude::*;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo,
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data, Font,
-                PictureRecorder, Picture, Drawable, FilterQuality, SamplingOptions,
+                FilterQuality, FilterMode, MipmapMode, SamplingOptions, CubicResampler,
+                PictureRecorder, Picture, Drawable,
                 image_filters, color_filters, table_color_filter, dash_path_effect, path_1d_path_effect};
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
@@ -463,9 +464,24 @@ impl Context2D{
     canvas_paint
       .set_alpha_f(self.state.global_alpha);
 
-    let sampling = match self.state.image_smoothing_enabled {
-      true => SamplingOptions::from_filter_quality(self.state.image_filter_quality, None),
-      false => SamplingOptions::default()
+    let quality = match self.state.image_smoothing_enabled {
+      true => self.state.image_filter_quality,
+      false => FilterQuality::None
+    };
+
+    let sampling = match quality {
+      FilterQuality::None => SamplingOptions {
+        use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Nearest, mipmap:MipmapMode::None
+      },
+      FilterQuality::Low => SamplingOptions {
+        use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
+      },
+      FilterQuality::Medium => SamplingOptions {
+        use_cubic:true, cubic:CubicResampler::mitchell(), filter:FilterMode::Nearest, mipmap:MipmapMode::Nearest
+      },
+      FilterQuality::High => SamplingOptions {
+        use_cubic:true, cubic:CubicResampler::catmull_rom(), filter:FilterMode::Nearest, mipmap:MipmapMode::Linear
+      }
     };
 
     if let Some(image) = &img {
