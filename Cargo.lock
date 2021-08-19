@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "skia-canvas"
-version = "0.9.23"
+version = "0.9.24"
 dependencies = [
  "crc",
  "css-color",
