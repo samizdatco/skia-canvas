@@ -271,7 +271,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let density = float_arg(&mut cx, 5, "density")?;
   let outline = bool_arg(&mut cx, 6, "outline")?;
   let matte = color_arg(&mut cx, 7);
-  let queue = cx.queue();
+  let channel = cx.channel();
 
   rayon::spawn(move || {
     let encoded = {
@@ -282,7 +282,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       }
     };
 
-    queue.send(move |mut cx| {
+    channel.send(move |mut cx| {
       let callback = callback.into_inner(&mut cx);
       let this = cx.undefined();
 
@@ -353,7 +353,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let density = float_arg(&mut cx, 7, "density")?;
   let outline = bool_arg(&mut cx, 8, "outline")?;
   let matte = color_arg(&mut cx, 9);
-  let queue = cx.queue();
+  let channel = cx.channel();
 
   rayon::spawn(move || {
     let result = {
@@ -366,7 +366,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       }
     };
 
-    queue.send(move |mut cx| {
+    channel.send(move |mut cx| {
       let callback = callback.into_inner(&mut cx);
       let this = cx.undefined();
       let args = match result {

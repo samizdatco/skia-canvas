@@ -17,9 +17,9 @@ lazy_static = "1.4.0"
 rayon = "1.5.1"
 
 [dependencies.neon]
-version = "0.8.3"
+version = "0.9.0"
 default-features = false
-features = ["napi-6", "event-queue-api"]
+features = ["napi-6", "channel-api"]
 
 [dependencies.skia-safe]
 version = "0.41.0"

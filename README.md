@@ -9,7 +9,7 @@ In particular, Skia Canvas:
   - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
-  - uses native threads and [EventQueues](https://docs.rs/neon/0.8.3-napi/neon/event/struct.EventQueue.html) for asynchronous rendering and file I/O
+  - uses native threads and [channels](https://docs.rs/neon/0.9.0/neon/event/struct.Channel.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - can fill shapes with vector-based [Textures][createTexture()] in addition to bitmap-based [Patterns][createPattern()] and supports line-drawing with custom [markers][lineDashMarker]
@@ -103,7 +103,7 @@ You can also use the ‘slim’ image if you manually install fontconfig:
 
 ```dockerfile
 FROM node:slim
-RUN apt-get update && apt-get install -y -q --no-install-recommends libfontconfig1 
+RUN apt-get update && apt-get install -y -q --no-install-recommends libfontconfig1
 ```
 
 ### Compiling from Source
@@ -379,7 +379,7 @@ Adds a line segment connecting the current point to (*x, y*) but curving toward 
 
 The `createTexture()` method returns a `CanvasTexture` object that can be assigned to the context’s `strokeStyle` or `fillStyle` property. Similar to a `CanvasPattern`, a `CanvasTexture` defines a repeating pattern that will be drawn instead of a flat color, but textures define their content using *vectors* rather than bitmaps.
 
-Textures can be based on a user-provided Path2D object or will draw a stripe pattern of parallel lines if a path isn’t provided. 
+Textures can be based on a user-provided Path2D object or will draw a stripe pattern of parallel lines if a path isn’t provided.
 
 ##### `spacing`
 
