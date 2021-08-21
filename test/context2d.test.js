@@ -523,7 +523,8 @@ describe("Context2D", ()=>{
       expect(__foo__).toBeGreaterThan(__foo)
 
       // start from the default, alphabetic baseline
-      var metrics = ctx.measureText("Lordran gypsum")
+      let msg = "Lordran gypsum",
+          metrics = ctx.measureText(msg)
 
       // + means up, - means down when it comes to baselines
       expect(metrics.alphabeticBaseline).toBe(0)
@@ -540,6 +541,14 @@ describe("Context2D", ()=>{
       expect(metrics.alphabeticBaseline).toBeGreaterThan(0)
       expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(0)
       expect(metrics.actualBoundingBoxDescent).toBeLessThan(0)
+
+      // width calculations should be the same (modulo rounding) for any alignment
+      let [lft, cnt, rgt] = ['left', 'center', 'right'].map(align => {
+        ctx.textAlign = align
+        return ctx.measureText(msg).width
+      })
+      expect(lft).toBeCloseTo(cnt)
+      expect(cnt).toBeCloseTo(rgt)
     })
 
   })
