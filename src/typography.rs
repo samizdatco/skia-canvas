@@ -83,7 +83,7 @@ impl Typesetter{
     let ideo = get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset;
     let ascent = norm - font_metrics.ascent;
     let descent = font_metrics.descent - norm;
-    let alignment = get_alignment_factor(&self.graf_style);
+    let alignment = get_alignment_factor(&self.graf_style) * self.width;
 
     if paragraph.line_number() == 0 {
       return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, ascent, descent, hang, norm, ideo]]
@@ -94,11 +94,11 @@ impl Typesetter{
     let line_rects:Vec<(Rect, Range<usize>, f32)> = paragraph.get_line_metrics().iter().map(|line|{
       let baseline = line.baseline - origin;
       let rect = Rect::new(line.left as f32, (baseline - line.ascent) as f32,
-                          (line.width - line.left) as f32, (baseline + line.descent) as f32);
+                          (line.left + line.width) as f32, (baseline + line.descent) as f32);
       let range = string_idx_range(&self.text, line.start_index,
         if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces }
       );
-      (rect.with_offset((alignment*rect.width(), offset)), range, baseline as f32)
+      (rect.with_offset((alignment, offset)), range, baseline as f32)
     }).collect();
 
     // take their union to find the bounds for the whole text run
