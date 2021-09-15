@@ -1,5 +1,6 @@
 const _ = require('lodash'),
       fs = require('fs'),
+      util = require('util'),
       tmp = require('tmp'),
       glob = require('glob').sync,
       {Canvas, Image} = require('../lib');
@@ -53,7 +54,7 @@ describe("Canvas", ()=>{
       expect(canvas.async).toBe(true)
 
       let promise = canvas.png
-      expect(promise).toBeInstanceOf(Promise)
+      expect(util.types.isPromise(promise))
       await expect(promise).resolves.toBeInstanceOf(Buffer)
 
       canvas.async = false
