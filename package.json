@@ -35,7 +35,7 @@
     "aws-sdk": "^2.967.0",
     "cargo-cp-artifact": "^0.1",
     "express": "^4.17.1",
-    "jest": "^27.0.6",
+    "jest": "^27.1.1",
     "lodash": "^4.17.21",
     "nodemon": "^2.0.12",
     "tmp": "^0.2.1"
