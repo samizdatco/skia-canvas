@@ -17,10 +17,10 @@ lazy_static = "1.4.0"
 rayon = "1.5.1"
 
 [dependencies.neon]
-version = "0.9.0"
+version = "0.9.1"
 default-features = false
 features = ["napi-6", "channel-api"]
 
 [dependencies.skia-safe]
-version = "0.41.0"
+version = "0.42.1"
 features = ["textlayout"]

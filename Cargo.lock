@@ -456,9 +456,9 @@ dependencies = [
 
 [[package]]
 name = "neon"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "158d44fdd9cc93d5051c15e970727e94e4440c3c585c77b2f482df397a661fcf"
+checksum = "5e85820b585bf3360bf158ac87a75764c48e361c91bbeb69873e6613cc78c023"
 dependencies = [
  "cslice",
  "neon-build",
@@ -470,15 +470,15 @@ dependencies = [
 
 [[package]]
 name = "neon-build"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "067f30e1bb8bec9a0f2be115fd54430dd66472872c7c1491473618a405c1daac"
+checksum = "ad9febc63f515156d4311a0c43899d3ace46352ecdd591c21b98ca3974f2a0d0"
 
 [[package]]
 name = "neon-macros"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72adff7fd8a79dc3a18e565086179fa7608c555dd0e553e4eafebf9033b6a01c"
+checksum = "987f12c91eb6ce0b67819f7c5fb4d391de64cf411c605ed027f03507a33943b2"
 dependencies = [
  "quote",
  "syn",
@@ -486,9 +486,9 @@ dependencies = [
 
 [[package]]
 name = "neon-runtime"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be066c504047007b93709dc164c42f9f19c2ff365e7bf71240c8f88c92f2e687"
+checksum = "02662cd2e62b131937bdef85d0918b05bc3c204daf4c64af62845403eccb60f3"
 dependencies = [
  "cfg-if 1.0.0",
  "libloading",
@@ -721,9 +721,9 @@ checksum = "42a568c8f2cd051a4d283bd6eb0343ac214c1b0f1ac19f93e1175b2dee38c73d"
 
 [[package]]
 name = "skia-bindings"
-version = "0.41.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a727ba3341bac89592fc6ad05669fd80425bacef0d655baf8e45640fee86f2d2"
+checksum = "3902fb99982774025e9270b0c9109e89b05a8f26bd77adc53a2beae9f470a5e2"
 dependencies = [
  "bindgen",
  "cc",
@@ -751,9 +751,9 @@ dependencies = [
 
 [[package]]
 name = "skia-safe"
-version = "0.41.0"
+version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0585e0a01da97be7f63dbcd81d6880f6aad3392039ef5d420741d1acf238c742"
+checksum = "d6ed1a71dc04e63cb755a77eaf3f4cb9baa26dbe67a6a54f372bcadf2af83023"
 dependencies = [
  "bitflags",
  "lazy_static",
