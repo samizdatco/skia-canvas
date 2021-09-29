@@ -214,6 +214,18 @@ tests['ellipse() 4'] = function (ctx) {
   }
 }
 
+tests["ellipse() 5 fillet"] = function (ctx, done) {
+  ctx.transform(1, 0, 0, 1, 100, 50)
+  ctx.beginPath()
+  ctx.moveTo(-39,-33);
+  ctx.ellipse(39,-23,9,9,0,-1,0,false);
+  ctx.lineTo(49,23);
+  ctx.closePath()
+  ctx.fillStyle="#5a0e3e"
+  ctx.fill()
+  done()
+}
+
 tests['bezierCurveTo()'] = function (ctx) {
   ctx.beginPath()
   ctx.moveTo(75, 40)
