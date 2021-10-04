@@ -64,7 +64,7 @@ describe("Canvas", ()=>{
   describe("handles bad arguments for", ()=>{
     let TMP
     beforeEach(() => TMP = tmp.dirSync().name )
-    afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
+    afterEach(() => fs.rmSync(TMP, {recursive:true}) )
 
     test("initial dimensions", () => {
       let W = 300,
@@ -154,7 +154,7 @@ describe("Canvas", ()=>{
       ctx.arc(100, 100, 25, 0, Math.PI/2)
       ctx.fill()
     })
-    afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
+    afterEach(() => fs.rmSync(TMP, {recursive:true}) )
 
     test("JPEGs", async ()=>{
       await Promise.all([
@@ -330,7 +330,7 @@ describe("Canvas", ()=>{
       ctx.arc(100, 100, 25, 0, Math.PI/2)
       ctx.fill()
     })
-    afterEach(() => fs.rmdirSync(TMP, {recursive:true}) )
+    afterEach(() => fs.rmSync(TMP, {recursive:true}) )
 
     test("JPEGs", ()=>{
       canvas.saveAs(`${TMP}/output1.jpg`)
