@@ -7,7 +7,7 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use skia_safe::{Shader, TileMode, TileMode::{Decal, Repeat}, SamplingOptions, Size,
-                Image as SkImage, Picture, Matrix, FilterQuality, FilterMode};
+                Image as SkImage, Picture, Matrix, FilterMode};
 
 use crate::utils::*;
 use crate::image::{BoxedImage};
@@ -36,11 +36,12 @@ impl CanvasPattern{
     let stamp = stamp.lock().unwrap();
 
     if let Some(image) = &stamp.image{
-      let sampling = match smoothing{
-        true => SamplingOptions::from_filter_quality(FilterQuality::High, None),
-        false => SamplingOptions::default()
+      let quality = match smoothing{
+        true => FilterQuality::High,
+        false => FilterQuality::None
       };
-      match image.to_shader(stamp.repeat, sampling, None){
+
+      match image.to_shader(stamp.repeat, to_sampling_opts(quality), None){
         Some(shader) => Some(shader.with_local_matrix(&stamp.matrix)),
         None => None
       }
