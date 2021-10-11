@@ -133,10 +133,15 @@ pub fn strings_to_array<'a>(cx: &mut FunctionContext<'a>, strings: &[String]) ->
 }
 
 /// Convert from byte-indices to char-indices for a given UTF-8 string
-pub fn string_idx_range(text: &str, begin: usize, end: usize) -> Range<usize>{
-  let start = text[0..begin].chars().count();
-  let end = start + text[begin..end].chars().count();
-  Range{ start, end }
+pub fn string_idx_range(text: &str, start_idx: usize, end_idx: usize) -> Range<usize> {
+  let mut indices = text.char_indices();
+  let obtain_index = |(index, _char)| index;
+  let str_len = text.len();
+
+  Range{
+    start: indices.nth(start_idx).map_or(str_len, &obtain_index),
+    end: indices.nth(end_idx - start_idx - 1).map_or(str_len, &obtain_index),
+  }
 }
 
 //
