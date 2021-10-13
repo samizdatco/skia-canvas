@@ -88,7 +88,7 @@ The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 w
 
 Pre-compiled binaries are available for:
 
-  - Linux (x86)
+  - Linux (x86 & arm7)
   - macOS (x86 & Apple silicon)
   - Windows (x86)
 
