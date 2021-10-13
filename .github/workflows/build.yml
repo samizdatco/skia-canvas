@@ -9,7 +9,7 @@ jobs:
 
   linux-x86:
     runs-on: ubuntu-latest
-    container: node:lts-stretch
+    container: node:lts-buster
 
     steps:
     - name: Checkout repository
