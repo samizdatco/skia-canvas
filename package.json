@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.25",
+  "version": "0.9.26",
   "description": "A canvas environment for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
@@ -32,10 +32,10 @@
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
-    "aws-sdk": "^2.1000.0",
+    "aws-sdk": "^2.1006.0",
     "cargo-cp-artifact": "^0.1",
     "express": "^4.17.1",
-    "jest": "^27.2.4",
+    "jest": "^27.2.5",
     "lodash": "^4.17.21",
     "nodemon": "^2.0.13",
     "tmp": "^0.2.1"

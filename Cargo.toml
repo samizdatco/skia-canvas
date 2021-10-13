@@ -1,6 +1,6 @@
 [package]
 name = "skia-canvas"
-version = "0.9.25"
+version = "0.9.26"
 description = "A canvas environment for Node"
 authors = ["Christian Swinehart <drafting@samizdat.co>"]
 license = "MIT"
