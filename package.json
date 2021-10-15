@@ -1,6 +1,6 @@
 {
   "name": "@arkie/skia-canvas",
-  "version": "1.0.1",
+  "version": "1.0.7",
   "description": "A canvas environment for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.5",
+    "ali-oss": "^6.16.0",
     "glob": "^7.1.7",
     "path-browserify": "^1.0.1",
     "simple-get": "^4.0.0",
@@ -45,7 +46,7 @@
     "module_path": "./lib/v{napi_build_version}",
     "remote_path": "./v{version}",
     "package_name": "{platform}-{arch}-{node_napi_label}.tar.gz",
-    "host": "https://skia-canvas.s3.us-east-1.amazonaws.com",
+    "host": "https://mock-test.oss-cn-beijing.aliyuncs.com",
     "napi_versions": [
       6
     ]
