@@ -10,11 +10,6 @@ exclude = ["index.node"]
 [lib]
 crate-type = ["cdylib"]
 
-[profile.release]
-opt-level = 2
-lto = "fat"
-codegen-units = 1
-
 [dependencies]
 crc = "1.8.1"
 css-color = "0.1.1"
