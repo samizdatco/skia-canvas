@@ -138,13 +138,6 @@ jobs:
         npm ci --ignore-scripts
         npm run build -- --release
 
-    # needed until https://github.com/rust-skia/rust-skia/pull/486 is merged...
-    - name: Bundle ICU data (windows only)
-      shell: bash
-      run: |
-        ICU=$(find . -name icudtl.dat | grep skia-bindings | head -n 1)
-        cp $ICU lib/v6
-
     - name: Package module
       run: |
         npm test
