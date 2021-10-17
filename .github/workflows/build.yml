@@ -96,8 +96,7 @@ jobs:
 
     - name: Package module
       run: |
-        npm test
-        npm run package
+        npm test && npm run package
 
     - name: Upload to S3
       env:
@@ -172,8 +171,7 @@ jobs:
 
     - name: Package module
       run: |
-        npm test
-        npm run package
+        npm test && npm run package
 
     - name: Upload to S3
       env:
