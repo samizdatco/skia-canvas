@@ -38,7 +38,7 @@ jobs:
     - name: Build module
       run: |
         npm ci --ignore-scripts
-        npm run build
+        npm run build -- --release
 
     - name: Run tests
       run: npm test
