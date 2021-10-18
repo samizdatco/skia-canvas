@@ -78,9 +78,9 @@ Start by installing:
 
 ## Example Usage
 ```js
-const fs = require('fs')
 const {Canvas, loadImage} = require('./lib'),
-      rand = n => Math.floor(n * Math.random());
+      rand = n => Math.floor(n * Math.random()),
+      fs = require('fs')
 
 let canvas = new Canvas(600, 600),
     ctx = canvas.getContext("2d"),
