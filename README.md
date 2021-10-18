@@ -72,13 +72,6 @@ $ npm install skia-canvas
 
 This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases).
 
-### Dependencies
-
-Nearly everything you need is statically linked into the library.
-
-A notable exception is the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library (and its associated [FreeType](https://www.freetype.org) renderer) which must be installed separately if you’re running on Linux.
-
-
 ### Platform Support
 
 The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions:
@@ -91,6 +84,9 @@ Pre-compiled binaries are available for:
   - Linux (x86, arm, & arm64)
   - macOS (x86 & Apple silicon)
   - Windows (x86)
+
+Nearly everything you need is statically linked into the library. A notable exception is the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library which must be installed separately if you’re running on Linux.
+
 
 ### Running in Docker
 
