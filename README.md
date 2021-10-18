@@ -111,7 +111,7 @@ Start by installing:
   1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using [`rustup`](https://rust-lang.github.io/rustup/)
   2. A C compiler toolchain like LLVM/Clang or MSVC
   3. Python 2.7 (used by Skia's [build process](https://skia.org/docs/user/build/))
-  4. On Linux: Fontconfig, OpenSSL, X11, and Mesa
+  4. On Linux: Fontconfig and OpenSSL
 
 [Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
 
