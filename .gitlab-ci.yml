@@ -1,0 +1,24 @@
+before_script:
+  - node --version; npm --version; yarn --version
+  - ls -la
+  - yarn config set cache-folder /gitlab.cache/.yarn
+
+.cache_build: &cache_build
+  cache:
+    key: "$CI_PROJECT_PATH-$CI_PROJECT_ID-test"
+  tags:
+    - node10
+
+
+stages:
+  - build
+
+build:
+  <<: *cache_build
+  stage: build
+  script:
+    - echo "$CNPMRC" > ~/.npmrc
+    - node publish.js
+  except:
+    - tags
+

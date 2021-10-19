@@ -11,4 +11,4 @@ native/*.node
 target
 test/assets/Oswald
 test/assets/Raleway
-/*.*
+yarn.lock

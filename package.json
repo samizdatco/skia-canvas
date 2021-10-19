@@ -1,6 +1,6 @@
 {
   "name": "@arkie/skia-canvas",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "description": "A canvas environment for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
