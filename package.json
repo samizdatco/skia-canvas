@@ -1,17 +1,8 @@
 {
   "name": "@arkie/sk-canvas",
-  "version": "1.0.7",
+  "version": "1.0.10",
   "description": "A canvas environment for Node",
-  "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/samizdatco/skia-canvas.git"
-  },
-  "bugs": {
-    "url": "https://github.com/samizdatco/skia-canvas/issues"
-  },
-  "homepage": "https://github.com/samizdatco/skia-canvas#readme",
   "main": "lib",
   "browser": {
     "lib": "./lib/browser.js",
@@ -21,19 +12,18 @@
     "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
     "install": "node-pre-gyp install || npm run build -- --release",
     "package": "node-pre-gyp package",
-    "upload": "node-pre-gyp publish",
+    "upload": "node publish",
     "test": "jest"
   },
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.5",
-    "ali-oss": "^6.16.0",
     "glob": "^7.1.7",
     "path-browserify": "^1.0.1",
     "simple-get": "^4.0.0",
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
-    "aws-sdk": "^2.967.0",
+    "ali-oss": "^6.16.0",
     "cargo-cp-artifact": "^0.1",
     "express": "^4.17.1",
     "jest": "^27.1.1",
@@ -50,20 +40,5 @@
     "napi_versions": [
       6
     ]
-  },
-  "keywords": [
-    "skia",
-    "canvas",
-    "offscreen",
-    "headless",
-    "graphic",
-    "graphics",
-    "image",
-    "images",
-    "compositing",
-    "render",
-    "pdf",
-    "svg",
-    "rust"
-  ]
+  }
 }
