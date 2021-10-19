@@ -78,7 +78,7 @@ Start by installing:
 
 ## Example Usage
 ```js
-const {Canvas, loadImage} = require('./lib'),
+const {Canvas, loadImage} = require('skia-canvas'),
       rand = n => Math.floor(n * Math.random()),
       fs = require('fs')
 
