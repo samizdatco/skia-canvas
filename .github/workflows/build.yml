@@ -11,9 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/samizdatco/skia-canvas-x86-env:v1
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.CR_PAT }}
 
     steps:
     - name: Checkout repository
@@ -64,9 +61,6 @@ jobs:
     runs-on: [self-hosted, linux, ARM64]
     container:
       image: ghcr.io/samizdatco/skia-canvas-arm64-env:v1
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.CR_PAT }}
 
     steps:
     - name: Use Node.js
@@ -126,9 +120,6 @@ jobs:
     runs-on: [self-hosted, linux, ARM]
     container:
       image: ghcr.io/samizdatco/skia-canvas-arm-env:v1
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.CR_PAT }}
 
     steps:
     - name: Use Node.js
