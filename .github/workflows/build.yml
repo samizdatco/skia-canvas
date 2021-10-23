@@ -175,6 +175,55 @@ jobs:
         cd skia-canvas
         npm run upload
 
+  linux-musl:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/samizdatco/skia-canvas-musl-env:v1
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+      with:
+        path: skia-canvas
+
+    - name: Checkout rust-skia
+      id: rust-skia
+      run: |
+        export TAG=$(awk '/skia-safe/{getline; print}' skia-canvas/Cargo.toml | egrep -o '[0-9\.]+')
+        git clone --depth 1 --branch $TAG https://github.com/rust-skia/rust-skia.git
+        cd rust-skia
+        git submodule update --init --depth 1 skia-bindings/skia
+        git submodule update --init --depth 1 skia-bindings/depot_tools
+
+    - name: Install rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Patch build files
+      run: |
+        patch -p0 < /code/alpine-build.patch
+        echo "#!/bin/true" > rust-skia/skia-bindings/skia/bin/fetch-gn
+        perl -0777 -pi.bak -e 's/(\[dependencies.skia-safe\]\n)version.*/$1path = "..\/rust-skia\/skia-safe"/m' skia-canvas/Cargo.toml
+
+    - name: Build module
+      run: |
+        cd skia-canvas
+        npm ci --ignore-scripts
+        npm run build -- --release
+
+    - name: Package module
+      run: |
+        cd skia-canvas
+        npm test && npm run package
+
+    - name: Upload to S3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        cd skia-canvas
+        npm run upload
 
   mac-x86:
     runs-on: macos-latest
