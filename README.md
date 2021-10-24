@@ -42,16 +42,18 @@ The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 w
 
 Pre-compiled binaries are available for:
 
-  - Linux (x86, arm, & arm64)
-  - macOS (x86 & Apple silicon)
-  - Windows (x86)
+  - Linux (x64, arm64, & armhf)
+  - macOS (x64 & Apple silicon)
+  - Windows (x64)
 
 Nearly everything you need is statically linked into the library. A notable exception is the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library which must be installed separately if you’re running on Linux.
 
 
 ### Running in Docker
 
-The library is compatible with Linux systems using glibc 2.24 or later. Currently the `rust-skia` library [will not compile](https://github.com/rust-skia/rust-skia/issues/356) against the [musl](https://musl.libc.org) library used by Alpine Linux—though this may change in the future. For now, if you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, you’ll want to set your `FROM` image to one of the (Debian-derived) defaults like `node:16`, `node:14`, `node:12`, `node:buster`, `node:stretch`, or simply:
+The library is compatible with Linux systems using [glibc](https://www.gnu.org/software/libc/) 2.24 or later as well as Alpine Linux (x64) and the [musl](https://musl.libc.org) C library it favors. In both cases, Fontconfig must be installed on the system for `skia-canvas` to operate correctly.
+
+If you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, the simplest approach is to set your `FROM` image to one of the (Debian-derived) defaults like `node:16`, `node:14`, `node:12`, `node:buster`, `node:stretch`, or simply:
 ```dockerfile
 FROM node
 ```
@@ -61,6 +63,13 @@ You can also use the ‘slim’ image if you manually install fontconfig:
 ```dockerfile
 FROM node:slim
 RUN apt-get update && apt-get install -y -q --no-install-recommends libfontconfig1
+```
+
+If you wish to use Alpine as the underlying distribution, you can start with something along the lines of:
+
+```dockerfile
+FROM node:alpine
+RUN apk update && apk add fontconfig
 ```
 
 ### Compiling from Source
