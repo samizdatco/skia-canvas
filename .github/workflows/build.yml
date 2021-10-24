@@ -291,7 +291,7 @@ jobs:
       run: |
         npm ci --ignore-scripts
         npm run build -- --release --target aarch64-apple-darwin
-        sed -i.bak 's/"package_name":.*/"package_name": "{platform}-arm64-{node_napi_label}.tar.gz",/' package.json
+        sed -i.bak 's/"package_name":.*/"package_name": "{platform}-arm64-{node_napi_label}-{libc}.tar.gz",/' package.json
         npm run package
 
     - name: Upload to S3
