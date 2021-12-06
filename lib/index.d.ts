@@ -39,10 +39,9 @@ export class Canvas {
    * myCanvas.async = false
    * const result = myCanvas.toBuffer("png") // now these functions return synchronously
    */
-  async: true
-
-  get width(): number
-  get height(): number
+  async: boolean
+  width: number
+  height: number
 
   getContext(type?: "2d"): CanvasRenderingContext2D
 
