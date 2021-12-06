@@ -1,5 +1,16 @@
 /// <reference types="node" />
 
+export class DOMMatrix extends globalThis.DOMMatrix {}
+export class Image extends globalThis.Image {}
+export class ImageData extends globalThis.ImageData {}
+export class CanvasGradient extends globalThis.CanvasGradient {}
+export class CanvasPattern extends globalThis.CanvasPattern {}
+export class CanvasTexture {}
+
+//
+// Canvas
+//
+
 export type ExportFormat = "png" | "jpg" | "jpeg" | "pdf" | "svg";
 
 export interface RenderOptions {
@@ -44,19 +55,17 @@ export class Canvas {
   height: number
 
   getContext(type?: "2d"): CanvasRenderingContext2D
+  newPage(width?: number, height?: number): CanvasRenderingContext2D
+  readonly pages: CanvasRenderingContext2D[]
 
-  get pages(): readonly CanvasRenderingContext2D[]
+  saveAs(filename: string, options?: SaveOptions): Promise<void>
+  toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
+  toDataURL(format: ExportFormat, options?: RenderOptions): Promise<string>
 
   get pdf(): Promise<Buffer>
   get svg(): Promise<Buffer>
   get jpg(): Promise<Buffer>
   get png(): Promise<Buffer>
-
-  newPage(width?: number, height?: number): CanvasRenderingContext2D
-
-  saveAs(filename: string, options?: SaveOptions): Promise<void>
-  toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
-  toDataURL(format: ExportFormat, options?: RenderOptions): Promise<string>
 }
 
 export type SyncCanvas = {
@@ -68,6 +77,11 @@ export type SyncCanvas = {
     ? false // `async` property is now false
     : Canvas[P] // Everything else stays the same
 }
+
+
+//
+// Context
+//
 
 export interface CreateTextureOptions {
   path?: Path2D
@@ -113,26 +127,9 @@ export class CanvasRenderingContext2D extends globalThis.CanvasRenderingContext2
   fillStyle: globalThis.CanvasRenderingContext2D["fillStyle"] | CanvasTexture
 }
 
-export interface TextMetrics extends globalThis.TextMetrics {
-  lines: TextMetricsLine[]
-}
-
-export interface TextMetricsLine {
-  readonly x: number
-  readonly y: number
-  readonly width: number
-  readonly height: number
-  readonly baseline: number
-  readonly startIndex: number
-  readonly endIndex: number
-}
-
-export class CanvasTexture {}
-export class CanvasGradient extends globalThis.CanvasGradient {}
-export class CanvasPattern extends globalThis.CanvasPattern {}
-export class DOMMatrix extends globalThis.DOMMatrix {}
-export class Image extends globalThis.Image {}
-export class ImageData extends globalThis.ImageData {}
+//
+// Bézier Paths
+//
 
 export interface Path2DBounds {
   readonly top: number
@@ -146,11 +143,19 @@ export interface Path2DBounds {
 export type Path2DEdge = [verb: string, ...args: number[]]
 
 export class Path2D extends globalThis.Path2D {
-  readonly bounds: Path2DBounds
   d: string
+  readonly bounds: Path2DBounds
   readonly edges: readonly Path2DEdge[]
 
   contains(x: number, y: number): boolean
+  conicCurveTo(
+    cpx: number,
+    cpy: number,
+    x: number,
+    y: number,
+    weight: number
+  ): void
+
 
   complement(otherPath: Path2D): Path2D
   difference(otherPath: Path2D): Path2D
@@ -170,30 +175,33 @@ export class Path2D extends globalThis.Path2D {
 
   simplify(rule?: "nonzero" | "evenodd"): Path2D
 
-  transform(matrix: DOMMatrix): Path2D
-  transform(
-    a: number,
-    b: number,
-    c: number,
-    d: number,
-    e: number,
-    f: number
-  ): Path2D
+  transform(...args: [matrix: DOMMatrix] | [a: number, b: number, c: number, d: number, e: number, f: number]): Path2D;
 
-  trim(start: number, end?: number, inverted?: boolean): Path2D
+  trim(start: number, end: number, inverted?: boolean): Path2D;
+  trim(start: number, inverted?: boolean): Path2D;
 
   unwind(): Path2D
-
-  conicCurveTo(
-    cpx: number,
-    cpy: number,
-    x: number,
-    y: number,
-    weight: number
-  ): void
 }
 
 export function loadImage(src: string | Buffer): Promise<Image>
+
+//
+// Typography
+//
+
+export interface TextMetrics extends globalThis.TextMetrics {
+  lines: TextMetricsLine[]
+}
+
+export interface TextMetricsLine {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly baseline: number
+  readonly startIndex: number
+  readonly endIndex: number
+}
 
 export interface FontFamily {
   family: string
