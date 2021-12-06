@@ -474,7 +474,7 @@ tests['createPattern() repeats'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.scale(0.1, 0.1)
-    ctx.lineStyle = 'black'
+    ctx.strokeStyle = 'black'
     ctx.lineWidth = 10
     ctx.fillStyle = ctx.createPattern(img, 'no-repeat')
     ctx.fillRect(0, 0, 900, 900)
