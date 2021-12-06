@@ -1,3 +1,5 @@
+// @ts-check
+
 "use strict"
 
 const _ = require('lodash'),
@@ -423,6 +425,7 @@ describe("Context2D", ()=>{
     })
 
     test("fillText()", () => {
+      /** @type {[args: any[], shouldDraw: boolean][]} */
       let argsets = [
         [['A', 10, 10], true],
         [['A', 10, 10, undefined], true],
