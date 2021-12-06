@@ -100,9 +100,6 @@ export class CanvasRenderingContext2D extends globalThis.CanvasRenderingContext2
     | CanvasTexture
   // @ts-expect-error We're rewriting the canvas property in a non-typesafe way
   fillStyle: globalThis.CanvasRenderingContext2D["fillStyle"] | CanvasTexture
-
-  /** @internal */
-  lineStyle: string
 }
 
 export interface TextMetrics extends globalThis.TextMetrics {
