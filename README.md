@@ -174,11 +174,11 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 [canvas_async]: #async
 [canvas_pages]: #pages
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
-[saveAs]: #saveasfilename-page-format-density1-quality092-outlinefalse
-[toBuffer]: #tobufferformat-page-density-quality-outline
+[saveAs]: #saveasfilename-page-format-matte-density1-quality092-outlinefalse
+[toBuffer]: #tobufferformat-page-matte-density-quality-outline
 [newPage]: #newpagewidth-height
 [toDataURL_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
-[toDataURL_ext]: #todataurlformat-page-density-quality-outline
+[toDataURL_ext]: #todataurlformat-page-matte-density-quality-outline
 [shorthands]: #pdf-svg-jpg-and-png
 
 #### Creating new `Canvas` objects
@@ -265,11 +265,11 @@ The `quality` option is a number between 0 and 1.0 that controls the level of JP
 ##### outline
 When generating SVG output containing text, you have two options for how to handle the fonts that were used. By default, SVG files will contain `<text>` elements that refer to the fonts by name in the embedded stylesheet. This requires that viewers of the SVG have the same fonts available on their system (or accessible as webfonts). Setting the optional `outline` argument to `true` will trace all the letterforms and ‘burn’ them into the file as bézier paths. This will result in a much larger file (and one in which the original text strings will be unrecoverable), but it will be viewable regardless of the specifics of the system it’s displayed on.
 
-#### `toBuffer(format, {page, density, quality, outline})`
+#### `toBuffer(format, {page, matte, density, quality, outline})`
 
 Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the `saveAs` method.
 
-#### `toDataURL(format, {page, density, quality, outline})`
+#### `toDataURL(format, {page, matte, density, quality, outline})`
 
 This method accepts the same arguments and behaves similarly to `.toBuffer`. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
 

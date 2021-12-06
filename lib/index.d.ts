@@ -1,15 +1,27 @@
 /// <reference types="node" />
 
+export type ExportFormat = "png" | "jpg" | "jpeg" | "pdf" | "svg";
+
 export interface RenderOptions {
+  /** Page to export: Defaults to 1 (i.e., first page) */
   page?: number
+
+  /** Background color to draw beneath transparent parts of the canvas */
+  matte?: string
+
+  /** Number of pixels per grid ‘point’ (defaults to 1) */
   density?: number
-  quality?: number | undefined
+
+  /** Quality for lossy encodings like JPEG (0.0–1.0) */
+  quality?: number
+
+  /** Convert text to paths for PDF or SVG exports */
   outline?: boolean
 }
 
 export interface SaveOptions extends RenderOptions {
-  format?: string | undefined
-  matte?: string
+  /** Image format to use */
+  format?: ExportFormat
 }
 
 export class Canvas {
@@ -44,8 +56,8 @@ export class Canvas {
   newPage(width?: number, height?: number): CanvasRenderingContext2D
 
   saveAs(filename: string, options?: SaveOptions): Promise<void>
-  toBuffer(format: string, options?: RenderOptions): Promise<Buffer>
-  toDataURL(format: string, options?: RenderOptions): Promise<string>
+  toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
+  toDataURL(format: ExportFormat, options?: RenderOptions): Promise<string>
 }
 
 export type SyncCanvas = {
