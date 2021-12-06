@@ -60,7 +60,6 @@ describe("Path2D", ()=>{
 
       let clone = new Path2D()
       for (const [verb, ...pts] of p.edges){
-        // @ts-expect-error This is not possible to be done in a type-safe way in TypeScript (yet, at least)
         clone[verb](...pts)
       }
 

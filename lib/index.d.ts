@@ -132,7 +132,6 @@ export interface Path2DBounds {
   readonly height: number
 }
 
-type _Values<T extends {}> = T[keyof T]
 export type Path2DEdge = [verb: string, ...args: number[]]
 
 export class Path2D extends globalThis.Path2D {
