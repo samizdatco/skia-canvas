@@ -50,17 +50,6 @@ describe("Canvas", ()=>{
       expect(ctx.fillStyle).toBe('#000000')
       expect(pixel(0,0)).toEqual(CLEAR)
     })
-
-    test('async i/o mode', async () => {
-      expect(canvas.async).toBe(true)
-
-      let promise = canvas.png
-      expect(promise).toBeInstanceOf(Promise)
-      await expect(promise).resolves.toBeInstanceOf(Buffer)
-
-      canvas.async = false
-      expect(canvas.png).toBeInstanceOf(Buffer)
-    })
   })
 
   describe("handles bad arguments for", ()=>{
@@ -329,7 +318,6 @@ describe("Canvas", ()=>{
     beforeEach(() => {
       TMP = tmp.dirSync().name
 
-      canvas.async = false
       ctx.fillStyle = 'red'
       ctx.arc(100, 100, 25, 0, Math.PI/2)
       ctx.fill()
@@ -337,13 +325,13 @@ describe("Canvas", ()=>{
     afterEach(() => fs.rmSync(TMP, {recursive:true}) )
 
     test("JPEGs", ()=>{
-      canvas.saveAs(`${TMP}/output1.jpg`)
-      canvas.saveAs(`${TMP}/output2.jpeg`)
-      canvas.saveAs(`${TMP}/output3.JPG`)
-      canvas.saveAs(`${TMP}/output4.JPEG`)
-      canvas.saveAs(`${TMP}/output5`, {format:'jpg'})
-      canvas.saveAs(`${TMP}/output6`, {format:'jpeg'})
-      canvas.saveAs(`${TMP}/output6.png`, {format:'jpeg'})
+      canvas.saveAsSync(`${TMP}/output1.jpg`)
+      canvas.saveAsSync(`${TMP}/output2.jpeg`)
+      canvas.saveAsSync(`${TMP}/output3.JPG`)
+      canvas.saveAsSync(`${TMP}/output4.JPEG`)
+      canvas.saveAsSync(`${TMP}/output5`, {format:'jpg'})
+      canvas.saveAsSync(`${TMP}/output6`, {format:'jpeg'})
+      canvas.saveAsSync(`${TMP}/output6.png`, {format:'jpeg'})
 
       let magic = MAGIC.jpg
       for (let path of glob(`${TMP}/*`)){
@@ -353,10 +341,10 @@ describe("Canvas", ()=>{
     })
 
     test("PNGs", ()=>{
-      canvas.saveAs(`${TMP}/output1.png`)
-      canvas.saveAs(`${TMP}/output2.PNG`)
-      canvas.saveAs(`${TMP}/output3`, {format:'png'})
-      canvas.saveAs(`${TMP}/output4.svg`, {format:'png'})
+      canvas.saveAsSync(`${TMP}/output1.png`)
+      canvas.saveAsSync(`${TMP}/output2.PNG`)
+      canvas.saveAsSync(`${TMP}/output3`, {format:'png'})
+      canvas.saveAsSync(`${TMP}/output4.svg`, {format:'png'})
 
       let magic = MAGIC.png
       for (let path of glob(`${TMP}/*`)){
@@ -366,10 +354,10 @@ describe("Canvas", ()=>{
     })
 
     test("SVGs", ()=>{
-      canvas.saveAs(`${TMP}/output1.svg`)
-      canvas.saveAs(`${TMP}/output2.SVG`)
-      canvas.saveAs(`${TMP}/output3`, {format:'svg'})
-      canvas.saveAs(`${TMP}/output4.jpeg`, {format:'svg'})
+      canvas.saveAsSync(`${TMP}/output1.svg`)
+      canvas.saveAsSync(`${TMP}/output2.SVG`)
+      canvas.saveAsSync(`${TMP}/output3`, {format:'svg'})
+      canvas.saveAsSync(`${TMP}/output4.jpeg`, {format:'svg'})
 
       for (let path of glob(`${TMP}/*`)){
         let svg = fs.readFileSync(path, 'utf-8')
@@ -378,10 +366,10 @@ describe("Canvas", ()=>{
     })
 
     test("PDFs", ()=>{
-      canvas.saveAs(`${TMP}/output1.pdf`)
-      canvas.saveAs(`${TMP}/output2.PDF`)
-      canvas.saveAs(`${TMP}/output3`, {format:'pdf'})
-      canvas.saveAs(`${TMP}/output4.jpg`, {format:'pdf'})
+      canvas.saveAsSync(`${TMP}/output1.pdf`)
+      canvas.saveAsSync(`${TMP}/output2.PDF`)
+      canvas.saveAsSync(`${TMP}/output3`, {format:'pdf'})
+      canvas.saveAsSync(`${TMP}/output4.jpg`, {format:'pdf'})
 
       let magic = MAGIC.pdf
       for (let path of glob(`${TMP}/*`)){
@@ -402,7 +390,7 @@ describe("Canvas", ()=>{
         expect(ctx.canvas.width).toEqual(dim)
       })
 
-      canvas.saveAs(`${TMP}/output-{2}.png`)
+      canvas.saveAsSync(`${TMP}/output-{2}.png`)
 
       let files = glob(`${TMP}/output-0?.png`)
       expect(files.length).toEqual(colors.length+1)
@@ -432,7 +420,7 @@ describe("Canvas", ()=>{
       })
 
       let path = `${TMP}/multipage.pdf`
-      expect(() => canvas.saveAs(path) ).not.toThrow()
+      expect(() => canvas.saveAsSync(path) ).not.toThrow()
 
       let header = fs.readFileSync(path).slice(0, MAGIC.pdf.length)
       expect(header.equals(MAGIC.pdf)).toBe(true)
@@ -442,7 +430,7 @@ describe("Canvas", ()=>{
       for (let ext of ["png", "jpg", "pdf", "svg"]){
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
-        let buf = canvas.toBuffer(ext)
+        let buf = canvas.toBufferSync(ext)
         expect(buf).toBeInstanceOf(Buffer)
 
         fs.writeFileSync(path, buf)
@@ -451,7 +439,7 @@ describe("Canvas", ()=>{
 
         // use mime to specify type
         path = `${TMP}/bymime.${ext}`
-        buf = canvas.toBuffer(MIME[ext])
+        buf = canvas.toBufferSync(MIME[ext])
         expect(buf).toBeInstanceOf(Buffer)
 
         fs.writeFileSync(path, buf)
@@ -464,8 +452,8 @@ describe("Canvas", ()=>{
       for (let ext in MIME){
         let magic = MAGIC[ext],
             mime = MIME[ext],
-            extURL = canvas.toDataURL(ext),
-            mimeURL = canvas.toDataURL(mime),
+            extURL = canvas.toDataURLSync(ext),
+            mimeURL = canvas.toDataURLSync(mime),
             header = `data:${mime};base64,`,
             data = Buffer.from(extURL.substr(header.length), 'base64')
         expect(extURL).toEqual(mimeURL)
@@ -480,14 +468,14 @@ describe("Canvas", ()=>{
 
       // invalid path
       expect(() =>
-        canvas.saveAs(`${TMP}/deep/path/that/doesn/not/exist.pdf`)
+        canvas.saveAsSync(`${TMP}/deep/path/that/doesn/not/exist.pdf`)
       ).toThrow()
 
       // canvas has a zero dimension
       let width = 0, height = 128
       Object.assign(canvas, {width, height})
       expect(canvas).toMatchObject({width, height})
-      expect( () => canvas.saveAs(`${TMP}/zeroed.png`)).toThrowError("must be non-zero")
+      expect( () => canvas.saveAsSync(`${TMP}/zeroed.png`)).toThrowError("must be non-zero")
     })
   })
 

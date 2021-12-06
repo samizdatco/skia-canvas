@@ -41,18 +41,12 @@ export interface SaveOptions extends RenderOptions {
 
 export class Canvas {
   /** @internal */
+  constructor(width?: number, height?: number)
   static contexts: WeakMap<Canvas, readonly CanvasRenderingContext2D[]>
 
-  constructor(width?: number, height?: number)
-
   /**
-   * Cast this object as a {@link SyncCanvas} and set the `async` property to false to get the synchronous behaviours.
-   *
-   * @example
-   * import { Canvas, SyncCanvas } from "."
-   * const myCanvas = new Canvas() as any as SyncCanvas
-   * myCanvas.async = false
-   * const result = myCanvas.toBuffer("png") // now these functions return synchronously
+   * @deprecated Use the saveAsSync, toBufferSync, and toDataURLSync methods
+   * instead of setting the async property to false
    */
   async: boolean
   width: number
@@ -66,20 +60,14 @@ export class Canvas {
   toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
   toDataURL(format: ExportFormat, options?: RenderOptions): Promise<string>
 
+  saveAsSync(filename: string, options?: SaveOptions): void
+  toBufferSync(format: ExportFormat, options?: RenderOptions): Buffer
+  toDataURLSync(format: ExportFormat, options?: RenderOptions): string
+
   get pdf(): Promise<Buffer>
   get svg(): Promise<Buffer>
   get jpg(): Promise<Buffer>
   get png(): Promise<Buffer>
-}
-
-export type SyncCanvas = {
-  [P in keyof Canvas]: Canvas[P] extends Promise<infer Value>
-    ? Value // Promise getter to synchronous getter
-    : Canvas[P] extends (...args: infer Args) => Promise<infer Return>
-    ? (...args: Args) => Return // Async functions to sync functions
-    : P extends "async"
-    ? false // `async` property is now false
-    : Canvas[P] // Everything else stays the same
 }
 
 //
