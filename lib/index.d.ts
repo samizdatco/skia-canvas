@@ -1,3 +1,4 @@
+/// <reference lib="dom"/>
 /// <reference types="node" />
 
 export function loadImage(src: string | Buffer): Promise<Image>
@@ -81,53 +82,45 @@ export type SyncCanvas = {
     : Canvas[P] // Everything else stays the same
 }
 
-
 //
 // Context
 //
+
+type Offset = [x: number, y: number] | number
 
 export interface CreateTextureOptions {
   path?: Path2D
   line?: number
   color?: string
   angle?: number
-  offset?: [x: number, y: number] | number
+  offset?: Offset
 }
 
-export class CanvasRenderingContext2D extends globalThis.CanvasRenderingContext2D {
-  // @ts-expect-error We're rewriting the canvas property in a non-typesafe way
-  readonly canvas: Canvas
+interface CanvasFillStrokeStyles {
+  fillStyle: string | CanvasGradient | CanvasPattern | CanvasTexture;
+  strokeStyle: string | CanvasGradient | CanvasPattern | CanvasTexture;
+  createConicGradient(startAngle: number, x: number, y: number): CanvasGradient;
+  createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradient;
+  createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
+  createPattern(image: CanvasImageSource, repetition: string | null): CanvasPattern | null;
+  createTexture(spacing: Offset, options?: CreateTextureOptions): CanvasTexture
+}
 
-  fontVariant: string
-  textTracking: number
-  textWrap: boolean
+export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform, CanvasUserInterface {
+  readonly canvas: Canvas;
+  fontVariant: string;
+  textTracking: number;
+  textWrap: boolean;
+  lineDashMarker: Path2D | null;
+  lineDashFit: "move" | "turn" | "follow";
 
-  lineDashFit: "move" | "turn" | "follow"
-  lineDashMarker: Path2D | null
+  conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void;
+  // getContextAttributes(): CanvasRenderingContext2DSettings;
 
-  conicCurveTo(
-    cpx: number,
-    cpy: number,
-    x: number,
-    y: number,
-    weight: number
-  ): void
-
-  createTexture(
-    spacing: number | [width: number, height: number],
-    options?: CreateTextureOptions
-  ): CanvasTexture
-
-  measureText(text: string, maxWidth?: number): TextMetrics
-
-  outlineText(text: string): Path2D
-
-  // @ts-expect-error We're rewriting the canvas property in a non-typesafe way
-  strokeStyle:
-    | globalThis.CanvasRenderingContext2D["strokeStyle"]
-    | CanvasTexture
-  // @ts-expect-error We're rewriting the canvas property in a non-typesafe way
-  fillStyle: globalThis.CanvasRenderingContext2D["fillStyle"] | CanvasTexture
+  fillText(text: string, x: number, y:number, maxWidth?: number): void;
+  strokeText(text: string, x: number, y:number, maxWidth?: number): void;
+  measureText(text: string, maxWidth?: number): TextMetrics;
+  outlineText(text: string): Path2D;
 }
 
 //
