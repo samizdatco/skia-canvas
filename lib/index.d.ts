@@ -136,17 +136,7 @@ export interface Path2DBounds {
 }
 
 type _Values<T extends {}> = T[keyof T]
-export type Path2DEdge = _Values<{
-  [P in
-    | "moveTo"
-    | "lineTo"
-    | "quadraticCurveTo"
-    | "bezierCurveTo"
-    | "conicCurveTo"
-    | "closePath"]: Path2D[P] extends (...args: any) => void
-    ? [P, ...Parameters<Path2D[P]>]
-    : never
-}>
+export type Path2DEdge = [verb: string, ...args: number[]]
 
 export class Path2D extends globalThis.Path2D {
   readonly bounds: Path2DBounds
