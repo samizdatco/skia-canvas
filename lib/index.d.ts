@@ -63,7 +63,7 @@ export interface CreateTextureOptions {
   line?: number
   color?: string
   angle?: number
-  offset?: [x: number, y: number]
+  offset?: [x: number, y: number] | number
 }
 
 export class CanvasRenderingContext2D extends globalThis.CanvasRenderingContext2D {
@@ -75,7 +75,7 @@ export class CanvasRenderingContext2D extends globalThis.CanvasRenderingContext2
   textWrap: boolean
 
   lineDashFit: "move" | "turn" | "follow"
-  lineDashMarker: Path2D
+  lineDashMarker: Path2D | null
 
   conicCurveTo(
     cpx: number,
