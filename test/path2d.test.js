@@ -18,7 +18,6 @@ describe("Path2D", ()=>{
   beforeEach(()=>{
     canvas = new Canvas(WIDTH, HEIGHT)
     ctx = canvas.getContext("2d")
-    ctx.lineStyle = 'black'
     ctx.lineWidth = 4
     p = new Path2D()
   })
