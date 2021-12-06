@@ -1,3 +1,5 @@
+// @ts-check
+
 var DOMMatrix
 var Image
 var imageSrc
@@ -10,6 +12,7 @@ if (typeof module !== 'undefined' && module.exports) {
   DOMMatrix = skCanvas.DOMMatrix
   imageSrc = function (filename) { return require('path').join(__dirname, '../assets', filename) }
 } else {
+  // @ts-expect-error We are creating a tests propery
   window.tests = tests
   Image = window.Image
   DOMMatrix = window.DOMMatrix

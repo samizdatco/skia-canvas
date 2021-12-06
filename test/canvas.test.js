@@ -1,3 +1,5 @@
+// @ts-check
+
 const _ = require('lodash'),
       fs = require('fs'),
       tmp = require('tmp'),
@@ -91,10 +93,12 @@ describe("Canvas", ()=>{
       expect(c.width).toBe(W)
       expect(c.height).toBe(789)
 
+      // @ts-expect-error
       c = new Canvas('garbage', NaN)
       expect(c.width).toBe(W)
       expect(c.height).toBe(H)
-
+      
+      // @ts-expect-error
       c = new Canvas(false, {})
       expect(c.width).toBe(W)
       expect(c.height).toBe(H)
@@ -267,7 +271,7 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", async () => {
-      for (ext of ["png", "jpg", "pdf", "svg"]){
+      for (let ext of ["png", "jpg", "pdf", "svg"]){
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = await canvas.toBuffer(ext)
@@ -289,7 +293,7 @@ describe("Canvas", ()=>{
     })
 
     test("data URLs", async () => {
-      for (ext in MIME){
+      for (let ext in MIME){
         let magic = MAGIC[ext],
             mime = MIME[ext],
             [extURL, mimeURL] = await Promise.all([
@@ -435,7 +439,7 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", () => {
-      for (ext of ["png", "jpg", "pdf", "svg"]){
+      for (let ext of ["png", "jpg", "pdf", "svg"]){
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = canvas.toBuffer(ext)
@@ -457,7 +461,7 @@ describe("Canvas", ()=>{
     })
 
     test("data URLs", () => {
-      for (ext in MIME){
+      for (let ext in MIME){
         let magic = MAGIC[ext],
             mime = MIME[ext],
             extURL = canvas.toDataURL(ext),

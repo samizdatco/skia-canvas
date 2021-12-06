@@ -1,3 +1,5 @@
+// @ts-check
+
 const _ = require('lodash'),
       fs = require('fs'),
       glob = require('glob').sync,
