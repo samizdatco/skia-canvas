@@ -1,6 +1,9 @@
 /// <reference types="node" />
 
+export function loadImage(src: string | Buffer): Promise<Image>
 export class DOMMatrix extends globalThis.DOMMatrix {}
+export class DOMPoint extends globalThis.DOMPoint {}
+export class DOMRect extends globalThis.DOMRect {}
 export class Image extends globalThis.Image {}
 export class ImageData extends globalThis.ImageData {}
 export class CanvasGradient extends globalThis.CanvasGradient {}
@@ -182,8 +185,6 @@ export class Path2D extends globalThis.Path2D {
 
   unwind(): Path2D
 }
-
-export function loadImage(src: string | Buffer): Promise<Image>
 
 //
 // Typography
