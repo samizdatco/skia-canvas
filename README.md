@@ -122,15 +122,14 @@ async function render(){
   // save the graphic...
   await canvas.saveAs("pilcrow.png")
   // ...or use a shorthand for canvas.toBuffer("png")
-  fs.writeFileSync("pilcrow.png", await canvas.png)
+  let pngData = await canvas.png
   // ...or embed it in a string
   console.log(`<img src="${await canvas.toDataURL("png")}">`)
 }
 render()
 
-// ...or switch into synchronous mode and save from the main thread
-canvas.async = false
-canvas.saveAs("pilcrow.png")
+// ...or save the file synchronously from the main thread
+canvas.saveAsSync("pilcrow.png")
 ```
 
 
@@ -163,11 +162,11 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 
 | Image Dimensions             | Rendering Contexts            | Output                                           |
 | --                           | --                            | --                                               |
-| [**width**][canvas_width]    | [**pages**][canvas_pages] ⚡  | [**async**][canvas_async]  ⚡                    |
+| [**width**][canvas_width]    | [**pages**][canvas_pages] ⚡  | ~~[**async**][canvas_async]~~  ⚡                    |
 | [**height**][canvas_height]  | [getContext()][getContext]    | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
-|                              | [newPage()][newPage] ⚡       | [saveAs()][saveAs] ⚡                            |
-|                              |                               | [toBuffer()][toBuffer] ⚡                        |
-|                              |                               | [toDataURL()][toDataURL_mdn] [⚡][toDataURL_ext] |
+|                              | [newPage()][newPage] ⚡       | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
+|                              |                               | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡                        |
+|                              |                               | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] ⚡ |
 
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
@@ -190,21 +189,24 @@ let defaultCanvas = new Canvas() // without arguments, defaults to 300 × 150 px
 let squareCanvas = new Canvas(512, 512) // creates a 512 px square
 ```
 
-##### PROPERTIES
+#### Saving graphics to files, buffers, and strings
 
-#### `.async`
-
-When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script. As a result you’ll generally want to deal with the canvas from within an `async` function and be sure to use the `await` keyword when accessing any of its output methods or shorthand properties:
+When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script. As a result you’ll generally want to deal with the canvas from within an `async` function and be sure to use the `await` keyword when accessing any of its output methods or shorthand properties (all of which return Promises):
   - [`saveAs()`][saveAs]
   - [`toBuffer()`][toBuffer]
   - [`toDataURL()`][toDataURL_ext]
   - [`.pdf`, `.svg`, `.jpg`, and `.png`][shorthands]
 
-In cases where this is not the desired behavior, you can switch these methods into a synchronous mode for a particular canvas by setting its `async` property to `false`. For instance, both of the example functions below will generate PNG & PDF from the canvas, though the first will be more efficient (particularly for parallel contexts like request-handlers in an HTTP server or batch exports):
-```js
 
+In cases where this is not the desired behavior, you can use the synchronous equivalents for the primary export functions. They accept identical arguments to their async versions but block execution and return their values synchronously rather than wrapped in Promises. Also note that the [shorthand properties][shorthands] do not have synchronous versions:
+- [`saveAsSync()`][saveAs]
+- [`toBufferSync()`][toBuffer]
+- [`toDataURLSync()`][toDataURL_ext]
+
+For instance, both of the example functions below will generate PNG & PDF from the canvas, though the first will be more efficient (particularly for parallel contexts like request-handlers in an HTTP server or batch exports):
+
+```js
 let canvas = new Canvas()
-console.log(canvas.async) // -> true by default
 
 async function normal(){
   let pngURL = await canvas.toDataURL("png")
@@ -212,14 +214,16 @@ async function normal(){
 }
 
 function synchronous(){
-  canvas.async = false // switch into synchronous mode
-  let pngURL = canvas.toDataURL("png")
-  let pdfBuffer = canvas.pdf
+  let pngURL = canvas.toDataURLSync("png")
+  let pdfBuffer = canvas.toBufferSync("pdf")
 }
 ```
 
+##### PROPERTIES
 
+#### ~~`.async`~~
 
+**The async property has been deprecated** and will be removed in a future release. Use the [`saveAsSync()`][saveAs], [`toBufferSync()`][toBuffer], and [`toDataURLSync()`][toDataURL_ext] methods if the default, asynchronous versions aren't to your liking.
 
 #### `.pages`
 
@@ -247,6 +251,10 @@ An integer can optionally be placed between the braces to indicate the number of
 
 ##### page
 The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.saveAs("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
+
+##### format
+
+The image format to generate, specified either as a mime-type string or file extension. The `format` argument will take precedence over the type specified through the `filename` argument’s extension, but is primarily useful when generating a file whose name cannot end with an extension for other reasons.
 
 ##### matte
 The optional `matte` argument accepts a color-string specifying the background that should be drawn *behind* the canvas in the exported image. Any transparent portions of the image will be filled with the matte color.
