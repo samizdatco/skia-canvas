@@ -30,7 +30,7 @@ export interface RenderOptions {
   /** Quality for lossy encodings like JPEG (0.0–1.0) */
   quality?: number
 
-  /** Convert text to paths for PDF or SVG exports */
+  /** Convert text to paths for SVG exports */
   outline?: boolean
 }
 
@@ -77,10 +77,19 @@ export class Canvas {
 type Offset = [x: number, y: number] | number
 
 export interface CreateTextureOptions {
+  /** The 2D shape to be drawn in a repeating grid with the specified spacing (if omitted, parallel lines will be used) */
   path?: Path2D
+
+  /** The lineWidth with which to stroke the path (if omitted, the path will be filled instead) */
   line?: number
+
+  /** The color to use for stroking/filling the path */
   color?: string
+
+  /** The orientation of the pattern grid in radians */
   angle?: number
+
+  /** The amount by which to shift the pattern relative to the canvas origin */
   offset?: Offset
 }
 
@@ -140,27 +149,19 @@ export class Path2D extends globalThis.Path2D {
     weight: number
   ): void
 
-
   complement(otherPath: Path2D): Path2D
   difference(otherPath: Path2D): Path2D
   intersect(otherPath: Path2D): Path2D
   union(otherPath: Path2D): Path2D
   xor(otherPath: Path2D): Path2D
-
   interpolate(otherPath: Path2D, weight: number): Path2D
 
   jitter(segmentLength: number, amount: number, seed?: number): Path2D
-
   offset(dx: number, dy: number): Path2D
-
   points(step?: number): readonly [x: number, y: number][]
-
   round(radius: number): Path2D
-
   simplify(rule?: "nonzero" | "evenodd"): Path2D
-
   transform(...args: [matrix: DOMMatrix] | [a: number, b: number, c: number, d: number, e: number, f: number]): Path2D;
-
   trim(start: number, end: number, inverted?: boolean): Path2D;
   trim(start: number, inverted?: boolean): Path2D;
 
@@ -192,7 +193,7 @@ export interface FontFamily {
   styles: string[]
 }
 
-export interface FontVariant {
+export interface Font {
   family: string
   weight: number
   style: string
@@ -205,11 +206,11 @@ export interface FontLibrary {
   family(name: string): FontFamily | undefined
   has(familyName: string): boolean
 
-  use(familyName: string, fontPaths?: string | readonly string[]): FontVariant[]
-  use(fontPaths: readonly string[]): FontVariant[]
+  use(familyName: string, fontPaths?: string | readonly string[]): Font[]
+  use(fontPaths: readonly string[]): Font[]
   use(
     families: Record<string, readonly string[] | string>
-  ): Record<string, FontVariant[] | FontVariant>
+  ): Record<string, Font[] | Font>
 }
 
 export const FontLibrary: FontLibrary
