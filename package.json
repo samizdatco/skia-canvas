@@ -25,8 +25,8 @@
     "test": "jest"
   },
   "dependencies": {
-    "cargo-cp-artifact": "^0.1",
     "@mapbox/node-pre-gyp": "^1.0.7",
+    "cargo-cp-artifact": "^0.1",
     "glob": "^7.2.0",
     "path-browserify": "^1.0.1",
     "simple-get": "^4.0.0",
@@ -34,14 +34,15 @@
   },
   "devDependencies": {
     "@types/jest": "^27.0.3",
-    "@types/node": "^10.17.60",
+    "@types/node": "^16.11.12",
+    "aws-sdk": "^2.1046.0",
     "express": "^4.17.1",
-    "jest": "^27.4.3",
+    "jest": "^27.4.5",
     "lodash": "^4.17.21",
     "nodemon": "^2.0.15",
     "tmp": "^0.2.1"
   },
-  "files":[
+  "files": [
     "lib"
   ],
   "binary": {
