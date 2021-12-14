@@ -704,7 +704,7 @@ impl Context2D{
   }
 
   pub fn color_with_alpha(&self, src:&Color) -> Color{
-    let mut color:Color4f = src.clone().into();
+    let mut color:Color4f = (*src).into();
     color.a *= self.state.global_alpha;
     color.to_color()
   }
@@ -795,7 +795,7 @@ impl Dye{
   pub fn mix_into(&self, paint: &mut Paint, alpha: f32, smoothing: bool){
     match self {
       Dye::Color(color) => {
-        let mut color:Color4f = color.clone().into();
+        let mut color:Color4f = (*color).into();
         color.a *= alpha;
         paint.set_color(color.to_color());
       },
