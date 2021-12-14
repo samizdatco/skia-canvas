@@ -629,7 +629,7 @@ pub fn drawRaster(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       let (src, dst) = fit_bounds(width, height, src, dst);
 
       let mut this = this.borrow_mut();
-      this.draw_image(&image, &src, &dst);
+      this.draw_image(image, &src, &dst);
       Ok(cx.undefined())
     },
     None => cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
@@ -785,7 +785,7 @@ pub fn measureText(mut cx: FunctionContext) -> JsResult<JsArray> {
 
   let results = JsArray::new(&mut cx, text_metrics.len() as u32);
   for (i, info) in text_metrics.iter().enumerate(){
-    let line = floats_to_array(&mut cx, &info)?;
+    let line = floats_to_array(&mut cx, info)?;
     results.set(&mut cx, i as u32, line)?;
   }
   Ok(results)

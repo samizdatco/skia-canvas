@@ -47,13 +47,13 @@ impl CanvasGradient{
 
     match &*gradient{
       Gradient::Linear{start, end, stops, colors} => {
-        gradient_shader::linear((*start, *end), Colors(&colors), Some(stops.as_slice()), TileMode::Clamp, None, None)
+        gradient_shader::linear((*start, *end), Colors(colors), Some(stops.as_slice()), TileMode::Clamp, None, None)
       },
       Gradient::Radial{start_point, start_radius, end_point, end_radius, stops, colors} => {
         gradient_shader::two_point_conical(
           *start_point, *start_radius,
           *end_point, *end_radius,
-          Colors(&colors), Some(stops.as_slice()),
+          Colors(colors), Some(stops.as_slice()),
           TileMode::Clamp, None, None)
       },
       Gradient::Conic{center, angle, stops, colors} => {
@@ -66,7 +66,7 @@ impl CanvasGradient{
 
         gradient_shader::sweep(
           *center,
-          Colors(&colors),
+          Colors(colors),
           Some(stops.as_slice()),
           TileMode::Clamp,
           None, // angles

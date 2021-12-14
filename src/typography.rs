@@ -435,7 +435,7 @@ impl FontLibrary{
       weights.push(*style.weight());
       if let Some(font) = var_fc.find_typefaces(&[&family], style).first(){
         // for variable fonts, report all the 100× sizes they support within their wght range
-        weights.append(&mut typeface_wght_range(&font));
+        weights.append(&mut typeface_wght_range(font));
       }
     });
 
@@ -503,7 +503,7 @@ impl FontLibrary{
       if let Some(params) = font.variation_design_parameters(){
 
         // memoize the generation of single-weight FontCollections for variable fonts
-        let key = CollectionKey::new(&style);
+        let key = CollectionKey::new(style);
         if let Some(collection) = self.collection_cache.get(&key){
           return collection.clone()
         }
@@ -606,7 +606,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
     match typeface {
       Some(font) => {
         // add family/weight/width/slant details to return value
-        let details = typeface_details(&mut cx, &filename, &font, alias.clone())?;
+        let details = typeface_details(&mut cx, filename, &font, alias.clone())?;
         results.set(&mut cx, i as u32, details)?;
 
         // register the typeface

@@ -227,7 +227,7 @@ impl Context2D{
           if let Some(canvas) = recorder.recording_canvas() {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
-            canvas.draw_picture(&pict, None, Some(&paint));
+            canvas.draw_picture(&pict, None, Some(paint));
             canvas.restore();
           }
         }
@@ -238,7 +238,7 @@ impl Context2D{
         let mut recorder = recorder.lock().unwrap();
         if let Some(canvas) = recorder.recording_canvas() {
           // only call the closure if there's an active dropshadow
-          if let Some(shadow_paint) = self.paint_for_shadow(&paint){
+          if let Some(shadow_paint) = self.paint_for_shadow(paint){
             canvas.save();
             canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
             canvas.concat(&self.state.matrix);
@@ -247,7 +247,7 @@ impl Context2D{
           }
 
           // draw with the normal paint
-          f(canvas, &paint);
+          f(canvas, paint);
         }
 
       }
@@ -344,7 +344,7 @@ impl Context2D{
           canvas.draw_path(&fill_path, &fill_paint);
         }
       }else{
-        canvas.draw_path(&path, &paint);
+        canvas.draw_path(&path, paint);
       }
     });
   }
@@ -380,7 +380,7 @@ impl Context2D{
       PaintStyle::Stroke => {
         let paint = self.paint_for(PaintStyle::Stroke);
         let precision = 0.3; // this is what Chrome uses to compute this
-        match paint.get_fill_path(&path, None, Some(precision)){
+        match paint.get_fill_path(path, None, Some(precision)){
           Some(traced_path) => traced_path.contains(point),
           None => path.contains(point)
         }
@@ -416,14 +416,14 @@ impl Context2D{
 
         if let Some(shadow_paint) = self.paint_for_shadow(&paint){
           if let Some(mut surface) = Surface::new_raster_n32_premul(size){
-            surface.canvas().draw_drawable(&mut drobble, Some(&matrix));
+            surface.canvas().draw_drawable(drobble, Some(&matrix));
             canvas.draw_image(&surface.image_snapshot(), (dst_rect.x(), dst_rect.y()), Some(&shadow_paint));
           }
         }
 
         matrix.pre_translate((dst_rect.x()/mag.x, dst_rect.y()/mag.y));
         canvas.clip_rect(dst_rect, ClipOp::Intersect, true)
-              .draw_drawable(&mut drobble, Some(&matrix));
+              .draw_drawable(drobble, Some(&matrix));
       });
       self.pop();
     }
@@ -471,7 +471,7 @@ impl Context2D{
     if let Some(image) = &img {
       self.render_to_canvas(&canvas_paint, |canvas, paint| {
         let sampling = to_sampling_opts(quality);
-        canvas.draw_image_rect_with_sampling_options(&image, Some((src_rect, Strict)), dst_rect, sampling, &paint);
+        canvas.draw_image_rect_with_sampling_options(&image, Some((src_rect, Strict)), dst_rect, sampling, paint);
       });
     }
   }
@@ -486,7 +486,7 @@ impl Context2D{
     if let Some(canvas) = recorder.recording_canvas() {
       // fill the newly restarted recorder with the snapshot content...
       if let Some(mut palimpsest) = drobble.as_mut() {
-        canvas.draw_drawable(&mut palimpsest, None);
+        canvas.draw_drawable(palimpsest, None);
       }
 
       // ...and the current ctm/clip state
@@ -549,7 +549,7 @@ impl Context2D{
     // works just like draw_image in terms of src/dst rects, but clears the dst_rect and then draws
     // without clips, transforms, alpha, blend, or shadows
     let data = unsafe{ Data::new_bytes(buffer) };
-    if let Some(bitmap) = Image::from_raster_data(&info, data, info.min_row_bytes()) {
+    if let Some(bitmap) = Image::from_raster_data(info, data, info.min_row_bytes()) {
       self.push();
       self.reset_canvas();
       self.with_canvas(|canvas| {
@@ -586,7 +586,7 @@ impl Context2D{
     let typesetter = Typesetter::new(&self.state, text, width);
     self.render_to_canvas(&paint, |canvas, paint| {
       let point = Point::new(x, y);
-      let (paragraph, offset) = typesetter.layout(&paint);
+      let (paragraph, offset) = typesetter.layout(paint);
       paragraph.paint(canvas, point + offset);
     });
   }
@@ -787,7 +787,7 @@ impl Dye{
 
   pub fn value<'a>(&self, cx: &mut FunctionContext<'a>) -> JsResult<'a, JsValue> {
     match self{
-      Dye::Color(color) => color_to_css(cx, &color),
+      Dye::Color(color) => color_to_css(cx, color),
       _ => Ok(cx.null().upcast()) // flag to the js context that it should use its cached pattern/gradient ref
     }
   }

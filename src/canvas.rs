@@ -118,7 +118,7 @@ impl Page{
 
   fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String> {
     let path = Path::new(&filename);
-    let data = self.encoded_as(&file_format, quality, density, outline, matte)?;
+    let data = self.encoded_as(file_format, quality, density, outline, matte)?;
     fs::write(path, data.as_bytes()).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     )
@@ -147,7 +147,7 @@ fn to_pdf(pages:&[Page], quality:f32, density:f32) -> Result<Data, String>{
 
 fn write_pdf(path:&str, pages:&[Page], quality:f32, density:f32) -> Result<(), String>{
   let path = Path::new(&path);
-  match to_pdf(&pages, quality, density){
+  match to_pdf(pages, quality, density){
     Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     ),
@@ -167,7 +167,7 @@ fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality
     .try_for_each(|(pp, page)|{
       let folio = format!("{:0width$}", pp+1, width=padding);
       let filename = pattern.replace("{}", folio.as_str());
-      page.write(&filename, &format, quality, density, outline, matte)
+      page.write(&filename, format, quality, density, outline, matte)
     })
 }
 
