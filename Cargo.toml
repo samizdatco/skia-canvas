@@ -22,5 +22,5 @@ default-features = false
 features = ["napi-6", "channel-api"]
 
 [dependencies.skia-safe]
-version = "0.43.0"
+version = "0.45.1"
 features = ["textlayout"]
