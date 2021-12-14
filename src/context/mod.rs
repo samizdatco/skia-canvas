@@ -778,10 +778,8 @@ impl Dye{
       Some(Dye::Pattern(pattern.borrow().clone()) )
     }else if let Ok(texture) = value.downcast::<BoxedCanvasTexture, _>(cx){
       Some(Dye::Texture(texture.borrow().clone()) )
-    }else if let Some(color) = color_in(cx, value){
-      Some(Dye::Color(color))
     }else{
-      None
+      color_in(cx, value).map(Dye::Color)
     }
   }
 
