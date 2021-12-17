@@ -36,38 +36,37 @@ pub struct Recorder{
   current: PictureRecorder,
   layers: Vec<Drawable>,
   bounds: Rect,
+  changes: usize,
 }
 
 impl Recorder{
   fn new(bounds:Rect) -> Self {
-    let mut list = Recorder{ current:PictureRecorder::new(), layers:vec![], bounds };
-    list.clear(bounds);
-    list
+    let mut rec = PictureRecorder::new();
+    rec.begin_recording(bounds, None);
+    rec.recording_canvas().unwrap().save(); // start at depth 2
+    Recorder{ current:rec, changes:0, layers:vec![], bounds }
   }
 
   pub fn clear(&mut self, bounds:Rect){
-    self.bounds = bounds;
-    self.layers.clear();
-    self.current = PictureRecorder::new();
-    self.current.begin_recording(bounds, None);
-    if let Some(canvas) = self.current.recording_canvas() {
-      canvas.save(); // start at depth 2
-    }
+    *self = Recorder::new(bounds);
   }
 
   pub fn snapshot(&mut self, ctm:&Matrix, clip:&Path) -> PictureRecorder {
-    // stop and restart the recorder while adding its content as a new layer
-    if let Some(palimpsest) = self.current.finish_recording_as_drawable() {
-      self.layers.push(palimpsest);
-    }
-    self.current.begin_recording(self.bounds, None);
+    if self.changes > 0 {
+      // stop and restart the recorder while adding its content as a new layer
+      if let Some(palimpsest) = self.current.finish_recording_as_drawable() {
+        self.layers.push(palimpsest);
+      }
+      self.current.begin_recording(self.bounds, None);
+      self.changes = 0;
 
-    // restore the ctm & clip state
-    if let Some(canvas) = self.current.recording_canvas() {
-      canvas.save();
-      canvas.concat(ctm);
-      if !clip.is_empty(){
-        canvas.clip_path(clip, ClipOp::Intersect, true /* antialias */);
+      // restore the ctm & clip state
+      if let Some(canvas) = self.current.recording_canvas() {
+        canvas.save();
+        canvas.concat(ctm);
+        if !clip.is_empty(){
+          canvas.clip_path(clip, ClipOp::Intersect, true /* antialias */);
+        }
       }
     }
 
@@ -238,10 +237,21 @@ impl Context2D{
   pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
-    let draw_list = Arc::clone(&self.recorder);
-    let mut draw_list = draw_list.lock().unwrap();
-    if let Some(canvas) = draw_list.current.recording_canvas() {
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
+    if let Some(canvas) = recorder.current.recording_canvas() {
       f(canvas);
+    }
+  }
+
+  pub fn update_canvas<F>(&self, f:F)
+    where F:FnOnce(&mut SkCanvas)
+  {
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
+    if let Some(canvas) = recorder.current.recording_canvas() {
+      f(canvas);
+      recorder.changes += 1;
     }
   }
 
@@ -277,7 +287,7 @@ impl Context2D{
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
         if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
-          self.with_canvas(|canvas| {
+          self.update_canvas(|canvas| {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
             canvas.draw_picture(&pict, None, Some(paint));
@@ -287,7 +297,7 @@ impl Context2D{
 
       },
       _ => {
-        self.with_canvas(|canvas| {
+        self.update_canvas(|canvas| {
           if let Some(shadow_paint) = self.paint_for_shadow(paint){
             canvas.save();
             canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
@@ -438,7 +448,7 @@ impl Context2D{
   }
 
   pub fn clear_rect(&mut self, rect:&Rect){
-    self.with_canvas(|canvas| {
+    self.update_canvas(|canvas| {
       let mut paint = Paint::default();
       paint.set_style(PaintStyle::Fill);
       paint.set_blend_mode(BlendMode::Clear);
@@ -452,7 +462,7 @@ impl Context2D{
 
     if let Some(mut drobble) = drobble.as_mut(){
       self.push();
-      self.with_canvas(|canvas| {
+      self.update_canvas(|canvas| {
         let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
         let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
         let mut matrix = Matrix::new_identity();
@@ -481,7 +491,7 @@ impl Context2D{
 
     if let Some(picture) = picture{
       self.push();
-      self.with_canvas(|canvas| {
+      self.update_canvas(|canvas| {
         let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
         let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
         let mut matrix = Matrix::new_identity();
@@ -557,7 +567,7 @@ impl Context2D{
     if let Some(bitmap) = Image::from_raster_data(info, data, info.min_row_bytes()) {
       self.push();
       self.reset_canvas();
-      self.with_canvas(|canvas| {
+      self.update_canvas(|canvas| {
         let paint = Paint::default();
         let mut eraser = Paint::default();
         eraser.set_blend_mode(BlendMode::Clear);
