@@ -32,9 +32,69 @@ unsafe impl Send for Context2D {
   // PictureRecorder is non-threadsafe
 }
 
+pub struct DrawList{
+  recorder: PictureRecorder,
+  layers: Vec<Drawable>,
+  bounds: Rect,
+}
+
+impl DrawList{
+  fn new(bounds:Rect) -> Self {
+    let mut list = DrawList{ recorder:PictureRecorder::new(), layers:vec![], bounds };
+    list.clear(bounds);
+    list
+  }
+
+  pub fn clear(&mut self, bounds:Rect){
+    self.bounds = bounds;
+    self.layers.clear();
+    self.recorder = PictureRecorder::new();
+    self.recorder.begin_recording(bounds, None);
+    if let Some(canvas) = self.recorder.recording_canvas() {
+      canvas.save(); // start at depth 2
+    }
+  }
+
+  pub fn snapshot(&mut self, ctm:&Matrix, clip:&Path) -> PictureRecorder {
+    // stop and restart the recorder while adding its content as a new layer
+    if let Some(palimpsest) = self.recorder.finish_recording_as_drawable() {
+      self.layers.push(palimpsest);
+    }
+    self.recorder.begin_recording(self.bounds, None);
+
+    // restore the ctm & clip state
+    if let Some(canvas) = self.recorder.recording_canvas() {
+      canvas.save();
+      canvas.concat(ctm);
+      if !clip.is_empty(){
+        canvas.clip_path(clip, ClipOp::Intersect, true /* antialias */);
+      }
+    }
+
+    // return an overlay of all the recorded layers
+    let mut compositor = PictureRecorder::new();
+    compositor.begin_recording(self.bounds, None);
+    if let Some(output) = compositor.recording_canvas() {
+      for drawable in self.layers.iter_mut(){
+        drawable.draw(output, None);
+      }
+    }
+    compositor
+  }
+
+  pub fn get_picture(&mut self, ctm:&Matrix, clip:&Path, cull: Option<&Rect>) -> Option<Picture> {
+    self.snapshot(ctm, clip).finish_recording_as_picture(cull.or(Some(&self.bounds)))
+  }
+
+  pub fn get_drawable(&mut self, ctm:&Matrix, clip:&Path) -> Option<Drawable> {
+    self.snapshot(ctm, clip).finish_recording_as_drawable()
+  }
+}
+
+
 pub struct Context2D{
   pub bounds: Rect,
-  recorder: Arc<Mutex<PictureRecorder>>,
+  draw_list: Arc<Mutex<DrawList>>,
   state: State,
   stack: Vec<State>,
   path: Path,
@@ -149,16 +209,11 @@ impl State{
 
 impl Context2D{
   pub fn new() -> Self {
-    let mut recorder = PictureRecorder::new();
     let bounds = Rect::from_wh(300.0, 150.0);
-    recorder.begin_recording(bounds, None);
-    if let Some(canvas) = recorder.recording_canvas() {
-      canvas.save(); // start at depth 2
-    }
 
     Context2D{
       bounds,
-      recorder: Arc::new(Mutex::new(recorder)),
+      draw_list: Arc::new(Mutex::new(DrawList::new(bounds))),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
@@ -183,9 +238,9 @@ impl Context2D{
   pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    if let Some(canvas) = recorder.recording_canvas() {
+    let draw_list = Arc::clone(&self.draw_list);
+    let mut draw_list = draw_list.lock().unwrap();
+    if let Some(canvas) = draw_list.recorder.recording_canvas() {
       f(canvas);
     }
   }
@@ -222,22 +277,17 @@ impl Context2D{
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
         if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
-          let recorder = Arc::clone(&self.recorder);
-          let mut recorder = recorder.lock().unwrap();
-          if let Some(canvas) = recorder.recording_canvas() {
+          self.with_canvas(|canvas| {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
             canvas.draw_picture(&pict, None, Some(paint));
             canvas.restore();
-          }
+          });
         }
 
       },
       _ => {
-        let recorder = Arc::clone(&self.recorder);
-        let mut recorder = recorder.lock().unwrap();
-        if let Some(canvas) = recorder.recording_canvas() {
-          // only call the closure if there's an active dropshadow
+        self.with_canvas(|canvas| {
           if let Some(shadow_paint) = self.paint_for_shadow(paint){
             canvas.save();
             canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
@@ -248,8 +298,7 @@ impl Context2D{
 
           // draw with the normal paint
           f(canvas, paint);
-        }
-
+        });
       }
     };
 
@@ -286,13 +335,9 @@ impl Context2D{
     self.state = State::default();
 
     // erase any existing content
-    let mut new_recorder = PictureRecorder::new();
-    new_recorder.begin_recording(self.bounds, None);
-    let recorder = Arc::clone(&self.recorder);
-    if let Ok(mut recorder) = recorder.lock(){
-      *recorder = new_recorder;
-    }
-    self.reset_canvas();
+    let draw_list = Arc::clone(&self.draw_list);
+    let mut draw_list = draw_list.lock().unwrap();
+    draw_list.clear(self.bounds);
   }
 
   pub fn push(&mut self){
@@ -476,32 +521,9 @@ impl Context2D{
     }
   }
 
-  pub fn get_drawable(&mut self) -> Option<Drawable> {
-    // stop the recorder to take a snapshot then restart it again
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    let mut drobble = recorder.finish_recording_as_drawable();
-    recorder.begin_recording(self.bounds, None);
-
-    if let Some(canvas) = recorder.recording_canvas() {
-      // fill the newly restarted recorder with the snapshot content...
-      if let Some(mut palimpsest) = drobble.as_mut() {
-        canvas.draw_drawable(palimpsest, None);
-      }
-
-      // ...and the current ctm/clip state
-      canvas.save();
-      canvas.set_matrix(&self.state.matrix.into());
-      if !self.state.clip.is_empty(){
-        canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
-      }
-    }
-    drobble
-  }
-
   pub fn get_page(&self) -> Page {
     Page{
-      recorder: Arc::clone(&self.recorder),
+      draw_list: Arc::clone(&self.draw_list),
       bounds: self.bounds,
       clip: self.state.clip.clone(),
       matrix: self.state.matrix,
@@ -509,26 +531,9 @@ impl Context2D{
   }
 
   pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
-    // stop the recorder to take a snapshot then restart it again
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    let snapshot = recorder.finish_recording_as_picture(cull.or(Some(&self.bounds)));
-    recorder.begin_recording(self.bounds, None);
-
-    if let Some(canvas) = recorder.recording_canvas() {
-      // fill the newly restarted recorder with the snapshot content...
-      if let Some(palimpsest) = &snapshot {
-        canvas.draw_picture(&palimpsest, None, None);
-      }
-
-      // ...and the current ctm/clip state
-      canvas.save();
-      canvas.set_matrix(&self.state.matrix.into());
-      if !self.state.clip.is_empty(){
-        canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
-      }
-    }
-    snapshot
+    let draw_list = Arc::clone(&self.draw_list);
+    let mut draw_list = draw_list.lock().unwrap();
+    draw_list.get_picture(&self.state.matrix, &self.state.clip, cull.or(Some(&self.bounds)))
   }
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){

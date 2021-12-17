@@ -7,12 +7,12 @@ use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use rayon::prelude::*;
 use crc::{crc32, Hasher32};
-use skia_safe::{Rect, Matrix, Path as SkPath, Picture, PictureRecorder,
-                Size, ClipOp, Surface, EncodedImageFormat, Data, Color,
+use skia_safe::{Rect, Matrix, Path as SkPath, Picture, Size,
+                Surface, EncodedImageFormat, Data, Color,
                 svg::{self, canvas::Flags}, Document};
 
 use crate::utils::*;
-use crate::context::BoxedContext2D;
+use crate::context::{BoxedContext2D, DrawList};
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -34,7 +34,7 @@ impl Canvas{
 //
 
 pub struct Page{
-  pub recorder: Arc<Mutex<PictureRecorder>>,
+  pub draw_list: Arc<Mutex<DrawList>>,
   pub bounds: Rect,
   pub clip: SkPath,
   pub matrix: Matrix,
@@ -46,26 +46,9 @@ unsafe impl Sync for Page{}
 impl Page{
 
   fn get_picture(&self) -> Option<Picture> {
-    // stop the recorder to take a snapshot then restart it again
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    let snapshot = recorder.finish_recording_as_picture(Some(&self.bounds));
-    recorder.begin_recording(self.bounds, None);
-
-    if let Some(canvas) = recorder.recording_canvas() {
-      // fill the newly restarted recorder with the snapshot content...
-      if let Some(palimpsest) = &snapshot {
-        canvas.draw_picture(&palimpsest, None, None);
-      }
-
-      // ...and the current ctm/clip state
-      canvas.save();
-      canvas.set_matrix(&self.matrix.into());
-      if !self.clip.is_empty(){
-        canvas.clip_path(&self.clip, ClipOp::Intersect, true /* antialias */);
-      }
-    }
-    snapshot
+    let draw_list = Arc::clone(&self.draw_list);
+    let mut draw_list = draw_list.lock().unwrap();
+    draw_list.get_picture(&self.matrix, &self.clip, Some(&self.bounds))
   }
 
   fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<Data, String> {
