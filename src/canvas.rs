@@ -121,6 +121,18 @@ impl Page{
   }
 }
 
+//
+// PDF creation
+//
+
+pub fn pdf_document(quality:f32, density:f32) -> Document{
+  let mut meta = pdf::Metadata::default();
+  meta.producer = "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string();
+  meta.encoding_quality = Some((quality*100.0) as i32);
+  meta.raster_dpi = Some(density * 72.0);
+  pdf::new_document(Some(&meta))
+}
+
 fn to_pdf(pages:&[Page], quality:f32, density:f32) -> Result<Data, String>{
   pages
     .iter()
@@ -137,6 +149,10 @@ fn write_pdf(path:&str, pages:&[Page], quality:f32, density:f32) -> Result<(), S
     Err(msg) => Err(msg)
   }
 }
+
+//
+// Raster graphics
+//
 
 fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
   let padding = match padding as i32{
