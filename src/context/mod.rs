@@ -32,15 +32,15 @@ unsafe impl Send for Context2D {
   // PictureRecorder is non-threadsafe
 }
 
-pub struct DrawList{
-  recorder: PictureRecorder,
+pub struct Recorder{
+  current: PictureRecorder,
   layers: Vec<Drawable>,
   bounds: Rect,
 }
 
-impl DrawList{
+impl Recorder{
   fn new(bounds:Rect) -> Self {
-    let mut list = DrawList{ recorder:PictureRecorder::new(), layers:vec![], bounds };
+    let mut list = Recorder{ current:PictureRecorder::new(), layers:vec![], bounds };
     list.clear(bounds);
     list
   }
@@ -48,22 +48,22 @@ impl DrawList{
   pub fn clear(&mut self, bounds:Rect){
     self.bounds = bounds;
     self.layers.clear();
-    self.recorder = PictureRecorder::new();
-    self.recorder.begin_recording(bounds, None);
-    if let Some(canvas) = self.recorder.recording_canvas() {
+    self.current = PictureRecorder::new();
+    self.current.begin_recording(bounds, None);
+    if let Some(canvas) = self.current.recording_canvas() {
       canvas.save(); // start at depth 2
     }
   }
 
   pub fn snapshot(&mut self, ctm:&Matrix, clip:&Path) -> PictureRecorder {
     // stop and restart the recorder while adding its content as a new layer
-    if let Some(palimpsest) = self.recorder.finish_recording_as_drawable() {
+    if let Some(palimpsest) = self.current.finish_recording_as_drawable() {
       self.layers.push(palimpsest);
     }
-    self.recorder.begin_recording(self.bounds, None);
+    self.current.begin_recording(self.bounds, None);
 
     // restore the ctm & clip state
-    if let Some(canvas) = self.recorder.recording_canvas() {
+    if let Some(canvas) = self.current.recording_canvas() {
       canvas.save();
       canvas.concat(ctm);
       if !clip.is_empty(){
@@ -94,7 +94,7 @@ impl DrawList{
 
 pub struct Context2D{
   pub bounds: Rect,
-  draw_list: Arc<Mutex<DrawList>>,
+  recorder: Arc<Mutex<Recorder>>,
   state: State,
   stack: Vec<State>,
   path: Path,
@@ -213,7 +213,7 @@ impl Context2D{
 
     Context2D{
       bounds,
-      draw_list: Arc::new(Mutex::new(DrawList::new(bounds))),
+      recorder: Arc::new(Mutex::new(Recorder::new(bounds))),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
@@ -238,9 +238,9 @@ impl Context2D{
   pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
-    let draw_list = Arc::clone(&self.draw_list);
+    let draw_list = Arc::clone(&self.recorder);
     let mut draw_list = draw_list.lock().unwrap();
-    if let Some(canvas) = draw_list.recorder.recording_canvas() {
+    if let Some(canvas) = draw_list.current.recording_canvas() {
       f(canvas);
     }
   }
@@ -335,7 +335,7 @@ impl Context2D{
     self.state = State::default();
 
     // erase any existing content
-    let draw_list = Arc::clone(&self.draw_list);
+    let draw_list = Arc::clone(&self.recorder);
     let mut draw_list = draw_list.lock().unwrap();
     draw_list.clear(self.bounds);
   }
@@ -523,7 +523,7 @@ impl Context2D{
 
   pub fn get_page(&self) -> Page {
     Page{
-      draw_list: Arc::clone(&self.draw_list),
+      recorder: Arc::clone(&self.recorder),
       bounds: self.bounds,
       clip: self.state.clip.clone(),
       matrix: self.state.matrix,
@@ -531,7 +531,7 @@ impl Context2D{
   }
 
   pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
-    let draw_list = Arc::clone(&self.draw_list);
+    let draw_list = Arc::clone(&self.recorder);
     let mut draw_list = draw_list.lock().unwrap();
     draw_list.get_picture(&self.state.matrix, &self.state.clip, cull.or(Some(&self.bounds)))
   }

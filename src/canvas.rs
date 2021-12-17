@@ -12,7 +12,7 @@ use skia_safe::{Rect, Matrix, Path as SkPath, Picture, Size,
                 svg::{self, canvas::Flags}, Document};
 
 use crate::utils::*;
-use crate::context::{BoxedContext2D, DrawList};
+use crate::context::{BoxedContext2D, Recorder};
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -34,7 +34,7 @@ impl Canvas{
 //
 
 pub struct Page{
-  pub draw_list: Arc<Mutex<DrawList>>,
+  pub recorder: Arc<Mutex<Recorder>>,
   pub bounds: Rect,
   pub clip: SkPath,
   pub matrix: Matrix,
@@ -46,7 +46,7 @@ unsafe impl Sync for Page{}
 impl Page{
 
   fn get_picture(&self) -> Option<Picture> {
-    let draw_list = Arc::clone(&self.draw_list);
+    let draw_list = Arc::clone(&self.recorder);
     let mut draw_list = draw_list.lock().unwrap();
     draw_list.get_picture(&self.matrix, &self.clip, Some(&self.bounds))
   }
