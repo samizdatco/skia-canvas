@@ -449,7 +449,6 @@ tests['createPattern()'] = function (ctx, done) {
     ctx.strokeRect(1100, 1100, 800, 800)
     done()
   }
-  console.log('load',imageSrc('globe.jpg'))
   img.src = imageSrc('globe.jpg')
 }
 
@@ -2360,7 +2359,6 @@ tests['putImageData() png data'] = function (ctx, done) {
       for (var i = 0, len = data.length; i < len; i += 4) {
         data[i + 3] = 80
       }
-      console.log(data.slice(-40))
     }
     ctx.putImageData(imageData, 50, 50)
     done(null)
