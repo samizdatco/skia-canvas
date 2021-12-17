@@ -3,16 +3,15 @@
 use std::fs;
 use std::path::Path;
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
 use neon::prelude::*;
 use rayon::prelude::*;
 use crc::{crc32, Hasher32};
-use skia_safe::{Rect, Matrix, Path as SkPath, Picture, Size,
+use skia_safe::{Rect, Matrix, Picture, Size, PictureRecorder,
                 Surface, EncodedImageFormat, Data, Color,
-                svg::{self, canvas::Flags}, Document};
+                svg::{self, canvas::Flags}, pdf, Document};
 
 use crate::utils::*;
-use crate::context::{BoxedContext2D, Recorder};
+use crate::context::{BoxedContext2D};
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -34,10 +33,8 @@ impl Canvas{
 //
 
 pub struct Page{
-  pub recorder: Arc<Mutex<Recorder>>,
+  pub layers: Vec<Picture>,
   pub bounds: Rect,
-  pub clip: SkPath,
-  pub matrix: Matrix,
 }
 
 unsafe impl Send for Page{}
@@ -46,9 +43,14 @@ unsafe impl Sync for Page{}
 impl Page{
 
   fn get_picture(&self) -> Option<Picture> {
-    let draw_list = Arc::clone(&self.recorder);
-    let mut draw_list = draw_list.lock().unwrap();
-    draw_list.get_picture(&self.matrix, &self.clip, Some(&self.bounds))
+    let mut compositor = PictureRecorder::new();
+    compositor.begin_recording(self.bounds, None);
+    if let Some(output) = compositor.recording_canvas() {
+      for pict in self.layers.iter(){
+        output.draw_picture(pict, None, None);
+      }
+    }
+    compositor.finish_recording_as_picture(Some(&self.bounds))
   }
 
   fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<Data, String> {

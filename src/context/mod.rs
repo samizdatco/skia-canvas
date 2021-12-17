@@ -34,7 +34,7 @@ unsafe impl Send for Context2D {
 
 pub struct Recorder{
   current: PictureRecorder,
-  layers: Vec<Drawable>,
+  layers: Vec<Picture>,
   bounds: Rect,
   changes: usize,
 }
@@ -51,10 +51,10 @@ impl Recorder{
     *self = Recorder::new(bounds);
   }
 
-  pub fn snapshot(&mut self, ctm:&Matrix, clip:&Path) -> PictureRecorder {
+  fn snapshot(&mut self, ctm:&Matrix, clip:&Path) {
     if self.changes > 0 {
       // stop and restart the recorder while adding its content as a new layer
-      if let Some(palimpsest) = self.current.finish_recording_as_drawable() {
+      if let Some(palimpsest) = self.current.finish_recording_as_picture(Some(&self.bounds)) {
         self.layers.push(palimpsest);
       }
       self.current.begin_recording(self.bounds, None);
@@ -69,24 +69,26 @@ impl Recorder{
         }
       }
     }
+  }
+
+  pub fn get_picture(&mut self, ctm:&Matrix, clip:&Path, cull: Option<&Rect>) -> Option<Picture> {
+    self.snapshot(ctm, clip);
 
     // return an overlay of all the recorded layers
     let mut compositor = PictureRecorder::new();
     compositor.begin_recording(self.bounds, None);
     if let Some(output) = compositor.recording_canvas() {
-      for drawable in self.layers.iter_mut(){
-        drawable.draw(output, None);
+      for pict in self.layers.iter(){
+        output.draw_picture(pict, None, None);
       }
     }
-    compositor
+    compositor.finish_recording_as_picture(cull.or(Some(&self.bounds)))
   }
 
-  pub fn get_picture(&mut self, ctm:&Matrix, clip:&Path, cull: Option<&Rect>) -> Option<Picture> {
-    self.snapshot(ctm, clip).finish_recording_as_picture(cull.or(Some(&self.bounds)))
-  }
+  pub fn get_layers(&mut self, ctm:&Matrix, clip:&Path) -> Vec<Picture>{
+    self.snapshot(ctm, clip);
 
-  pub fn get_drawable(&mut self, ctm:&Matrix, clip:&Path) -> Option<Drawable> {
-    self.snapshot(ctm, clip).finish_recording_as_drawable()
+    self.layers.clone()
   }
 }
 
@@ -345,9 +347,9 @@ impl Context2D{
     self.state = State::default();
 
     // erase any existing content
-    let draw_list = Arc::clone(&self.recorder);
-    let mut draw_list = draw_list.lock().unwrap();
-    draw_list.clear(self.bounds);
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
+    recorder.clear(self.bounds);
   }
 
   pub fn push(&mut self){
@@ -532,18 +534,18 @@ impl Context2D{
   }
 
   pub fn get_page(&self) -> Page {
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
     Page{
-      recorder: Arc::clone(&self.recorder),
+      layers: recorder.get_layers(&self.state.matrix, &self.state.clip),
       bounds: self.bounds,
-      clip: self.state.clip.clone(),
-      matrix: self.state.matrix,
     }
   }
 
   pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
-    let draw_list = Arc::clone(&self.recorder);
-    let mut draw_list = draw_list.lock().unwrap();
-    draw_list.get_picture(&self.state.matrix, &self.state.clip, cull.or(Some(&self.bounds)))
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
+    recorder.get_picture(&self.state.matrix, &self.state.clip, cull.or(Some(&self.bounds)))
   }
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
