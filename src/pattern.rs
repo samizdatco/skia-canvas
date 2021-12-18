@@ -96,7 +96,7 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
     let dims = ctx.bounds.size();
     let stamp = Stamp{
       image:None,
-      pict:ctx.get_picture(None),
+      pict:ctx.get_picture(),
       dims,
       repeat,
       matrix:Matrix::new_identity()

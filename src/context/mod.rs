@@ -537,10 +537,8 @@ impl Context2D{
     recorder.get_page()
   }
 
-  pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    recorder.get_page().get_picture()
+  pub fn get_picture(&mut self) -> Option<Picture> {
+    self.get_page().get_picture()
   }
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
@@ -548,7 +546,7 @@ impl Context2D{
     let size = size.into();
     let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
 
-    if let Some(pict) = self.get_picture(None) {
+    if let Some(pict) = self.get_picture() {
       if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(size){
         let shift = Matrix::translate((-origin.x as f32, -origin.y as f32));
         bitmap_surface.canvas().draw_picture(&pict, Some(&shift), None);

@@ -651,7 +651,7 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     Some((src, dst)) => {
       let pict = {
         let mut ctx = context.borrow_mut();
-        ctx.get_picture(None)
+        ctx.get_picture()
       };
 
       let mut this = this.borrow_mut();
