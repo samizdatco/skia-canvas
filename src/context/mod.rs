@@ -181,7 +181,7 @@ impl Context2D{
     where F:FnOnce(MutexGuard<PageRecorder>)
   {
     let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
+    let recorder = recorder.lock().unwrap();
     f(recorder);
   }
 
@@ -305,7 +305,7 @@ impl Context2D{
     });
     path.set_fill_type(rule.unwrap_or(FillType::Winding));
 
-    let mut paint = self.paint_for(style);
+    let paint = self.paint_for(style);
     let texture = self.state.texture(style);
 
     self.render_to_canvas(&paint, |canvas, paint| {
@@ -386,7 +386,7 @@ impl Context2D{
     let mut paint = self.state.paint.clone();
     paint.set_color(self.color_with_alpha(&BLACK));
 
-    if let Some(mut drobble) = drobble.as_mut(){
+    if let Some(drobble) = drobble{
       self.push();
       self.update_canvas(|canvas| {
         let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
