@@ -2,12 +2,9 @@ use std::fs;
 use std::path::Path as FilePath;
 use rayon::prelude::*;
 use crc::{crc32, Hasher32};
-use skia_safe::{Size,
-                Surface, EncodedImageFormat, Data, Color,
+use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color,
+                PictureRecorder, Picture, Surface, EncodedImageFormat,
                 svg::{self, canvas::Flags}, pdf, Document};
-
-
-use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, PictureRecorder, Picture};
 
 pub struct PageRecorder{
   current: PictureRecorder,
@@ -23,7 +20,7 @@ impl PageRecorder{
     let mut rec = PictureRecorder::new();
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
-    PageRecorder{ current:rec, changed:true, layers:vec![], matrix:Matrix::default(), clip:Path::default(), bounds }
+    PageRecorder{ current:rec, changed:false, layers:vec![], matrix:Matrix::default(), clip:Path::default(), bounds }
   }
 
   pub fn append<F>(&mut self, f:F)
