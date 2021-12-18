@@ -37,9 +37,6 @@ pub struct Page{
   pub bounds: Rect,
 }
 
-unsafe impl Send for Page{}
-unsafe impl Sync for Page{}
-
 impl Page{
 
   fn get_picture(&self) -> Option<Picture> {
