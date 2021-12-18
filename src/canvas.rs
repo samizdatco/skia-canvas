@@ -39,7 +39,7 @@ pub struct Page{
 
 impl Page{
 
-  fn get_picture(&self) -> Option<Picture> {
+  pub fn get_picture(&self) -> Option<Picture> {
     let mut compositor = PictureRecorder::new();
     compositor.begin_recording(self.bounds, None);
     if let Some(output) = compositor.recording_canvas() {
