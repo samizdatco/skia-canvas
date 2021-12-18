@@ -7,109 +7,36 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo,
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
-                PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data, Font,
+                PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data,
                 PictureRecorder, Picture, Drawable,
                 image_filters, color_filters, table_color_filter, dash_path_effect, path_1d_path_effect};
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
 
+pub mod api;
+pub mod page;
+
 use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::typography::*;
-use crate::canvas::Page;
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
+use page::{PageRecorder, Page};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;
 
-pub mod api;
 pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
 impl Finalize for Context2D {}
 unsafe impl Send for Context2D {
   // PictureRecorder is non-threadsafe
 }
 
-pub struct Recorder{
-  current: PictureRecorder,
-  layers: Vec<Picture>,
-  bounds: Rect,
-  matrix: Matrix,
-  clip: Path,
-  changed: bool,
-}
-
-impl Recorder{
-  fn new(bounds:Rect) -> Self {
-    let mut rec = PictureRecorder::new();
-    rec.begin_recording(bounds, None);
-    rec.recording_canvas().unwrap().save(); // start at depth 2
-    Recorder{ current:rec, changed:true, layers:vec![], matrix:Matrix::default(), clip:Path::default(), bounds }
-  }
-
-  pub fn clear(&mut self, bounds:Rect){
-    *self = Recorder::new(bounds);
-  }
-
-  pub fn append<F>(&mut self, f:F)
-    where F:FnOnce(&mut SkCanvas)
-  {
-    if let Some(canvas) = self.current.recording_canvas() {
-      f(canvas);
-    }
-  }
-
-  pub fn set_matrix(&mut self, matrix:Matrix){
-    self.matrix = matrix;
-    if let Some(canvas) = self.current.recording_canvas() {
-      canvas.set_matrix(&matrix.into());
-    }
-  }
-
-  pub fn set_clip(&mut self, clip:&Path){
-    self.clip = clip.clone();
-    if let Some(canvas) = self.current.recording_canvas() {
-      canvas.restore_to_count(1);
-      canvas.save();
-      canvas.set_matrix(&self.matrix.into());
-      if !clip.is_empty(){
-        canvas.clip_path(clip, ClipOp::Intersect, true /* antialias */);
-      }
-    }
-  }
-
-  pub fn get_page(&mut self) -> Page{
-    if self.changed {
-      // stop and restart the recorder while adding its content as a new layer
-      if let Some(palimpsest) = self.current.finish_recording_as_picture(Some(&self.bounds)) {
-        self.layers.push(palimpsest);
-      }
-      self.current.begin_recording(self.bounds, None);
-      self.changed = false;
-
-      // restore the ctm & clip state
-      if let Some(canvas) = self.current.recording_canvas() {
-        canvas.save();
-        canvas.concat(&self.matrix);
-        if !self.clip.is_empty(){
-          canvas.clip_path(&self.clip, ClipOp::Intersect, true /* antialias */);
-        }
-      }
-    }
-
-    Page{
-      layers: self.layers.clone(),
-      bounds: self.bounds,
-    }
-  }
-}
-
-
 pub struct Context2D{
   pub bounds: Rect,
-  recorder: Arc<Mutex<Recorder>>,
+  recorder: Arc<Mutex<PageRecorder>>,
   state: State,
   stack: Vec<State>,
   path: Path,
@@ -228,7 +155,7 @@ impl Context2D{
 
     Context2D{
       bounds,
-      recorder: Arc::new(Mutex::new(Recorder::new(bounds))),
+      recorder: Arc::new(Mutex::new(PageRecorder::new(bounds))),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
@@ -251,7 +178,7 @@ impl Context2D{
   }
 
   pub fn with_recorder<F>(&self, f:F)
-    where F:FnOnce(MutexGuard<Recorder>)
+    where F:FnOnce(MutexGuard<PageRecorder>)
   {
     let recorder = Arc::clone(&self.recorder);
     let mut recorder = recorder.lock().unwrap();
@@ -263,7 +190,6 @@ impl Context2D{
   {
     self.with_recorder(|mut recorder|{
       recorder.append(f);
-      recorder.changed = true;
     });
   }
 
@@ -350,7 +276,7 @@ impl Context2D{
 
     // erase any existing content
     self.with_recorder(|mut recorder| {
-      recorder.clear(self.bounds);
+      recorder.set_bounds(self.bounds);
     });
   }
 
