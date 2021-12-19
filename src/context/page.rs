@@ -1,10 +1,18 @@
 use std::fs;
 use std::path::Path as FilePath;
 use rayon::prelude::*;
+use neon::prelude::*;
+use neon::result::Throw;
 use crc::{crc32, Hasher32};
 use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color,
                 PictureRecorder, Picture, Surface, EncodedImageFormat,
                 svg::{self, canvas::Flags}, pdf, Document};
+
+use crate::context::BoxedContext2D;
+
+//
+// Deferred canvas (records drawing commands for later replay on an output surface)
+//
 
 pub struct PageRecorder{
   current: PictureRecorder,
@@ -81,9 +89,8 @@ impl PageRecorder{
   }
 }
 
-
 //
-// -- File I/O ------------------------------------------------------------------------------------
+// Image generator for a single drawing context
 //
 
 pub struct Page{
@@ -172,56 +179,87 @@ impl Page{
       Err("Width and height must be non-zero to generate a PDF page".to_string())
     }
   }
+}
 
-  pub fn to_pdf(pages:&[Page], quality:f32, density:f32) -> Result<Data, String>{
-    pages
+
+//
+// Container for a canvas's entire stack of page contexts
+//
+
+pub struct PageSequence{
+  pages: Vec<Page>
+}
+
+impl PageSequence{
+  pub fn from(pages:Vec<Page>) -> Self{
+    PageSequence { pages }
+  }
+
+  pub fn first(&self) -> &Page {
+    &self.pages[0]
+  }
+
+  pub fn len(&self) -> usize{
+    self.pages.len()
+  }
+
+  pub fn as_pdf(&self, quality:f32, density:f32) -> Result<Data, String>{
+    self.pages
       .iter()
       .try_fold(pdf_document(quality, density), |doc, page| page.append_to(doc))
       .map(|doc| doc.close())
   }
+
+  #[allow(clippy::too_many_arguments)]
+  pub fn write_sequence(&self, pattern:&str, format:&str, padding:f32, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
+    let padding = match padding as i32{
+      -1 => (1.0 + (self.pages.len() as f32).log10().floor()) as usize,
+      pad => pad as usize
+    };
+
+    self.pages
+      .par_iter()
+      .enumerate()
+      .try_for_each(|(pp, page)|{
+        let folio = format!("{:0width$}", pp+1, width=padding);
+        let filename = pattern.replace("{}", folio.as_str());
+        page.write(&filename, format, quality, density, outline, matte)
+      })
+  }
+
+  pub fn write_pdf(&self, path:&str, quality:f32, density:f32) -> Result<(), String>{
+    let path = FilePath::new(&path);
+    match self.as_pdf(quality, density){
+      Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
+        format!("{}: \"{}\"", why, path.display())
+      ),
+      Err(msg) => Err(msg)
+    }
+  }
+
 }
 
 //
-// PDF creation
+// Helpers
 //
 
-pub fn pdf_document(quality:f32, density:f32) -> Document{
+pub fn pages_arg(cx: &mut FunctionContext, idx: i32) -> Result<PageSequence, Throw> {
+  let pages = cx.argument::<JsArray>(idx)?
+      .to_vec(cx)?
+      .iter()
+      .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
+      .filter( |ctx| ctx.is_ok() )
+      .map(|obj| obj.unwrap().borrow().get_page())
+      .collect();
+  Ok(PageSequence::from(pages))
+}
+
+fn pdf_document(quality:f32, density:f32) -> Document{
   let mut meta = pdf::Metadata::default();
   meta.producer = "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string();
   meta.encoding_quality = Some((quality*100.0) as i32);
   meta.raster_dpi = Some(density * 72.0);
   pdf::new_document(Some(&meta))
-}
-
-pub fn write_pdf(path:&str, pages:&[Page], quality:f32, density:f32) -> Result<(), String>{
-  let path = FilePath::new(&path);
-  match Page::to_pdf(pages, quality, density){
-    Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
-      format!("{}: \"{}\"", why, path.display())
-    ),
-    Err(msg) => Err(msg)
-  }
-}
-
-//
-// Raster graphics
-//
-
-#[allow(clippy::too_many_arguments)]
-pub fn write_sequence(pages:&[Page], pattern:&str, format:&str, padding:f32, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
-  let padding = match padding as i32{
-    -1 => (1.0 + (pages.len() as f32).log10().floor()) as usize,
-    pad => pad as usize
-  };
-
-  pages
-    .par_iter()
-    .enumerate()
-    .try_for_each(|(pp, page)|{
-      let folio = format!("{:0width$}", pp+1, width=padding);
-      let filename = pattern.replace("{}", folio.as_str());
-      page.write(&filename, format, quality, density, outline, matte)
-    })
 }
 
 fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{

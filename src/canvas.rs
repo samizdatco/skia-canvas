@@ -3,8 +3,7 @@ use std::cell::RefCell;
 use neon::prelude::*;
 
 use crate::utils::*;
-use crate::context::BoxedContext2D;
-use crate::context::page::{Page, write_sequence, write_pdf};
+use crate::context::page::pages_arg;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -20,20 +19,6 @@ impl Canvas{
     Canvas{width:300.0, height:150.0, async_io:true}
   }
 }
-
-
-use neon::result::Throw;
-fn pages_arg(cx: &mut FunctionContext, idx: i32) -> Result<Vec<Page>, Throw> {
-  let pages = cx.argument::<JsArray>(idx)?
-      .to_vec(cx)?
-      .iter()
-      .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
-      .filter( |ctx| ctx.is_ok() )
-      .map(|obj| obj.unwrap().borrow().get_page())
-      .collect::<Vec<Page>>();
-  Ok(pages)
-}
-
 
 //
 // -- Javascript Methods --------------------------------------------------------------------------
@@ -97,9 +82,9 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   rayon::spawn(move || {
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        Page::to_pdf(&pages, quality, density)
+        pages.as_pdf(quality, density)
       }else{
-        pages[0].encoded_as(&file_format, quality, density, outline, matte)
+        pages.first().encoded_as(&file_format, quality, density, outline, matte)
       }
     };
 
@@ -143,9 +128,9 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        Page::to_pdf(&pages, quality, density)
+        pages.as_pdf(quality, density)
       }else{
-        pages[0].encoded_as(&file_format, quality, density, outline, matte)
+        pages.first().encoded_as(&file_format, quality, density, outline, matte)
       }
     };
 
@@ -179,11 +164,11 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   rayon::spawn(move || {
     let result = {
       if sequence {
-        write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, outline, matte)
+        pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
       } else if file_format == "pdf" {
-        write_pdf(&name_pattern, &pages, quality, density)
+        pages.write_pdf(&name_pattern, quality, density)
       } else {
-        pages[0].write(&name_pattern, &file_format, quality, density, outline, matte)
+        pages.first().write(&name_pattern, &file_format, quality, density, outline, matte)
       }
     };
 
@@ -223,11 +208,11 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let result = {
     if sequence {
-      write_sequence(&pages, &name_pattern, &file_format, padding, quality, density, outline, matte)
+      pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
     } else if file_format == "pdf" {
-      write_pdf(&name_pattern, &pages, quality, density)
+      pages.write_pdf(&name_pattern, quality, density)
     } else {
-      pages[0].write(&name_pattern, &file_format, quality, density, outline, matte)
+      pages.first().write(&name_pattern, &file_format, quality, density, outline, matte)
     }
   };
 
