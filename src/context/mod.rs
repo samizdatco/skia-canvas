@@ -3,29 +3,31 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo,
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
-                PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data, Font,
+                PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data,
                 PictureRecorder, Picture, Drawable,
                 image_filters, color_filters, table_color_filter, dash_path_effect, path_1d_path_effect};
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
 
+pub mod api;
+pub mod page;
+
 use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::typography::*;
-use crate::canvas::Page;
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
+use page::{PageRecorder, Page};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;
 
-pub mod api;
 pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
 impl Finalize for Context2D {}
 unsafe impl Send for Context2D {
@@ -34,7 +36,7 @@ unsafe impl Send for Context2D {
 
 pub struct Context2D{
   pub bounds: Rect,
-  recorder: Arc<Mutex<PictureRecorder>>,
+  recorder: Arc<Mutex<PageRecorder>>,
   state: State,
   stack: Vec<State>,
   path: Path,
@@ -149,16 +151,11 @@ impl State{
 
 impl Context2D{
   pub fn new() -> Self {
-    let mut recorder = PictureRecorder::new();
     let bounds = Rect::from_wh(300.0, 150.0);
-    recorder.begin_recording(bounds, None);
-    if let Some(canvas) = recorder.recording_canvas() {
-      canvas.save(); // start at depth 2
-    }
 
     Context2D{
       bounds,
-      recorder: Arc::new(Mutex::new(recorder)),
+      recorder: Arc::new(Mutex::new(PageRecorder::new(bounds))),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
@@ -180,14 +177,29 @@ impl Context2D{
     self.bounds.height()
   }
 
+  pub fn with_recorder<F>(&self, f:F)
+    where F:FnOnce(MutexGuard<PageRecorder>)
+  {
+    let recorder = Arc::clone(&self.recorder);
+    let recorder = recorder.lock().unwrap();
+    f(recorder);
+  }
+
   pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    if let Some(canvas) = recorder.recording_canvas() {
-      f(canvas);
-    }
+    self.with_recorder(|mut recorder|{
+      recorder.append(f);
+    });
+  }
+
+  pub fn with_matrix<F>(&mut self, f:F)
+    where F:FnOnce(&mut Matrix) -> &Matrix
+  {
+    f(&mut self.state.matrix);
+    self.with_recorder(|mut recorder|{
+      recorder.set_matrix(self.state.matrix);
+    });
   }
 
   pub fn render_to_canvas<F>(&self, paint:&Paint, f:F)
@@ -222,22 +234,17 @@ impl Context2D{
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
         if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
-          let recorder = Arc::clone(&self.recorder);
-          let mut recorder = recorder.lock().unwrap();
-          if let Some(canvas) = recorder.recording_canvas() {
+          self.with_canvas(|canvas| {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
             canvas.draw_picture(&pict, None, Some(paint));
             canvas.restore();
-          }
+          });
         }
 
       },
       _ => {
-        let recorder = Arc::clone(&self.recorder);
-        let mut recorder = recorder.lock().unwrap();
-        if let Some(canvas) = recorder.recording_canvas() {
-          // only call the closure if there's an active dropshadow
+        self.with_canvas(|canvas| {
           if let Some(shadow_paint) = self.paint_for_shadow(paint){
             canvas.save();
             canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
@@ -248,20 +255,10 @@ impl Context2D{
 
           // draw with the normal paint
           f(canvas, paint);
-        }
-
+        });
       }
     };
 
-  }
-
-  pub fn with_matrix<F>(&mut self, f:F)
-    where F:FnOnce(&mut Matrix) -> &Matrix
-  {
-    f(&mut self.state.matrix);
-    self.with_canvas(|canvas| {
-      canvas.set_matrix(&self.state.matrix.into());
-    });
   }
 
   pub fn map_points(&self, coords:&[f32]) -> Vec<Point>{
@@ -270,29 +267,17 @@ impl Context2D{
           .collect()
   }
 
-  pub fn reset_canvas(&mut self){
-    // clears the active clip and transform from the canvas (but not from the state struct)
-    self.with_canvas(|canvas|{
-      canvas.restore_to_count(1);
-      canvas.save();
-    });
-  }
-
   pub fn resize(&mut self, dims: impl Into<Size>) {
     // called by the canvas when .width or .height are assigned to
     self.bounds = Rect::from_size(dims);
-    self.path = Path::new();
+    self.path = Path::default();
     self.stack = vec![];
     self.state = State::default();
 
     // erase any existing content
-    let mut new_recorder = PictureRecorder::new();
-    new_recorder.begin_recording(self.bounds, None);
-    let recorder = Arc::clone(&self.recorder);
-    if let Ok(mut recorder) = recorder.lock(){
-      *recorder = new_recorder;
-    }
-    self.reset_canvas();
+    self.with_recorder(|mut recorder| {
+      recorder.set_bounds(self.bounds);
+    });
   }
 
   pub fn push(&mut self){
@@ -305,12 +290,9 @@ impl Context2D{
     if let Some(old_state) = self.stack.pop(){
       self.state = old_state;
 
-      self.reset_canvas();
-      self.with_canvas(|canvas|{
-        canvas.set_matrix(&self.state.matrix.into());
-        if !self.state.clip.is_empty(){
-          canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
-        }
+      self.with_recorder(|mut recorder|{
+        recorder.set_matrix(self.state.matrix);
+        recorder.set_clip(&self.state.clip);
       });
     }
   }
@@ -323,7 +305,7 @@ impl Context2D{
     });
     path.set_fill_type(rule.unwrap_or(FillType::Winding));
 
-    let mut paint = self.paint_for(style);
+    let paint = self.paint_for(style);
     let texture = self.state.texture(style);
 
     self.render_to_canvas(&paint, |canvas, paint| {
@@ -363,9 +345,8 @@ impl Context2D{
       self.state.clip = new_clip;
     }
 
-    let do_aa = true;
-    self.with_canvas(|canvas| {
-      canvas.clip_path(&clip, ClipOp::Intersect, do_aa);
+    self.with_recorder(|mut recorder|{
+      recorder.set_clip(&self.state.clip);
     });
   }
 
@@ -405,7 +386,7 @@ impl Context2D{
     let mut paint = self.state.paint.clone();
     paint.set_color(self.color_with_alpha(&BLACK));
 
-    if let Some(mut drobble) = drobble.as_mut(){
+    if let Some(drobble) = drobble{
       self.push();
       self.with_canvas(|canvas| {
         let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
@@ -476,59 +457,14 @@ impl Context2D{
     }
   }
 
-  pub fn get_drawable(&mut self) -> Option<Drawable> {
-    // stop the recorder to take a snapshot then restart it again
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    let mut drobble = recorder.finish_recording_as_drawable();
-    recorder.begin_recording(self.bounds, None);
-
-    if let Some(canvas) = recorder.recording_canvas() {
-      // fill the newly restarted recorder with the snapshot content...
-      if let Some(mut palimpsest) = drobble.as_mut() {
-        canvas.draw_drawable(palimpsest, None);
-      }
-
-      // ...and the current ctm/clip state
-      canvas.save();
-      canvas.set_matrix(&self.state.matrix.into());
-      if !self.state.clip.is_empty(){
-        canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
-      }
-    }
-    drobble
-  }
-
   pub fn get_page(&self) -> Page {
-    Page{
-      recorder: Arc::clone(&self.recorder),
-      bounds: self.bounds,
-      clip: self.state.clip.clone(),
-      matrix: self.state.matrix,
-    }
-  }
-
-  pub fn get_picture(&mut self, cull: Option<&Rect>) -> Option<Picture> {
-    // stop the recorder to take a snapshot then restart it again
     let recorder = Arc::clone(&self.recorder);
     let mut recorder = recorder.lock().unwrap();
-    let snapshot = recorder.finish_recording_as_picture(cull.or(Some(&self.bounds)));
-    recorder.begin_recording(self.bounds, None);
+    recorder.get_page()
+  }
 
-    if let Some(canvas) = recorder.recording_canvas() {
-      // fill the newly restarted recorder with the snapshot content...
-      if let Some(palimpsest) = &snapshot {
-        canvas.draw_picture(&palimpsest, None, None);
-      }
-
-      // ...and the current ctm/clip state
-      canvas.save();
-      canvas.set_matrix(&self.state.matrix.into());
-      if !self.state.clip.is_empty(){
-        canvas.clip_path(&self.state.clip, ClipOp::Intersect, true /* antialias */);
-      }
-    }
-    snapshot
+  pub fn get_picture(&mut self) -> Option<Picture> {
+    self.get_page().get_picture()
   }
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
@@ -536,7 +472,7 @@ impl Context2D{
     let size = size.into();
     let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
 
-    if let Some(pict) = self.get_picture(None) {
+    if let Some(pict) = self.get_picture() {
       if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(size){
         let shift = Matrix::translate((-origin.x as f32, -origin.y as f32));
         bitmap_surface.canvas().draw_picture(&pict, Some(&shift), None);
@@ -550,16 +486,16 @@ impl Context2D{
     // without clips, transforms, alpha, blend, or shadows
     let data = unsafe{ Data::new_bytes(buffer) };
     if let Some(bitmap) = Image::from_raster_data(info, data, info.min_row_bytes()) {
-      self.push();
-      self.reset_canvas();
+      self.push(); // cache matrix & clip in self.state
       self.with_canvas(|canvas| {
         let paint = Paint::default();
         let mut eraser = Paint::default();
+        canvas.restore_to_count(1); // discard current matrix & clip
         eraser.set_blend_mode(BlendMode::Clear);
         canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &eraser);
         canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &paint);
       });
-      self.pop();
+      self.pop(); // restore discarded matrix & clip
     }
   }
 
