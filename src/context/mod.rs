@@ -185,11 +185,20 @@ impl Context2D{
     f(recorder);
   }
 
-  pub fn update_canvas<F>(&self, f:F)
+  pub fn with_canvas<F>(&self, f:F)
     where F:FnOnce(&mut SkCanvas)
   {
     self.with_recorder(|mut recorder|{
       recorder.append(f);
+    });
+  }
+
+  pub fn with_matrix<F>(&mut self, f:F)
+    where F:FnOnce(&mut Matrix) -> &Matrix
+  {
+    f(&mut self.state.matrix);
+    self.with_recorder(|mut recorder|{
+      recorder.set_matrix(self.state.matrix);
     });
   }
 
@@ -225,7 +234,7 @@ impl Context2D{
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
         if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
-          self.update_canvas(|canvas| {
+          self.with_canvas(|canvas| {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
             canvas.draw_picture(&pict, None, Some(paint));
@@ -235,7 +244,7 @@ impl Context2D{
 
       },
       _ => {
-        self.update_canvas(|canvas| {
+        self.with_canvas(|canvas| {
           if let Some(shadow_paint) = self.paint_for_shadow(paint){
             canvas.save();
             canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
@@ -250,15 +259,6 @@ impl Context2D{
       }
     };
 
-  }
-
-  pub fn with_matrix<F>(&mut self, f:F)
-    where F:FnOnce(&mut Matrix) -> &Matrix
-  {
-    f(&mut self.state.matrix);
-    self.with_recorder(|mut recorder|{
-      recorder.set_matrix(self.state.matrix);
-    });
   }
 
   pub fn map_points(&self, coords:&[f32]) -> Vec<Point>{
@@ -374,7 +374,7 @@ impl Context2D{
   }
 
   pub fn clear_rect(&mut self, rect:&Rect){
-    self.update_canvas(|canvas| {
+    self.with_canvas(|canvas| {
       let mut paint = Paint::default();
       paint.set_style(PaintStyle::Fill);
       paint.set_blend_mode(BlendMode::Clear);
@@ -388,7 +388,7 @@ impl Context2D{
 
     if let Some(drobble) = drobble{
       self.push();
-      self.update_canvas(|canvas| {
+      self.with_canvas(|canvas| {
         let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
         let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
         let mut matrix = Matrix::new_identity();
@@ -417,7 +417,7 @@ impl Context2D{
 
     if let Some(picture) = picture{
       self.push();
-      self.update_canvas(|canvas| {
+      self.with_canvas(|canvas| {
         let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
         let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
         let mut matrix = Matrix::new_identity();
@@ -487,7 +487,7 @@ impl Context2D{
     let data = unsafe{ Data::new_bytes(buffer) };
     if let Some(bitmap) = Image::from_raster_data(info, data, info.min_row_bytes()) {
       self.push(); // cache matrix & clip in self.state
-      self.update_canvas(|canvas| {
+      self.with_canvas(|canvas| {
         let paint = Paint::default();
         let mut eraser = Paint::default();
         canvas.restore_to_count(1); // discard current matrix & clip
