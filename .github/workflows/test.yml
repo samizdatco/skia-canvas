@@ -31,7 +31,7 @@ jobs:
         node-version: ${{ matrix.node-version }}
 
     - name: Use Rust
-      uses: actions-rs/toolchain@v1.0.6
+      uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
 
