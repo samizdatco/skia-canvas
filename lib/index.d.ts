@@ -93,6 +93,14 @@ export interface CreateTextureOptions {
   offset?: Offset
 }
 
+export type CanvasImageSource = Canvas | Image;
+
+interface CanvasDrawImage {
+  drawImage(image: CanvasImageSource, dx: number, dy: number): void;
+  drawImage(image: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
+  drawImage(image: CanvasImageSource, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+}
+
 interface CanvasFillStrokeStyles {
   fillStyle: string | CanvasGradient | CanvasPattern | CanvasTexture;
   strokeStyle: string | CanvasGradient | CanvasPattern | CanvasTexture;
