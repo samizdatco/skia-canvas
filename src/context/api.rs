@@ -6,7 +6,7 @@
 use std::f32::consts::PI;
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::{Path, Matrix, Rect, PathDirection, PaintStyle};
+use skia_safe::{Point, Rect, Matrix, Path, PathDirection, PaintStyle};
 use skia_safe::path::AddPathMode::Append;
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
@@ -104,6 +104,41 @@ pub fn resetTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   this.with_matrix(|ctm| ctm.reset() );
   Ok(cx.undefined())
+}
+
+pub fn createProjection(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let dst = points_arg(&mut cx, 1)?;
+  let src = points_arg(&mut cx, 2)?;
+
+  let basis:Vec<Point> = match src.len(){
+    0 => this.bounds.to_quad().to_vec(), // use canvas dims
+    1 => Rect::from_wh(src[0].x, src[0].y).to_quad().to_vec(), // implicit 0,0 origin
+    2 => Rect::new(src[0].x, src[0].y, src[1].x, src[1].y).to_quad().to_vec(), // lf/top, rt/bot
+    _ => src.clone(),
+  };
+
+  let quad:Vec<Point> = match dst.len(){
+    1 => Rect::from_wh(dst[0].x, dst[0].y).to_quad().to_vec(), // implicit 0,0 origin
+    2 => Rect::new(dst[0].x, dst[0].y, dst[1].x, dst[1].y).to_quad().to_vec(), // lf/top, rt/bot
+    _ => dst.clone(),
+  };
+
+  match (Matrix::from_poly_to_poly(&basis, &quad), basis.len() == quad.len()){
+    (Some(projection), true) => {
+      let array = JsArray::new(&mut cx, 9);
+      for i in 0..9 {
+        let num = cx.number(projection[i as usize]);
+        array.set(&mut cx, i as u32, num)?;
+      }
+      Ok(array)
+    },
+    _ => cx.throw_type_error(format!(
+      "Expected 2 or 4 x/y points for output quad (got {}) and 0, 1, 2, or 4 points for the coordinate basis (got {})",
+      quad.len(), basis.len()
+    ))
+  }
 }
 
 // -- ctm property ----------------------------------------------------------------------
