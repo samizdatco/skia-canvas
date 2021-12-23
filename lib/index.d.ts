@@ -111,6 +111,9 @@ interface CanvasFillStrokeStyles {
   createTexture(spacing: Offset, options?: CreateTextureOptions): CanvasTexture
 }
 
+type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:number, x4:number, y4:number] |
+                  [left:number, top:number, right:number, bottom:number] | [width:number, height:number]
+
 export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform, CanvasUserInterface {
   readonly canvas: Canvas;
   fontVariant: string;
@@ -119,13 +122,17 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   lineDashMarker: Path2D | null;
   lineDashFit: "move" | "turn" | "follow";
 
-  conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void;
+  get currentTransform(): DOMMatrix
+  set currentTransform(matrix: DOMMatrix)
+  createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
+
+  conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
   // getContextAttributes(): CanvasRenderingContext2DSettings;
 
-  fillText(text: string, x: number, y:number, maxWidth?: number): void;
-  strokeText(text: string, x: number, y:number, maxWidth?: number): void;
-  measureText(text: string, maxWidth?: number): TextMetrics;
-  outlineText(text: string): Path2D;
+  fillText(text: string, x: number, y:number, maxWidth?: number): void
+  strokeText(text: string, x: number, y:number, maxWidth?: number): void
+  measureText(text: string, maxWidth?: number): TextMetrics
+  outlineText(text: string): Path2D
 }
 
 //
