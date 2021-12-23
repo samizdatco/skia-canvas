@@ -3,15 +3,15 @@
 ## 🥚 ⟩ [Unreleased] 
 
 ### New Features
-- Added TypeScript definitions for extensions to the DOM spec (contributed by [Carlos Precioso](https://github.com/cprecioso))
+- Added TypeScript definitions for extensions to the DOM spec (contributed by [@cprecioso](https://github.com/cprecioso))
 
 ### Breaking Changes
-- The [`Canvas.async`](https://github.com/samizdatco/skia-canvas#async) property has been **deprecated** and will be removed in a future release. 
+- The **Canvas** [`.async`](https://github.com/samizdatco/skia-canvas#async) property has been **deprecated** and will be removed in a future release. 
   - The `saveAs`, `toBuffer`, and `toDataURL` methods will now be async-only (likewise the [shorthand properties](https://github.com/samizdatco/skia-canvas#pdf-svg-jpg-and-png)).
   - Use their synchronous counterparts (`saveAsSync`, `toBufferSync`, and `toDataURLSync`) if you want to block execution while exporting images.
 
 ### Bugfixes
-- Fixed a stack overflow that occurred when images become too deeply nested for the default deallocator to handle (primarily due to many thousands of image exports from the same canvas)
+- Fixed a stack overflow that was occurring when images became too deeply nested for the default deallocator to handle (primarily due to many thousands of image exports from the same canvas)
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 96
