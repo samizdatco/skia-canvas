@@ -105,7 +105,7 @@ impl Page{
     compositor.begin_recording(self.bounds, None);
     if let Some(output) = compositor.recording_canvas() {
       for pict in self.layers.iter(){
-        output.draw_picture(pict, None, None);
+        pict.playback(output);
       }
     }
     compositor.finish_recording_as_picture(Some(&self.bounds))
