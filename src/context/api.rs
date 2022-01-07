@@ -8,6 +8,7 @@ use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::{Path, Matrix, Rect, PathDirection, PaintStyle};
 use skia_safe::path::AddPathMode::Append;
+use skia_safe::path::AddPathMode::Extend;
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
@@ -188,7 +189,7 @@ pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let matrix = this.state.matrix;
     let mut arc = Path2D::new();
     arc.add_ellipse((*x, *y), (*x_radius, *y_radius), *rotation, *start_angle, *end_angle, ccw);
-    this.path.add_path(&arc.path.with_transform(&matrix), (0,0), Append);
+    this.path.add_path(&arc.path.with_transform(&matrix), (0,0), Extend);
   }
   Ok(cx.undefined())
 }
