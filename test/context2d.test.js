@@ -3,7 +3,7 @@
 "use strict"
 
 const _ = require('lodash'),
-      {Canvas, DOMMatrix, loadImage} = require('../lib'),
+      {Canvas, DOMMatrix, ImageData, loadImage} = require('../lib'),
       css = require('../lib/css');
 
 const BLACK = [0,0,0,255],
@@ -196,6 +196,24 @@ describe("Context2D", ()=>{
       expect(bmp.height).toBe(height)
       expect(bmp.data.length).toBe(width * height * 4)
       expect(Array.from(bmp.data.slice(0,4))).toEqual(CLEAR)
+
+      let blank = new ImageData(width, height)
+      expect(blank.width).toBe(width)
+      expect(blank.height).toBe(height)
+      expect(blank.data.length).toBe(width * height * 4)
+      expect(Array.from(blank.data.slice(0,4))).toEqual(CLEAR)
+
+      new ImageData(blank.data, width, height)
+      new ImageData(blank.data, height, width)
+      new ImageData(blank.data, width)
+      new ImageData(blank.data, height)
+      expect(() => new ImageData(blank.data, width+1, height) ).toThrow()
+      expect(() => new ImageData(blank.data, width+1) ).toThrow()
+
+      // @ts-ignore
+      new ImageData(blank)
+      // @ts-ignore
+      expect(() => new ImageData(blank.data) ).toThrow()
     })
 
     describe("CanvasPattern", () => {
