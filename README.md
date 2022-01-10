@@ -12,6 +12,7 @@ In particular, Skia Canvas:
   - uses native threads and [channels](https://docs.rs/neon/0.9.0/neon/event/struct.Channel.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
+  - can apply [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
   - can fill shapes with vector-based [Textures][createTexture()] in addition to bitmap-based [Patterns][createPattern()] and supports line-drawing with custom [markers][lineDashMarker]
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
@@ -432,7 +433,7 @@ The geometry of the quadrilateral should be described as an Array of either 8 or
 
 ##### `basis`
    
-The optional `basis` argument defines the **source** rectangle whose corners will be mapped to the positions defined by `quad`. If no `basis` is specified, the canvas's bounding box will be used (i.e., the rectangle from <0,0> to <`canvas.width`,`canvas.height`>). Note that drawing commands that go outside of the `basis` region may well be visible—it only establishes the geometry of the projection, not the [clipping][clip()] path.
+The optional `basis` argument defines the **source** rectangle whose corners will be mapped to the positions defined by `quad`. If no `basis` is specified, the canvas's bounding box will be used (i.e., the rectangle from ⟨`0`, `0`⟩ to ⟨`canvas.width`, `canvas.height`⟩). Note that drawing commands that go outside of the `basis` region may well be visible—it only establishes the geometry of the projection, not the [clipping][clip()] path.
 
 The `basis` polygon can be described using 2, 4, or 8 numbers, using the canvas dimensions to fill in the unspecified coordinates:
 ```js
@@ -441,33 +442,39 @@ The `basis` polygon can be described using 2, 4, or 8 numbers, using the canvas 
 [x1, y1, x2, y2, x3, y3, x4, y4] // four corner points
 ```
 
+The projection matrix will apply to all types of drawing: shapes, images, and text. For example, this will transform a white box and `"@"` character into a trapezoid bounded by the vertical midline of the canvas and its left and right edges. No `basis` argument is being passed, so it will use the current canvas size (the ‘default basis’) as the rectangle to be mapped onto that trapezoid.
 
 ```js
 let canvas = new Canvas(512, 512),
     ctx = canvas.getContext("2d"),
-    {width, height} = canvas;
+    {width:w, height:h} = canvas;
 ctx.font = '900 480px Times'
 ctx.textAlign = 'center'
 ctx.fillStyle = '#aaa'
-ctx.fillRect(0,0,width,height)
+ctx.fillRect(0, 0, w, h)
 
 let quad = [
-    width*.33, height/2,
-    width*.66, height/2,
-    width, height*.9,
-    0, height*.9,
+  w*.33, h/2,  // upper left
+  w*.66, h/2,  // upper right
+  w,     h*.9, // bottom right
+  0,     h*.9, // bottom left
 ]
 
-let matrix = ctx.createProjection(quad)
+let matrix = ctx.createProjection(quad) // use default basis
 ctx.setTransform(matrix)
 
 ctx.fillStyle = 'white'
-ctx.fillRect(0, 0, width, height)
+ctx.fillRect(10, 10, w-20, h-20)
 
 ctx.fillStyle = '#900'
-ctx.fillText("@", width/2, height-40)
+ctx.fillText("@", w/2, h-40)
 
 ```
+
+The results below show the image generated when the `createProjection()` call is omitted entirely, called (as above) with just a `quad` argument, or called with two different values for the optional `basis` argument:
+
+![Paths and text with a perspective transform](/test/assets/path/projection@2x.png)
+
 
 #### `createTexture(spacing, {path, line, color, angle, offset=0})`
 
