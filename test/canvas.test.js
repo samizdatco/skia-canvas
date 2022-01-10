@@ -260,7 +260,7 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", async () => {
-      for (const ext of ["png", "jpg", "pdf", "svg"]){
+      for (let ext of ["png", "jpg", "pdf", "svg"]){
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = await canvas.toBuffer(ext)
@@ -282,7 +282,7 @@ describe("Canvas", ()=>{
     })
 
     test("data URLs", async () => {
-      for (const ext in MIME){
+      for (let ext in MIME){
         let magic = MAGIC[ext],
             mime = MIME[ext],
             [extURL, mimeURL] = await Promise.all([
@@ -427,7 +427,7 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", () => {
-      for (const ext of ["png", "jpg", "pdf", "svg"]){
+      for (let ext of ["png", "jpg", "pdf", "svg"]){
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = canvas.toBufferSync(ext)
@@ -449,7 +449,7 @@ describe("Canvas", ()=>{
     })
 
     test("data URLs", () => {
-      for (const ext in MIME){
+      for (let ext in MIME){
         let magic = MAGIC[ext],
             mime = MIME[ext],
             extURL = canvas.toDataURLSync(ext),

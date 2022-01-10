@@ -208,7 +208,7 @@ describe("Path2D", ()=>{
       expect(pixel(163, 100)).toEqual(CLEAR)
 
       // with ccw enabled
-      const p2 = new Path2D()
+      let p2 = new Path2D()
       p2.ellipse(100,100, 100, 50, .25*Math.PI, 0, 1.5*Math.PI, true)
       ctx.clearRect(0,0, WIDTH, HEIGHT)
       ctx.stroke(p2)
