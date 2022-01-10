@@ -380,12 +380,30 @@ pub fn matrix_arg(cx: &mut FunctionContext, idx:usize) -> Result<Matrix, Throw> 
 // Points
 //
 
-// pub fn points_in(vals:&[Handle<JsValue>]) -> Vec<Point>{
-//   floats_in(&vals).as_slice()
-//       .chunks(2)
-//       .map(|pair| Point::new(pair[0], pair[1]))
-//       .collect()
-// }
+pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> Result<Vec<Point>, Throw>{
+  let mut nums:Vec<f32> = vec![];
+  if let Some(arg) = cx.argument_opt(idx as i32) {
+    if let Ok(array) = arg.downcast::<JsArray, _>(cx) {
+      if let Ok(vals) = array.to_vec(cx){
+        nums = floats_in(cx, &vals);
+      }
+    }
+  }
+
+  if nums.len() % 2 == 1{
+    let which = if idx==1{ "first" }else if idx==2{ "second" }else{ "an" };
+    cx.throw_type_error(
+      format!("Lists of x/y points must have an even number of values (got {} in {} argument)", nums.len(), which)
+    )
+  }else{
+    let points = nums
+      .as_slice()
+      .chunks_exact(2)
+      .map(|pair| Point::new(pair[0], pair[1]))
+      .collect();
+    Ok(points)
+  }
+}
 
 //
 // Path2D

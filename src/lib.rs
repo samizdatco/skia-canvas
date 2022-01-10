@@ -123,6 +123,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_resetTransform", ctx::resetTransform)?;
   cx.export_function("CanvasRenderingContext2D_get_currentTransform", ctx::get_currentTransform)?;
   cx.export_function("CanvasRenderingContext2D_set_currentTransform", ctx::set_currentTransform)?;
+  cx.export_function("CanvasRenderingContext2D_createProjection", ctx::createProjection)?;
 
   // bézier paths
   cx.export_function("CanvasRenderingContext2D_beginPath", ctx::beginPath)?;

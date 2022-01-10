@@ -12,6 +12,7 @@ In particular, Skia Canvas:
   - uses native threads and [channels](https://docs.rs/neon/0.9.0/neon/event/struct.Channel.html) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
+  - can apply [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
   - can fill shapes with vector-based [Textures][createTexture()] in addition to bitmap-based [Patterns][createPattern()] and supports line-drawing with custom [markers][lineDashMarker]
   - fully supports the [CSS filter effects][filter] image processing operators
   - offers rich typographic control including:
@@ -287,17 +288,32 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
 
-| Canvas State                             | Drawing                                      | Pattern & Color                                   | Line Style                              | Transform                                |
-|------------------------------------------|----------------------------------------------|---------------------------------------------------|-----------------------------------------|------------------------------------------|
-| [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                        | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform] |
-| [beginPath()][beginPath()]               | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [getTransform()][getTransform()]         |
-| [isPointInPath()][isPointInPath()]       | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [setTransform()][setTransform()]         |
-| [isPointInStroke()][isPointInStroke()]   | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]    | [resetTransform()][resetTransform()]     |
-| [save()][save()]                         | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                | [transform()][transform()]               |
-| [restore()][restore()]                   | [fill()][fill()]                             | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]              | [translate()][translate()]               |
-| [clip()][clip()]                         | [stroke()][stroke()]                         | [createTexture() ⚡][createTexture()]             | [**miterLimit**][miterLimit]            | [rotate()][rotate()]                     |
-|                                          |                                              |                                                   | [getLineDash()][getLineDash()]          | [scale()][scale()]                       |
-|                                          |                                              |                                                   | [setLineDash()][setLineDash()]          |                                          |
+| Canvas State                             | Drawing                                      | Pattern & Color                                   | Line Style                              | Transform                                   |
+|------------------------------------------|----------------------------------------------|---------------------------------------------------|-----------------------------------------|---------------------------------------------|
+| [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                        | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]    |
+| [beginPath()][beginPath()]               | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [createProjection() ⚡][createProjection()] |
+| [isPointInPath()][isPointInPath()]       | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [getTransform()][getTransform()]            |
+| [isPointInStroke()][isPointInStroke()]   | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]            |
+| [save()][save()]                         | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]        |
+| [restore()][restore()]                   | [fill()][fill()]                             | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]              | [transform()][transform()]                  |
+| [clip()][clip()]                         | [stroke()][stroke()]                         | [createTexture() ⚡][createTexture()]             | [**miterLimit**][miterLimit]            | [translate()][translate()]                  |
+|                                          |                                              |                                                   | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                        |
+|                                          |                                              |                                                   | [setLineDash()][setLineDash()]          | [scale()][scale()]                          |
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 | Bezier Paths                             | Typography                                                  | Images                                             | Compositing Effects                                      |
@@ -396,6 +412,71 @@ The `lineDashFit` attribute can be set to `"move"`, `"turn"`, or `"follow"` and 
 #### `conicCurveTo(cpx, cpy, x, y, weight)`
 
 Adds a line segment connecting the current point to (*x, y*) but curving toward the control point (*cpx, cpy*) along the way. The `weight` argument controls how close the curve will come to the control point. If the weight is `0`, the result will be a straight line from the current point to (*x, y*). With a weight of `1.0`, the function is equivalent to calling `quadraticCurveTo()`. Weights greater than `1.0` will pull the line segment ever closer to the control point.
+
+#### `createProjection(quad, [basis])`
+
+This method returns a [DOMMatrix][DOMMatrix] object which can be used to simulate perspective effects or other distortions in which the four corners of the canvas are mapped to an arbitrary quadrilateral (four sided polygon). The matrix must be passed to the context's [setTransform][setTransform()] method for it take effect.
+
+##### `quad`
+
+The `quad` argument defines the **target** of the transformation. It specifies four points that establish where the four corners of the source coordinate space will be positioned within the viewport. If these points form a polygon other than a rectangle, lines drawn along the x & y axes of the source space will no longer be perpendicular—trapezoids allow for ‘vanishing point’ effects and parallelograms create ‘skew’.
+
+The geometry of the quadrilateral should be described as an Array of either 8 or 4 numbers specifying an arbitrary polygon or rectangle respectively:
+
+```js
+[x1, y1, x2, y2, x3, y3, x4, y4] // four corner points
+[left, top, right, bottom] // four edges of a rectangle
+
+// internal arrays for grouping are also allowed
+[[x1, y1], [x2, y2], [x3, y3], [x4, y4]] 
+```
+
+##### `basis`
+   
+The optional `basis` argument defines the **source** quadrilateral whose corners will be mapped to the positions defined by `quad`. If no `basis` is specified, the canvas's bounding box will be used (i.e., the rectangle from ⟨`0`, `0`⟩ to ⟨`canvas.width`, `canvas.height`⟩). Note that drawing commands that go outside of the `basis` region may well be visible—it only establishes the geometry of the projection, not the [clipping][clip()] path.
+
+The `basis` polygon can be described using 2, 4, or 8 numbers, using the canvas dimensions to fill in the unspecified coordinates:
+```js
+[width, height] // rectangle from ⟨0, 0⟩ to ⟨width, height⟩
+[left, top, right, bottom] // four edges of a rectangle
+[x1, y1, x2, y2, x3, y3, x4, y4] // four corner points
+```
+
+----
+
+The projection matrix will apply to all types of drawing: shapes, images, and text. This example transforms a white box and red `"@"` character into a trapezoid bounded by the vertical midline of the canvas and its left and right edges. Since no `basis` argument is provided, it will default to using the current canvas bounds as the rectangle to be mapped onto that trapezoid. 
+
+```js
+let canvas = new Canvas(512, 512),
+    ctx = canvas.getContext("2d"),
+    {width:w, height:h} = canvas;
+ctx.font = '900 480px Times'
+ctx.textAlign = 'center'
+ctx.fillStyle = '#aaa'
+ctx.fillRect(0, 0, w, h)
+
+let quad = [
+  w*.33, h/2,  // upper left
+  w*.66, h/2,  // upper right
+  w,     h*.9, // bottom right
+  0,     h*.9, // bottom left
+]
+
+let matrix = ctx.createProjection(quad) // use default basis
+ctx.setTransform(matrix)
+
+ctx.fillStyle = 'white'
+ctx.fillRect(10, 10, w-20, h-20)
+
+ctx.fillStyle = '#900'
+ctx.fillText("@", w/2, h-40)
+
+```
+
+The results below show the image generated when the `createProjection()` call is omitted entirely, called (as above) with just a `quad` argument, or called with two different values for the optional `basis` argument:
+
+![Paths and text with a perspective transform](/test/assets/path/projection@2x.png)
+
 
 #### `createTexture(spacing, {path, line, color, angle, offset=0})`
 
@@ -838,6 +919,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [conicCurveTo]: #coniccurvetocpx-cpy-x-y-weight
 [outlineText()]: #outlinetextstr
 [createTexture()]: #createtexturespacing-path-line-color-angle-offset0
+[createProjection()]: #createprojectionquad-basis
 [lineDashMarker]: #linedashmarker
 [lineDashFit]: #linedashfit
 
