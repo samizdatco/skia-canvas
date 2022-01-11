@@ -4,6 +4,7 @@
 
 ### New Features
 - Added TypeScript definitions for extensions to the DOM spec (contributed by [@cprecioso](https://github.com/cprecioso))
+- Added 3D-perspective transformations via the new [createProjection()](https://github.com/samizdatco/skia-canvas#createprojectionquad-basis) context method
 
 ### Breaking Changes
 - The **Canvas** [`.async`](https://github.com/samizdatco/skia-canvas#async) property has been **deprecated** and will be removed in a future release. 
@@ -12,6 +13,12 @@
 
 ### Bugfixes
 - Fixed a stack overflow that was occurring when images became too deeply nested for the default deallocator to handle (primarily due to many thousands of image exports from the same canvas)
+- The [ImageData](https://developer.mozilla.org/en-US/docs/Web/API/ImageData/ImageData) constructor now orders its arguments properly: the optional buffer/array argument now comes first
+- The `source-in`, `source-out`, `destination-atop`, and `copy` composite operations now work correctly for paths rather than rendering shapes without color (contributed by [@meihuanyu](https://github.com/meihuanyu))
+- Shape primitives now behave consistently with browsers when being added to a non-empty path:
+  - `rect()` now issues an initial `moveTo` rather than extending the path, then leaves the ‘current’ point in its upper left corner
+  - `ellipse()` extends the current path rather than implicitly closing it (contributed by [@meihuanyu](https://github.com/meihuanyu))
+  - `arc()` also extends the current path rather than closing it
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 96
