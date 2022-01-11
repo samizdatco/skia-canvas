@@ -188,10 +188,12 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   if let [x, y, w, h] = nums.as_slice(){
     let rect = Rect::from_xywh(*x, *y, *w, *h);
-    let matrix = this.state.matrix;
-    let mut rect_path = Path::new();
-    rect_path.add_rect(&rect, Some((PathDirection::CW, 0)));
-    this.path.add_path(&rect_path.with_transform(&matrix), (0, 0), Append);
+    let quad = this.state.matrix.map_rect_to_quad(rect);
+    this.path.move_to(quad[0]);
+    this.path.line_to(quad[1]);
+    this.path.line_to(quad[2]);
+    this.path.line_to(quad[3]);
+    this.path.close();
   }
   Ok(cx.undefined())
 }
@@ -206,7 +208,7 @@ pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let matrix = this.state.matrix;
     let mut arc = Path2D::new();
     arc.add_ellipse((*x, *y), (*radius, *radius), 0.0, *start_angle, *end_angle, ccw);
-    this.path.add_path(&arc.path.with_transform(&matrix), (0,0), Append);
+    this.path.add_path(&arc.path.with_transform(&matrix), (0,0), Extend);
   }
   Ok(cx.undefined())
 }
