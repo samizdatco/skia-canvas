@@ -5,6 +5,7 @@
 ### New Features
 - Added TypeScript definitions for extensions to the DOM spec (contributed by [@cprecioso](https://github.com/cprecioso))
 - Added 3D-perspective transformations via the new [createProjection()](https://github.com/samizdatco/skia-canvas#createprojectionquad-basis) context method
+- Colors can now use the [hwb()](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/hwb()) model
 
 ### Breaking Changes
 - The **Canvas** [`.async`](https://github.com/samizdatco/skia-canvas#async) property has been **deprecated** and will be removed in a future release. 
