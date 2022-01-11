@@ -3,10 +3,12 @@ use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
 use neon::result::Throw;
-use crc::{crc32, Hasher32};
 use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color,
                 PictureRecorder, Picture, Surface, EncodedImageFormat,
                 svg::{self, canvas::Flags}, pdf, Document};
+
+use crc::{Crc, CRC_32_ISO_HDLC};
+const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 
 use crate::context::BoxedContext2D;
 
@@ -273,7 +275,7 @@ fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{
       Data::new_copy(&bytes)
     }
     EncodedImageFormat::PNG => {
-      let mut digest = crc32::Digest::new(crc32::IEEE);
+      let mut digest = CRC32.digest();
       let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
       let phys = vec![
         b'p', b'H', b'Y', b's',
@@ -281,10 +283,10 @@ fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{
         a, b, c, d, // y-dpi
         1, // dots per meter
       ];
-      digest.write(&phys);
+      digest.update(&phys);
 
       let length = 9u32.to_be_bytes().to_vec();
-      let checksum = digest.sum32().to_be_bytes().to_vec();
+      let checksum = digest.finalize().to_be_bytes().to_vec();
       bytes.splice(33..33, [length, phys, checksum].concat());
       Data::new_copy(&bytes)
     }
