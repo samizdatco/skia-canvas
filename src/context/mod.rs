@@ -237,9 +237,9 @@ impl Context2D{
           self.with_canvas(|canvas| {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
-            let mut new_paint = Paint::default();
-            new_paint.set_blend_mode(self.state.global_composite_operation);
-            canvas.draw_picture(&pict, None, Some(&new_paint));
+            let mut blend_paint = Paint::default();
+            blend_paint.set_blend_mode(self.state.global_composite_operation);
+            canvas.draw_picture(&pict, None, Some(&blend_paint));
             canvas.restore();
           });
         }
