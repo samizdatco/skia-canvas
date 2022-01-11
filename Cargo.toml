@@ -11,10 +11,10 @@ exclude = ["index.node"]
 crate-type = ["cdylib"]
 
 [dependencies]
-css-color = "0.1.1"
 crc = "^2.1"
+css-color = "^0.2"
 lazy_static = "1.4.0"
-rayon = "1.5.1"
+rayon = "^1.5"
 
 [dependencies.neon]
 version = "0.9.1"
