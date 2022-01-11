@@ -217,6 +217,18 @@ tests['ellipse() 4'] = function (ctx) {
   }
 }
 
+tests["ellipse() 5"] = function (ctx, done) {
+  ctx.transform(1, 0, 0, 1, 100, 50)
+  ctx.beginPath()
+  ctx.moveTo(-39,-33);
+  ctx.ellipse(39,-23,9,9,0,-1,0,false);
+  ctx.lineTo(49,23);
+  ctx.closePath()
+  ctx.fillStyle="#5a0e3e"
+  ctx.fill()
+  done()
+}
+
 tests['bezierCurveTo()'] = function (ctx) {
   ctx.beginPath()
   ctx.moveTo(75, 40)
@@ -1313,7 +1325,31 @@ const gco = [
 ]
 
 gco.forEach(op => {
-  tests['globalCompositeOperator ' + op] = function (ctx, done) {
+  tests['path globalCompositeOperator ' + op] = function (ctx, done) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(255,0,0,1)";
+    ctx.arc(50, 100, 50, Math.PI*2, 0, false);
+    ctx.fill()
+
+    ctx.globalCompositeOperation = op;
+
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(0,0,255,1)";
+    ctx.arc(110, 100, 50, Math.PI*2, 0, false);
+    ctx.fill()
+
+    ctx.beginPath();
+    ctx.fillStyle = "rgba(0,255,0,1)";
+    ctx.arc(80, 50, 50, Math.PI*2, 0, false);
+    ctx.fill();
+    
+    done()
+  }
+})
+
+gco.forEach(op => {
+  tests['image globalCompositeOperator ' + op] = function (ctx, done) {
     var img1 = new Image()
     var img2 = new Image()
     img1.onload = function () {

@@ -211,7 +211,7 @@ impl Context2D{
       BlendMode::DstATop | BlendMode::Src =>{
         // for blend modes that affect regions of the canvas outside of the bounds of the object
         // being drawn, create an intermediate picture before drawing to the canvas
-        let mut layer_paint = self.state.paint.clone();
+        let mut layer_paint = paint.clone();
         layer_paint.set_blend_mode(BlendMode::SrcOver);
         let mut layer_recorder = PictureRecorder::new();
         layer_recorder.begin_recording(self.bounds, None);
@@ -237,7 +237,9 @@ impl Context2D{
           self.with_canvas(|canvas| {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
-            canvas.draw_picture(&pict, None, Some(paint));
+            let mut new_paint = Paint::default();
+            new_paint.set_blend_mode(self.state.global_composite_operation);
+            canvas.draw_picture(&pict, None, Some(&new_paint));
             canvas.restore();
           });
         }
