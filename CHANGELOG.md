@@ -23,6 +23,7 @@
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 96
+- Added workflow for creating docker build environments
 
 
 ## 📦 ⟩ [v0.9.27] ⟩ Oct 23, 2021
