@@ -3,7 +3,7 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### Bugfixes
-- Regions erased using `clearRect` are now properly antialised
+- Regions erased using `clearRect` are now properly antialiased
 - The `clip` method now interprets the current translate/scale/rotate state correctly when combining clipping masks
 
 ## 📦 ⟩ [v0.9.28] ⟩ Jan 12, 2022
