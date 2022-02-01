@@ -238,6 +238,7 @@ impl Context2D{
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
             let mut blend_paint = Paint::default();
+            blend_paint.set_anti_alias(true);
             blend_paint.set_blend_mode(self.state.global_composite_operation);
             canvas.draw_picture(&pict, None, Some(&blend_paint));
             canvas.restore();
@@ -374,8 +375,9 @@ impl Context2D{
   pub fn clear_rect(&mut self, rect:&Rect){
     self.with_canvas(|canvas| {
       let mut paint = Paint::default();
-      paint.set_style(PaintStyle::Fill);
-      paint.set_blend_mode(BlendMode::Clear);
+      paint.set_anti_alias(true)
+           .set_style(PaintStyle::Fill)
+           .set_blend_mode(BlendMode::Clear);
       canvas.draw_rect(&rect, &paint);
     });
   }
