@@ -334,13 +334,9 @@ impl Context2D{
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
-    let mut clip = path.unwrap_or_else(|| {
-      // the current path has already incorporated its transform state
-      let inverse = self.state.matrix.invert().unwrap();
-      self.path.with_transform(&inverse)
-    });
-
+    let mut clip = path.unwrap_or_else(|| self.path.clone()) ;
     clip.set_fill_type(rule);
+
     if self.state.clip.is_empty(){
       self.state.clip = clip.clone();
     }else if let Some(new_clip) = self.state.clip.op(&clip, PathOp::Intersect){

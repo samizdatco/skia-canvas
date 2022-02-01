@@ -405,14 +405,41 @@ describe("Context2D", ()=>{
       // b | b
       // -----
       // w | b
+      ctx.save()
       ctx.clip() // nonzero
       ctx.fillStyle = 'black'
       ctx.fillRect(0, 0, 2, 2)
+      ctx.restore()
 
       expect(pixel(0, 0)).toEqual(BLACK)
       expect(pixel(1, 0)).toEqual(BLACK)
       expect(pixel(0, 1)).toEqual(WHITE)
       expect(pixel(1, 1)).toEqual(BLACK)
+
+      // test intersection of sequential clips while incorporating transform
+      ctx.fillStyle = 'black'
+      ctx.fillRect(0,0,WIDTH,HEIGHT)
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(20,20,60,60)
+      ctx.clip()
+      ctx.fillStyle = 'white'
+      ctx.fillRect(0,0,WIDTH,HEIGHT)
+
+      ctx.beginPath()
+      ctx.translate(20, 20)
+      ctx.rect(0,0,30,30)
+      ctx.clip()
+      ctx.fillStyle = 'green'
+      ctx.fillRect(0,0,WIDTH,HEIGHT)
+      ctx.restore()
+
+      expect(pixel(10, 10)).toEqual(BLACK)
+      expect(pixel(90, 90)).toEqual(BLACK)
+      expect(pixel(22, 22)).toEqual(GREEN)
+      expect(pixel(48, 48)).toEqual(GREEN)
+      expect(pixel(52, 52)).toEqual(WHITE)
     })
 
     test("fill()", () => {

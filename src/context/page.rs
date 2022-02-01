@@ -55,13 +55,17 @@ impl PageRecorder{
 
   pub fn set_clip(&mut self, clip:&Path){
     self.clip = clip.clone();
+    self.restore();
+  }
+
+  pub fn restore(&mut self){
     if let Some(canvas) = self.current.recording_canvas() {
       canvas.restore_to_count(1);
       canvas.save();
-      canvas.set_matrix(&self.matrix.into());
-      if !clip.is_empty(){
-        canvas.clip_path(clip, ClipOp::Intersect, true /* antialias */);
+      if !self.clip.is_empty(){
+        canvas.clip_path(&self.clip, ClipOp::Intersect, true /* antialias */);
       }
+      canvas.set_matrix(&self.matrix.into());
     }
   }
 
@@ -73,15 +77,7 @@ impl PageRecorder{
       }
       self.current.begin_recording(self.bounds, None);
       self.changed = false;
-
-      // restore the ctm & clip state
-      if let Some(canvas) = self.current.recording_canvas() {
-        canvas.save();
-        canvas.concat(&self.matrix);
-        if !self.clip.is_empty(){
-          canvas.clip_path(&self.clip, ClipOp::Intersect, true /* antialias */);
-        }
-      }
+      self.restore();
     }
 
     Page{
