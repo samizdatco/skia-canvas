@@ -645,10 +645,18 @@ fn _layout_rects(width:f32, height:f32, nums:&[f32]) -> Option<(Rect, Rect)> {
   Some((src, dst))
 }
 
-pub fn drawRaster(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let source = cx.argument::<BoxedImage>(1)?;
-  let image = &source.borrow().image;
+  let source = cx.argument::<JsValue>(1)?;
+  let image = {
+    if let Ok(obj) = source.downcast::<BoxedImage, _>(&mut cx){
+      (&obj.borrow().image).clone()
+    }else if let Ok(obj) = source.downcast::<BoxedContext2D, _>(&mut cx){
+      obj.borrow().get_image()
+    }else{
+      return Ok(cx.undefined())
+    }
+  };
 
   let dims = image.as_ref().map(|img|
     (img.width(), img.height())
@@ -667,7 +675,7 @@ pub fn drawRaster(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       let (src, dst) = fit_bounds(width, height, src, dst);
 
       let mut this = this.borrow_mut();
-      this.draw_image(image, &src, &dst);
+      this.draw_image(&image, &src, &dst);
       Ok(cx.undefined())
     },
     None => cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))

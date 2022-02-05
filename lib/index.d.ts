@@ -99,6 +99,9 @@ interface CanvasDrawImage {
   drawImage(image: CanvasImageSource, dx: number, dy: number): void;
   drawImage(image: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
   drawImage(image: CanvasImageSource, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+  drawCanvas(image: Canvas, dx: number, dy: number): void;
+  drawCanvas(image: Canvas, dx: number, dy: number, dw: number, dh: number): void;
+  drawCanvas(image: Canvas, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
 }
 
 interface CanvasFillStrokeStyles {

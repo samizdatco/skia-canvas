@@ -2,6 +2,9 @@
 
 ## 🥚 ⟩ [Unreleased]
 
+### Breaking Changes
+- When the `drawImage` function is passed a `Canvas` object as its image source it will now rasterize the canvas before drawing. The prior behavior (in which it is drawn as a vector graphic) can now be accessed through the new `drawCanvas` method which supports the same numerical arguments as `drawImage` but requires that its first argument be a `Canvas`.
+
 ### Bugfixes
 - Regions erased using `clearRect` are now properly antialiased
 - The `clip` method now interprets the current translate/scale/rotate state correctly when combining clipping masks

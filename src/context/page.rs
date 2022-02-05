@@ -3,8 +3,9 @@ use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
 use neon::result::Throw;
-use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color,
-                PictureRecorder, Picture, Surface, EncodedImageFormat,
+use skia_safe::image::BitDepth;
+use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color, ColorSpace,
+                PictureRecorder, Picture, Surface, EncodedImageFormat, Image as SkImage,
                 svg::{self, canvas::Flags}, pdf, Document};
 
 use crc::{Crc, CRC_32_ISO_HDLC};
@@ -19,6 +20,7 @@ use crate::context::BoxedContext2D;
 pub struct PageRecorder{
   current: PictureRecorder,
   layers: Vec<Picture>,
+  cache: Option<SkImage>,
   bounds: Rect,
   matrix: Matrix,
   clip: Path,
@@ -30,7 +32,7 @@ impl PageRecorder{
     let mut rec = PictureRecorder::new();
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
-    PageRecorder{ current:rec, changed:false, layers:vec![], matrix:Matrix::default(), clip:Path::default(), bounds }
+    PageRecorder{ current:rec, changed:false, layers:vec![], cache:None, matrix:Matrix::default(), clip:Path::default(), bounds }
   }
 
   pub fn append<F>(&mut self, f:F)
@@ -77,6 +79,7 @@ impl PageRecorder{
       }
       self.current.begin_recording(self.bounds, None);
       self.changed = false;
+      self.cache = None;
       self.restore();
     }
 
@@ -84,6 +87,17 @@ impl PageRecorder{
       layers: self.layers.clone(),
       bounds: self.bounds,
     }
+  }
+
+  pub fn get_image(&mut self) -> Option<SkImage>{
+    let page = self.get_page();
+    if self.cache.is_none(){
+      if let Some(pict) = page.get_picture(){
+        let size = page.bounds.size().to_floor();
+        self.cache = SkImage::from_picture(pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()));
+      }
+    }
+    self.cache.clone()
   }
 }
 

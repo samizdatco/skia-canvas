@@ -8,7 +8,7 @@ use neon::prelude::*;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo,
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
                 PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data,
-                PictureRecorder, Picture, Drawable,
+                PictureRecorder, Picture, Drawable, image::CachingHint,
                 image_filters, color_filters, table_color_filter, dash_path_effect, path_1d_path_effect};
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
@@ -463,6 +463,12 @@ impl Context2D{
     recorder.get_page()
   }
 
+  pub fn get_image(&self) -> Option<Image> {
+    let recorder = Arc::clone(&self.recorder);
+    let mut recorder = recorder.lock().unwrap();
+    recorder.get_image()
+  }
+
   pub fn get_picture(&mut self) -> Option<Picture> {
     self.get_page().get_picture()
   }
@@ -472,12 +478,8 @@ impl Context2D{
     let size = size.into();
     let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
 
-    if let Some(pict) = self.get_picture() {
-      if let Some(mut bitmap_surface) = Surface::new_raster_n32_premul(size){
-        let shift = Matrix::translate((-origin.x as f32, -origin.y as f32));
-        bitmap_surface.canvas().draw_picture(&pict, Some(&shift), None);
-        bitmap_surface.read_pixels(&info, buffer, info.min_row_bytes(), (0,0));
-      }
+    if let Some(img) = self.get_image(){
+      img.read_pixels(&info, buffer, info.min_row_bytes(), origin, CachingHint::Allow);
     }
   }
 
