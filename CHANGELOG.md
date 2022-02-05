@@ -9,6 +9,9 @@
 - Regions erased using [`clearRect()`][mdn_clearRect] are now properly antialiased
 - The [`clip()`][mdn_clip] method now interprets the current translate/scale/rotate state correctly when combining clipping masks
 
+### Misc. Improvements
+- Upgraded Skia to milestone 97
+
 [drawCanvas]: https://github.com/samizdatco/skia-canvas#drawcanvas
 [mdn_clip]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clip
 [mdn_clearRect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clearRect
