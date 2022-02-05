@@ -3,11 +3,15 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### Breaking Changes
-- When the `drawImage` function is passed a `Canvas` object as its image source it will now rasterize the canvas before drawing. The prior behavior (in which it is drawn as a vector graphic) can now be accessed through the new `drawCanvas` method which supports the same numerical arguments as `drawImage` but requires that its first argument be a `Canvas`.
+- When the [`drawImage()`][mdn_drawImage] function is passed a **Canvas** object as its image source it will now rasterize the canvas before drawing. The prior behavior (in which it is drawn as a vector graphic) can now be accessed through the new [`drawCanvas()`][drawCanvas] method which supports the same numerical arguments as `drawImage` but requires that its first argument be a **Canvas**.
 
 ### Bugfixes
-- Regions erased using `clearRect` are now properly antialiased
-- The `clip` method now interprets the current translate/scale/rotate state correctly when combining clipping masks
+- Regions erased using [`clearRect()`][mdn_clearRect] are now properly antialiased
+- The [`clip()`][mdn_clip] method now interprets the current translate/scale/rotate state correctly when combining clipping masks
+
+[drawCanvas]: https://github.com/samizdatco/skia-canvas#drawcanvas
+[mdn_clip]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clip
+[mdn_clearRect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clearRect
 
 ## 📦 ⟩ [v0.9.28] ⟩ Jan 12, 2022
 
@@ -59,7 +63,7 @@
 ## 📦 ⟩ [v0.9.25] ⟩ Aug 22, 2021
 
 ### Bugfixes
-- Improved image scaling when a larger image is being shrunk down to a smaller size via [`drawImage()`](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage)
+- Improved image scaling when a larger image is being shrunk down to a smaller size via [`drawImage()`][mdn_drawImage]
 - modified [`imageSmoothingQuality`](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/imageSmoothingQuality) settings to provide a more meaningful range across `low`, `medium`, and `high`
 - [`measureText()`](https://github.com/samizdatco/skia-canvas#measuretextstr-width) now returns correct metrics regardless of current `textAlign` setting
 - Rolled back `icudtl.dat` changes on Windows (which suppressed the misleading warning message but required running as Administrator)
@@ -67,6 +71,7 @@
 ### Misc. Improvements
 - Now using [Neon](https://github.com/neon-bindings/neon) v0.9 (with enhanced async event scheduling)
 
+[mdn_drawImage]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
 
 ## 📦 ⟩ [v0.9.24] ⟩ Aug 18, 2021
 
