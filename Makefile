@@ -10,6 +10,7 @@ NPM_VERSION = $(shell npm view skia-canvas version)
 .PHONY: build test visual check clean distclean release run preview
 
 build: $(NPM)
+	@rm -f $(LIB)
 	@npm run build
 
 $(NPM):
