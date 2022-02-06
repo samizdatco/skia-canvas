@@ -291,29 +291,14 @@ Most of your interaction with the canvas will actually be directed toward its �
 | Canvas State                             | Drawing                                      | Pattern & Color                                   | Line Style                              | Transform                                   |
 |------------------------------------------|----------------------------------------------|---------------------------------------------------|-----------------------------------------|---------------------------------------------|
 | [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                        | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]    |
-| [beginPath()][beginPath()]               | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [createProjection() ⚡][createProjection()] |
-| [isPointInPath()][isPointInPath()]       | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [getTransform()][getTransform()]            |
-| [isPointInStroke()][isPointInStroke()]   | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]            |
-| [save()][save()]                         | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]        |
-| [restore()][restore()]                   | [fill()][fill()]                             | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]              | [transform()][transform()]                  |
-| [clip()][clip()]                         | [stroke()][stroke()]                         | [createTexture() ⚡][createTexture()]             | [**miterLimit**][miterLimit]            | [translate()][translate()]                  |
-|                                          |                                              |                                                   | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                        |
+| [beginPath()][beginPath()]               | [drawCanvas() ⚡](#drawcanvascanvas-x-y-)    | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [createProjection() ⚡][createProjection()] |
+| [isPointInPath()][isPointInPath()]       | [fillRect()][fillRect()]                     | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [getTransform()][getTransform()]            |
+| [isPointInStroke()][isPointInStroke()]   | [strokeRect()][strokeRect()]                 | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]            |
+| [save()][save()]                         | [fillText()][fillText()] ⧸[⚡][drawText]     | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]        |
+| [restore()][restore()]                   | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]              | [transform()][transform()]                  |
+| [clip()][clip()]                         | [fill()][fill()]                             | [createTexture() ⚡][createTexture()]             | [**miterLimit**][miterLimit]            | [translate()][translate()]                  |
+|                                          | [stroke()][stroke()]                         |                                                   | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                        |
 |                                          |                                              |                                                   | [setLineDash()][setLineDash()]          | [scale()][scale()]                          |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 | Bezier Paths                             | Typography                                                  | Images                                             | Compositing Effects                                      |
@@ -505,6 +490,21 @@ The rectangle defined by the `spacing` argument will be aligned with the canvas�
 ##### `offset`
 As with `CanvasPattern` objects, textures are positioned globally relative to the upper left corner of the canvas—not the corner of the object currently being filled or stroked. To fine-tune the texture’s alignment with individual objects, set the `offset` argument to an `[x, y]` array with two numbers that will shift the texture relative to its origin.
 
+#### `drawCanvas(canvas, x, y, …)`
+This method behaves identically to the standard [`drawImage()`][drawImage()] function with one key difference: if the first argument is a canvas, it will not be converted to a bitmap before being drawn. Instead its contents will be added to the canvas as resolution-independent vector graphics. This is especially useful when scaling or rotating since it preserves the fidelity of text, patterns, and gradients from the source canvas.
+
+```js
+let src = new Canvas(10, 10),
+    srcCtx = src.getContext("2d");
+srcCtx.font = 'italic 10px Times'
+srcCtx.fillText('¶', 2, 8)
+
+let dst = new Canvas(350, 150),
+    dstCtx = dst.getContext("2d");
+dstCtx.drawImage(src, 0, 0, 150, 150)
+dstCtx.drawCanvas(src, 200, 0, 150, 150)
+```
+![drawCanvas preserves resolution-independence](/test/assets/image/drawCanvas@2x.png)
 
 #### `fillText(str, x, y, [width])` & `strokeText(str, x, y, [width])`
 

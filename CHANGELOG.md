@@ -15,7 +15,7 @@
 ### Misc. Improvements
 - Upgraded Skia to milestone 97
 
-[drawCanvas]: https://github.com/samizdatco/skia-canvas#drawcanvas
+[drawCanvas]: https://github.com/samizdatco/skia-canvas#drawcanvascanvas-x-y-
 [mdn_clip]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clip
 [mdn_clearRect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clearRect
 
