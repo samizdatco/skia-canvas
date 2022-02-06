@@ -92,7 +92,7 @@ impl PageRecorder{
   pub fn get_image(&mut self) -> Option<SkImage>{
     let page = self.get_page();
     if self.cache.is_none(){
-      if let Some(pict) = page.get_picture(){
+      if let Some(pict) = page.get_picture(None){
         let size = page.bounds.size().to_floor();
         self.cache = SkImage::from_picture(pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()));
       }
@@ -112,10 +112,11 @@ pub struct Page{
 
 impl Page{
 
-  pub fn get_picture(&self) -> Option<Picture> {
+  pub fn get_picture(&self, matte:Option<Color>) -> Option<Picture> {
     let mut compositor = PictureRecorder::new();
     compositor.begin_recording(self.bounds, None);
     if let Some(output) = compositor.recording_canvas() {
+      output.clear(matte.unwrap_or(Color::TRANSPARENT));
       for pict in self.layers.iter(){
         pict.playback(output);
       }
@@ -124,7 +125,7 @@ impl Page{
   }
 
   pub fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<Data, String> {
-    let picture = self.get_picture().ok_or("Could not generate an image")?;
+    let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
 
     if self.bounds.is_empty(){
       Err("Width and height must be non-zero to generate an image".to_string())
@@ -139,14 +140,8 @@ impl Page{
       if let Some(img_format) = img_format{
         let img_scale = Matrix::scale((density, density));
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
-        if let Some(mut surface) = Surface::new_raster_n32_premul(img_dims){
-          surface
-            .canvas()
-            .clear(matte.unwrap_or(Color::TRANSPARENT))
-            .set_matrix(&img_scale.into())
-            .draw_picture(&picture, None, None);
-          surface
-            .image_snapshot()
+        if let Some(img) = SkImage::from_picture(picture, img_dims, Some(&img_scale), None, BitDepth::U8, Some(ColorSpace::new_srgb())){
+          img
             .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
             .map(|data| with_dpi(data, img_format, density))
             .ok_or(format!("Could not encode as {}", format))
@@ -179,11 +174,11 @@ impl Page{
     )
   }
 
-  fn append_to(&self, doc:Document) -> Result<Document, String>{
+  fn append_to(&self, doc:Document, matte:Option<Color>) -> Result<Document, String>{
     if !self.bounds.is_empty(){
       let mut doc = doc.begin_page(self.bounds.size(), None);
       let canvas = doc.canvas();
-      if let Some(picture) = self.get_picture(){
+      if let Some(picture) = self.get_picture(matte){
         canvas.draw_picture(&picture, None, None);
       }
       Ok(doc.end_page())
@@ -215,10 +210,10 @@ impl PageSequence{
     self.pages.len()
   }
 
-  pub fn as_pdf(&self, quality:f32, density:f32) -> Result<Data, String>{
+  pub fn as_pdf(&self, quality:f32, density:f32, matte:Option<Color>) -> Result<Data, String>{
     self.pages
       .iter()
-      .try_fold(pdf_document(quality, density), |doc, page| page.append_to(doc))
+      .try_fold(pdf_document(quality, density), |doc, page| page.append_to(doc, matte))
       .map(|doc| doc.close())
   }
 
@@ -239,9 +234,9 @@ impl PageSequence{
       })
   }
 
-  pub fn write_pdf(&self, path:&str, quality:f32, density:f32) -> Result<(), String>{
+  pub fn write_pdf(&self, path:&str, quality:f32, density:f32, matte:Option<Color>) -> Result<(), String>{
     let path = FilePath::new(&path);
-    match self.as_pdf(quality, density){
+    match self.as_pdf(quality, density, matte){
       Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
         format!("{}: \"{}\"", why, path.display())
       ),

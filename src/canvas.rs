@@ -82,7 +82,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   rayon::spawn(move || {
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        pages.as_pdf(quality, density)
+        pages.as_pdf(quality, density, matte)
       }else{
         pages.first().encoded_as(&file_format, quality, density, outline, matte)
       }
@@ -128,7 +128,7 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
-        pages.as_pdf(quality, density)
+        pages.as_pdf(quality, density, matte)
       }else{
         pages.first().encoded_as(&file_format, quality, density, outline, matte)
       }
@@ -166,7 +166,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       if sequence {
         pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
       } else if file_format == "pdf" {
-        pages.write_pdf(&name_pattern, quality, density)
+        pages.write_pdf(&name_pattern, quality, density, matte)
       } else {
         pages.first().write(&name_pattern, &file_format, quality, density, outline, matte)
       }
@@ -210,7 +210,7 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     if sequence {
       pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
     } else if file_format == "pdf" {
-      pages.write_pdf(&name_pattern, quality, density)
+      pages.write_pdf(&name_pattern, quality, density, matte)
     } else {
       pages.first().write(&name_pattern, &file_format, quality, density, outline, matte)
     }

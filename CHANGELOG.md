@@ -2,6 +2,9 @@
 
 ## 🥚 ⟩ [Unreleased]
 
+### New Features
+- PDF exports now support the optional [`matte`][matte] argument.
+
 ### Breaking Changes
 - When the [`drawImage()`][mdn_drawImage] function is passed a **Canvas** object as its image source it will now rasterize the canvas before drawing. The prior behavior (in which it is drawn as a vector graphic) can now be accessed through the new [`drawCanvas()`][drawCanvas] method which supports the same numerical arguments as `drawImage` but requires that its first argument be a **Canvas**.
 
