@@ -1,6 +1,8 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!-- ## 🥚 ⟩ [Unreleased] -->
+
+## 📦 ⟩ [v0.9.29] ⟩ Feb 7, 2022
 
 ### New Features
 - PDF exports now support the optional [`matte`][matte] argument.
@@ -200,7 +202,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v0.9.28...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v0.9.29...HEAD
+[v0.9.29]: https://github.com/samizdatco/skia-canvas/compare/v0.9.28...v0.9.29
 [v0.9.28]: https://github.com/samizdatco/skia-canvas/compare/v0.9.27...v0.9.28
 [v0.9.27]: https://github.com/samizdatco/skia-canvas/compare/v0.9.26...v0.9.27
 [v0.9.26]: https://github.com/samizdatco/skia-canvas/compare/v0.9.25...v0.9.26
