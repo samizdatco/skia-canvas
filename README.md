@@ -789,6 +789,13 @@ img.src = 'https://example.com/icon.png'
 ```
 
 ```js
+let img = new Image()
+img.src = 'https://example.com/icon.png'
+await img.decode()
+ctx.drawImage(img, 100, 100)
+```
+
+```js
 let img = await loadImage('https://example.com/icon.png')
 ctx.drawImage(img, 100, 100)
 ```
