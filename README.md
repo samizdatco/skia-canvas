@@ -398,11 +398,11 @@ The geometry of the quadrilateral should be described as an Array of either 8 or
 [left, top, right, bottom] // four edges of a rectangle
 
 // internal arrays for grouping are also allowed
-[[x1, y1], [x2, y2], [x3, y3], [x4, y4]] 
+[[x1, y1], [x2, y2], [x3, y3], [x4, y4]]
 ```
 
 ##### `basis`
-   
+
 The optional `basis` argument defines the **source** quadrilateral whose corners will be mapped to the positions defined by `quad`. If no `basis` is specified, the canvas's bounding box will be used (i.e., the rectangle from ⟨`0`, `0`⟩ to ⟨`canvas.width`, `canvas.height`⟩). Note that drawing commands that go outside of the `basis` region may well be visible—it only establishes the geometry of the projection, not the [clipping][clip()] path.
 
 The `basis` polygon can be described using 2, 4, or 8 numbers, using the canvas dimensions to fill in the unspecified coordinates:
@@ -414,7 +414,7 @@ The `basis` polygon can be described using 2, 4, or 8 numbers, using the canvas 
 
 ----
 
-The projection matrix will apply to all types of drawing: shapes, images, and text. This example transforms a white box and red `"@"` character into a trapezoid bounded by the vertical midline of the canvas and its left and right edges. Since no `basis` argument is provided, it will default to using the current canvas bounds as the rectangle to be mapped onto that trapezoid. 
+The projection matrix will apply to all types of drawing: shapes, images, and text. This example transforms a white box and red `"@"` character into a trapezoid bounded by the vertical midline of the canvas and its left and right edges. Since no `basis` argument is provided, it will default to using the current canvas bounds as the rectangle to be mapped onto that trapezoid.
 
 ```js
 let canvas = new Canvas(512, 512),
