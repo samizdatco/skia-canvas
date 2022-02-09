@@ -194,7 +194,7 @@ pub fn floats_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<f32>
   for (i, val) in vals.iter().enumerate() {
     if let Ok(num) = val.downcast::<JsNumber, _>(cx){
       let val = num.value(cx) as f32;
-      if val.is_finite() && !val.is_nan(){
+      if val.is_finite(){
         nums.push(val);
       }
     }
