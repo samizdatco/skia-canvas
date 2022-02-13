@@ -44,7 +44,7 @@ pub struct Context2D{
 
 #[derive(Clone)]
 pub struct State{
-  clip: Path,
+  clip: Option<Path>,
   matrix: Matrix,
   paint: Paint,
 
@@ -91,7 +91,7 @@ impl Default for State {
     char_style.set_font_size(10.0);
 
     State {
-      clip: Path::new(),
+      clip: None,
       matrix: Matrix::new_identity(),
 
       paint,
@@ -338,11 +338,10 @@ impl Context2D{
     let mut clip = path.unwrap_or_else(|| self.path.clone()) ;
     clip.set_fill_type(rule);
 
-    if self.state.clip.is_empty(){
-      self.state.clip = clip.clone();
-    }else if let Some(new_clip) = self.state.clip.op(&clip, PathOp::Intersect){
-      self.state.clip = new_clip;
-    }
+    self.state.clip = match &self.state.clip {
+      Some(old_clip) => old_clip.op(&clip, PathOp::Intersect),
+      None => Some(clip.clone())
+    };
 
     self.with_recorder(|mut recorder|{
       recorder.set_clip(&self.state.clip);

@@ -23,7 +23,7 @@ pub struct PageRecorder{
   cache: Option<SkImage>,
   bounds: Rect,
   matrix: Matrix,
-  clip: Path,
+  clip: Option<Path>,
   changed: bool,
 }
 
@@ -32,7 +32,7 @@ impl PageRecorder{
     let mut rec = PictureRecorder::new();
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
-    PageRecorder{ current:rec, changed:false, layers:vec![], cache:None, matrix:Matrix::default(), clip:Path::default(), bounds }
+    PageRecorder{ current:rec, changed:false, layers:vec![], cache:None, matrix:Matrix::default(), clip:None, bounds }
   }
 
   pub fn append<F>(&mut self, f:F)
@@ -55,7 +55,7 @@ impl PageRecorder{
     }
   }
 
-  pub fn set_clip(&mut self, clip:&Path){
+  pub fn set_clip(&mut self, clip:&Option<Path>){
     self.clip = clip.clone();
     self.restore();
   }
@@ -64,8 +64,8 @@ impl PageRecorder{
     if let Some(canvas) = self.current.recording_canvas() {
       canvas.restore_to_count(1);
       canvas.save();
-      if !self.clip.is_empty(){
-        canvas.clip_path(&self.clip, ClipOp::Intersect, true /* antialias */);
+      if let Some(clip) = &self.clip{
+        canvas.clip_path(&clip, ClipOp::Intersect, true /* antialias */);
       }
       canvas.set_matrix(&self.matrix.into());
     }
