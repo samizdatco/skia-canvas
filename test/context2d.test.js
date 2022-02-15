@@ -440,6 +440,31 @@ describe("Context2D", ()=>{
       expect(pixel(22, 22)).toEqual(GREEN)
       expect(pixel(48, 48)).toEqual(GREEN)
       expect(pixel(52, 52)).toEqual(WHITE)
+
+      // non-overlapping clips & empty clips should prevent drawing altogether
+      ctx.beginPath()
+      ctx.rect(20,20,30,30)
+      ctx.clip()
+      ctx.fillStyle = 'black'
+      ctx.fillRect(0,0,WIDTH,HEIGHT)
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(25,25,0,0)
+      ctx.clip()
+      ctx.fillStyle = 'green'
+      ctx.fillRect(0,0,WIDTH,HEIGHT)
+      ctx.restore()
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(0,0,10,10)
+      ctx.clip()
+      ctx.fillStyle = 'green'
+      ctx.fillRect(0,0,WIDTH,HEIGHT)
+      ctx.restore()
+
+      expect(pixel(30, 30)).toEqual(BLACK)
     })
 
     test("fill()", () => {
