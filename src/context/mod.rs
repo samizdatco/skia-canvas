@@ -265,7 +265,7 @@ impl Context2D{
   }
 
   pub fn map_points(&self, coords:&[f32]) -> Vec<Point>{
-    coords.chunks(2)
+    coords.chunks_exact(2)
           .map(|pair| self.state.matrix.map_xy(pair[0], pair[1]))
           .collect()
   }

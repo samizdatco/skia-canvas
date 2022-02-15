@@ -83,7 +83,7 @@ describe("Path2D", ()=>{
       let [left, top] = [20, 30]
       p.moveTo(left, top)
       expect(p.bounds).toMatchObject({left, top})
-      expect(() => p.moveTo(120) ).toThrowError("must be a number")
+      expect(() => p.moveTo(120) ).toThrowError("Not enough arguments")
     })
 
     test("lineTo", () => {
@@ -94,7 +94,7 @@ describe("Path2D", ()=>{
       ctx.stroke(p)
       expect(p.bounds).toMatchObject({left, top, width, height})
       expect(pixel(left+width/2, top+height/2)).toEqual(BLACK)
-      expect(() => p.lineTo(120) ).toThrowError("must be a number")
+      expect(() => p.lineTo(120) ).toThrowError("Not enough arguments")
     })
 
     test("bezierCurveTo", () => {
@@ -107,7 +107,7 @@ describe("Path2D", ()=>{
       expect(pixel(71, 42)).toEqual(BLACK)
       expect(pixel(168, 157)).toEqual(BLACK)
       expect(() => p.bezierCurveTo(120, 300, 400, 400) ).toThrowError("Not enough arguments")
-      expect(() => p.bezierCurveTo(120, 300, null, 'foo', 400, 400) ).toThrowError("Not enough arguments")
+      expect(() => p.bezierCurveTo(120, 300, null, 'foo', NaN, 400) ).not.toThrow()
     })
 
     test("quadraticCurveTo", () => {
@@ -119,7 +119,7 @@ describe("Path2D", ()=>{
 
       expect(pixel(120, 199)).toEqual(BLACK)
       expect(() => p.quadraticCurveTo(120, 300) ).toThrowError("Not enough arguments")
-      expect(() => p.quadraticCurveTo(120, 300, null, 'foo') ).toThrowError("Not enough arguments")
+      expect(() => p.quadraticCurveTo(NaN, 300, null, 'foo') ).not.toThrow()
     })
 
     test("conicTo", () => {
@@ -166,8 +166,8 @@ describe("Path2D", ()=>{
 
       expect(pixel(150, 137)).toEqual(BLACK)
       expect(pixel(150, 33)).toEqual(BLACK)
-      expect(() => p.arcTo(0,0, 20,20) ).toThrowError("Missing argument")
-      expect(() => p.arcTo(150, 5, null, 'foo', 25) ).toThrowError("Not enough arguments")
+      expect(() => p.arcTo(0,0, 20,20) ).toThrowError("Not enough arguments")
+      expect(() => p.arcTo(150, 5, null, 'foo', NaN) ).not.toThrow()
     })
 
     test("rect", () => {
@@ -192,7 +192,7 @@ describe("Path2D", ()=>{
 
       expect(pixel(196, 112)).toEqual(BLACK)
       expect(pixel(150, 150)).toEqual(WHITE)
-      expect(() => p.arc(150, 150, 75, Math.PI/8, false) ).toThrowError("Not enough arguments")
+      expect(() => p.arc(150, 150, 75, Math.PI/8) ).toThrowError("Not enough arguments")
       expect(() => p.arc(150, 150, 75, Math.PI/8, Math.PI*1.5) ).not.toThrow()
     })
 

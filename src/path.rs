@@ -141,10 +141,13 @@ pub fn closePath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let x = float_arg(&mut cx, 1, "x")?;
-  let y = float_arg(&mut cx, 2, "y")?;
+  check_argc(&mut cx, 3)?;
 
-  this.path.move_to((x, y));
+  let xy = opt_float_args(&mut cx, 1..3);
+  if let [x, y] = xy.as_slice(){
+    this.path.move_to((*x, *y));
+  }
+
   Ok(cx.undefined())
 }
 
@@ -152,11 +155,12 @@ pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let x = float_arg(&mut cx, 1, "x")?;
-  let y = float_arg(&mut cx, 2, "y")?;
+  check_argc(&mut cx, 3)?;
 
-  this.scoot(x, y);
-  this.path.line_to((x, y));
+  let xy = opt_float_args(&mut cx, 1..3);
+  if let [x, y] = xy.as_slice(){
+    this.path.line_to((*x, *y));
+  }
   Ok(cx.undefined())
 }
 
@@ -164,7 +168,9 @@ pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..7)?;
+  check_argc(&mut cx, 7)?;
+
+  let nums = opt_float_args(&mut cx, 1..7);
   if let [cp1x, cp1y, cp2x, cp2y, x, y] = nums.as_slice(){
     this.scoot(*cp1x, *cp1y);
     this.path.cubic_to((*cp1x, *cp1y), (*cp2x, *cp2y), (*x, *y));
@@ -177,7 +183,9 @@ pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..5)?;
+  check_argc(&mut cx, 5)?;
+
+  let nums = opt_float_args(&mut cx, 1..5);
   if let [cpx, cpy, x, y] = nums.as_slice(){
     this.scoot(*cpx, *cpy);
     this.path.quad_to((*cpx, *cpy), (*x, *y));
@@ -190,7 +198,9 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..6)?;
+  check_argc(&mut cx, 6)?;
+
+  let nums = opt_float_args(&mut cx, 1..6);
   if let [p1x, p1y, p2x, p2y, weight] = nums.as_slice(){
     this.scoot(*p1x, *p1y);
     this.path.conic_to((*p1x, *p1y), (*p2x, *p2y), *weight);
@@ -203,9 +213,10 @@ pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..6)?;
-  let ccw = bool_arg_or(&mut cx, 6, false);
+  check_argc(&mut cx, 6)?;
 
+  let nums = opt_float_args(&mut cx, 1..6);
+  let ccw = bool_arg_or(&mut cx, 6, false);
   if let [x, y, radius, start_angle, end_angle] = nums.as_slice(){
     this.add_ellipse((*x, *y), (*radius, *radius), 0.0, *start_angle, *end_angle, ccw);
   }
@@ -217,12 +228,12 @@ pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let coords = float_args(&mut cx, 1..5)?;
-  let radius = float_arg(&mut cx, 5, "radius")?;
+  check_argc(&mut cx, 6)?;
 
-  if let [x1, y1, x2, y2] = coords.as_slice(){
+  let nums = opt_float_args(&mut cx, 1..6);
+  if let [x1, y1, x2, y2, radius] = nums.as_slice(){
     this.scoot(*x1, *y1);
-    this.path.arc_to_tangent((*x1, *y1), (*x2, *y2), radius);
+    this.path.arc_to_tangent((*x1, *y1), (*x2, *y2), *radius);
   }
 
   Ok(cx.undefined())
@@ -232,14 +243,14 @@ pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..8)?;
-  let ccw = bool_arg_or(&mut cx, 8, false);
+  check_argc(&mut cx, 8)?;
 
+  let nums = opt_float_args(&mut cx, 1..8);
+  let ccw = bool_arg_or(&mut cx, 8, false);
   if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
     if *x_radius < 0.0 || *y_radius < 0.0 {
       return cx.throw_error("radii cannot be negative")
     }
-
     this.add_ellipse((*x, *y), (*x_radius, *y_radius), *rotation, *start_angle, *end_angle, ccw);
   }
 
@@ -250,8 +261,9 @@ pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..5)?;
+  check_argc(&mut cx, 5)?;
 
+  let nums = opt_float_args(&mut cx, 1..5);
   if let [x, y, w, h] = nums.as_slice(){
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     this.path.add_rect(rect, Some((PathDirection::CW, 0)));

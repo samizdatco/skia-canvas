@@ -52,6 +52,14 @@ pub fn to_radians(degrees: f32) -> f32{
   degrees / 180.0 * PI
 }
 
+pub fn check_argc(cx: &mut FunctionContext, argc:i32) -> Result<(), Throw>{
+  match cx.len() >= argc {
+    true => Ok(()),
+    false => cx.throw_type_error("Not enough arguments")
+  }
+}
+
+
 // pub fn symbol<'a>(cx: &mut FunctionContext<'a>, symbol_name: &str) -> JsResult<'a, JsValue> {
 //   let global = cx.global();
 //   let symbol_ctor = global
@@ -203,13 +211,14 @@ pub fn floats_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<f32>
 }
 
 pub fn opt_float_arg(cx: &mut FunctionContext, idx: usize) -> Option<f32>{
-  match cx.argument_opt(idx as i32) {
-    Some(arg) => match arg.downcast::<JsNumber, _>(cx) {
-      Ok(v) => if v.value(cx).is_finite(){ Some(v.value(cx) as f32) }else{ None },
-      Err(_e) => None
-    },
-    None => None
+  if let Some(arg) = cx.argument_opt(idx as i32) {
+    if let Ok(num) = arg.downcast::<JsNumber, _>(cx){
+      if num.value(cx).is_finite(){
+        return Some(num.value(cx) as f32)
+      }
+    }
   }
+  None
 }
 
 pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default:f64) -> f32{
@@ -249,9 +258,12 @@ pub fn opt_float_args(cx: &mut FunctionContext, rng: Range<usize>) -> Vec<f32>{
 
   let mut args:Vec<f32> = Vec::new();
   for i in rng.start..end{
-    if let Ok(arg) = cx.argument::<JsValue>(i as i32){
+    if let Some(arg) = cx.argument_opt(i as i32) {
       if let Ok(num) = arg.downcast::<JsNumber, _>(cx){
-        args.push(num.value(cx) as f32);
+        let val = num.value(cx) as f32;
+        if val.is_finite(){
+          args.push(val);
+        }
       }
     }
   }
@@ -524,10 +536,10 @@ pub fn to_sampling_opts(mode:FilterQuality) -> SamplingOptions {
       use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
     },
     FilterQuality::Medium => SamplingOptions {
-      use_cubic:true, cubic:CubicResampler::mitchell(), filter:FilterMode::Nearest, mipmap:MipmapMode::Nearest
+      use_cubic:true, cubic:CubicResampler::mitchell(), filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
     },
     FilterQuality::High => SamplingOptions {
-      use_cubic:true, cubic:CubicResampler::catmull_rom(), filter:FilterMode::Nearest, mipmap:MipmapMode::Linear
+      use_cubic:true, cubic:CubicResampler::catmull_rom(), filter:FilterMode::Linear, mipmap:MipmapMode::Linear
     }
   }
 }

@@ -184,8 +184,9 @@ pub fn beginPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..5)?;
+  check_argc(&mut cx, 5)?;
 
+  let nums = opt_float_args(&mut cx, 1..5);
   if let [x, y, w, h] = nums.as_slice(){
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let quad = this.state.matrix.map_rect_to_quad(rect);
@@ -201,9 +202,10 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..6)?;
-  let ccw = bool_arg_or(&mut cx, 6, false);
+  check_argc(&mut cx, 6)?;
 
+  let nums = opt_float_args(&mut cx, 1..6);
+  let ccw = bool_arg_or(&mut cx, 6, false);
   if let [x, y, radius, start_angle, end_angle] = nums.as_slice(){
     let matrix = this.state.matrix;
     let mut arc = Path2D::new();
@@ -216,9 +218,10 @@ pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..8)?;
-  let ccw = bool_arg_or(&mut cx, 8, false);
+  check_argc(&mut cx, 8)?;
 
+  let nums = opt_float_args(&mut cx, 1..8);
+  let ccw = bool_arg_or(&mut cx, 8, false);
   if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
     if *x_radius < 0.0 || *y_radius < 0.0 {
       return cx.throw_error("radii cannot be negative")
@@ -236,11 +239,11 @@ pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let x = float_arg(&mut cx, 1, "x")?;
-  let y = float_arg(&mut cx, 2, "y")?;
+  check_argc(&mut cx, 3)?;
 
-  if let [dst] = this.map_points(&[x, y])[..1]{
-    this.path.move_to(dst);
+  let xy = opt_float_args(&mut cx, 1..3);
+  if let Some(dst) = this.map_points(&xy).first(){
+    this.path.move_to(*dst);
   }
   Ok(cx.undefined())
 }
@@ -248,12 +251,12 @@ pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let x = float_arg(&mut cx, 1, "x")?;
-  let y = float_arg(&mut cx, 2, "y")?;
+  check_argc(&mut cx, 3)?;
 
-  if let [dst] = this.map_points(&[x, y])[..1]{
-    if this.path.is_empty(){ this.path.move_to(dst); }
-    this.path.line_to(dst);
+  let xy = opt_float_args(&mut cx, 1..3);
+  if let Some(dst) = this.map_points(&xy).first(){
+    if this.path.is_empty(){ this.path.move_to(*dst); }
+    this.path.line_to(*dst);
   }
   Ok(cx.undefined())
 }
@@ -261,12 +264,15 @@ pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let coords = float_args(&mut cx, 1..5)?;
-  let radius = float_arg(&mut cx, 5, "radius")?;
+  check_argc(&mut cx, 6)?;
 
-  if let [src, dst] = this.map_points(&coords)[..2]{
-    if this.path.is_empty(){ this.path.move_to(src); }
-    this.path.arc_to_tangent(src, dst, radius);
+  let coords = opt_float_args(&mut cx, 1..5);
+  let radius = opt_float_arg(&mut cx, 5);
+  if let Some(radius) = radius {
+    if let [src, dst] = this.map_points(&coords).as_slice(){
+      if this.path.is_empty(){ this.path.move_to(*src); }
+      this.path.arc_to_tangent(*src, *dst, radius);
+    }
   }
   Ok(cx.undefined())
 }
@@ -274,10 +280,12 @@ pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let coords = float_args(&mut cx, 1..7)?;
-  if let [cp1, cp2, dst] = this.map_points(&coords)[..3]{
-    if this.path.is_empty(){ this.path.move_to(cp1); }
-    this.path.cubic_to(cp1, cp2, dst);
+  check_argc(&mut cx, 7)?;
+
+  let coords = opt_float_args(&mut cx, 1..7);
+  if let [cp1, cp2, dst] = this.map_points(&coords).as_slice(){
+    if this.path.is_empty(){ this.path.move_to(*cp1); }
+    this.path.cubic_to(*cp1, *cp2, *dst);
   }
   Ok(cx.undefined())
 }
@@ -285,11 +293,12 @@ pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let coords = float_args(&mut cx, 1..5)?;
+  check_argc(&mut cx, 5)?;
 
-  if let [cp, dst] = this.map_points(&coords)[..2]{
-    if this.path.is_empty(){ this.path.move_to(cp); }
-    this.path.quad_to(cp, dst);
+  let coords = opt_float_args(&mut cx, 1..5);
+  if let [cp, dst] = this.map_points(&coords).as_slice(){
+    if this.path.is_empty(){ this.path.move_to(*cp); }
+    this.path.quad_to(*cp, *dst);
   }
   Ok(cx.undefined())
 }
@@ -513,7 +522,7 @@ pub fn setLineDash(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if arg.is_a::<JsArray, _>(&mut cx) {
     let list = cx.argument::<JsArray>(1)?.to_vec(&mut cx)?;
     let mut intervals = floats_in(&mut cx, &list).iter().cloned()
-      .filter(|n| *n >= 0.0)
+      .filter(|n| *n >= 0.0 && n.is_finite())
       .collect::<Vec<f32>>();
 
     if list.len() == intervals.len(){
@@ -563,8 +572,9 @@ pub fn set_lineDashOffset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
 
-  let num = float_arg(&mut cx, 1, "lineDashOffset")?;
-  this.state.line_dash_offset = num;
+  if let Some(num) = opt_float_arg(&mut cx, 1){
+    this.state.line_dash_offset = num;
+  }
   Ok(cx.undefined())
 }
 
@@ -1050,9 +1060,10 @@ pub fn get_shadowBlur(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn set_shadowBlur(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let num = float_arg(&mut cx, 1, "shadowBlur")?;
-  if num >= 0.0{
-    this.state.shadow_blur = num;
+  if let Some(num) = opt_float_arg(&mut cx, 1){
+    if num >= 0.0 {
+      this.state.shadow_blur = num;
+    }
   }
   Ok(cx.undefined())
 }
@@ -1088,15 +1099,17 @@ pub fn get_shadowOffsetY(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn set_shadowOffsetX(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let num = float_arg(&mut cx, 1, "shadowOffsetX")?;
-  this.state.shadow_offset.x = num;
+  if let Some(num) = opt_float_arg(&mut cx, 1){
+    this.state.shadow_offset.x = num;
+  }
   Ok(cx.undefined())
 }
 
 pub fn set_shadowOffsetY(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let num = float_arg(&mut cx, 1, "shadowOffsetY")?;
-  this.state.shadow_offset.y = num;
+  if let Some(num) = opt_float_arg(&mut cx, 1){
+    this.state.shadow_offset.y = num;
+  }
   Ok(cx.undefined())
 }
