@@ -1,6 +1,16 @@
 # Changelog
 
-<!-- ## 🥚 ⟩ [Unreleased] -->
+## 🥚 ⟩ [Unreleased]
+
+### Bugfixes
+
+- Calling `clip` with an empty path (or one that does not intersect the current clipping mask) will now prevent drawing altogether
+- Transformation (`translate`, `rotate`, etc.) and line-drawing methods (`moveTo`, `lineTo`, `ellipse`, etc.) are now silently ignored if called with `NaN`, `Infinity`, or non-**Number** values in the arguments rather than throwing an error
+  - applies to both the Context and Path2D versions of the drawing methods
+  - a **TypeError** is thrown only if the number of arguments is too low (mirroring browser behavior)
+- [`conicCurveTo()`][conicCurveTo] now correctly reflects the canvas's transform state
+
+[conicCurveTo]: https://github.com/samizdatco/skia-canvas#coniccurvetocpx-cpy-x-y-weight
 
 ## 📦 ⟩ [v0.9.29] ⟩ Feb 7, 2022
 
