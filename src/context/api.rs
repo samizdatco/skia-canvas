@@ -62,40 +62,49 @@ pub fn restore(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn transform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let t = float_args(&mut cx, 1..7)?;
-  let matrix = Matrix::new_all(t[0], t[2], t[4], t[1], t[3], t[5], 0.0, 0.0, 1.0);
+  check_argc(&mut cx, 7)?;
 
-  this.with_matrix(|ctm| ctm.pre_concat(&matrix) );
+  let nums = opt_float_args(&mut cx, 1..7);
+  if let [m11, m12, m21, m22, dx, dy] = nums.as_slice(){
+    let matrix = Matrix::new_all(*m11, *m21, *dx, *m12, *m22, *dy, 0.0, 0.0, 1.0);
+    this.with_matrix(|ctm| ctm.pre_concat(&matrix) );
+  }
   Ok(cx.undefined())
 }
 
 pub fn translate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let dx = float_arg(&mut cx, 1, "deltaX")?;
-  let dy = float_arg(&mut cx, 2, "deltaY")?;
+  check_argc(&mut cx, 3)?;
 
-  this.with_matrix(|ctm| ctm.pre_translate((dx, dy)) );
+  let xy = opt_float_args(&mut cx, 1..3);
+  if let [dx, dy] = xy.as_slice(){
+    this.with_matrix(|ctm| ctm.pre_translate((*dx, *dy)) );
+  }
   Ok(cx.undefined())
 }
 
 pub fn scale(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let x_scale = float_arg(&mut cx, 1, "xScale")?;
-  let y_scale = float_arg(&mut cx, 2, "yScale")?;
+  check_argc(&mut cx, 3)?;
 
-  this.with_matrix(|ctm| ctm.pre_scale((x_scale, y_scale), None) );
+  let xy = opt_float_args(&mut cx, 1..3);
+  if let [m11, m22] = xy.as_slice(){
+    this.with_matrix(|ctm| ctm.pre_scale((*m11, *m22), None) );
+  }
   Ok(cx.undefined())
 }
 
 pub fn rotate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let radians = float_arg(&mut cx, 1, "angle")?;
-  let degrees = radians / PI * 180.0;
+  check_argc(&mut cx, 2)?;
 
-  this.with_matrix(|ctm| ctm.pre_rotate(degrees, None) );
+  if let Some(radians) = opt_float_arg(&mut cx, 1){
+    let degrees = radians / PI * 180.0;
+    this.with_matrix(|ctm| ctm.pre_rotate(degrees, None) );
+  }
   Ok(cx.undefined())
 }
 
