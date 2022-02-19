@@ -3,10 +3,12 @@ use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
 use neon::result::Throw;
-use skia_safe::image::BitDepth;
 use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color, ColorSpace,
-                PictureRecorder, Picture, Surface, EncodedImageFormat, Image as SkImage,
-                svg::{self, canvas::Flags}, pdf, Document};
+                PictureRecorder, Picture, Surface, EncodedImageFormat, Image as SkImage, ColorType,
+                svg::{self, canvas::Flags}, pdf, Document, ImageInfo, Budgeted,
+                gpu::{SurfaceOrigin, DirectContext},
+                image::BitDepth};
+use surfman::{Device, Context, Connection, ContextAttributeFlags, ContextAttributes, GLApi, GLVersion};
 
 use crc::{Crc, CRC_32_ISO_HDLC};
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
@@ -105,6 +107,48 @@ impl PageRecorder{
 // Image generator for a single drawing context
 //
 
+use std::cell::RefCell;
+thread_local!(static GL_CONTEXT: RefCell<Option<GLContext>> = RefCell::new(None));
+
+fn gl_init(){
+  GL_CONTEXT.with(|cell| {
+    let mut local_ctx = cell.borrow_mut();
+    if local_ctx.is_none(){
+      local_ctx.replace(GLContext::new());
+    }
+  });
+}
+
+struct GLContext {
+  device:Device,
+  context:Context
+}
+
+impl GLContext {
+  pub fn new() -> Self{
+    let connection = Connection::new().unwrap();
+    let adapter = connection.create_hardware_adapter().unwrap();
+    let mut device = connection.create_device(&adapter).unwrap();
+    let context_attributes = ContextAttributes {
+      version: GLVersion::new(3, 3),
+      flags: ContextAttributeFlags::empty(),
+    };
+    let context_descriptor = device
+        .create_context_descriptor(&context_attributes)
+        .unwrap();
+    let mut context = device.create_context(&context_descriptor, None).unwrap();
+    device.make_context_current(&context).unwrap();
+    gl::load_with(|symbol_name| device.get_proc_address(&context, symbol_name));
+
+    GLContext{device, context}
+  }
+}
+
+impl Drop for GLContext {
+  fn drop(&mut self) {
+    self.device.destroy_context(&mut self.context).unwrap();
+  }
+}
 pub struct Page{
   pub layers: Vec<Picture>,
   pub bounds: Rect,
@@ -125,6 +169,73 @@ impl Page{
   }
 
   pub fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<Data, String> {
+    self.gl_encoded_as(&format, quality, density, outline, matte)
+    // self.cpu_encoded_as(&format, quality, density, outline, matte)
+  }
+
+  pub fn gl_encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<Data, String> {
+    let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
+
+    if self.bounds.is_empty(){
+      Err("Width and height must be non-zero to generate an image".to_string())
+    }else{
+      let img_dims = self.bounds.size();
+      let img_format = match format {
+        "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
+        "png" => Some(EncodedImageFormat::PNG),
+        _ => None
+      };
+
+      if let Some(img_format) = img_format{
+        gl_init();
+        let mut gl_context = DirectContext::new_gl(None, None).unwrap();
+        let img_scale = Matrix::scale((density, density));
+        let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
+        let img_info = ImageInfo::new_n32_premul(img_dims, None);
+
+        let mut surface = Surface::new_render_target(
+          &mut gl_context,
+          Budgeted::Yes,
+          &img_info,
+          Some(4),
+          SurfaceOrigin::BottomLeft,
+          None,
+          true,
+        );
+
+        if let Some(mut surface) = surface{
+          surface
+            .canvas()
+            .clear(matte.unwrap_or(Color::TRANSPARENT))
+            .set_matrix(&img_scale.into())
+            .draw_picture(&picture, None, None);
+          surface
+            .image_snapshot()
+            .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
+            .map(|data| with_dpi(data, img_format, density))
+            .ok_or(format!("Could not encode as {}", format))
+        }else{
+          Err("Could not allocate new bitmap".to_string())
+        }
+      }else if format == "pdf"{
+        let mut document = pdf_document(quality, density).begin_page(img_dims, None);
+        let canvas = document.canvas();
+        canvas.draw_picture(&picture, None, None);
+        Ok(document.end_page().close())
+      }else if format == "svg"{
+        let flags = outline.then(|| Flags::CONVERT_TEXT_TO_PATHS);
+        let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
+        canvas.draw_picture(&picture, None, None);
+        Ok(canvas.end())
+      }else{
+        Err(format!("Unsupported file format {}", format))
+      }
+
+    }
+
+  }
+
+  pub fn cpu_encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<Data, String> {
     let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
 
     if self.bounds.is_empty(){

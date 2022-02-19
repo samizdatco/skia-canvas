@@ -15,6 +15,9 @@ crc = "^3.0"
 css-color = "^0.2"
 lazy_static = "1.4.0"
 rayon = "^1.5"
+# glutin = "^0.28.0"
+gl = "0.14.0"
+surfman = "0.4.3"
 
 [dependencies.neon]
 version = "0.10.1"
@@ -23,4 +26,4 @@ features = ["napi-6", "promise-api", "task-api"]
 
 [dependencies.skia-safe]
 version = "0.50.0"
-features = ["textlayout"]
+features = ["textlayout", "gl"]
