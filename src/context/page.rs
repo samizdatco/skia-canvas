@@ -25,14 +25,15 @@ pub struct PageRecorder{
   matrix: Matrix,
   clip: Option<Path>,
   changed: bool,
+  antialias: bool
 }
 
 impl PageRecorder{
-  pub fn new(bounds:Rect) -> Self {
+  pub fn new(bounds:Rect , antialias : bool) -> Self {
     let mut rec = PictureRecorder::new();
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
-    PageRecorder{ current:rec, changed:false, layers:vec![], cache:None, matrix:Matrix::default(), clip:None, bounds }
+    PageRecorder{ current:rec, changed:false, layers:vec![], cache:None, matrix:Matrix::default(), clip:None, bounds ,antialias}
   }
 
   pub fn append<F>(&mut self, f:F)
@@ -44,8 +45,12 @@ impl PageRecorder{
     }
   }
 
-  pub fn set_bounds(&mut self, bounds:Rect){
-    *self = PageRecorder::new(bounds);
+  pub fn set_bounds(&mut self, bounds:Rect,antialias: bool){
+    *self = PageRecorder::new(bounds,antialias);
+  }
+
+  pub fn set_anti_alias(&mut self,antialias: bool){
+    self.antialias = antialias;
   }
 
   pub fn set_matrix(&mut self, matrix:Matrix){
@@ -60,12 +65,15 @@ impl PageRecorder{
     self.restore();
   }
 
+
+
+  
   pub fn restore(&mut self){
     if let Some(canvas) = self.current.recording_canvas() {
       canvas.restore_to_count(1);
       canvas.save();
       if let Some(clip) = &self.clip{
-        canvas.clip_path(&clip, ClipOp::Intersect, true /* antialias */);
+        canvas.clip_path(&clip, ClipOp::Intersect, self.antialias /* antialias */);
       }
       canvas.set_matrix(&self.matrix.into());
     }

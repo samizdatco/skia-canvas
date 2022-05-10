@@ -40,6 +40,7 @@ pub struct Context2D{
   state: State,
   stack: Vec<State>,
   path: Path,
+  antialias: bool,
 }
 
 #[derive(Clone)]
@@ -74,6 +75,9 @@ pub struct State{
   text_baseline: Baseline,
   text_tracking: i32,
   text_wrap: bool,
+
+  
+  
 }
 
 impl Default for State {
@@ -155,10 +159,11 @@ impl Context2D{
 
     Context2D{
       bounds,
-      recorder: Arc::new(Mutex::new(PageRecorder::new(bounds))),
+      recorder: Arc::new(Mutex::new(PageRecorder::new(bounds,true))),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
+      antialias: true
     }
   }
 
@@ -238,7 +243,7 @@ impl Context2D{
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
             let mut blend_paint = Paint::default();
-            blend_paint.set_anti_alias(true);
+            blend_paint.set_anti_alias(self.antialias);
             blend_paint.set_blend_mode(self.state.global_composite_operation);
             canvas.draw_picture(&pict, None, Some(&blend_paint));
             canvas.restore();
@@ -276,11 +281,20 @@ impl Context2D{
     self.path = Path::default();
     self.stack = vec![];
     self.state = State::default();
-
+    self.state.paint.set_anti_alias(self.antialias);
     // erase any existing content
     self.with_recorder(|mut recorder| {
-      recorder.set_bounds(self.bounds);
+      recorder.set_bounds(self.bounds, self.antialias);
     });
+  }
+
+  pub fn set_antialias(&mut self, antialias : bool){
+    self.antialias = antialias;
+    self.state.paint.set_anti_alias(antialias);
+    self.with_recorder(|mut recorder| {
+      recorder.set_anti_alias(self.antialias);
+    });
+
   }
 
   pub fn push(&mut self){
@@ -374,7 +388,7 @@ impl Context2D{
   pub fn clear_rect(&mut self, rect:&Rect){
     self.with_canvas(|canvas| {
       let mut paint = Paint::default();
-      paint.set_anti_alias(true)
+      paint.set_anti_alias(self.antialias)
            .set_style(PaintStyle::Fill)
            .set_blend_mode(BlendMode::Clear);
       canvas.draw_rect(&rect, &paint);
@@ -482,15 +496,17 @@ impl Context2D{
     }
   }
 
-  pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect){
+  pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect, antialias:bool){
     // works just like draw_image in terms of src/dst rects, but clears the dst_rect and then draws
     // without clips, transforms, alpha, blend, or shadows
     let data = Data::new_copy(buffer);
     if let Some(bitmap) = Image::from_raster_data(info, data, info.min_row_bytes()) {
       self.push(); // cache matrix & clip in self.state
       self.with_canvas(|canvas| {
-        let paint = Paint::default();
+        let mut paint = Paint::default();
         let mut eraser = Paint::default();
+        paint.set_anti_alias(antialias);
+        eraser.set_anti_alias(antialias);
         canvas.restore_to_count(1); // discard current matrix & clip
         eraser.set_blend_mode(BlendMode::Clear);
         canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &eraser);
