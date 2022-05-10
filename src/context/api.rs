@@ -750,6 +750,7 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
   let img_data = cx.argument::<JsObject>(1)?;
+  let antialias = this.antialias;
 
   // determine geometry
   let width = float_for_key(&mut cx, &img_data, "width")?;
@@ -774,7 +775,7 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let buffer = img_data.get(&mut cx, "data")?.downcast_or_throw::<JsBuffer, _>(&mut cx)?;
   let info = Image::info(width, height);
   cx.borrow(&buffer, |data| {
-    this.blit_pixels(data.as_slice(), &info, &src, &dst);
+    this.blit_pixels(data.as_slice(), &info, &src, &dst ,antialias);
   });
   Ok(cx.undefined())
 }
@@ -1125,4 +1126,25 @@ pub fn set_shadowOffsetY(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     this.state.shadow_offset.y = num;
   }
   Ok(cx.undefined())
+}
+
+pub fn set_antialias(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let flag = string_arg(&mut cx, 1, "antialias")?;
+  let antialias = match flag.to_lowercase().as_str(){"none" => false,_ => true};
+  this.set_antialias(antialias);
+  Ok(cx.undefined())
+}
+
+pub fn get_antialias(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let antialias:bool = this.antialias;
+  if antialias {
+    Ok(cx.string("default"))
+  }else{
+    Ok(cx.string("none"))
+  }
+  
 }

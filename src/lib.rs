@@ -215,6 +215,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_get_shadowOffsetY", ctx::get_shadowOffsetY)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetX", ctx::set_shadowOffsetX)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetY", ctx::set_shadowOffsetY)?;
+ 
+
+  cx.export_function("CanvasRenderingContext2D_set_antialias", ctx::set_antialias)?;
+  cx.export_function("CanvasRenderingContext2D_get_antialias", ctx::get_antialias)?;
 
   Ok(())
 }
