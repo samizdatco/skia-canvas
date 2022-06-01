@@ -25,21 +25,21 @@
     "test": "jest"
   },
   "dependencies": {
-    "@mapbox/node-pre-gyp": "^1.0.8",
+    "@mapbox/node-pre-gyp": "^1.0.9",
     "cargo-cp-artifact": "^0.1",
-    "glob": "^7.2.0",
+    "glob": "^8.0.3",
     "path-browserify": "^1.0.1",
     "simple-get": "^4.0.1",
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
-    "@types/jest": "^27.4.0",
-    "@types/node": "^17.0.15",
-    "aws-sdk": "^2.1069.0",
-    "express": "^4.17.2",
-    "jest": "^27.5.0",
+    "@types/jest": "^27.5.1",
+    "@types/node": "^17.0.38",
+    "aws-sdk": "^2.1146.0",
+    "express": "^4.18.1",
+    "jest": "^28.1.0",
     "lodash": "^4.17.21",
-    "nodemon": "^2.0.15",
+    "nodemon": "^2.0.16",
     "tmp": "^0.2.1"
   },
   "files": [
