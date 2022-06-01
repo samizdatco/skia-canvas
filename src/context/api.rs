@@ -962,7 +962,7 @@ pub fn set_fontVariant(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let arg = cx.argument::<JsObject>(1)?;
 
   let variant = string_for_key(&mut cx, &arg, "variant")?;
-  let feat_obj = arg.get(&mut cx, "features")?.downcast_or_throw::<JsObject, _>(&mut cx)?;
+  let feat_obj: Handle<JsObject> = arg.get(&mut cx, "features")?;
   let features = font_features(&mut cx, &feat_obj)?;
   this.set_font_variant(&variant, &features);
   Ok(cx.undefined())

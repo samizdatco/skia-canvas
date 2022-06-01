@@ -167,7 +167,7 @@ pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> Result<Option<FontSpec>, 
   let slant = to_slant(string_for_key(cx, &font_desc, "style")?.as_str());
   let width = to_width(string_for_key(cx, &font_desc, "stretch")?.as_str());
 
-  let feat_obj = font_desc.get(cx, "features")?.downcast::<JsObject, _>(cx).or_throw(cx)?;
+  let feat_obj:Handle<JsObject> = font_desc.get(cx, "features")?;
   let features = font_features(cx, &feat_obj)?;
 
   let style = FontStyle::new(weight, width, slant);

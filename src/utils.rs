@@ -91,13 +91,15 @@ pub fn strings_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<Str
 }
 
 pub fn strings_at_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Result<Vec<String>, Throw>{
-  let array = obj.get(cx, attr)?.downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
-  Ok(strings_in(cx, &array))
+  let array:Handle<JsArray> = obj.get(cx, attr)?;
+  let list = array.to_vec(cx)?;
+  Ok(strings_in(cx, &list))
 }
 
 pub fn string_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Result<String, Throw>{
   let key = cx.string(attr);
-  match obj.get(cx, key)?.downcast::<JsString, _>(cx){
+  let val:Handle<JsValue> = obj.get(cx, key)?;
+  match val.downcast::<JsString, _>(cx){
     Ok(s) => Ok(s.value(cx)),
     Err(_e) => cx.throw_type_error(format!("Exptected a string for \"{}\"", attr))
   }
@@ -191,7 +193,8 @@ pub fn bool_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> Result<bool,
 
 pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Result<f32, Throw>{
   let key = cx.string(attr);
-  match obj.get(cx, key)?.downcast::<JsNumber, _>(cx){
+  let val:Handle<JsValue> = obj.get(cx, key)?;
+  match val.downcast::<JsNumber, _>(cx){
     Ok(num) => Ok(num.value(cx) as f32),
     Err(_e) => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
   }
@@ -303,7 +306,7 @@ pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> O
   }
 
   if let Ok(obj) = val.downcast::<JsObject, _>(cx){
-    if let Ok(attr) = obj.get(cx, "toString"){
+    if let Ok(attr) = obj.get::<JsValue, _, _>(cx, "toString"){
       if let Ok(to_string) = attr.downcast::<JsFunction, _>(cx){
         let args: Vec<Handle<JsValue>> = vec![];
         if let Ok(result) = to_string.call(cx, obj, args){
@@ -446,16 +449,16 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> Result<(String, Vec<F
   let arg = cx.argument::<JsObject>(idx as i32)?;
   let canonical = string_for_key(cx, &arg, "canonical")?;
 
-  let obj = arg.get(cx, "filters")?.downcast_or_throw::<JsObject, _>(cx)?;
+  let obj:Handle<JsObject> = arg.get(cx, "filters")?;
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut filters = vec![];
   for (name, key) in strings_in(cx, &keys).iter().zip(keys) {
     match name.as_str() {
       "drop-shadow" => {
-        let values = obj.get(cx, key)?.downcast_or_throw::<JsArray, _>(cx)?;
+        let values = obj.get::<JsArray, _, _>(cx, key)?;
         let nums = values.to_vec(cx)?;
         let dims = floats_in(cx, &nums);
-        let color_str = values.get(cx, 3)?.downcast_or_throw::<JsString, _>(cx)?.value(cx);
+        let color_str = values.get::<JsString, _, _>(cx, 3)?.value(cx);
         if let Some(color) = css_to_color(cx, &color_str) {
           filters.push(FilterSpec::Shadow{
             offset: Point::new(dims[0], dims[1]), blur: dims[2], color
@@ -463,9 +466,9 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> Result<(String, Vec<F
         }
       },
       _ => {
-        let value = obj.get(cx, key)?.downcast_or_throw::<JsNumber, _>(cx)?.value(cx);
+        let value = obj.get::<JsNumber, _, _>(cx, key)?.value(cx) as f32;
         filters.push(FilterSpec::Plain{
-          name:name.to_string(), value:value as f32
+          name:name.to_string(), value
         })
       }
     }
