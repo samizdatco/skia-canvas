@@ -3,7 +3,7 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 use std::cell::RefCell;
-use neon::prelude::*;
+use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{Image as SkImage, ImageInfo, Size, ColorType, AlphaType, Data};
 
 use crate::utils::*;
@@ -64,9 +64,7 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let mut this = this.borrow_mut();
 
   let buffer = cx.argument::<JsBuffer>(1)?;
-  let data = cx.borrow(&buffer, |buf_data| {
-    Data::new_copy(buf_data.as_slice())
-  });
+  let data = Data::new_copy(buffer.as_slice(&mut cx));
 
   this.image = SkImage::from_encoded(data);
   Ok(cx.boolean(this.image.is_some()))

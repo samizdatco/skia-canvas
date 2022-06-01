@@ -5,7 +5,7 @@
 #![allow(non_snake_case)]
 use std::f32::consts::PI;
 use std::cell::RefCell;
-use neon::prelude::*;
+use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{Point, Rect, Matrix, Path, PathDirection, PaintStyle};
 use skia_safe::path::AddPathMode::Append;
 use skia_safe::path::AddPathMode::Extend;
@@ -739,10 +739,9 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let width = float_arg(&mut cx, 3, "width")? as i32;
   let height = float_arg(&mut cx, 4, "height")? as i32;
 
-  let buffer = JsBuffer::new(&mut cx, 4 * (width * height) as u32)?;
-  cx.borrow(&buffer, |data| {
-    this.get_pixels(data.as_mut_slice(), (x, y), (width, height));
-  });
+  let mut buffer = cx.buffer(4 * (width * height) as usize)?;
+  this.get_pixels(buffer.as_mut_slice(&mut cx), (x, y), (width, height));
+
   Ok(buffer)
 }
 
@@ -771,11 +770,9 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       Rect::from_xywh(x, y, width, height)
   )};
 
-  let buffer = img_data.get(&mut cx, "data")?.downcast_or_throw::<JsBuffer, _>(&mut cx)?;
+  let buffer: Handle<JsBuffer> = img_data.get(&mut cx, "data")?;
   let info = Image::info(width, height);
-  cx.borrow(&buffer, |data| {
-    this.blit_pixels(data.as_slice(), &info, &src, &dst);
-  });
+  this.blit_pixels(buffer.as_slice(&cx), &info, &src, &dst);
   Ok(cx.undefined())
 }
 
