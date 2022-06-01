@@ -19,7 +19,7 @@ rayon = "^1.5"
 [dependencies.neon]
 version = "0.10.1"
 default-features = false
-features = ["napi-6", "channel-api"]
+features = ["napi-6", "promise-api", "task-api"]
 
 [dependencies.skia-safe]
 version = "0.50.0"
