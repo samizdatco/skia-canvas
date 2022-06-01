@@ -250,7 +250,7 @@ impl PageSequence{
 // Helpers
 //
 
-pub fn pages_arg(cx: &mut FunctionContext, idx: i32) -> Result<PageSequence, Throw> {
+pub fn pages_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<PageSequence> {
   let pages = cx.argument::<JsArray>(idx)?
       .to_vec(cx)?
       .iter()

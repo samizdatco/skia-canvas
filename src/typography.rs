@@ -152,7 +152,7 @@ pub struct FontSpec{
   pub canonical: String
 }
 
-pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> Result<Option<FontSpec>, Throw> {
+pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<Option<FontSpec>> {
   let arg = cx.argument::<JsValue>(idx)?;
   if arg.is_a::<JsNull, _>(cx){ return Ok(None) }
 
@@ -174,7 +174,7 @@ pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> Result<Option<FontSpec>, 
   Ok(Some(FontSpec{ families, size, leading, style, features, variant, canonical}))
 }
 
-pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> Result<Vec<(String, i32)>, Throw>{
+pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut features:Vec<(String, i32)> = vec![];
   for key in strings_in(cx, &keys).iter() {
