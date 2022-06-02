@@ -450,6 +450,15 @@ impl FontLibrary{
   }
 
   fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
+    // replace any previously added font with the same metadata/alias
+    if let Some(idx) = self.fonts.iter().position(|(old_font, old_alias)|
+      match alias.is_some(){
+        true => old_alias == &alias,
+        false => old_font.family_name() == font.family_name()
+      } && old_font.font_style() == font.font_style()
+    ){
+      self.fonts.remove(idx);
+    }
     self.fonts.push((font, alias));
 
     let mut assets = TypefaceFontProvider::new();
