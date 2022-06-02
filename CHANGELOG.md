@@ -2,6 +2,11 @@
 
 ## 🥚 ⟩ [Unreleased]
 
+### New Features
+- Enhacements to the shared **FontLibrary** object:
+  - Added a [`reset()`][FontLibrary.reset] method to FontLibrary which uninstalls any fonts that had been dynamically installed via `FontLibrary.use()`
+  - The [`use()`][FontLibrary.use] method now checks for previously installed fonts with the same family name (or alias) and will replace them with the newly added font
+
 ### Bugfixes
 
 - Calling `clip` with an empty path (or one that does not intersect the current clipping mask) will now prevent drawing altogether
@@ -9,8 +14,15 @@
   - applies to both the Context and Path2D versions of the drawing methods
   - a **TypeError** is thrown only if the number of arguments is too low (mirroring browser behavior)
 - [`conicCurveTo()`][conicCurveTo] now correctly reflects the canvas's transform state
+- The browser-based version of [`loadImage()`][loadImage] now returns a **Promise** that correctly resolves to an **Image** object
+
+### Misc. Improvements
+- Upgraded Skia to milestone 101
 
 [conicCurveTo]: https://github.com/samizdatco/skia-canvas#coniccurvetocpx-cpy-x-y-weight
+[FontLibrary.reset]: https://github.com/samizdatco/skia-canvas#reset
+[FontLibrary.use]: https://github.com/samizdatco/skia-canvas#usefamilyname-fontpaths
+[loadImage]: https://github.com/samizdatco/skia-canvas/#loadimage
 
 ## 📦 ⟩ [v0.9.29] ⟩ Feb 7, 2022
 
