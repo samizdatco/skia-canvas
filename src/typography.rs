@@ -392,8 +392,7 @@ impl FontLibrary{
 
   fn families(&self) -> Vec<String>{
     let font_mgr = FontMgr::new();
-    let count = font_mgr.count_families();
-    let mut names:Vec<String> = (0..count).map(|i| font_mgr.family_name(i)).collect();
+    let mut names:Vec<String> = font_mgr.family_names().collect();
     for (font, alias) in &self.fonts {
       names.push(match alias{
         Some(name) => name.clone(),
@@ -622,3 +621,8 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
   Ok(results.upcast())
 }
 
+pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let mut library = FONT_LIBRARY.lock().unwrap();
+  library.fonts.clear();
+  Ok(cx.undefined())
+}

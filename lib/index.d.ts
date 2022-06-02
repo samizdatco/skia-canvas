@@ -229,6 +229,8 @@ export interface FontLibrary {
   use(
     families: Record<string, readonly string[] | string>
   ): Record<string, Font[] | Font>
+
+  reset(): void
 }
 
 export const FontLibrary: FontLibrary

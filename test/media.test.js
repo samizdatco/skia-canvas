@@ -201,6 +201,10 @@ describe("FontLibrary", ()=>{
     expect(() => FontLibrary.use(alias, ttf)).not.toThrow()
     expect(FontLibrary.has(alias)).toBe(true)
     expect(FontLibrary.family(alias).weights).toContain(400)
+
+    FontLibrary.reset()
+    expect(FontLibrary.has(name)).toBe(false)
+    expect(FontLibrary.has(alias)).toBe(false)
   })
 })
 

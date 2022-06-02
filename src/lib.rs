@@ -92,6 +92,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("FontLibrary_has", typography::has)?;
   cx.export_function("FontLibrary_family", typography::family)?;
   cx.export_function("FontLibrary_addFamily", typography::addFamily)?;
+  cx.export_function("FontLibrary_reset", typography::reset)?;
 
   // -- Canvas ------------------------------------------------------------------------------------
 

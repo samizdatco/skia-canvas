@@ -9,7 +9,7 @@ In particular, Skia Canvas:
   - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
-  - uses native threads and [channels](https://docs.rs/neon/0.9.0/neon/event/struct.Channel.html) for asynchronous rendering and file I/O
+  - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - can apply [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
@@ -828,6 +828,10 @@ Asking for details about an unknown family will return `undefined`.
 
 Returns `true` if the family is installed on the system or has been added via `FontLibrary.use()`.
 
+##### `reset()`
+
+Uninstalls any dynamically loaded fonts that had been added via `FontLibrary.use()`.
+
 ##### `use(familyName, [...fontPaths])`
 
 The `FontLibrary.use()` method allows you to dynamically load local font files and use them with your canvases. By default it will use whatever family name is in the font metadata, but this can be overridden by an alias you provide. Since font-wrangling can be messy, `use` can be called in a number of different ways:
@@ -850,6 +854,8 @@ FontLibrary.use("Grizwald", [
 ```
 
 ###### with a list of ‘glob’ patterns
+
+> Note to Windows users: Due to recent changes to the [glob][glob] module, you must write paths using unix-style forward slashes. Backslashes are now used solely for escaping wildcard characters.
 
 ```js
 // with default family name
@@ -998,3 +1004,5 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 
 [nonzero]: https://en.wikipedia.org/wiki/Nonzero-rule
 [evenodd]: https://en.wikipedia.org/wiki/Even–odd_rule
+
+[glob]: https://github.com/isaacs/node-glob/blob/main/changelog.md#80
