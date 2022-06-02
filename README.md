@@ -71,6 +71,7 @@ If you wish to use Alpine as the underlying distribution, you can start with som
 ```dockerfile
 FROM node:alpine
 RUN apk update && apk add fontconfig
+RUN apk -UvX http://dl-cdn.alpinelinux.org/alpine/edge/main add -u nodejs
 ```
 
 ### Compiling from Source
