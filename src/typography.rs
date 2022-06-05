@@ -98,7 +98,7 @@ impl Typesetter{
       let range = string_idx_range(&self.text, line.start_index,
         if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces }
       );
-      (rect.with_offset((alignment, offset)), range, baseline as f32)
+      (rect.with_offset((alignment, offset)), range, baseline as f32 + offset)
     }).collect();
 
     // take their union to find the bounds for the whole text run
