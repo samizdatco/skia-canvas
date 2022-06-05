@@ -150,7 +150,7 @@ pub fn string_idx_range(text: &str, start_idx: usize, end_idx: usize) -> Range<u
 
   Range{
     start: indices.nth(start_idx).map_or(str_len, &obtain_index),
-    end: indices.nth(end_idx - start_idx - 1).map_or(str_len, &obtain_index),
+    end: indices.nth((end_idx - start_idx).max(1) - 1).map_or(str_len, &obtain_index),
   }
 }
 
