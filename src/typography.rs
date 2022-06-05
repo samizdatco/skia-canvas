@@ -50,6 +50,22 @@ impl Typesetter{
       }
     };
 
+    if wrap {
+      // make sure line-breaks use the current leading
+      let mut strut_style = graf_style.strut_style().clone();
+      let (leading, size) = if char_style.height() < 1.0 {
+        ( strut_style.leading(), char_style.font_size() * char_style.height() )
+      }else{
+        ( char_style.height() - 1.0, char_style.font_size() )
+      };
+      strut_style
+        .set_strut_enabled(true)
+        .set_force_strut_height(true)
+        .set_font_size(size)
+        .set_leading(leading);
+      graf_style.set_strut_style(strut_style);
+    }
+
     Typesetter{text, width, baseline, typefaces, char_style, graf_style}
   }
 
