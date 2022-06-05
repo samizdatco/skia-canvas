@@ -116,7 +116,7 @@ impl Page{
     let mut compositor = PictureRecorder::new();
     compositor.begin_recording(self.bounds, None);
     if let Some(output) = compositor.recording_canvas() {
-      output.clear(matte.unwrap_or(Color::TRANSPARENT));
+      matte.map(|c| output.clear(c));
       for pict in self.layers.iter(){
         pict.playback(output);
       }
