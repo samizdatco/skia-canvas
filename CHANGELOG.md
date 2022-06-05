@@ -15,6 +15,7 @@
   - a **TypeError** is thrown only if the number of arguments is too low (mirroring browser behavior)
 - [`conicCurveTo()`][conicCurveTo] now correctly reflects the canvas's transform state
 - The browser-based version of [`loadImage()`][loadImage] now returns a **Promise** that correctly resolves to an **Image** object
+- SVG exports no longer have an invisible, canvas-sized `<rect/>` as their first element
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 101
