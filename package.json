@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "0.9.29",
+  "version": "0.9.30",
   "description": "A canvas environment for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",

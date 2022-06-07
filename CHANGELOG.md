@@ -1,6 +1,8 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!-- ## 🥚 ⟩ [Unreleased] -->
+
+## 📦 ⟩ [v0.9.30] ⟩ Jun 7, 2022
 
 ### New Features
 - Enhacements to the shared **FontLibrary** object:
@@ -9,7 +11,6 @@
 - Added pre-compiled binaries for Alpine Linux on arm64
 
 ### Bugfixes
-
 - Calling `clip` with an empty path (or one that does not intersect the current clipping mask) will now prevent drawing altogether
 - Transformation (`translate`, `rotate`, etc.) and line-drawing methods (`moveTo`, `lineTo`, `ellipse`, etc.) are now silently ignored if called with `NaN`, `Infinity`, or non-**Number** values in the arguments rather than throwing an error
   - applies to both the Context and Path2D versions of the drawing methods
@@ -227,7 +228,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v0.9.29...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v0.9.30...HEAD
+[v0.9.30]: https://github.com/samizdatco/skia-canvas/compare/v0.9.29...v0.9.30
 [v0.9.29]: https://github.com/samizdatco/skia-canvas/compare/v0.9.28...v0.9.29
 [v0.9.28]: https://github.com/samizdatco/skia-canvas/compare/v0.9.27...v0.9.28
 [v0.9.27]: https://github.com/samizdatco/skia-canvas/compare/v0.9.26...v0.9.27
