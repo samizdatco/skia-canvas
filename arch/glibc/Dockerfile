@@ -1,17 +1,14 @@
-FROM node:lts-stretch-slim
+FROM node:buster-slim
 
-RUN apt-get update && apt-get install -y -q software-properties-common
-RUN add-apt-repository "deb http://deb.debian.org/debian stretch-backports main"
-RUN apt-get update && apt-get install -y \
-    curl less build-essential lsb-release wget python2.7  \
-    libssl-dev libfontconfig-dev git clang-5.0 lld-5.0
+RUN apt-get update && \
+    apt-get install -y -q \
+    python2 python3 perl git clang lldb lld \
+    build-essential software-properties-common \
+    libssl-dev libfontconfig-dev \
+    ninja-build
 
-RUN ln -s /usr/bin/clang++-5.0   /usr/bin/clang++
-RUN ln -s /usr/bin/clang-5.0     /usr/bin/clang
-RUN ln -s /usr/bin/clang-cpp-5.0 /usr/bin/clang-cpp
-RUN ln -s /usr/bin/ld.lld-5.0    /usr/bin/ld.lld
-RUN ln -s /usr/bin/lld-5.0       /usr/bin/lld
+RUN add-apt-repository "deb http://deb.debian.org/debian buster-backports main" && \
+    apt-get update && apt-get install -t buster-backports -y -q \
+    curl
 
-RUN groupadd -r -g 1001 ghuser
-RUN useradd -r -u 1001 -g ghuser ghuser
-USER ghuser
+ENV SKIA_NINJA_COMMAND="/usr/bin/ninja"

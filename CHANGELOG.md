@@ -6,6 +6,7 @@
 - Enhacements to the shared **FontLibrary** object:
   - Added a [`reset()`][FontLibrary.reset] method to FontLibrary which uninstalls any fonts that had been dynamically installed via `FontLibrary.use()`
   - The [`use()`][FontLibrary.use] method now checks for previously installed fonts with the same family name (or alias) and will replace them with the newly added font
+- Added pre-compiled binaries for Alpine Linux on arm64
 
 ### Bugfixes
 
@@ -16,6 +17,7 @@
 - [`conicCurveTo()`][conicCurveTo] now correctly reflects the canvas's transform state
 - The browser-based version of [`loadImage()`][loadImage] now returns a **Promise** that correctly resolves to an **Image** object
 - SVG exports no longer have an invisible, canvas-sized `<rect/>` as their first element
+- Fixed an incompatibility on Alpine between the version of libstdc++ present on the `node:alpine` docker images and the version used when building the precompiled binaries
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 101

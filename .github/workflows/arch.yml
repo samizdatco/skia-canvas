@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  intel:
+  server:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -13,6 +13,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v1
       with:
@@ -20,23 +26,16 @@ jobs:
         username: ${{ github.repository_owner }}
         password: ${{ secrets.CR_PAT }}
 
-    - name: Build and Push Docker Image
-      uses: docker/build-push-action@v2
+    - name: Build and push
+      uses: docker/build-push-action@v3
       with:
         tags: ghcr.io/${{ github.repository }}-${{ matrix.libc }}:latest
         context: arch/${{ matrix.libc }}
+        platforms: linux/amd64,linux/arm64
         push: true
 
-  acorn:
-    runs-on:
-    - self-hosted
-    - linux
-    - ${{ matrix.runner }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ARM, ARM64]
+  pi:
+    runs-on: [self-hosted, linux, ARM]
 
     steps:
     - name: Checkout
@@ -49,16 +48,11 @@ jobs:
         username: ${{ github.repository_owner }}
         password: ${{ secrets.CR_PAT }}
 
-    - id: cpu
-      uses: ASzc/change-string-case-action@v1
-      with:
-        string: ${{ matrix.runner }}
-
     - name: Build and Push Docker Image
       run: |
         cd ${{ env.context }}
         docker build . -t ${{ env.tag }}
         docker push ${{ env.tag }}
       env:
-        context: arch/${{ steps.cpu.outputs.lowercase }}
-        tag: ghcr.io/${{ github.repository }}-${{ steps.cpu.outputs.lowercase }}:latest
+        context: arch/arm
+        tag: ghcr.io/${{ github.repository }}-arm:latest

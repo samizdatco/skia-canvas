@@ -17,5 +17,5 @@ ENV SKIA_GN_COMMAND="/usr/local/bin/gn"
 ENV SKIA_NINJA_COMMAND="/usr/bin/ninja"
 
 RUN groupadd -r -g 1000 pi
-RUN useradd -r -u 1000 -g pi pi
+RUN useradd -r -m -u 1000 -g pi pi
 USER pi

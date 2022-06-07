@@ -52,7 +52,7 @@ Nearly everything you need is statically linked into the library. A notable exce
 
 ### Running in Docker
 
-The library is compatible with Linux systems using [glibc](https://www.gnu.org/software/libc/) 2.24 or later as well as Alpine Linux (x64 only) and the [musl](https://musl.libc.org) C library it favors. In both cases, Fontconfig must be installed on the system for `skia-canvas` to operate correctly.
+The library is compatible with Linux systems using [glibc](https://www.gnu.org/software/libc/) 2.24 or later as well as Alpine Linux (x64 & arm64) and the [musl](https://musl.libc.org) C library it favors. In both cases, Fontconfig must be installed on the system for `skia-canvas` to operate correctly.
 
 If you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, the simplest approach is to set your `FROM` image to one of the (Debian-derived) defaults like `node:16`, `node:14`, `node:12`, `node:bullseye`, `node:buster`, or simply:
 ```dockerfile
@@ -71,7 +71,6 @@ If you wish to use Alpine as the underlying distribution, you can start with som
 ```dockerfile
 FROM node:alpine
 RUN apk update && apk add fontconfig
-RUN apk -UvX http://dl-cdn.alpinelinux.org/alpine/edge/main add -u nodejs
 ```
 
 ### Compiling from Source
