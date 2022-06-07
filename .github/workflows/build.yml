@@ -59,14 +59,13 @@ jobs:
         cd skia-canvas
         npm test && npm run package
 
-    - name: Add to release
+    - name: Upload to S3
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
         cd skia-canvas
-        export RELEASE="v$(jq -r '.version' package.json)"
-        export ASSET=$(npm run package 2>&1 | grep 'info package' | cut -d "\"" -f 2)
-        gh release upload $RELEASE $ASSET
+        npm run upload
 
 
   linux-arm64:
@@ -133,14 +132,13 @@ jobs:
         cd skia-canvas
         npm test && npm run package
 
-    - name: Add to release
+    - name: Upload to S3
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
         cd skia-canvas
-        export RELEASE="v$(jq -r '.version' package.json)"
-        export ASSET=$(npm run package 2>&1 | grep 'info package' | cut -d "\"" -f 2)
-        gh release upload $RELEASE $ASSET
+        npm run upload
 
 
   linux-arm:
@@ -205,14 +203,13 @@ jobs:
         cd skia-canvas
         npm test && npm run package
 
-    - name: Add to release
+    - name: Upload to S3
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
         cd skia-canvas
-        export RELEASE="v$(jq -r '.version' package.json)"
-        export ASSET=$(npm run package 2>&1 | grep 'info package' | cut -d "\"" -f 2)
-        gh release upload $RELEASE $ASSET
+        npm run upload
 
 
   mac-x86:
@@ -243,13 +240,12 @@ jobs:
       run: |
         npm test && npm run package
 
-    - name: Add to release
+    - name: Upload to S3
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
-        export RELEASE="v$(jq -r '.version' package.json)"
-        export ASSET=$(npm run package 2>&1 | grep 'info package' | cut -d "\"" -f 2)
-        gh release upload $RELEASE $ASSET
+        npm run upload
 
 
   mac-arm64:
@@ -285,13 +281,12 @@ jobs:
         sed -i.bak 's/"package_name":.*/"package_name": "{platform}-arm64-{node_napi_label}-{libc}.tar.gz",/' package.json
         npm run package
 
-    - name: Add to release
+    - name: Upload to S3
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
-        export RELEASE="v$(jq -r '.version' package.json)"
-        export ASSET=$(npm run package 2>&1 | grep 'info package' | cut -d "\"" -f 2)
-        gh release upload $RELEASE $ASSET
+        npm run upload
 
 
   windows-x86:
@@ -320,10 +315,9 @@ jobs:
       run: |
         npm test && npm run package
 
-    - name: Add to release
+    - name: Upload to S3
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       run: |
-        export RELEASE="v$(jq -r '.version' package.json)"
-        export ASSET=$(npm run package 2>&1 | grep 'info package' | cut -d "\"" -f 2)
-        gh release upload $RELEASE $ASSET
+        npm run upload
