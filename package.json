@@ -50,7 +50,7 @@
     "module_path": "./lib/v{napi_build_version}",
     "remote_path": "./v{version}",
     "package_name": "{platform}-{arch}-{node_napi_label}-{libc}.tar.gz",
-    "host": "https://skia-canvas.s3.us-east-1.amazonaws.com",
+    "host": "https://github.com/samizdatco/skia-canvas/releases/download/",
     "napi_versions": [
       6
     ]
