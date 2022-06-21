@@ -5,7 +5,10 @@ export function loadImage(src: string | Buffer): Promise<Image>
 export class DOMMatrix extends globalThis.DOMMatrix {}
 export class DOMPoint extends globalThis.DOMPoint {}
 export class DOMRect extends globalThis.DOMRect {}
-export class Image extends globalThis.Image {}
+export class Image extends globalThis.Image {
+  get src(): string
+  set src(src: string | Buffer)
+}
 export class ImageData extends globalThis.ImageData {}
 export class CanvasGradient extends globalThis.CanvasGradient {}
 export class CanvasPattern extends globalThis.CanvasPattern {}
