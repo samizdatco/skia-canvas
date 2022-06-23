@@ -188,8 +188,6 @@ impl Page{
       };
 
       if let Some(img_format) = img_format{
-        gl_init();
-        let mut gl_context = DirectContext::new_gl(None, None).unwrap();
         let img_scale = Matrix::scale((density, density));
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
         let img_info = ImageInfo::new_n32_premul(img_dims, None);
