@@ -14,6 +14,7 @@ mod pattern;
 mod texture;
 mod typography;
 mod utils;
+mod init_gpu;
 
 use context::api as ctx;
 use typography::FontLibrary;

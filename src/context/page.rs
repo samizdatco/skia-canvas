@@ -108,6 +108,7 @@ impl PageRecorder{
 //
 
 use std::cell::RefCell;
+use crate::init_gpu::get_vulkan_context;
 thread_local!(static GL_CONTEXT: RefCell<Option<GLContext>> = RefCell::new(None));
 
 fn gl_init(){
@@ -194,7 +195,7 @@ impl Page{
         let img_info = ImageInfo::new_n32_premul(img_dims, None);
 
         let mut surface = Surface::new_render_target(
-          &mut gl_context,
+          &mut get_vulkan_context(),
           Budgeted::Yes,
           &img_info,
           Some(4),
