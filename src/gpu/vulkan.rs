@@ -11,11 +11,18 @@ use skia_safe::gpu::DirectContext;
 thread_local!(static GL_CONTEXT: RefCell<Option<Vulkan>> = RefCell::new(None));
 
 
-fn vulkan_init() {
+fn vulkan_init() -> bool {
     GL_CONTEXT.with(|cell| {
         let mut local_ctx = cell.borrow_mut();
         if local_ctx.is_none() {
-            local_ctx.replace(Vulkan::new());
+            if let Ok(ctx) = Vulkan::new() {
+                local_ctx.replace(ctx);
+                true
+            } else {
+                false
+            }
+        } else {
+            true
         }
     })
 }
@@ -28,14 +35,18 @@ pub fn get_vulkan_context() -> DirectContext {
     })
 }
 
+pub fn vulkan_supported() -> bool {
+    vulkan_init()
+}
+
 pub struct Vulkan {
     context: gpu::DirectContext,
-    ash_graphics: AshGraphics,
+    _ash_graphics: AshGraphics,
 }
 
 impl Vulkan {
-    fn new() -> Self {
-        let ash_graphics = unsafe { AshGraphics::new("skia-canvas") };
+    fn new() -> Result<Self, String> {
+        let ash_graphics = unsafe { AshGraphics::new("skia-canvas") }?;
         let context = {
             let get_proc = |of| unsafe {
                 match ash_graphics.get_proc(of) {
@@ -60,13 +71,13 @@ impl Vulkan {
                 )
             };
 
-            gpu::DirectContext::new_vulkan(&backend_context, None).unwrap()
-        };
+            DirectContext::new_vulkan(&backend_context, None)
+        }.ok_or("Failed to create Vulkan context")?;
 
-        Self {
+        Ok(Self {
             context,
-            ash_graphics,
-        }
+            _ash_graphics: ash_graphics,
+        })
     }
 }
 
@@ -89,7 +100,6 @@ impl Drop for AshGraphics {
     }
 }
 
-// most code copied from here: https://github.com/MaikKlein/ash/blob/master/examples/src/lib.rs
 impl AshGraphics {
     pub fn vulkan_version() -> Option<(usize, usize, usize)> {
         let entry = unsafe { Entry::load() }.unwrap();
@@ -105,8 +115,8 @@ impl AshGraphics {
         })
     }
 
-    pub unsafe fn new(app_name: &str) -> AshGraphics {
-        let entry = unsafe { Entry::load() }.unwrap();
+    pub unsafe fn new(app_name: &str) -> Result<AshGraphics, String> {
+        let entry = Entry::load().or(Err("Failed to load Vulkan entry"))?;
 
         let minimum_version = vk::make_api_version(0, 1, 0, 0);
 
@@ -145,8 +155,7 @@ impl AshGraphics {
 
             entry
                 .create_instance(&create_info, None)
-                .expect("Failed to create a Vulkan instance.")
-        };
+        }.or(Err("Failed to create a Vulkan instance."))?;
 
         let (physical_device, queue_family_index) = {
             let physical_devices = instance
@@ -171,10 +180,7 @@ impl AshGraphics {
                         })
                 })
                 .find_map(|v| v)
-                .expect("Failed to find a suitable Vulkan device.")
-        };
-
-        println!("Found device {:?}", physical_device);
+        }.ok_or("Failed to find a Vulkan physical device.")?;
 
         let device: ash::Device = {
             let features = vk::PhysicalDeviceFeatures::default();
@@ -195,24 +201,18 @@ impl AshGraphics {
 
             instance
                 .create_device(physical_device, &device_create_info, None)
-                .unwrap()
-        };
-
-        println!("Created device");
-
+        }.or(Err("Failed to create Device."))?;
 
         let queue_index: usize = 0;
         let queue: vk::Queue = device.get_device_queue(queue_family_index as _, queue_index as _);
 
-        println!("Got queue {:?}", queue);
-
-        AshGraphics {
+        Ok(AshGraphics {
             queue_and_index: (queue, queue_index),
             device,
             physical_device,
             instance,
             entry,
-        }
+        })
     }
 
     pub unsafe fn get_proc(&self, of: gpu::vk::GetProcOf) -> Option<unsafe extern "system" fn()> {

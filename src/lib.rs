@@ -14,7 +14,7 @@ mod pattern;
 mod texture;
 mod typography;
 mod utils;
-mod init_gpu;
+mod gpu;
 
 use context::api as ctx;
 use typography::FontLibrary;
@@ -97,6 +97,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- Canvas ------------------------------------------------------------------------------------
 
   cx.export_function("Canvas_new", canvas::new)?;
+  cx.export_function("Canvas_gpuSupport", gpu::gpu_support)?;
   cx.export_function("Canvas_get_width", canvas::get_width)?;
   cx.export_function("Canvas_set_width", canvas::set_width)?;
   cx.export_function("Canvas_get_height", canvas::get_height)?;
