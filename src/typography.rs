@@ -482,7 +482,10 @@ impl FontLibrary{
       assets.register_typeface(font.clone(), alias.as_ref());
     }
 
-    self.collection.set_asset_font_manager(Some(assets.into()));
+    let mut collection = FontCollection::new();
+    collection.set_default_font_manager(FontMgr::new(), None);
+    collection.set_asset_font_manager(Some(assets.into()));
+    self.collection = collection;
     self.collection_cache.drain();
   }
 
@@ -649,5 +652,11 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut library = FONT_LIBRARY.lock().unwrap();
   library.fonts.clear();
+
+  let mut collection = FontCollection::new();
+  collection.set_default_font_manager(FontMgr::new(), None);
+  library.collection = collection;
+  library.collection_cache.drain();
+
   Ok(cx.undefined())
 }
