@@ -1,6 +1,9 @@
 # Changelog
 
-<!-- ## 🥚 ⟩ [Unreleased] -->
+## 🥚 ⟩ [Unreleased]
+
+### Bugfixes
+- The `FontLibrary.reset()` method didn't actually remove previously installed fonts that had already been drawn with (and thus cached). It now clears those caches, which also means previously used fonts can now be replaced by calling `.use()` again with the same family name.
 
 ## 📦 ⟩ [v0.9.30] ⟩ Jun 7, 2022
 
