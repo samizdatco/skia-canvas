@@ -702,6 +702,25 @@ pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> 
   Ok(rule)
 }
 
+use crate::gpu::RenderingEngine;
+pub fn to_engine(engine_name:&str) -> Option<RenderingEngine>{
+  let mode = match engine_name.to_lowercase().as_str(){
+    "vulkan" => RenderingEngine::VULKAN,
+    "gl" => RenderingEngine::GL,
+    "cpu" => RenderingEngine::CPU,
+    _ => return None
+  };
+  Some(mode)
+}
+
+pub fn from_engine(engine:RenderingEngine) -> String{
+  match engine{
+    RenderingEngine::VULKAN => "vulkan",
+    RenderingEngine::GL => "gl",
+    RenderingEngine::CPU => "cpu",
+  }.to_string()
+}
+
 // pub fn blend_mode_arg(cx: &mut FunctionContext, idx: usize, attr: &str) -> NeonResult<BlendMode>{
 //   let mode_name = string_arg(cx, idx, attr)?;
 //   match to_blend_mode(&mode_name){
@@ -746,3 +765,4 @@ pub fn fit_bounds(width: f32, height: f32, src: Rect, dst: Rect) -> (Rect, Rect)
 
   (src, dst)
 }
+
