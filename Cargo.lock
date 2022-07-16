@@ -27,6 +27,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash"
+version = "0.35.2+1.2.203"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f6a491bcad4563b355ac2bb6e3f09d5e1c5d628710c7156e901dad0c416075e"
+dependencies = [
+ "libloading 0.7.3",
+]
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -661,6 +670,7 @@ dependencies = [
 name = "skia-canvas"
 version = "0.9.30"
 dependencies = [
+ "ash",
  "crc",
  "css-color",
  "lazy_static",
