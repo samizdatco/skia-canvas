@@ -12,8 +12,9 @@ use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Colo
 use crc::{Crc, CRC_32_ISO_HDLC};
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 
+use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
-use crate::gpu::get_surface;
+use crate::gpu::RenderingEngine;
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -126,7 +127,7 @@ impl Page{
     compositor.finish_recording_as_picture(Some(&self.bounds))
   }
 
-  pub fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<Data, String> {
+  pub fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>, engine:RenderingEngine) -> Result<Data, String> {
     let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
 
     if self.bounds.is_empty(){
@@ -144,9 +145,7 @@ impl Page{
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
         let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
 
-        let mut surface = get_surface(&img_info);
-
-        if let Some(mut surface) = surface{
+        if let Some(mut surface) = engine.get_surface(&img_info){
           surface
             .canvas()
             .clear(matte.unwrap_or(Color::TRANSPARENT))
@@ -177,9 +176,9 @@ impl Page{
   }
 
 
-  pub fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String> {
+  pub fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>, engine:RenderingEngine) -> Result<(), String> {
     let path = FilePath::new(&filename);
-    let data = self.encoded_as(file_format, quality, density, outline, matte)?;
+    let data = self.encoded_as(file_format, quality, density, outline, matte, engine)?;
     fs::write(path, data.as_bytes()).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     )
@@ -205,12 +204,13 @@ impl Page{
 //
 
 pub struct PageSequence{
-  pages: Vec<Page>
+  pub pages: Vec<Page>,
+  pub engine: RenderingEngine
 }
 
 impl PageSequence{
-  pub fn from(pages:Vec<Page>) -> Self{
-    PageSequence { pages }
+  pub fn from(pages:Vec<Page>, engine:RenderingEngine) -> Self{
+    PageSequence { pages, engine }
   }
 
   pub fn first(&self) -> &Page {
@@ -228,6 +228,10 @@ impl PageSequence{
       .map(|doc| doc.close())
   }
 
+  pub fn write_image(&self, pattern:&str, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
+    self.first().write(&pattern, &format, quality, density, outline, matte, self.engine)
+  }
+
   #[allow(clippy::too_many_arguments)]
   pub fn write_sequence(&self, pattern:&str, format:&str, padding:f32, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
     let padding = match padding as i32{
@@ -241,7 +245,7 @@ impl PageSequence{
       .try_for_each(|(pp, page)|{
         let folio = format!("{:0width$}", pp+1, width=padding);
         let filename = pattern.replace("{}", folio.as_str());
-        page.write(&filename, format, quality, density, outline, matte)
+        page.write(&filename, format, quality, density, outline, matte, self.engine)
       })
   }
 
@@ -261,7 +265,8 @@ impl PageSequence{
 // Helpers
 //
 
-pub fn pages_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<PageSequence> {
+pub fn pages_arg(cx: &mut FunctionContext, idx: i32, canvas:&BoxedCanvas) -> NeonResult<PageSequence> {
+  let engine = canvas.borrow().engine;
   let pages = cx.argument::<JsArray>(idx)?
       .to_vec(cx)?
       .iter()
@@ -269,7 +274,7 @@ pub fn pages_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<PageSequence>
       .filter( |ctx| ctx.is_ok() )
       .map(|obj| obj.unwrap().borrow().get_page())
       .collect();
-  Ok(PageSequence::from(pages))
+  Ok(PageSequence::from(pages, engine))
 }
 
 fn pdf_document(quality:f32, density:f32) -> Document{
