@@ -21,7 +21,10 @@ fn gl_init() -> bool {
 }
 
 pub fn gl_supported() -> bool {
-    gl_init()
+    // surfman's declare_surfman!() macro isn't actually defining the linker symbols necessary for it
+    // to choose a GPU, so (for the moment) GL is disabled on Windows to prevent aggressive logging
+    // of the failure
+    if cfg!(windows){ false }else{ gl_init() }
 }
 
 pub fn get_gl_context() -> DirectContext {
