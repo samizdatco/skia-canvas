@@ -8,36 +8,7 @@ use ash::vk::Handle;
 use skia_safe::gpu;
 use skia_safe::gpu::DirectContext;
 
-thread_local!(static GL_CONTEXT: RefCell<Option<Vulkan>> = RefCell::new(None));
-
-
-fn vulkan_init() -> bool {
-    GL_CONTEXT.with(|cell| {
-        let mut local_ctx = cell.borrow_mut();
-        if local_ctx.is_none() {
-            if let Ok(ctx) = Vulkan::new() {
-                local_ctx.replace(ctx);
-                true
-            } else {
-                false
-            }
-        } else {
-            true
-        }
-    })
-}
-
-pub fn get_vulkan_context() -> DirectContext {
-    vulkan_init();
-    GL_CONTEXT.with(|cell| {
-        let local_ctx = cell.borrow();
-        local_ctx.as_ref().unwrap().context.clone()
-    })
-}
-
-pub fn vulkan_supported() -> bool {
-    vulkan_init()
-}
+thread_local!(static VK_CONTEXT: RefCell<Option<Vulkan>> = RefCell::new(None));
 
 pub struct Vulkan {
     context: gpu::DirectContext,
@@ -45,6 +16,22 @@ pub struct Vulkan {
 }
 
 impl Vulkan {
+    fn init() {
+        VK_CONTEXT.with(|cell| {
+            let mut local_ctx = cell.borrow_mut();
+            if local_ctx.is_none() {
+                if let Ok(ctx) = Vulkan::new() {
+                    local_ctx.replace(ctx);
+                }
+            }
+        })
+    }
+
+    pub fn supported() -> bool {
+        Self::init();
+        VK_CONTEXT.with(|cell| cell.borrow().is_some() )
+    }
+
     fn new() -> Result<Self, String> {
         let ash_graphics = unsafe { AshGraphics::new("skia-canvas") }?;
         let context = {
@@ -78,6 +65,15 @@ impl Vulkan {
             context,
             _ash_graphics: ash_graphics,
         })
+    }
+
+    pub fn direct_context() -> Option<DirectContext> {
+        Self::init();
+        VK_CONTEXT.with(|cell| {
+            let local_ctx = cell.borrow();
+            Some(local_ctx.as_ref().unwrap().context.clone())
+        })
+
     }
 }
 

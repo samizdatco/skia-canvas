@@ -1,7 +1,7 @@
 use skia_safe::gpu::{DirectContext, SurfaceOrigin};
 use skia_safe::{Budgeted, ImageInfo, Surface};
-use crate::gpu::gl::{get_gl_context, gl_supported};
-use crate::gpu::vulkan::{get_vulkan_context, vulkan_supported};
+use crate::gpu::gl::OpenGL;
+use crate::gpu::vulkan::Vulkan;
 
 mod vulkan;
 mod gl;
@@ -13,8 +13,8 @@ pub enum RenderingEngine{
 
 impl Default for RenderingEngine {
     fn default() -> Self {
-        if vulkan_supported() { RenderingEngine::VULKAN }
-        else if gl_supported() { RenderingEngine::GL }
+        if Vulkan::supported() { RenderingEngine::VULKAN }
+        else if OpenGL::supported() { RenderingEngine::GL }
         else { RenderingEngine::CPU }
     }
 }
@@ -22,8 +22,8 @@ impl Default for RenderingEngine {
 impl RenderingEngine{
     pub fn supported(&self) -> bool {
         match self {
-            RenderingEngine::GL => gl_supported(),
-            RenderingEngine::VULKAN => vulkan_supported(),
+            RenderingEngine::GL => OpenGL::supported(),
+            RenderingEngine::VULKAN => Vulkan::supported(),
             RenderingEngine::CPU => true
         }
     }
@@ -46,8 +46,8 @@ impl RenderingEngine{
 
     fn get_direct_context(&self) -> Option<DirectContext> {
         match self {
-            Self::VULKAN => Some(get_vulkan_context()),
-            Self::GL => Some(get_gl_context()),
+            Self::VULKAN => Vulkan::direct_context(),
+            Self::GL => OpenGL::direct_context(),
             Self::CPU => None
         }
     }
