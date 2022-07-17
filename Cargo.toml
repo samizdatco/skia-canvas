@@ -15,8 +15,6 @@ crc = "^3.0"
 css-color = "^0.2"
 lazy_static = "1.4.0"
 rayon = "^1.5"
-surfman = "0.4.3"
-gl = "0.14.0"
 ash = "0.35"
 
 [dependencies.neon]
@@ -27,3 +25,7 @@ features = ["napi-6", "promise-api", "task-api"]
 [dependencies.skia-safe]
 version = "0.50.0"
 features = ["textlayout", "gl", "vulkan"]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+surfman = "0.4.3"
+gl = "0.14.0"
