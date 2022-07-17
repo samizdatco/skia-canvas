@@ -705,9 +705,7 @@ pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> 
 use crate::gpu::RenderingEngine;
 pub fn to_engine(engine_name:&str) -> Option<RenderingEngine>{
   let mode = match engine_name.to_lowercase().as_str(){
-    "metal" => RenderingEngine::METAL,
-    // "vulkan" => RenderingEngine::VULKAN,
-    // "gl" => RenderingEngine::GL,
+    "gpu" => RenderingEngine::GPU,
     "cpu" => RenderingEngine::CPU,
     _ => return None
   };
@@ -716,9 +714,7 @@ pub fn to_engine(engine_name:&str) -> Option<RenderingEngine>{
 
 pub fn from_engine(engine:RenderingEngine) -> String{
   match engine{
-    RenderingEngine::METAL => "metal",
-    // RenderingEngine::VULKAN => "vulkan",
-    // RenderingEngine::GL => "gl",
+    RenderingEngine::GPU => "gpu",
     RenderingEngine::CPU => "cpu",
   }.to_string()
 }

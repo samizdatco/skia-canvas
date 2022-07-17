@@ -15,16 +15,15 @@ crc = "^3.0"
 css-color = "^0.2"
 lazy_static = "1.4.0"
 rayon = "^1.5"
-ash = "0.35"
 
 [dependencies.neon]
 version = "0.10.1"
 default-features = false
 features = ["napi-6", "promise-api", "task-api"]
 
-[dependencies.skia-safe]
-version = "0.50.0"
-features = ["textlayout", "vulkan"]
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+skia-safe = { version = "0.50.0", features = ["textlayout", "vulkan"] }
+ash = "0.35"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 skia-safe = { version = "0.50.0", features = ["textlayout", "metal"] }

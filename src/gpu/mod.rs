@@ -1,37 +1,37 @@
 use skia_safe::gpu::{DirectContext, SurfaceOrigin};
 use skia_safe::{Budgeted, ImageInfo, Surface};
-// use crate::gpu::gl::OpenGL;
-use crate::gpu::metal::Metal;
-// use crate::gpu::vulkan::Vulkan;
 
+#[cfg(target_os = "macos")]
+use crate::gpu::metal::Metal as Engine;
+
+#[cfg(target_os = "macos")]
 mod metal;
-// mod vulkan;
+
+#[cfg(not(target_os = "macos"))]
+mod vulkan;
+
+#[cfg(not(target_os = "macos"))]
+use crate::gpu::metal::Metal as Engine;
+
+
 // mod gl;
 
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
     CPU,
-    METAL,
-    // GL,
-    // VULKAN
+    GPU,
 }
 
 impl Default for RenderingEngine {
     fn default() -> Self {
-        // for engine in [Self::VULKAN, Self::GL]{
-        for engine in [Self::METAL]{
-            if engine.supported(){ return engine }
-        }
-        return Self::CPU
+        if Engine::supported() { Self::GPU } else { Self::CPU }
     }
 }
 
 impl RenderingEngine{
     pub fn supported(&self) -> bool {
         match self {
-            // Self::GL => OpenGL::supported(),
-            // Self::VULKAN => Vulkan::supported(),
-            Self::METAL => Metal::supported(),
+            Self::GPU => Engine::supported(),
             Self::CPU => true
         }
     }
@@ -54,9 +54,7 @@ impl RenderingEngine{
 
     fn get_direct_context(&self) -> Option<DirectContext> {
         match self {
-            Self::METAL => Metal::direct_context(),
-            // Self::VULKAN => Vulkan::direct_context(),
-            // Self::GL => OpenGL::direct_context(),
+            Self::GPU => Engine::direct_context(),
             Self::CPU => None
         }
     }

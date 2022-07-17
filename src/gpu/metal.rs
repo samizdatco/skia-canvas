@@ -1,14 +1,15 @@
 use std::cell::RefCell;
 use skia_safe::gpu::DirectContext;
+use foreign_types_shared::ForeignType;
+use metal_rs::Device;
+use skia_safe::gpu::mtl;
 
 thread_local!(static MTL_CONTEXT: RefCell<Option<Metal>> = RefCell::new(None));
 
-#[cfg(target_os = "macos")]
 pub struct Metal {
     context: DirectContext,
 }
 
-#[cfg(target_os = "macos")]
 impl Metal {
     fn init() {
         MTL_CONTEXT.with(|cell| {
@@ -27,10 +28,6 @@ impl Metal {
     }
 
     pub fn new() -> Option<Self> {
-      use foreign_types_shared::ForeignType;
-      use metal_rs::Device;
-      use skia_safe::gpu::mtl;
-
       let device = Device::system_default()?;
       let command_queue = device.new_command_queue();
       let backend_context = unsafe {
@@ -64,18 +61,3 @@ impl Metal {
 //         self.device.destroy_context(&mut self.context).unwrap();
 //     }
 // }
-
-//
-// a dummy struct for linux & windows to ignore
-//
-
-#[cfg(not(target_os = "macos"))]
-pub struct Metal {}
-
-#[cfg(not(target_os = "macos"))]
-impl Metal {
-    pub fn new() -> Option<Self> { None }
-    pub fn supported() -> bool { false }
-    pub fn direct_context() -> Option<DirectContext> { None }
-}
-
