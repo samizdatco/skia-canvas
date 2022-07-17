@@ -39,8 +39,6 @@ export interface SaveOptions extends RenderOptions {
   format?: ExportFormat
 }
 
-export type CanvasEngine = "cpu" | "gl" | "vulkan"
-
 export class Canvas {
   /** @internal */
   constructor(width?: number, height?: number)
@@ -58,8 +56,8 @@ export class Canvas {
   newPage(width?: number, height?: number): CanvasRenderingContext2D
   readonly pages: CanvasRenderingContext2D[]
 
-  get engine(): CanvasEngine
-  set engine(mode: CanvasEngine): void
+  get gpu(): boolean
+  set gpu(enabled: boolean): void
 
   saveAs(filename: string, options?: SaveOptions): Promise<void>
   toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
