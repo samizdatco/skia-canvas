@@ -13,18 +13,19 @@ pub enum RenderingEngine{
 
 impl Default for RenderingEngine {
     fn default() -> Self {
-        if Vulkan::supported() { RenderingEngine::VULKAN }
-        else if OpenGL::supported() { RenderingEngine::GL }
-        else { RenderingEngine::CPU }
+        for engine in [Self::VULKAN, Self::GL]{
+            if engine.supported(){ return engine }
+        }
+        return Self::CPU
     }
 }
 
 impl RenderingEngine{
     pub fn supported(&self) -> bool {
         match self {
-            RenderingEngine::GL => OpenGL::supported(),
-            RenderingEngine::VULKAN => Vulkan::supported(),
-            RenderingEngine::CPU => true
+            Self::GL => OpenGL::supported(),
+            Self::VULKAN => Vulkan::supported(),
+            Self::CPU => true
         }
     }
 
