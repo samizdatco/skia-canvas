@@ -11,7 +11,7 @@ mod metal;
 mod vulkan;
 
 #[cfg(not(target_os = "macos"))]
-use crate::gpu::metal::Metal as Engine;
+use crate::gpu::vulkan::Vulkan as Engine;
 
 
 // mod gl;

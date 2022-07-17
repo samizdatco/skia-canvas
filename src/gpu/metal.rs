@@ -54,10 +54,3 @@ impl Metal {
       }
 
 }
-
-// #[cfg(target_os = "macos")]
-// impl Drop for Metal {
-//     fn drop(&mut self) {
-//         self.device.destroy_context(&mut self.context).unwrap();
-//     }
-// }
