@@ -546,7 +546,7 @@ impl Context2D{
         },
         FilterSpec::Plain{ name, value } => match name.as_ref() {
           "blur" => {
-            image_filters::blur((*value, *value), TileMode::Clamp, chain, None)
+            image_filters::blur((*value, *value), TileMode::Decal, chain, None)
           },
           "brightness" => {
             let amt = value.max(0.0);
