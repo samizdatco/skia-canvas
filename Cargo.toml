@@ -24,8 +24,9 @@ features = ["napi-6", "promise-api", "task-api"]
 
 [dependencies.skia-safe]
 version = "0.50.0"
-features = ["textlayout", "gl", "vulkan"]
+features = ["textlayout", "vulkan"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
-surfman = "0.4.3"
-gl = "0.14.0"
+skia-safe = { version = "0.50.0", features = ["textlayout", "metal"] }
+metal-rs = { package = "metal", version = "0.24.0" }
+foreign-types-shared = "0.1.1"
