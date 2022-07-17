@@ -55,6 +55,14 @@ release:
 	git push origin --tags
 	@printf "\nNext: publish the release on github to submit to npm\n"
 
+# linux-build helpers
+skia-version:
+	@grep -m 1 'skia-safe' Cargo.toml | egrep -o '[0-9\.]+'
+
+with-local-skia:
+	perl -0777 -pi.bak -e 's/(skia-safe.*?)version = ".*?"/$$1path = "..\/rust-skia\/skia-safe"/g' Cargo.toml
+
+# debugging
 run: build
 	@node check.js
 
