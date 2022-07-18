@@ -31,16 +31,16 @@ impl Metal {
       let device = Device::system_default()?;
       let command_queue = device.new_command_queue();
       let backend_context = unsafe {
-        mtl::BackendContext::new(
-            device.as_ptr() as mtl::Handle,
-            command_queue.as_ptr() as mtl::Handle,
-            std::ptr::null(),
-        )
+          mtl::BackendContext::new(
+              device.as_ptr() as mtl::Handle,
+              command_queue.as_ptr() as mtl::Handle,
+              std::ptr::null(),
+          )
       };
       if let Some(context) = DirectContext::new_metal(&backend_context, None){
-        Some(Metal{context})
+          Some(Metal{context})
       }else{
-        None
+          None
       }
 
     }
@@ -48,8 +48,8 @@ impl Metal {
     pub fn direct_context() -> Option<DirectContext> {
         Self::init();
         MTL_CONTEXT.with(|cell| {
-          let local_ctx = cell.borrow();
-          Some(local_ctx.as_ref().unwrap().context.clone())
+            let local_ctx = cell.borrow();
+            Some(local_ctx.as_ref().unwrap().context.clone())
         })
       }
 
