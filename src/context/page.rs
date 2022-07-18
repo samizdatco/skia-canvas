@@ -2,11 +2,9 @@ use std::fs;
 use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
-use neon::result::Throw;
 use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color, ColorSpace,
-                PictureRecorder, Picture, Surface, EncodedImageFormat, Image as SkImage, ColorType,
-                svg::{self, canvas::Flags}, pdf, Document, ImageInfo, Budgeted,
-                gpu::{SurfaceOrigin, DirectContext},
+                PictureRecorder, Picture, EncodedImageFormat, Image as SkImage,
+                svg::{self, canvas::Flags}, pdf, Document, ImageInfo,
                 image::BitDepth};
 
 use crc::{Crc, CRC_32_ISO_HDLC};
@@ -148,7 +146,6 @@ impl Page{
         if let Some(mut surface) = engine.get_surface(&img_info){
           surface
             .canvas()
-            .clear(matte.unwrap_or(Color::TRANSPARENT))
             .set_matrix(&img_scale.into())
             .draw_picture(&picture, None, None);
           surface
@@ -157,7 +154,7 @@ impl Page{
             .map(|data| with_dpi(data, img_format, density))
             .ok_or(format!("Could not encode as {}", format))
         }else{
-          Err("Could not allocate new bitmap".to_string())
+          Err(format!("Could not allocate new {}×{} bitmap", img_dims.width, img_dims.height))
         }
       }else if format == "pdf"{
         let mut document = pdf_document(quality, density).begin_page(img_dims, None);
