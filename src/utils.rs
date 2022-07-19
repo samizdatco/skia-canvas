@@ -440,10 +440,7 @@ pub fn opt_path2d_arg(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
 // Filters
 //
 
-pub enum FilterSpec{
-  Plain{name:String, value:f32},
-  Shadow{offset:Point, blur:f32, color:Color},
-}
+use crate::filter::FilterSpec;
 
 pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, Vec<FilterSpec>)> {
   let arg = cx.argument::<JsObject>(idx as i32)?;

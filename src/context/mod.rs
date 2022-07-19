@@ -7,9 +7,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo,
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
-                PaintStyle, BlendMode, AlphaType, TileMode, ClipOp, Data,
-                PictureRecorder, Picture, Drawable, image::CachingHint,
-                image_filters, color_filters, table_color_filter, dash_path_effect, path_1d_path_effect};
+                PaintStyle, BlendMode, AlphaType, ClipOp, Data, PictureRecorder, Picture,
+                Drawable, image::CachingHint, image_filters, dash_path_effect, path_1d_path_effect};
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
@@ -20,6 +19,7 @@ pub mod page;
 use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::typography::*;
+use crate::filter::Filter;
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
@@ -64,7 +64,7 @@ pub struct State{
   global_composite_operation: BlendMode,
   image_filter_quality: FilterQuality,
   image_smoothing_enabled: bool,
-  filter:String,
+  filter: Filter,
 
   font: String,
   font_variant: String,
@@ -107,7 +107,7 @@ impl Default for State {
       global_composite_operation: BlendMode::SrcOver,
       image_filter_quality: FilterQuality::Low,
       image_smoothing_enabled: true,
-      filter: "none".to_string(),
+      filter: Filter::default(),
 
       shadow_blur: 0.0,
       shadow_color: TRANSPARENT,
@@ -308,7 +308,7 @@ impl Context2D{
     });
     path.set_fill_type(rule.unwrap_or(FillType::Winding));
 
-    let paint = self.paint_for(style);
+    let paint = self.paint_for_drawing(style);
     let texture = self.state.texture(style);
 
     self.render_to_canvas(&paint, |canvas, paint| {
@@ -357,7 +357,7 @@ impl Context2D{
 
     let is_in = match style{
       PaintStyle::Stroke => {
-        let paint = self.paint_for(PaintStyle::Stroke);
+        let paint = self.paint_for_drawing(PaintStyle::Stroke);
         let precision = 0.3; // this is what Chrome uses to compute this
         match paint.get_fill_path(path, None, Some(precision)){
           Some(traced_path) => traced_path.contains(point),
@@ -439,9 +439,7 @@ impl Context2D{
   }
 
   pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
-    let mut canvas_paint = self.state.paint.clone();
-    canvas_paint
-      .set_alpha_f(self.state.global_alpha);
+    let paint = self.paint_for_image();
 
     let quality = match self.state.image_smoothing_enabled {
       true => self.state.image_filter_quality,
@@ -449,7 +447,7 @@ impl Context2D{
     };
 
     if let Some(image) = &img {
-      self.render_to_canvas(&canvas_paint, |canvas, paint| {
+      self.render_to_canvas(&paint, |canvas, paint| {
         let sampling = to_sampling_opts(quality);
         canvas.draw_image_rect_with_sampling_options(&image, Some((src_rect, Strict)), dst_rect, sampling, paint);
       });
@@ -518,8 +516,7 @@ impl Context2D{
 
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, style:PaintStyle){
-    let paint = self.paint_for(style);
-
+    let paint = self.paint_for_drawing(style);
     let typesetter = Typesetter::new(&self.state, text, width);
     self.render_to_canvas(&paint, |canvas, paint| {
       let point = Point::new(x, y);
@@ -536,121 +533,16 @@ impl Context2D{
     Typesetter::new(&self.state, text, None).path()
   }
 
-  pub fn set_filter(&mut self, filter_text:&str, specs:&[FilterSpec]){
-    // matrices and formulæ taken from: https://www.w3.org/TR/filter-effects-1/
-    let filter = specs.iter().fold(None, |chain, next_filter|
-      match next_filter {
-        FilterSpec::Shadow{ offset, blur, color } => {
-          let sigma = *blur / 2.0;
-          image_filters::drop_shadow(*offset, (sigma, sigma), *color, chain, None)
-        },
-        FilterSpec::Plain{ name, value } => match name.as_ref() {
-          "blur" => {
-            image_filters::blur((*value, *value), TileMode::Decal, chain, None)
-          },
-          "brightness" => {
-            let amt = value.max(0.0);
-            let color_matrix = color_filters::matrix_row_major(&[
-              amt,  0.0,  0.0,  0.0, 0.0,
-              0.0,  amt,  0.0,  0.0, 0.0,
-              0.0,  0.0,  amt,  0.0, 0.0,
-              0.0,  0.0,  0.0,  1.0, 0.0
-            ]);
-            image_filters::color_filter(color_matrix, chain, None)
-          },
-          "contrast" => {
-            let amt = value.max(0.0);
-            let mut ramp = [0u8; 256];
-            for (i, val) in ramp.iter_mut().take(256).enumerate() {
-              let orig = i as f32;
-              *val = (127.0 + amt * orig - (127.0 * amt )) as u8;
-            }
-            let table = Some(&ramp);
-            let color_table = table_color_filter::from_argb(None, table, table, table);
-            image_filters::color_filter(color_table, chain, None)
-          },
-          "grayscale" => {
-            let amt = 1.0 - value.max(0.0).min(1.0);
-            let color_matrix = color_filters::matrix_row_major(&[
-              (0.2126 + 0.7874 * amt), (0.7152 - 0.7152  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
-              (0.2126 - 0.2126 * amt), (0.7152 + 0.2848  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
-              (0.2126 - 0.2126 * amt), (0.7152 - 0.7152  * amt), (0.0722 + 0.9278 * amt), 0.0, 0.0,
-               0.0,                     0.0,                      0.0,                    1.0, 0.0
-            ]);
-            image_filters::color_filter(color_matrix, chain, None)
-          },
-          "invert" => {
-            let amt = value.max(0.0).min(1.0);
-            let mut ramp = [0u8; 256];
-            for (i, val) in ramp.iter_mut().take(256).enumerate().map(|(i,v)| (i as f32, v)) {
-              let (orig, inv) = (i, 255.0-i);
-              *val = (orig * (1.0 - amt) + inv * amt) as u8;
-            }
-            let table = Some(&ramp);
-            let color_table = table_color_filter::from_argb(None, table, table, table);
-            image_filters::color_filter(color_table, chain, None)
-          },
-          "opacity" => {
-            let amt = value.max(0.0).min(1.0);
-            let color_matrix = color_filters::matrix_row_major(&[
-              1.0,  0.0,  0.0,  0.0,  0.0,
-              0.0,  1.0,  0.0,  0.0,  0.0,
-              0.0,  0.0,  1.0,  0.0,  0.0,
-              0.0,  0.0,  0.0,  amt,  0.0
-            ]);
-            image_filters::color_filter(color_matrix, chain, None)
-          },
-          "saturate" => {
-            let amt = value.max(0.0);
-            let color_matrix = color_filters::matrix_row_major(&[
-              (0.2126 + 0.7874 * amt), (0.7152 - 0.7152 * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
-              (0.2126 - 0.2126 * amt), (0.7152 + 0.2848 * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
-              (0.2126 - 0.2126 * amt), (0.7152 - 0.7152 * amt), (0.0722 + 0.9278 * amt), 0.0, 0.0,
-               0.0,                     0.0,                     0.0,                    1.0, 0.0
-            ]);
-            image_filters::color_filter(color_matrix, chain, None)
-          },
-          "sepia" => {
-            let amt = 1.0 - value.max(0.0).min(1.0);
-            let color_matrix = color_filters::matrix_row_major(&[
-              (0.393 + 0.607 * amt), (0.769 - 0.769 * amt), (0.189 - 0.189 * amt), 0.0, 0.0,
-              (0.349 - 0.349 * amt), (0.686 + 0.314 * amt), (0.168 - 0.168 * amt), 0.0, 0.0,
-              (0.272 - 0.272 * amt), (0.534 - 0.534 * amt), (0.131 + 0.869 * amt), 0.0, 0.0,
-               0.0,                   0.0,                   0.0,                  1.0, 0.0
-            ]);
-            image_filters::color_filter(color_matrix, chain, None)
-          },
-          "hue-rotate" => {
-            let cos = to_radians(*value).cos();
-            let sin = to_radians(*value).sin();
-            let color_matrix = color_filters::matrix_row_major(&[
-              (0.213 + cos*0.787 - sin*0.213), (0.715 - cos*0.715 - sin*0.715), (0.072 - cos*0.072 + sin*0.928), 0.0, 0.0,
-              (0.213 - cos*0.213 + sin*0.143), (0.715 + cos*0.285 + sin*0.140), (0.072 - cos*0.072 - sin*0.283), 0.0, 0.0,
-              (0.213 - cos*0.213 - sin*0.787), (0.715 - cos*0.715 + sin*0.715), (0.072 + cos*0.928 + sin*0.072), 0.0, 0.0,
-               0.0,                             0.0,                             0.0,                            1.0, 0.0
-            ]);
-            image_filters::color_filter(color_matrix, chain, None)
-          },
-          _ => chain
-        }
-      }
-    );
-
-    self.state.paint.set_image_filter(filter);
-    self.state.filter = filter_text.to_string();
-  }
-
   pub fn color_with_alpha(&self, src:&Color) -> Color{
     let mut color:Color4f = (*src).into();
     color.a *= self.state.global_alpha;
     color.to_color()
   }
 
-  pub fn paint_for(&self, style:PaintStyle) -> Paint{
+  pub fn paint_for_drawing(&self, style:PaintStyle) -> Paint{
     let mut paint = self.state.paint.clone();
-    let alpha = self.state.global_alpha;
-    let smoothing = self.state.image_smoothing_enabled;
-    self.state.dye(style).mix_into(&mut paint, alpha, smoothing);
+    self.state.filter.mix_into(&mut paint, self.state.matrix, false);
+    self.state.dye(style).mix_into(&mut paint, self.state.global_alpha, self.state.image_smoothing_enabled);
     paint.set_style(style);
 
     if style==PaintStyle::Stroke && !self.state.line_dash_list.is_empty(){
@@ -677,20 +569,24 @@ impl Context2D{
     paint
   }
 
+  pub fn paint_for_image(&self) -> Paint {
+    let mut paint = self.state.paint.clone();
+    self.state.filter.mix_into(&mut paint, self.state.matrix, true)
+      .set_alpha_f(self.state.global_alpha);
+    paint
+  }
+
   pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint> {
     let State {shadow_color, shadow_blur, shadow_offset, ..} = self.state;
-    let sigma = shadow_blur / 2.0;
-
-    match shadow_color.a() > 0 && !(shadow_blur == 0.0 && shadow_offset.is_zero()){
-      true => {
-        let mut paint = base_paint.clone();
-        if let Some(filter) = image_filters::drop_shadow_only((0.0, 0.0), (sigma, sigma), shadow_color, None, None){
-          paint.set_image_filter(filter); // this also knocks out any ctx.filter settings as a side-effect
-        }
-        Some(paint)
-      }
-      false => None
+    if shadow_color.a() == 0 || (shadow_blur == 0.0 && shadow_offset.is_zero()){
+      return None
     }
+
+    let sigma_x = shadow_blur / (2.0 * self.state.matrix.scale_x());
+    let sigma_y = shadow_blur / (2.0 * self.state.matrix.scale_y());
+    let mut paint = base_paint.clone();
+    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma_x, sigma_y), shadow_color, None, None));
+    Some(paint)
   }
 
 }

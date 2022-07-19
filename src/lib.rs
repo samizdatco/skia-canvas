@@ -9,6 +9,7 @@ mod canvas;
 mod context;
 mod path;
 mod image;
+mod filter;
 mod gradient;
 mod pattern;
 mod texture;

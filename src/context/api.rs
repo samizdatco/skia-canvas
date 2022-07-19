@@ -16,6 +16,7 @@ use super::{Context2D, BoxedContext2D, Dye};
 use crate::canvas::{Canvas, BoxedCanvas};
 use crate::path::{Path2D, BoxedPath2D};
 use crate::image::{Image, BoxedImage};
+use crate::filter::Filter;
 use crate::typography::*;
 use crate::utils::*;
 
@@ -1046,15 +1047,15 @@ pub fn set_globalCompositeOperation(mut cx: FunctionContext) -> JsResult<JsUndef
 pub fn get_filter(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  Ok(cx.string(this.state.filter.clone()))
+  Ok(cx.string(this.state.filter.to_string()))
 }
 
 pub fn set_filter(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
   if !cx.argument::<JsValue>(1)?.is_a::<JsNull, _>(&mut cx) {
-    let (filter_text, filters) = filter_arg(&mut cx, 1)?;
-    this.set_filter(&filter_text, &filters);
+    let (filter_text, specs) = filter_arg(&mut cx, 1)?;
+    this.state.filter = Filter::new(&filter_text, &specs);
   }
   Ok(cx.undefined())
 }
