@@ -2093,6 +2093,10 @@ tests['shadow in filter'] = function (ctx) {
   ctx.fillRect(20, 0, 33, 33)
 }
 
+tests['filter chains'] = function (ctx) {
+  ctx.filter = 'blur(5px) invert(56%) sepia(63%) saturate(4837%) hue-rotate(163deg) brightness(96%) contrast(101%)'
+  ctx.fillRect(40,40,120,120)
+}
 
 tests['font state'] = function (ctx) {
   ctx.save()
