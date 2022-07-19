@@ -168,18 +168,10 @@ impl ImageFilter {
   pub fn sampling(&self) -> SamplingOptions {
     let quality = if self.smoothing { self.quality } else { FilterQuality::None };
     match quality {
-      FilterQuality::None => SamplingOptions {
-        use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Nearest, mipmap:MipmapMode::None
-      },
-      FilterQuality::Low => SamplingOptions {
-        use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
-      },
-      FilterQuality::Medium => SamplingOptions {
-        use_cubic:true, cubic:CubicResampler::mitchell(), filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
-      },
-      FilterQuality::High => SamplingOptions {
-        use_cubic:true, cubic:CubicResampler::catmull_rom(), filter:FilterMode::Linear, mipmap:MipmapMode::Linear
-      }
+      FilterQuality::None   => SamplingOptions::new(FilterMode::Nearest, MipmapMode::None),
+      FilterQuality::Low    => SamplingOptions::new(FilterMode::Linear,  MipmapMode::Nearest),
+      FilterQuality::Medium => SamplingOptions::new(FilterMode::Linear,  MipmapMode::Linear),
+      FilterQuality::High   => SamplingOptions::new(FilterMode::Linear,  MipmapMode::Linear)
     }
   }
 
