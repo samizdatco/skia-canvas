@@ -489,7 +489,7 @@ impl Context2D{
     color.to_color()
   }
 
-  pub fn paint_for_drawing(&self, style:PaintStyle) -> Paint{
+  pub fn paint_for_drawing(&mut self, style:PaintStyle) -> Paint{
     let mut paint = self.state.paint.clone();
     self.state.filter.mix_into(&mut paint, self.state.matrix, false);
     self.state.dye(style).mix_into(&mut paint, self.state.global_alpha, self.state.image_filter);
@@ -519,7 +519,7 @@ impl Context2D{
     paint
   }
 
-  pub fn paint_for_image(&self) -> Paint {
+  pub fn paint_for_image(&mut self) -> Paint {
     let mut paint = self.state.paint.clone();
     self.state.filter.mix_into(&mut paint, self.state.matrix, true)
       .set_alpha_f(self.state.global_alpha);
