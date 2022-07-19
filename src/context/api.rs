@@ -782,7 +782,8 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn get_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  Ok(cx.boolean(this.state.image_smoothing_enabled))
+  // Ok(cx.boolean(this.state.image_smoothing_enabled))
+  Ok(cx.boolean(this.state.image_filter.smoothing))
 }
 
 pub fn set_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -790,14 +791,14 @@ pub fn set_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsUndefine
   let mut this = this.borrow_mut();
   let flag = bool_arg(&mut cx, 1, "imageSmoothingEnabled")?;
 
-  this.state.image_smoothing_enabled = flag;
+  this.state.image_filter.smoothing = flag;
   Ok(cx.undefined())
 }
 
 pub fn get_imageSmoothingQuality(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let mode = from_filter_quality(this.state.image_filter_quality);
+  let mode = from_filter_quality(this.state.image_filter.quality);
   Ok(cx.string(mode))
 }
 
@@ -807,7 +808,7 @@ pub fn set_imageSmoothingQuality(mut cx: FunctionContext) -> JsResult<JsUndefine
   let name = string_arg(&mut cx, 1, "imageSmoothingQuality")?;
 
   if let Some(mode) = to_filter_quality(&name){
-    this.state.image_filter_quality = mode;
+    this.state.image_filter.quality = mode;
   }
   Ok(cx.undefined())
 }

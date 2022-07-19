@@ -440,7 +440,7 @@ pub fn opt_path2d_arg(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
 // Filters
 //
 
-use crate::filter::FilterSpec;
+use crate::filter::{FilterSpec, FilterQuality};
 
 pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, Vec<FilterSpec>)> {
   let arg = cx.argument::<JsObject>(idx as i32)?;
@@ -473,39 +473,6 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, V
   Ok( (canonical, filters) )
 }
 
-//
-// Skia Enums
-//
-
-use skia_safe::{TileMode, TileMode::{Decal, Repeat}};
-// pub fn to_tile_mode(mode_name:&str) -> Option<TileMode>{
-//   let mode = match mode_name.to_lowercase().as_str(){
-//     "clamp" => TileMode::Clamp,
-//     "repeat" => TileMode::Repeat,
-//     "mirror" => TileMode::Mirror,
-//     "decal" => TileMode::Decal,
-//     _ => return None
-//   };
-//   Some(mode)
-// }
-
-pub fn to_repeat_mode(repeat:&str) -> Option<(TileMode, TileMode)> {
-  let mode = match repeat.to_lowercase().as_str() {
-    "repeat" | "" => (Repeat, Repeat),
-    "repeat-x" => (Repeat, Decal),
-    "repeat-y" => (Decal, Repeat),
-    "no-repeat" => (Decal, Decal),
-    _ => return None
-  };
-  Some(mode)
-}
-
-
-#[derive(Copy, Clone)]
-pub enum FilterQuality{
-  None, Low, Medium, High
-}
-
 pub fn to_filter_quality(mode_name:&str) -> Option<FilterQuality>{
   let mode = match mode_name.to_lowercase().as_str(){
     "low" => FilterQuality::Low,
@@ -525,23 +492,21 @@ pub fn from_filter_quality(mode:FilterQuality) -> String{
   }.to_string()
 }
 
-use skia_safe::{FilterMode, MipmapMode, SamplingOptions, CubicResampler};
 
-pub fn to_sampling_opts(mode:FilterQuality) -> SamplingOptions {
-  match mode {
-    FilterQuality::None => SamplingOptions {
-      use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Nearest, mipmap:MipmapMode::None
-    },
-    FilterQuality::Low => SamplingOptions {
-      use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
-    },
-    FilterQuality::Medium => SamplingOptions {
-      use_cubic:true, cubic:CubicResampler::mitchell(), filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
-    },
-    FilterQuality::High => SamplingOptions {
-      use_cubic:true, cubic:CubicResampler::catmull_rom(), filter:FilterMode::Linear, mipmap:MipmapMode::Linear
-    }
-  }
+//
+// Skia Enums
+//
+
+use skia_safe::{TileMode, TileMode::{Decal, Repeat}};
+pub fn to_repeat_mode(repeat:&str) -> Option<(TileMode, TileMode)> {
+  let mode = match repeat.to_lowercase().as_str() {
+    "repeat" | "" => (Repeat, Repeat),
+    "repeat-x" => (Repeat, Decal),
+    "repeat-y" => (Decal, Repeat),
+    "no-repeat" => (Decal, Decal),
+    _ => return None
+  };
+  Some(mode)
 }
 
 use skia_safe::{PaintCap};

@@ -19,7 +19,7 @@ pub mod page;
 use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::typography::*;
-use crate::filter::Filter;
+use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
@@ -62,8 +62,7 @@ pub struct State{
 
   global_alpha: f32,
   global_composite_operation: BlendMode,
-  image_filter_quality: FilterQuality,
-  image_smoothing_enabled: bool,
+  image_filter: ImageFilter,
   filter: Filter,
 
   font: String,
@@ -105,8 +104,7 @@ impl Default for State {
 
       global_alpha: 1.0,
       global_composite_operation: BlendMode::SrcOver,
-      image_filter_quality: FilterQuality::Low,
-      image_smoothing_enabled: true,
+      image_filter: ImageFilter{ smoothing:true, quality:FilterQuality::Low },
       filter: Filter::default(),
 
       shadow_blur: 0.0,
@@ -398,15 +396,9 @@ impl Context2D{
 
   pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
     let paint = self.paint_for_image();
-
-    let quality = match self.state.image_smoothing_enabled {
-      true => self.state.image_filter_quality,
-      false => FilterQuality::None
-    };
-
     if let Some(image) = &img {
       self.render_to_canvas(&paint, |canvas, paint| {
-        let sampling = to_sampling_opts(quality);
+        let sampling = self.state.image_filter.sampling();
         canvas.draw_image_rect_with_sampling_options(&image, Some((src_rect, Strict)), dst_rect, sampling, paint);
       });
     }
@@ -500,7 +492,7 @@ impl Context2D{
   pub fn paint_for_drawing(&self, style:PaintStyle) -> Paint{
     let mut paint = self.state.paint.clone();
     self.state.filter.mix_into(&mut paint, self.state.matrix, false);
-    self.state.dye(style).mix_into(&mut paint, self.state.global_alpha, self.state.image_smoothing_enabled);
+    self.state.dye(style).mix_into(&mut paint, self.state.global_alpha, self.state.image_filter);
     paint.set_style(style);
 
     if style==PaintStyle::Stroke && !self.state.line_dash_list.is_empty(){
@@ -581,7 +573,7 @@ impl Dye{
     }
   }
 
-  pub fn mix_into(&self, paint: &mut Paint, alpha: f32, smoothing: bool){
+  pub fn mix_into(&self, paint: &mut Paint, alpha: f32, image_filter: ImageFilter){
     match self {
       Dye::Color(color) => {
         let mut color:Color4f = (*color).into();
@@ -593,7 +585,7 @@ impl Dye{
              .set_alpha_f(alpha);
       },
       Dye::Pattern(pattern) =>{
-        paint.set_shader(pattern.shader(smoothing))
+        paint.set_shader(pattern.shader(image_filter))
              .set_alpha_f(alpha);
       }
       Dye::Texture(texture) =>{

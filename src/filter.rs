@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+use skia_safe::{FilterMode, MipmapMode, SamplingOptions, CubicResampler};
 use skia_safe::{Paint, Matrix, Point, Color, TileMode,  MaskFilter, BlurStyle,
                 image_filters, color_filters, table_color_filter};
 
@@ -150,4 +151,36 @@ impl Filter {
 
     paint.set_image_filter(image_filter)
   }
+}
+
+#[derive(Copy, Clone)]
+pub enum FilterQuality{
+  None, Low, Medium, High
+}
+
+#[derive(Copy, Clone)]
+pub struct ImageFilter {
+  pub smoothing: bool,
+  pub quality: FilterQuality
+}
+
+impl ImageFilter {
+  pub fn sampling(&self) -> SamplingOptions {
+    let quality = if self.smoothing { self.quality } else { FilterQuality::None };
+    match quality {
+      FilterQuality::None => SamplingOptions {
+        use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Nearest, mipmap:MipmapMode::None
+      },
+      FilterQuality::Low => SamplingOptions {
+        use_cubic:false, cubic:CubicResampler{b:0.0, c:0.0}, filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
+      },
+      FilterQuality::Medium => SamplingOptions {
+        use_cubic:true, cubic:CubicResampler::mitchell(), filter:FilterMode::Linear, mipmap:MipmapMode::Nearest
+      },
+      FilterQuality::High => SamplingOptions {
+        use_cubic:true, cubic:CubicResampler::catmull_rom(), filter:FilterMode::Linear, mipmap:MipmapMode::Linear
+      }
+    }
+  }
+
 }
