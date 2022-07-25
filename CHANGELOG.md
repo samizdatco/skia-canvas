@@ -12,6 +12,7 @@
 ### Misc. Improvements
 - The [`.filter`][filter] property's `"blur(…)"` and `"drop-shadow(…)"` effects now match browser behavior much more closely and scale appropriately with the `density` export option.
 - Antialiasing is smoother, particularly when down-scaling images, thanks to the use of mipmaps rather than Skia's (apparently buggy?) implementation of bucubic interpolation.
+- Upgraded Skia to milestone 103
 
 [canvas_gpu]: https://github.com/samizdatco/skia-canvas#gpu
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter

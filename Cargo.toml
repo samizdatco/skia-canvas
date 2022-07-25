@@ -22,10 +22,10 @@ default-features = false
 features = ["napi-6", "promise-api", "task-api"]
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-skia-safe = { version = "0.50.0", features = ["textlayout", "vulkan"] }
-ash = "0.35"
+skia-safe = { version = "0.52.0", features = ["textlayout", "vulkan"] }
+ash = "0.37"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-skia-safe = { version = "0.50.0", features = ["textlayout", "metal"] }
+skia-safe = { version = "0.52.0", features = ["textlayout", "metal"] }
 metal-rs = { package = "metal", version = "0.24.0" }
 foreign-types-shared = "0.1.1"
