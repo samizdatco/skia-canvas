@@ -10,22 +10,27 @@ exclude = ["index.node"]
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+metal = ["skia-safe/metal"]
+vulkan = ["skia-safe/vulkan", "dep:skulpin", "dep:ash"]
+
 [dependencies]
 crc = "^3.0"
 css-color = "^0.2"
 lazy_static = "1.4.0"
 rayon = "^1.5"
+skia-safe = { version = "0.52.0", features = ["textlayout"] }
+skulpin = { git = "https://github.com/aclysma/skulpin.git", rev="c5fb342", optional = true }
+ash = {version = "0.37", optional = true}
 
 [dependencies.neon]
 version = "0.10.1"
 default-features = false
 features = ["napi-6", "promise-api", "task-api"]
 
-[target.'cfg(not(target_os = "macos"))'.dependencies]
-skia-safe = { version = "0.52.0", features = ["textlayout", "vulkan"] }
-ash = "0.37"
-
 [target.'cfg(target_os = "macos")'.dependencies]
-skia-safe = { version = "0.52.0", features = ["textlayout", "metal"] }
-metal-rs = { package = "metal", version = "0.24.0" }
-foreign-types-shared = "0.1.1"
+metal-rs = { package = "metal", version = "0.24" }
+core-graphics-types = "0.1.1"
+foreign-types = "0.3.2"
+cocoa = "0.24.0"
+objc = "0.2.7"

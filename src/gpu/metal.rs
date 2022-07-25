@@ -1,21 +1,20 @@
 use std::cell::RefCell;
-use skia_safe::gpu::DirectContext;
-use foreign_types_shared::ForeignType;
+use foreign_types::ForeignType;
 use metal_rs::Device;
-use skia_safe::gpu::mtl;
+use skia_safe::gpu::{mtl, DirectContext, SurfaceOrigin};
+use skia_safe::{Budgeted, ImageInfo, Surface};
+thread_local!(static MTL_CONTEXT: RefCell<Option<Engine>> = RefCell::new(None));
 
-thread_local!(static MTL_CONTEXT: RefCell<Option<Metal>> = RefCell::new(None));
-
-pub struct Metal {
+pub struct Engine {
     context: DirectContext,
 }
 
-impl Metal {
+impl Engine {
     fn init() {
         MTL_CONTEXT.with(|cell| {
             let mut local_ctx = cell.borrow_mut();
             if local_ctx.is_none(){
-                if let Some(ctx) = Metal::new() {
+                if let Some(ctx) = Engine::new() {
                     local_ctx.replace(ctx);
                 }
             }
@@ -38,19 +37,28 @@ impl Metal {
           )
       };
       if let Some(context) = DirectContext::new_metal(&backend_context, None){
-          Some(Metal{context})
+          Some(Engine{context})
       }else{
           None
       }
 
     }
 
-    pub fn direct_context() -> Option<DirectContext> {
+    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
         Self::init();
         MTL_CONTEXT.with(|cell| {
             let local_ctx = cell.borrow();
-            Some(local_ctx.as_ref().unwrap().context.clone())
-        })
-      }
+            let mut context = local_ctx.as_ref().unwrap().context.clone();
 
+            Surface::new_render_target(
+                &mut context,
+                Budgeted::Yes,
+                image_info,
+                Some(4),
+                SurfaceOrigin::BottomLeft,
+                None,
+                true,
+            )
+        })
+    }
 }

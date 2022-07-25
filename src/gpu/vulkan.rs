@@ -5,22 +5,22 @@ use std::os::raw;
 
 use ash::{Entry, Instance, vk};
 use ash::vk::Handle;
-use skia_safe::gpu;
-use skia_safe::gpu::DirectContext;
+use skia_safe::gpu::{self, DirectContext, SurfaceOrigin};
+use skia_safe::{ImageInfo, Budgeted, Surface};
 
-thread_local!(static VK_CONTEXT: RefCell<Option<Vulkan>> = RefCell::new(None));
+thread_local!(static VK_CONTEXT: RefCell<Option<Engine>> = RefCell::new(None));
 
-pub struct Vulkan {
+pub struct Engine {
     context: gpu::DirectContext,
     _ash_graphics: AshGraphics,
 }
 
-impl Vulkan {
+impl Engine {
     fn init() {
         VK_CONTEXT.with(|cell| {
             let mut local_ctx = cell.borrow_mut();
             if local_ctx.is_none() {
-                if let Ok(ctx) = Vulkan::new() {
+                if let Ok(ctx) = Engine::new() {
                     local_ctx.replace(ctx);
                 }
             }
@@ -67,13 +67,21 @@ impl Vulkan {
         })
     }
 
-    pub fn direct_context() -> Option<DirectContext> {
+    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
         Self::init();
         VK_CONTEXT.with(|cell| {
             let local_ctx = cell.borrow();
-            Some(local_ctx.as_ref().unwrap().context.clone())
+            let mut context = local_ctx.as_ref().unwrap().context.clone();
+            Surface::new_render_target(
+                &mut context,
+                Budgeted::Yes,
+                image_info,
+                Some(4),
+                SurfaceOrigin::BottomLeft,
+                None,
+                true,
+            )
         })
-
     }
 }
 
