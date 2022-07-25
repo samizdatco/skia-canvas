@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 use std::ptr;
 use std::cell::RefCell;
 use std::ffi::CString;
@@ -8,19 +11,33 @@ use ash::vk::Handle;
 use skia_safe::gpu::{self, DirectContext, SurfaceOrigin};
 use skia_safe::{ImageInfo, Budgeted, Surface};
 
-thread_local!(static VK_CONTEXT: RefCell<Option<Engine>> = RefCell::new(None));
+use std::sync::{Arc, Mutex};
+use skulpin::{CoordinateSystem, Renderer, RendererBuilder};
+use skulpin::rafx::api::RafxExtents2D;
 
-pub struct Engine {
+#[cfg(feature = "window")]
+use winit::{
+    dpi::{LogicalSize, LogicalPosition, PhysicalSize},
+    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode, ElementState},
+    event_loop::{ControlFlow, EventLoop},
+    platform::macos::WindowExtMacOS,
+    window::{WindowBuilder, Window},
+};
+
+
+thread_local!(static VK_CONTEXT: RefCell<Option<VulkanEngine>> = RefCell::new(None));
+
+pub struct VulkanEngine {
     context: gpu::DirectContext,
     _ash_graphics: AshGraphics,
 }
 
-impl Engine {
+impl VulkanEngine {
     fn init() {
         VK_CONTEXT.with(|cell| {
             let mut local_ctx = cell.borrow_mut();
             if local_ctx.is_none() {
-                if let Ok(ctx) = Engine::new() {
+                if let Ok(ctx) = VulkanEngine::new() {
                     local_ctx.replace(ctx);
                 }
             }
@@ -82,6 +99,63 @@ impl Engine {
                 true,
             )
         })
+    }
+}
+
+
+pub struct VulkanRenderer {
+    skulpin: Arc<Mutex<Renderer>>,
+}
+
+unsafe impl Send for VulkanRenderer {}
+
+#[cfg(feature = "window")]
+impl VulkanRenderer {
+    pub fn for_window(window: &Window) -> Self {
+        let window_size = window.inner_size();
+        let window_extents = RafxExtents2D {
+            width: window_size.width,
+            height: window_size.height,
+        };
+
+        let skulpin = RendererBuilder::new()
+            .coordinate_system(CoordinateSystem::Logical)
+            .build(&window, window_extents)
+            .unwrap();
+        let skulpin = Arc::new(Mutex::new(skulpin));
+        VulkanRenderer { skulpin }
+    }
+
+    pub fn resize(&self, _size: PhysicalSize<u32>) {
+
+    }
+
+    pub fn draw<F: FnOnce(&mut skia_safe::Canvas, LogicalSize<f32>)>(
+        &mut self,
+        window: &Window,
+        f: F,
+    ) -> Result<(), String> {
+
+        let size = window.inner_size();
+        let window_extents = RafxExtents2D {
+            width: size.width,
+            height: size.height,
+        };
+
+        if let Err(e) = self.skulpin.lock().unwrap().draw(
+            window_extents,
+            window.scale_factor(),
+            |canvas, coords| {
+                let size = coords.window_logical_size();
+                f(canvas, LogicalSize::new(size.width as f32, size.height as f32))
+            })
+        {
+            Err(format!("Rendering error {:?}", e))
+        }else{
+            Ok(())
+        }
+
+
     }
 }
 

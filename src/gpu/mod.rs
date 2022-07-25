@@ -1,14 +1,20 @@
+#![allow(dead_code)]
 use skia_safe::{ImageInfo, Surface};
 
 #[cfg(feature = "metal")]
 mod metal;
 #[cfg(feature = "metal")]
-use crate::gpu::metal::Engine;
+use crate::gpu::metal::MetalEngine as Engine;
+#[cfg(all(feature = "metal", feature = "window"))]
+pub use crate::gpu::metal::MetalRenderer as Renderer;
+
 
 #[cfg(feature = "vulkan")]
 mod vulkan;
 #[cfg(feature = "vulkan")]
-use crate::gpu::vulkan::Engine;
+use crate::gpu::vulkan::VulkanEngine as Engine;
+#[cfg(all(feature = "vulkan", feature = "window"))]
+pub use crate::gpu::vulkan::VulkanRenderer as Renderer;
 
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 struct Engine { }
