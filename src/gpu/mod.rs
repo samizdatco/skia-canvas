@@ -14,8 +14,6 @@ mod vulkan;
 use crate::gpu::vulkan::Vulkan as Engine;
 
 
-// mod gl;
-
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
     CPU,
