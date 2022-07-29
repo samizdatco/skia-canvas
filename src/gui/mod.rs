@@ -40,24 +40,23 @@ fn send_event(event: CanvasEvent){
 }
 
 fn roundtrip<'a, F>(cx: &'a mut FunctionContext, payload:serde_json::Value, callback:&Handle<JsFunction>, mut f:F) -> NeonResult<()>
-    where F:FnMut(&str, Page)
+    where F:FnMut(&WindowSpec, Page)
 {
     let null = cx.null();
     let idents = cx.string(payload.to_string()).upcast::<JsValue>();
     let response = callback.call(cx, null, vec![idents]).expect("Error in Window event handler")
         .downcast::<JsArray, _>(cx).or_throw(cx)?
         .to_vec(cx)?;
-    let tokens:Vec<String> = serde_json::from_str(
+    let specs:Vec<WindowSpec> = serde_json::from_str(
         &response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx)
     ).unwrap();
     let contexts = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?
         .iter()
         .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
         .filter( |ctx| ctx.is_ok() )
-        .zip(tokens.iter())
-        .for_each(|(ctx, token)| {
-            let page = ctx.unwrap().borrow().get_page();
-            f(token, page);
+        .zip(specs.iter())
+        .for_each(|(ctx, spec)| {
+            f(&spec, ctx.unwrap().borrow().get_page());
         });
     Ok(())
 }
@@ -114,13 +113,10 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                             }
                             CanvasEvent::Render => {
                                 frame += 1;
-                                roundtrip(&mut cx, json!({ "frame": frame }), &callback, |token, page| {
-                                    if let Some(window_id) = window_ids.get(token){
-                                        let event = Event::UserEvent(CanvasEvent::Page(page));
+                                roundtrip(&mut cx, json!({ "frame": frame }), &callback, |spec, page| {
+                                    if let Some(window_id) = window_ids.get(&spec.id){
                                         if let Some(tx) = windows.get(&window_id) {
-                                            if let Some(event) = event.to_static() {
-                                                tx.send(event).unwrap();
-                                            }
+                                            tx.send(Event::UserEvent(CanvasEvent::Page(page))).unwrap();
                                         }
                                     }
                                 }).ok();
