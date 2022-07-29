@@ -29,6 +29,7 @@ pub mod window;
 use window::{Window, WindowSpec};
 
 thread_local!(
+    // the event loop can only be run from the main thread
     static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event());
     static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with(|event_loop|
         event_loop.borrow().create_proxy()
@@ -134,9 +135,11 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                     }
                                 }).ok();
                             }
+                            CanvasEvent::FrameRate(fps) => {
+                                cadence.set_frame_rate(*fps)
+                            }
                             _ => {}
                         //   CanvasEvent::Heartbeat => window.autohide_cursor(),
-                        //   CanvasEvent::FrameRate(fps) => cadence.set_frame_rate(fps),
                         //   CanvasEvent::InFullscreen(to_full) => window.went_fullscreen(to_full),
                         //   CanvasEvent::Transform(matrix) => window.new_transform(matrix),
                         //   _ => window.send_js_event(canvas_event)
@@ -175,6 +178,11 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     Ok(cx.undefined())
 }
 
+pub fn set_rate(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let fps = float_arg(&mut cx, 1, "framesPerSecond")? as u64;
+    add_event(CanvasEvent::FrameRate(fps));
+    Ok(cx.number(fps as f64))
+}
 
 pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let win_config = string_arg(&mut cx, 0, "Window configuration")?;
