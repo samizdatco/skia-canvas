@@ -4,7 +4,7 @@ use serde::Deserialize;
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize},
     event::{Event, WindowEvent},
-    event_loop::{EventLoopWindowTarget},
+    event_loop::{EventLoopWindowTarget, EventLoopProxy},
     window::{Window as WinitWindow, WindowBuilder},
 };
 #[cfg(target_os = "macos" )]
@@ -46,6 +46,7 @@ pub enum Fit{
 
 pub struct Window {
     pub handle: WinitWindow,
+    pub proxy: EventLoopProxy<CanvasEvent>,
     pub renderer: Renderer,
     pub state: WindowSpec,
     pub page: Page
@@ -54,7 +55,7 @@ pub struct Window {
 impl Finalize for Window {}
 
 impl Window {
-    pub fn new(event_loop:&EventLoopWindowTarget<CanvasEvent>, spec: &WindowSpec, page: Page) -> Self {
+    pub fn new(event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>,spec: &WindowSpec, page: Page) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
         let loc:LogicalPosition<i32> = LogicalPosition::new(500+spec.x, 300+spec.y);
         let handle = WindowBuilder::new()
@@ -64,7 +65,7 @@ impl Window {
             .build(&event_loop)
             .unwrap();
         let renderer = Renderer::for_window(&handle);
-        Self{ handle, renderer, page, state:spec.clone() }
+        Self{ handle, proxy, renderer, page, state:spec.clone() }
     }
 
 

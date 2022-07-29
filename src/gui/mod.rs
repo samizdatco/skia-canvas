@@ -90,7 +90,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 spec.y = offset.y;
                                 offset.x += 30;
                                 offset.y += 30;
-                                let mut window = Window::new(event_loop, &spec, page.clone());
+                                let mut window = Window::new(event_loop, new_proxy(), &spec, page.clone());
                                 let id = window.handle.id();
                                 let (tx, rx) = mpsc::channel();
 
