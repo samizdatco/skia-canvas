@@ -90,7 +90,10 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                 match event {
                     Event::NewEvents(..) => {
                         *control_flow = cadence.on_next_frame(||
-                            send_event(CanvasEvent::Render)
+                            add_event(match windows.len(){
+                                0 => CanvasEvent::Quit,
+                                _ => CanvasEvent::Render
+                            })
                         )
                     }
 
@@ -160,18 +163,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                     },
 
                     Event::RedrawRequested(window_id) => {
-                        if let Some(tx) = windows.get(&window_id) {
-                            if let Some(event) = event.to_static() {
-                                tx.send(event).unwrap();
-                            }
-                        }
-                    }
-
-                    Event::MainEventsCleared => {
-                        *control_flow = match windows.len(){
-                            0 => ControlFlow::Exit,
-                            _ => ControlFlow::Poll
-                        }
+                        send_event_to(&windows, &window_id, event);
                     }
 
                     _ => {}
