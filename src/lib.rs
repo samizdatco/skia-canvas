@@ -16,6 +16,8 @@ mod texture;
 mod typography;
 mod utils;
 mod gpu;
+#[cfg(feature = "window")]
+mod gui;
 
 use context::api as ctx;
 use typography::FontLibrary;
@@ -222,6 +224,15 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_get_shadowOffsetY", ctx::get_shadowOffsetY)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetX", ctx::set_shadowOffsetX)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetY", ctx::set_shadowOffsetY)?;
+
+  // -- Window -----------------------------------------------------------------------------------
+
+  if cfg!(feature = "window"){
+    cx.export_function("App_launch", gui::launch)?;
+    cx.export_function("App_quit", gui::quit)?;
+    cx.export_function("App_closeWindow", gui::close)?;
+    cx.export_function("App_openWindow", gui::open)?;
+  }
 
   Ok(())
 }

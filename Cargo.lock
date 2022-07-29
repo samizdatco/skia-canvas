@@ -1986,6 +1986,7 @@ dependencies = [
  "parking_lot",
  "percent-encoding",
  "raw-window-handle 0.4.3",
+ "serde",
  "smithay-client-toolkit",
  "wasm-bindgen",
  "wayland-client",

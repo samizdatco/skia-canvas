@@ -106,6 +106,7 @@ impl PageRecorder{
 // Image generator for a single drawing context
 //
 
+#[derive(Debug, Clone)]
 pub struct Page{
   pub layers: Vec<Picture>,
   pub bounds: Rect,
