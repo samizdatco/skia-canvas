@@ -276,9 +276,9 @@ pub struct Cadence{
   begun: bool,
 }
 
-impl Cadence{
-  pub fn new() -> Self {
-    Cadence{
+impl Default for Cadence {
+  fn default() -> Self {
+    Self{
       rate: 0,
       last: Instant::now(),
       render: Duration::new(0, 0),
@@ -286,7 +286,9 @@ impl Cadence{
       begun: false,
     }
   }
+}
 
+impl Cadence{
   fn on_startup<F:FnOnce()>(&mut self, init:F){
     if self.begun{ return }
     self.begun = true;
