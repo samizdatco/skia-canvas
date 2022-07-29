@@ -35,8 +35,20 @@ thread_local!(
     ));
 );
 
-fn send_event(event: CanvasEvent){
+fn new_proxy() -> EventLoopProxy<CanvasEvent>{
+    PROXY.with(|cell| cell.borrow().clone() )
+}
+
+fn add_event(event: CanvasEvent){
     PROXY.with(|cell| cell.borrow().send_event(event).ok() );
+}
+
+fn send_event_to(windows:&HashMap<WindowId, Sender<Event<'static, CanvasEvent>>>, id:&WindowId, event:Event<CanvasEvent>){
+    if let Some(tx) = windows.get(id) {
+        if let Some(event) = event.to_static() {
+            tx.send(event).ok();
+        }
+    }
 }
 
 fn roundtrip<'a, F>(cx: &'a mut FunctionContext, payload:serde_json::Value, callback:&Handle<JsFunction>, mut f:F) -> NeonResult<()>
@@ -115,9 +127,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 frame += 1;
                                 roundtrip(&mut cx, json!({ "frame": frame }), &callback, |spec, page| {
                                     if let Some(window_id) = window_ids.get(&spec.id){
-                                        if let Some(tx) = windows.get(&window_id) {
-                                            tx.send(Event::UserEvent(CanvasEvent::Page(page))).unwrap();
-                                        }
+                                        send_event_to(&windows, window_id, Event::UserEvent(CanvasEvent::Page(page)))
                                     }
                                 }).ok();
                             }
@@ -145,11 +155,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                             windows.remove(&window_id);
                         }
                         _ => {
-                            if let Some(tx) = windows.get(&window_id) {
-                                if let Some(event) = event.to_static() {
-                                    tx.send(event).unwrap();
-                                }
-                            }
+                            send_event_to(&windows, &window_id, event);
                         }
                     },
 
@@ -182,17 +188,17 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let win_config = string_arg(&mut cx, 0, "Window configuration")?;
     let context = cx.argument::<BoxedContext2D>(1)?;
     let spec = serde_json::from_str::<WindowSpec>(&win_config).expect("Invalid window state");
-    send_event(CanvasEvent::Open(spec, context.borrow().get_page()));
+    add_event(CanvasEvent::Open(spec, context.borrow().get_page()));
     Ok(cx.undefined())
 }
 
 pub fn close(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let token = string_arg(&mut cx, 0, "windowID")?;
-    send_event(CanvasEvent::Close(token));
+    add_event(CanvasEvent::Close(token));
     Ok(cx.undefined())
 }
 
 pub fn quit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    send_event(CanvasEvent::Quit);
+    add_event(CanvasEvent::Quit);
     Ok(cx.undefined())
 }
