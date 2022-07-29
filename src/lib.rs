@@ -1,9 +1,7 @@
 #![allow(clippy::unnecessary_wraps)]
 use std::sync::{Mutex};
 use neon::prelude::*;
-
-#[macro_use]
-extern crate lazy_static;
+use once_cell::sync::Lazy;
 
 mod canvas;
 mod context;
@@ -22,9 +20,7 @@ mod gui;
 use context::api as ctx;
 use typography::FontLibrary;
 
-lazy_static! {
-  pub static ref FONT_LIBRARY:Mutex<FontLibrary> = FontLibrary::shared();
-}
+pub static FONT_LIBRARY: Lazy<Mutex<FontLibrary>> = Lazy::new(|| FontLibrary::shared() );
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
