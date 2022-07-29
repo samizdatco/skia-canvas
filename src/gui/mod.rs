@@ -4,10 +4,10 @@
 #![allow(dead_code)]
 use neon::prelude::*;
 use serde_json::json;
+use crossbeam::channel::{self, Sender, Receiver};
 use std::{
     cell::RefCell,
     collections::HashMap,
-    sync::{Mutex, mpsc::{self, Sender, Receiver}},
     thread, borrow::BorrowMut
 };
 use winit::{
@@ -92,7 +92,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 offset.y += 30;
                                 let mut window = Window::new(event_loop, new_proxy(), &spec, page.clone());
                                 let id = window.handle.id();
-                                let (tx, rx) = mpsc::channel();
+                                let (tx, rx) = channel::bounded(50);
 
                                 window_ids.insert(spec.id.clone(), id);
                                 windows.insert(id, tx);
