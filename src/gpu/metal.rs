@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use cocoa::{appkit::NSView, base::id as cocoa_id};
 use core_graphics_types::geometry::CGSize;
 use foreign_types::{ForeignType, ForeignTypeRef};
-use metal_rs::{CommandQueue, Device, MTLPixelFormat, MetalLayer};
+use metal::{CommandQueue, Device, MTLPixelFormat, MetalLayer};
 use objc::runtime::YES;
 use std::sync::{Arc, Mutex};
 use skia_safe::{

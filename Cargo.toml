@@ -11,7 +11,7 @@ exclude = ["index.node"]
 crate-type = ["cdylib"]
 
 [features]
-metal = ["skia-safe/metal"]
+metal = ["skia-safe/metal", "dep:metal", "dep:core-graphics-types", "dep:foreign-types", "dep:cocoa", "dep:objc"]
 vulkan = ["skia-safe/vulkan", "dep:skulpin", "dep:ash"]
 window = ["dep:winit"]
 
@@ -20,19 +20,25 @@ crc = "^3.0"
 css-color = "^0.2"
 lazy_static = "1.4.0"
 rayon = "^1.5"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 skia-safe = { version = "0.52.0", features = ["textlayout"] }
-skulpin = { git = "https://github.com/aclysma/skulpin.git", rev="c5fb342", optional = true }
+
+# vulkan
 ash = { version = "0.37", optional = true }
+skulpin = { git = "https://github.com/aclysma/skulpin.git", rev="c5fb342", optional = true }
+
+# metal
+metal = { version = "0.24", optional = true }
+core-graphics-types = { version = "0.1.1", optional = true }
+foreign-types = { version = "0.3.2", optional = true }
+cocoa = { version = "0.24.0", optional = true }
+objc = { version = "0.2.7", optional = true }
+
+# window
 winit = { version = '0.26.1', optional = true }
 
 [dependencies.neon]
 version = "0.10.1"
 default-features = false
 features = ["napi-6", "promise-api", "task-api"]
-
-[target.'cfg(target_os = "macos")'.dependencies]
-metal-rs = { package = "metal", version = "0.24" }
-core-graphics-types = "0.1.1"
-foreign-types = "0.3.2"
-cocoa = "0.24.0"
-objc = "0.2.7"
