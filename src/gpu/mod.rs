@@ -24,6 +24,11 @@ impl Engine {
     pub fn surface(_: &ImageInfo) -> Option<Surface> { None }
 }
 
+#[cfg(feature = "metal")]
+pub use crate::gpu::metal::autoreleasepool as runloop;
+#[cfg(not(feature = "metal"))]
+pub fn runloop<T, F: FnOnce() -> T>(f: F) -> T { f() }
+
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
     CPU,

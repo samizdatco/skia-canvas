@@ -12,6 +12,7 @@ use skia_safe::{
     gpu::{mtl, BackendRenderTarget, DirectContext, SurfaceOrigin},
     scalar, Budgeted, ImageInfo, ColorType, Size, Surface,
 };
+pub use objc::rc::autoreleasepool;
 
 #[cfg(feature = "window")]
 use winit::{
