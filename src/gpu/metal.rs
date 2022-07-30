@@ -101,6 +101,7 @@ impl MetalRenderer {
             layer.set_device(&device);
             layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
             layer.set_presents_with_transaction(false);
+            layer.set_opaque(false);
 
             unsafe {
                 let view = window.ns_view() as cocoa_id;

@@ -69,12 +69,14 @@ impl Window {
         let handle = WindowBuilder::new()
             .with_inner_size(size)
             // .with_position(loc)
+            .with_transparent(true)
             .with_title(spec.title.clone())
             .build(&event_loop)
             .unwrap();
         let renderer = Renderer::for_window(&handle);
+        let background = css_to_color(&spec.background).unwrap_or(Color::BLACK);
 
-        Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, background:Color::BLACK }
+        Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, background }
     }
 
     pub fn resize(&self, size: PhysicalSize<u32>){
