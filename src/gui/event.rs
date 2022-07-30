@@ -44,7 +44,7 @@ pub enum UiEvent{
   Input(char),
   Mouse(String),
   Focus(bool),
-  Wheel(LogicalPosition<f64>),
+  Mousewheel(LogicalPosition<f64>),
   Position(LogicalPosition<i32>),
   Resize(LogicalSize<u32>),
   Fullscreen(bool),
@@ -138,7 +138,7 @@ impl Sieve{
             LogicalPosition::<f64>{x:*h as f64, y:*v as f64}
           }
         };
-        self.queue.push(UiEvent::Wheel(dxdy));
+        self.queue.push(UiEvent::Mousewheel(dxdy));
       }
 
       WindowEvent::MouseInput{state, button, ..} => {
@@ -199,7 +199,7 @@ impl Sieve{
           modifiers = Some(self.key_modifiers);
           mouse_events.insert(event_type.clone());
         }
-        UiEvent::Wheel(..) => {
+        UiEvent::Mousewheel(..) => {
           modifiers = Some(self.key_modifiers);
           last_wheel = Some(&change);
         }
