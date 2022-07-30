@@ -181,7 +181,7 @@ impl WindowManager {
     pub fn add(&mut self, mut window:Window){
         let id = window.handle.id();
         let (tx, rx) = channel::bounded(50);
-        let mut sieve = Sieve::new();
+        let mut sieve = Sieve::new(window.handle.scale_factor());
         if let Some(fit) = window.fitting_matrix(false).invert(){
             sieve.use_transform(fit);
         }

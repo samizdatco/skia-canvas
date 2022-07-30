@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 use winit::{
-  dpi::{LogicalSize, LogicalPosition, PhysicalSize},
+  dpi::{LogicalSize, LogicalPosition, PhysicalSize, PhysicalPosition},
   event_loop::{ControlFlow},
   event::{WindowEvent, ElementState,  KeyboardInput, VirtualKeyCode, ModifiersState, MouseButton, MouseScrollDelta},
   window::{CursorIcon, WindowId},
@@ -53,21 +53,23 @@ pub enum UiEvent{
 
 #[derive(Debug)]
 pub struct Sieve{
+  dpr: f64,
   queue: Vec<UiEvent>,
   key_modifiers: ModifiersState,
   key_repeats: HashMap<VirtualKeyCode, i32>,
-  mouse_point: LogicalPosition::<i32>,
+  mouse_point: PhysicalPosition::<f64>,
   mouse_button: Option<u16>,
   mouse_transform: Matrix,
 }
 
 impl Sieve{
-  pub fn new() -> Self {
+  pub fn new(dpr:f64) -> Self {
     Sieve{
+      dpr,
       queue: vec![],
       key_modifiers: ModifiersState::empty(),
       key_repeats: HashMap::new(),
-      mouse_point: LogicalPosition::<i32>{x:0, y:0},
+      mouse_point: PhysicalPosition::default(),
       mouse_button: None,
       mouse_transform: Matrix::new_identity(),
     }
@@ -121,10 +123,8 @@ impl Sieve{
       }
 
       WindowEvent::CursorMoved{position, ..} => {
-        let Point{x, y} = self.mouse_transform.map_point((position.x as f32, position.y as f32));
-        let new_point = LogicalPosition::new(x as i32, y as i32);
-        if new_point != self.mouse_point{
-          self.mouse_point = new_point;
+        if *position != self.mouse_point{
+          self.mouse_point = *position;
           self.queue.push(UiEvent::Mouse("mousemove".to_string()));
         }
       }
@@ -216,12 +216,19 @@ impl Sieve{
     }
 
     if !mouse_events.is_empty() {
+      let PhysicalPosition{x, y} = self.mouse_point;
+      let Point{x, y} = self.mouse_transform.map_point((x as f32, y as f32));
+      let canvas_point = LogicalPosition::new(x as i32, y as i32);
+      let viewport_point:LogicalPosition<i32> = LogicalPosition::from_physical(self.mouse_point, self.dpr);
+
       payload.push(json!({
         "mouse": {
           "events": mouse_events,
           "button": self.mouse_button,
-          "x":self.mouse_point.x,
-          "y":self.mouse_point.y
+          "x": canvas_point.x,
+          "y": canvas_point.y,
+          "pageX": viewport_point.x,
+          "pageY": viewport_point.y,
         }
       }));
 
