@@ -1,26 +1,19 @@
-use neon::prelude::*;
 use skia_safe::{Matrix, Point};
+use serde::Serialize;
+use serde_json::json;
 use std::{
-    collections::{HashMap},
+    collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
 use winit::{
   dpi::{LogicalSize, LogicalPosition, PhysicalSize},
   event_loop::{ControlFlow},
   event::{WindowEvent, ElementState,  KeyboardInput, VirtualKeyCode, ModifiersState, MouseButton, MouseScrollDelta},
-  window::{CursorIcon},
+  window::{CursorIcon, WindowId},
 };
 
 use crate::context::page::Page;
-use super::window::WindowSpec;
-
-#[derive(Copy, Clone, PartialEq, Debug)]
-pub enum Fit{
-  Contain{x:bool, y:bool},
-  Cover,
-  Fill,
-  ScaleDown
-}
+use super::window::{WindowSpec, Fit};
 
 #[derive(Debug, Clone)]
 pub enum CanvasEvent{
@@ -38,22 +31,25 @@ pub enum CanvasEvent{
   Position(LogicalPosition<i32>),
   Size(LogicalSize<u32>),
   Resized(PhysicalSize<u32>),
-  Transform(Option<Matrix>),
+  Transform(WindowId, Option<Matrix>),
   Heartbeat,
   Render,
   Quit,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum UiEvent{
-  Keyboard{event:String, key:String, code:u32, repeat:bool},
+  Keyboard{event:String, key:VirtualKeyCode, code:u32, repeat:bool},
   Input(char),
   Mouse(String),
+  Focus(bool),
   Wheel(LogicalPosition<f64>),
   Position(LogicalPosition<i32>),
-  Size(LogicalSize<u32>),
+  Resize(LogicalSize<u32>),
   Fullscreen(bool),
 }
+
 
 #[derive(Debug)]
 pub struct Sieve{
@@ -99,7 +95,11 @@ impl Sieve{
 
       WindowEvent::Resized(physical_size) => {
         let logical_size:LogicalSize<u32> = LogicalSize::from_physical(*physical_size, dpr);
-        self.queue.push(UiEvent::Size(logical_size));
+        self.queue.push(UiEvent::Resize(logical_size));
+      }
+
+      WindowEvent::Focused(in_focus) => {
+        self.queue.push(UiEvent::Focus(*in_focus));
       }
 
       WindowEvent::ModifiersChanged(state) => {
@@ -122,10 +122,11 @@ impl Sieve{
 
       WindowEvent::CursorMoved{position, ..} => {
         let Point{x, y} = self.mouse_transform.map_point((position.x as f32, position.y as f32));
-        self.mouse_point = LogicalPosition::new(x as i32, y as i32);
-
-        let mouse_event = "mousemove".to_string();
-        self.queue.push(UiEvent::Mouse(mouse_event));
+        let new_point = LogicalPosition::new(x as i32, y as i32);
+        if new_point != self.mouse_point{
+          self.mouse_point = new_point;
+          self.queue.push(UiEvent::Mouse("mousemove".to_string()));
+        }
       }
 
       WindowEvent::MouseWheel{delta, ..} => {
@@ -173,7 +174,7 @@ impl Sieve{
         if event_type == "keyup" || count < 2{
           self.queue.push(UiEvent::Keyboard{
             event: event_type.to_string(),
-            key: serde_json::to_string(keycode).unwrap(),
+            key: *keycode,
             code: *scancode,
             repeat: count > 0
           });
@@ -184,88 +185,59 @@ impl Sieve{
     }
   }
 
-  pub fn serialized<'a>(&mut self, cx: &mut FunctionContext<'a>) -> Vec<Handle<'a, JsValue>>{
-    let mut payload:Vec<Handle<JsValue>> = (0..17).map(|_|
-      //   0–5: x, y, w, h, fullscreen, [alt, ctrl, meta, shift]
-      //  6–10: input, keyEvent, key, code, repeat,
-      // 11–14: [mouseEvents], mouseX, mouseY, button,
-      // 15–16: wheelX, wheelY
-      cx.undefined().upcast::<JsValue>()
-    ).collect();
+  pub fn serialize(&mut self) -> Option<serde_json::Value>{
+    if self.queue.is_empty(){ return None }
 
-    let mut include_mods = false;
-    let mut mouse_events = vec![];
+    let mut payload: Vec<serde_json::Value> = vec![];
+    let mut mouse_events: HashSet<String> = HashSet::new();
+    let mut modifiers:Option<ModifiersState> = None;
+    let mut last_wheel:Option<&UiEvent> = None;
 
     for change in &self.queue {
       match change{
-        UiEvent::Position(LogicalPosition{x, y}) => {
-          payload[0] = cx.number(*x).upcast::<JsValue>(); // x
-          payload[1] = cx.number(*y).upcast::<JsValue>(); // y
-        }
-        UiEvent::Size(LogicalSize{width, height}) => {
-          payload[2] = cx.number(*width).upcast::<JsValue>();  // width
-          payload[3] = cx.number(*height).upcast::<JsValue>(); // height
-        }
-        UiEvent::Fullscreen(flag) => {
-          payload[4] = cx.boolean(*flag).upcast::<JsValue>(); // fullscreen
-        }
-        UiEvent::Input(character) => {
-          include_mods = true;
-          payload[6] = cx.string(character.to_string()).upcast::<JsValue>(); // input
-        }
-        UiEvent::Keyboard{event, key, code, repeat} => {
-          include_mods = true;
-          payload[7] = cx.string(event).upcast::<JsValue>();     // keyup | keydown
-          payload[8] = cx.string(key).upcast::<JsValue>();       // key
-          payload[9] = cx.number(*code).upcast::<JsValue>();     // code
-          payload[10] = cx.boolean(*repeat).upcast::<JsValue>(); // repeat
-        }
         UiEvent::Mouse(event_type) => {
-          include_mods = true;
-          let event_name = cx.string(event_type).upcast::<JsValue>();
-          mouse_events.push(event_name);
+          modifiers = Some(self.key_modifiers);
+          mouse_events.insert(event_type.clone());
         }
-        UiEvent::Wheel(delta) => {
-          payload[15] = cx.number(delta.x).upcast::<JsValue>(); // wheelX
-          payload[16] = cx.number(delta.y).upcast::<JsValue>(); // wheelY
+        UiEvent::Wheel(..) => {
+          modifiers = Some(self.key_modifiers);
+          last_wheel = Some(&change);
         }
+        UiEvent::Input(..) | UiEvent::Keyboard{..} => {
+          modifiers = Some(self.key_modifiers);
+          payload.push(json!(change));
+        }
+        _ => payload.push(json!(change))
       }
     }
 
-    if !mouse_events.is_empty(){
-      let event_list = JsArray::new(cx, mouse_events.len() as u32);
-      for (i, obj) in mouse_events.iter().enumerate() {
-        event_list.set(cx, i as u32, *obj).unwrap();
-      }
-      payload[11] = event_list.upcast::<JsValue>();
+    if let Some(modfiers) = modifiers {
+      payload.insert(0, json!({"modifiers": modifiers}));
+    }
 
-      let LogicalPosition{x, y} = self.mouse_point;
-      payload[12] = cx.number(x).upcast::<JsValue>(); // mouseX
-      payload[13] = cx.number(y).upcast::<JsValue>(); // mouseY
+    if !mouse_events.is_empty() {
+      payload.push(json!({
+        "mouse": {
+          "events": mouse_events,
+          "button": self.mouse_button,
+          "x":self.mouse_point.x,
+          "y":self.mouse_point.y
+        }
+      }));
 
-      if let Some(button_id) = self.mouse_button{
-        payload[14] = cx.number(button_id).upcast::<JsValue>(); // button
+      if mouse_events.contains("mouseup"){
         self.mouse_button = None;
       }
     }
 
-    if include_mods{
-      let mod_info = JsArray::new(cx, 4);
-      let mod_info_vec = vec![
-        cx.boolean(self.key_modifiers.alt()).upcast::<JsValue>(),   // altKey
-        cx.boolean(self.key_modifiers.ctrl()).upcast::<JsValue>(),  // ctrlKey
-        cx.boolean(self.key_modifiers.logo()).upcast::<JsValue>(),  // metaKey
-        cx.boolean(self.key_modifiers.shift()).upcast::<JsValue>(), // shiftKey
-      ];
-      for (i, obj) in mod_info_vec.iter().enumerate() {
-          mod_info.set(cx, i as u32, *obj).unwrap();
-      }
-      payload[5] = mod_info.upcast::<JsValue>();
+    if let Some(wheel) = last_wheel{
+      payload.push(json!(wheel));
     }
 
     self.queue.clear();
-    payload
+    Some(json!(payload))
   }
+
 }
 
 pub struct Cadence{
