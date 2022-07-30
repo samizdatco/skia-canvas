@@ -45,6 +45,7 @@ pub enum UiEvent{
   Mouse(String),
   Focus(bool),
   Mousewheel(LogicalPosition<f64>),
+  #[serde(rename = "move")]
   Position(LogicalPosition<i32>),
   Resize(LogicalSize<u32>),
   Fullscreen(bool),
