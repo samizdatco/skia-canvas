@@ -1,4 +1,4 @@
-use skia_safe::{Matrix, Point};
+use skia_safe::{Matrix, Point, Color};
 use serde::Serialize;
 use serde_json::json;
 use std::{
@@ -17,24 +17,34 @@ use super::window::{WindowSpec, Fit};
 
 #[derive(Debug, Clone)]
 pub enum CanvasEvent{
+  // app api
   Open(WindowSpec, Page),
   Close(String),
-  Page(Page),
-  Title(String),
   FrameRate(u64),
+  Quit,
+
+  // app -> window
+  Page(Page),
+
+  // window -> app
+  Transform(WindowId, Option<Matrix>),
+  InFullscreen(WindowId, bool),
+
+  // cadence triggers
+  Render,
+
+  // script -> window
+  Title(String),
   Fullscreen(bool),
-  InFullscreen(bool),
   Visible(bool),
-  Cursor(Option<CursorIcon>),
+  Cursor(CursorIcon),
   CursorVisible(bool),
-  Fit(Option<Fit>),
+  Background(Color),
+  Fit(Fit),
   Position(LogicalPosition<i32>),
   Size(LogicalSize<u32>),
   Resized(PhysicalSize<u32>),
-  Transform(WindowId, Option<Matrix>),
   Heartbeat,
-  Render,
-  Quit,
 }
 
 #[derive(Debug, Serialize)]
@@ -92,12 +102,12 @@ impl Sieve{
   pub fn capture(&mut self, event:&WindowEvent, dpr:f64){
     match event{
       WindowEvent::Moved(physical_pt) => {
-        let logical_pt:LogicalPosition<i32> = LogicalPosition::from_physical(*physical_pt, dpr);
+        let logical_pt = LogicalPosition::from_physical(*physical_pt, dpr);
         self.queue.push(UiEvent::Position(logical_pt));
       }
 
       WindowEvent::Resized(physical_size) => {
-        let logical_size:LogicalSize<u32> = LogicalSize::from_physical(*physical_size, dpr);
+        let logical_size = LogicalSize::from_physical(*physical_size, dpr);
         self.queue.push(UiEvent::Resize(logical_size));
       }
 
@@ -217,10 +227,8 @@ impl Sieve{
     }
 
     if !mouse_events.is_empty() {
-      let PhysicalPosition{x, y} = self.mouse_point;
-      let Point{x, y} = self.mouse_transform.map_point((x as f32, y as f32));
-      let canvas_point = LogicalPosition::new(x as i32, y as i32);
-      let viewport_point:LogicalPosition<i32> = LogicalPosition::from_physical(self.mouse_point, self.dpr);
+      let viewport_point = LogicalPosition::<f32>::from_physical(self.mouse_point, self.dpr);
+      let canvas_point = self.mouse_transform.map_point((viewport_point.x, viewport_point.y));
 
       payload.push(json!({
         "mouse": {

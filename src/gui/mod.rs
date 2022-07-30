@@ -38,7 +38,7 @@ fn add_event(event: CanvasEvent){
 }
 
 fn roundtrip<'a, F>(cx: &'a mut FunctionContext, payload:serde_json::Value, callback:&Handle<JsFunction>, mut f:F) -> NeonResult<()>
-    where F:FnMut(&WindowSpec, Page)
+    where F:FnMut(WindowSpec, Page)
 {
     let null = cx.null();
     let events = cx.string(payload.to_string()).upcast::<JsValue>();
@@ -56,7 +56,7 @@ fn roundtrip<'a, F>(cx: &'a mut FunctionContext, payload:serde_json::Value, call
         .filter( |ctx| ctx.is_ok() )
         .zip(specs.iter())
         .for_each(|(ctx, spec)| {
-            f(&spec, ctx.unwrap().borrow().get_page());
+            f(spec.clone(), ctx.unwrap().borrow().get_page());
         });
     Ok(())
 }
@@ -78,11 +78,11 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                         *control_flow = cadence.on_next_frame(|| add_event(CanvasEvent::Render) );
                     }
 
-                    Event::UserEvent(ref canvas_event) => {
+                    Event::UserEvent(canvas_event) => {
                         match canvas_event{
                             CanvasEvent::Open(spec, page) => {
-                                let new_window = Window::new(event_loop, new_proxy(), spec, page);
-                                windows.add(new_window);
+                                let new_window = Window::new(event_loop, new_proxy(), &spec, &page);
+                                windows.add(new_window, spec);
                             }
                             CanvasEvent::Close(token) => {
                                 windows.remove_by_token(&token);
@@ -94,17 +94,21 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 frame += 1;
                                 let payload = json!{{
                                     "frame": frame,
-                                    "changes": windows.get_ui_changes()
+                                    "changes": windows.get_ui_changes(),
+                                    "state": windows.get_state(),
                                 }};
                                 roundtrip(&mut cx, payload, &callback, |spec, page| {
-                                    windows.send_event_for(&spec, Event::UserEvent(CanvasEvent::Page(page)));
+                                    windows.update_window(spec, page);
                                 }).ok();
                             }
                             CanvasEvent::Transform(window_id, matrix) => {
-                                windows.use_ui_transform(window_id, matrix);
+                                windows.use_ui_transform(&window_id, &matrix);
                             },
+                            CanvasEvent::InFullscreen(window_id, is_fullscreen) => {
+                                windows.use_fullscreen_state(&window_id, is_fullscreen);
+                            }
                             CanvasEvent::FrameRate(fps) => {
-                                cadence.set_frame_rate(*fps)
+                                cadence.set_frame_rate(fps)
                             }
                             _ => {}
                         //   CanvasEvent::Heartbeat => window.autohide_cursor(),
@@ -114,7 +118,6 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                     }
 
                     Event::WindowEvent { event:ref win_event, window_id } => match win_event {
-                        #[allow(deprecated)]
                         WindowEvent::Destroyed | WindowEvent::CloseRequested => {
                             windows.remove(&window_id);
                         }

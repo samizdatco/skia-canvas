@@ -1,56 +1,62 @@
 use std::thread;
 use neon::prelude::*;
+use serde_json::json;
 use skia_safe::{Matrix, Point, Color};
 use crossbeam::channel::{self, Sender, Receiver};
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize, PhysicalPosition},
     event::{Event, WindowEvent},
     event_loop::{EventLoopWindowTarget, EventLoopProxy},
-    window::{Window as WinitWindow, WindowBuilder, WindowId},
+    window::{Window as WinitWindow, WindowBuilder, WindowId, CursorIcon, Fullscreen},
 };
 #[cfg(target_os = "macos" )]
 use winit::platform::macos::WindowExtMacOS;
 
+use crate::utils::css_to_color;
 use crate::gpu::{Renderer, runloop};
 use crate::context::page::Page;
 use super::event::{CanvasEvent, Sieve};
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "kebab-case")]
 pub struct WindowSpec {
     pub id: String,
+    pub left: i32,
+    pub top: i32,
     title: String,
-    active: bool,
-    loops: Option<bool>,
-    visible: Option<bool>,
+    visible: bool,
     fullscreen: bool,
     background: String,
     page: u32,
     width: f32,
     height: f32,
-    cursor: String,
-    fit: Option<Fit>,
-    fps: u32,
-    pub x: i32,
-    pub y: i32,
+    #[serde(with = "Cursor")]
+    cursor: CursorIcon,
+    fit: Fit,
 }
 
-#[derive(Copy, Clone, PartialEq, Debug, Deserialize)]
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Fit{
-  ContainX,
-  ContainY,
-  Contain,
-  Cover,
-  Fill,
-  ScaleDown
+  None, ContainX, ContainY, Contain, Cover, Fill, ScaleDown
+}
+
+#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", remote = "CursorIcon" )]
+pub enum Cursor {
+    Default, Crosshair, Hand, Arrow, Move, Text, Wait, Help, Progress, NotAllowed, ContextMenu,
+    Cell, VerticalText, Alias, Copy, NoDrop, Grab, Grabbing, AllScroll, ZoomIn, ZoomOut, EResize,
+    NResize, NeResize, NwResize, SResize, SeResize, SwResize, WResize, EwResize, NsResize, NeswResize,
+    NwseResize, ColResize, RowResize
 }
 
 pub struct Window {
     pub handle: WinitWindow,
     pub proxy: EventLoopProxy<CanvasEvent>,
     pub renderer: Renderer,
-    pub state: WindowSpec,
+    pub fit: Fit,
+    pub background: Color,
     pub page: Page
 }
 
@@ -68,52 +74,57 @@ impl Window {
             .unwrap();
         let renderer = Renderer::for_window(&handle);
 
-        Self{ handle, proxy, renderer, page:page.clone(), state:spec.clone() }
+        Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, background:Color::BLACK }
     }
 
     pub fn resize(&self, size: PhysicalSize<u32>){
         self.renderer.resize(size);
         self.proxy.send_event(CanvasEvent::Transform(
             self.handle.id(),
-            self.fitting_matrix(false).invert()
+            self.fitting_matrix().invert()
         )).ok();
     }
 
-    pub fn fitting_matrix(&self, scaled:bool) -> Matrix {
-        let dpr = if scaled{ self.handle.scale_factor() } else { 1.0 };
+    pub fn fitting_matrix(&self) -> Matrix {
+        let dpr = self.handle.scale_factor();
         let size = self.handle.inner_size().to_logical::<f32>(dpr);
         let dims = self.page.bounds.size();
         let fit_x = size.width / dims.width;
         let fit_y = size.height / dims.height;
 
-        let sf = match self.state.fit{
-            Some(Fit::Cover) => fit_x.max(fit_y),
-            Some(Fit::ScaleDown) => fit_x.min(fit_y).min(1.0),
-            Some(Fit::Contain) => fit_x.min(fit_y),
-            Some(Fit::ContainX) => fit_x,
-            Some(Fit::ContainY) => fit_y,
+        let sf = match self.fit{
+            Fit::Cover => fit_x.max(fit_y),
+            Fit::ScaleDown => fit_x.min(fit_y).min(1.0),
+            Fit::Contain => fit_x.min(fit_y),
+            Fit::ContainX => fit_x,
+            Fit::ContainY => fit_y,
             _ => 1.0
         };
 
-        let (x_scale, y_scale) = match self.state.fit{
-            Some(Fit::Fill) => (fit_x, fit_y),
+        let (x_scale, y_scale) = match self.fit{
+            Fit::Fill => (fit_x, fit_y),
             _ => (sf, sf)
         };
 
-        let mut matrix = Matrix::scale((x_scale, y_scale));
-        matrix.set_translate_x((size.width - dims.width * x_scale) / 2.0);
-        matrix.set_translate_y((size.height - dims.height * y_scale) / 2.0);
+        let x_shift = (size.width - dims.width * x_scale) / 2.0;
+        let y_shift = (size.height - dims.height * y_scale) / 2.0;
+
+        let mut matrix = Matrix::new_identity();
+        matrix.set_scale_translate(
+            (x_scale, y_scale),
+            (x_shift, y_shift)
+        );
         matrix
       }
 
 
     pub fn redraw(&mut self){
         runloop(|| {
-            let matrix = self.fitting_matrix(true);
+            let matrix = self.fitting_matrix();
             let (clip, _) = matrix.map_rect(&self.page.bounds);
 
             self.renderer.draw(&self.handle, |canvas, _size| {
-                canvas.clear(Color::BLACK);
+                canvas.clear(self.background);
                 canvas.clip_rect(&clip, None, Some(true));
                 canvas.draw_picture(self.page.get_picture(None).unwrap(), Some(&matrix), None);
             }).unwrap();
@@ -123,32 +134,42 @@ impl Window {
     pub fn handle_event(&mut self, event:Event<CanvasEvent>){
         runloop(|| {
             match event {
-                Event::UserEvent(CanvasEvent::Page(page)) => {
-                    self.page = page;
-                    self.handle.request_redraw();
+                Event::UserEvent(canvas_event) => {
+                    match canvas_event{
+                        CanvasEvent::Page(page) => {
+                            self.page = page;
+                            self.handle.request_redraw();
+                        }
+                        CanvasEvent::Visible(flag) => {
+                            self.handle.set_visible(flag);
+                        }
+                        CanvasEvent::Title(title) => {
+                            self.handle.set_title(&title);
+                        }
+                        CanvasEvent::Cursor(icon) => {
+                            self.handle.set_cursor_icon(icon);
+                        }
+                        CanvasEvent::Fit(mode) => {
+                            self.fit = mode;
+                        }
+                        CanvasEvent::Background(color) => {
+                            self.background = color;
+                        }
+                        CanvasEvent::Fullscreen(to_fullscreen) => {
+                            match to_fullscreen{
+                                true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
+                                false => self.handle.set_fullscreen( None )
+                            }
+                        }
+                        _ => { println!("update {:?}", canvas_event); }
+                    }
                 }
-                Event::WindowEvent { event, .. } => match event {
-                    // WindowEvent::Moved { .. } => {
-                    //     // We need to update our chosen video mode if the window
-                    //     // was moved to an another monitor, so that the window
-                    //     // appears on this monitor instead when we go fullscreen
-                    //     let previous_video_mode = video_modes.get(video_mode_id).cloned();
-                    //     video_modes = window.window.current_monitor().unwrap().video_modes().collect();
-                    //     video_mode_id = video_mode_id.min(video_modes.len());
-                    //     let video_mode = video_modes.get(video_mode_id);
 
-                    //     // Different monitors may support different video modes,
-                    //     // and the index we chose previously may now point to a
-                    //     // completely different video mode, so notify the user
-                    //     if video_mode != previous_video_mode.as_ref() {
-                    //         println!(
-                    //             "Window moved to another monitor, picked video mode: {}",
-                    //             video_modes.get(video_mode_id).unwrap()
-                    //         );
-                    //     }
-                    // },
+                Event::WindowEvent { event, window_id } => match event {
                     WindowEvent::Resized(size) => {
                         self.resize(size);
+                        let in_fullscreen = self.handle.fullscreen().is_some();
+                        self.proxy.send_event(CanvasEvent::InFullscreen(window_id, in_fullscreen)).ok();
                         self.handle.request_redraw();
                     },
                     _ => {}
@@ -166,7 +187,6 @@ impl Window {
 struct WindowRef { tx: Sender<Event<'static, CanvasEvent>>, id: WindowId, spec: WindowSpec, sieve:Sieve }
 pub struct WindowManager {
     windows: Vec<WindowRef>,
-    // offset: PhysicalPosition<i32>,
     last: Option<PhysicalPosition<i32>>,
 }
 
@@ -178,16 +198,15 @@ impl Default for WindowManager {
 
 impl WindowManager {
 
-    pub fn add(&mut self, mut window:Window){
+    pub fn add(&mut self, mut window:Window, mut spec:WindowSpec){
         let id = window.handle.id();
         let (tx, rx) = channel::bounded(50);
         let mut sieve = Sieve::new(window.handle.scale_factor());
-        if let Some(fit) = window.fitting_matrix(false).invert(){
+        if let Some(fit) = window.fitting_matrix().invert(){
             sieve.use_transform(fit);
         }
 
         // cascade the windows based on the position of the most recently opened
-        let mut spec = window.state.clone();
         if let Ok(loc) = window.handle.outer_position(){
             if let Ok(inset) = window.handle.inner_position(){
                 let delta = inset.y - loc.y;
@@ -195,11 +214,14 @@ impl WindowManager {
                     Some(last) => PhysicalPosition::new(last.x + delta, last.y + delta),
                     None => loc
                 };
-                spec.x = corner.x;
-                spec.y = corner.y;
                 self.last = Some(corner);
                 window.handle.set_outer_position(corner);
             }
+        }
+
+        if let Ok(loc) = window.handle.outer_position(){
+            spec.left = loc.x;
+            spec.top = loc.y;
         }
 
         self.windows.push( WindowRef{ id, spec, tx, sieve } );
@@ -231,11 +253,51 @@ impl WindowManager {
         }
     }
 
-    pub fn send_event_for(&self, spec:&WindowSpec, event:Event<CanvasEvent>){
-        if let Some(tx) = self.windows.iter().find(|win| win.spec.id == spec.id).map(|win| &win.tx){
-            if let Some(event) = event.to_static() {
-                tx.send(event).ok();
+    pub fn update_window(&mut self, spec:WindowSpec, page:Page){
+        let mut updates:Vec<CanvasEvent> = vec![];
+
+        if let Some(mut win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
+            if spec.width != win.spec.width || spec.height != win.spec.height {
+                updates.push(CanvasEvent::Size(LogicalSize::new(spec.width as u32, spec.height as u32)));
             }
+
+            if spec.left != win.spec.left || spec.top != win.spec.top {
+                updates.push(CanvasEvent::Position(LogicalPosition::new(spec.left as i32, spec.top as i32)));
+            }
+
+            if spec.title != win.spec.title {
+                updates.push(CanvasEvent::Title(spec.title.clone()));
+            }
+
+            if spec.visible != win.spec.visible {
+                updates.push(CanvasEvent::Visible(spec.visible));
+            }
+
+            if spec.fullscreen != win.spec.fullscreen {
+                updates.push(CanvasEvent::Fullscreen(spec.fullscreen));
+            }
+
+            if spec.cursor != win.spec.cursor {
+                updates.push(CanvasEvent::Cursor(spec.cursor));
+            }
+
+            if spec.fit != win.spec.fit {
+                updates.push(CanvasEvent::Fit(spec.fit));
+            }
+
+            if spec.background != win.spec.background {
+                if let Some(color) = css_to_color(&spec.background) {
+                    updates.push(CanvasEvent::Background(color));
+                }
+            }
+
+            updates.push(CanvasEvent::Page(page));
+
+            updates.drain(..).for_each(|event| {
+                win.tx.send(Event::UserEvent(event)).ok();
+            });
+
+            win.spec = spec;
         }
     }
 
@@ -253,6 +315,12 @@ impl WindowManager {
         }
     }
 
+    pub fn use_fullscreen_state(&mut self, window_id:&WindowId, is_fullscreen:bool){
+        if let Some(mut win) = self.windows.iter_mut().find(|win| win.id == *window_id){
+            win.spec.fullscreen = is_fullscreen;
+        }
+    }
+
     pub fn get_ui_changes(&mut self) -> serde_json::Value {
         let mut changes = serde_json::Map::new();
         self.windows.iter_mut().for_each(|win|{
@@ -261,9 +329,14 @@ impl WindowManager {
             }
         });
         serde_json::json!(changes)
-        // if !changes.is_empty(){
-        //     println!("{}", serde_json::to_string(&changes).unwrap());
-        // }
+    }
+
+    pub fn get_state(&mut self) -> serde_json::Value {
+        let mut changes = serde_json::Map::new();
+        self.windows.iter_mut().for_each(|win|{
+            changes.insert(win.spec.id.clone(), json!(win.spec));
+        });
+        json!(changes)
     }
 
     pub fn len(&self) -> usize {
