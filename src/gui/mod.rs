@@ -7,7 +7,7 @@ use serde_json::json;
 use std::cell::RefCell;
 use winit::{
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
-    event::{Event, WindowEvent},
+    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode, ElementState},
     platform::run_return::EventLoopExtRunReturn
 };
 
@@ -120,6 +120,9 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                     Event::WindowEvent { event:ref win_event, window_id } => match win_event {
                         WindowEvent::Destroyed | WindowEvent::CloseRequested => {
                             windows.remove(&window_id);
+                        }
+                        WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), state: ElementState::Released,.. }, .. } => {
+                            windows.set_fullscreen_state(&window_id, false);
                         }
                         WindowEvent::Resized(_) => {
                             windows.capture_ui_event(&window_id, win_event);
