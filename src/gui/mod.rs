@@ -91,15 +91,23 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 return *control_flow = ControlFlow::Exit;
                             }
                             CanvasEvent::Render => {
+                                // on initial pass, do a roundtrip to sync up the Window object's state attrs
+                                cadence.on_startup(||{
+                                    roundtrip(&mut cx, json!({}), &callback, |spec, page|
+                                        windows.update_window(spec, page)
+                                    ).ok();
+                                });
+
+                                // relay UI-driven state changes to js and render the response
                                 frame += 1;
                                 let payload = json!{{
                                     "frame": frame,
                                     "changes": windows.get_ui_changes(),
                                     "state": windows.get_state(),
                                 }};
-                                roundtrip(&mut cx, payload, &callback, |spec, page| {
-                                    windows.update_window(spec, page);
-                                }).ok();
+                                roundtrip(&mut cx, payload, &callback, |spec, page|
+                                    windows.update_window(spec, page)
+                                ).ok();
                             }
                             CanvasEvent::Transform(window_id, matrix) => {
                                 windows.use_ui_transform(&window_id, &matrix);

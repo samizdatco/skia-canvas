@@ -270,7 +270,7 @@ impl Default for Cadence {
 }
 
 impl Cadence{
-  fn on_startup<F:FnOnce()>(&mut self, init:F){
+  pub fn on_startup<F:FnOnce()>(&mut self, init:F){
     if self.begun{ return }
     self.begun = true;
     init();
