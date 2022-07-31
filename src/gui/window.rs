@@ -80,11 +80,13 @@ impl Window {
     }
 
     pub fn resize(&self, size: PhysicalSize<u32>){
-        self.renderer.resize(size);
-        self.proxy.send_event(CanvasEvent::Transform(
-            self.handle.id(),
-            self.fitting_matrix().invert()
-        )).ok();
+        if let Some(monitor) = self.handle.current_monitor(){
+            self.renderer.resize(size);
+
+            let id = self.handle.id();
+            self.proxy.send_event(CanvasEvent::Transform(id, self.fitting_matrix().invert() )).ok();
+            self.proxy.send_event(CanvasEvent::InFullscreen(id, monitor.size() == size )).ok();
+        }
     }
 
     pub fn fitting_matrix(&self) -> Matrix {
@@ -171,8 +173,6 @@ impl Window {
                 Event::WindowEvent { event, window_id } => match event {
                     WindowEvent::Resized(size) => {
                         self.resize(size);
-                        let in_fullscreen = self.handle.fullscreen().is_some();
-                        self.proxy.send_event(CanvasEvent::InFullscreen(window_id, in_fullscreen)).ok();
                         self.handle.request_redraw();
                     },
                     _ => {}
