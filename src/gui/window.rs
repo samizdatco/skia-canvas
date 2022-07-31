@@ -334,15 +334,20 @@ impl WindowManager {
     }
 
     pub fn set_fullscreen_state(&mut self, window_id:&WindowId, is_fullscreen:bool){
-        if let Some(mut win) = self.windows.iter_mut().find(|win| win.id == *window_id){
-            win.spec.fullscreen = is_fullscreen;
+        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
+            // tell the window to change state
             win.tx.send(Event::UserEvent(CanvasEvent::Fullscreen(is_fullscreen))).ok();
         }
+        // and make sure the change is reflected in local state
+        self.use_fullscreen_state(window_id, is_fullscreen);
     }
 
     pub fn use_fullscreen_state(&mut self, window_id:&WindowId, is_fullscreen:bool){
         if let Some(mut win) = self.windows.iter_mut().find(|win| win.id == *window_id){
-            win.spec.fullscreen = is_fullscreen;
+            if win.spec.fullscreen != is_fullscreen{
+                win.sieve.go_fullscreen(is_fullscreen);
+                win.spec.fullscreen = is_fullscreen;
+            }
         }
     }
 
