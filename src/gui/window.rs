@@ -1,7 +1,7 @@
 use std::thread;
 use neon::prelude::*;
 use serde_json::json;
-use skia_safe::{Matrix, Point, Color};
+use skia_safe::{Matrix, Point, Color, Paint};
 use crossbeam::channel::{self, Sender, Receiver};
 use serde::{Serialize, Deserialize};
 use winit::{
@@ -122,13 +122,14 @@ impl Window {
 
     pub fn redraw(&mut self){
         runloop(|| {
+            let paint = Paint::default();
             let matrix = self.fitting_matrix();
             let (clip, _) = matrix.map_rect(&self.page.bounds);
 
             self.renderer.draw(&self.handle, |canvas, _size| {
                 canvas.clear(self.background);
                 canvas.clip_rect(&clip, None, Some(true));
-                canvas.draw_picture(self.page.get_picture(None).unwrap(), Some(&matrix), None);
+                canvas.draw_picture(self.page.get_picture(None).unwrap(), Some(&matrix), Some(&paint));
             }).unwrap();
         })
     }
