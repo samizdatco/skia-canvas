@@ -231,7 +231,22 @@ impl WindowManager {
 
         thread::spawn(move || {
             while let Ok(event) = rx.recv() {
-                window.handle_event(event);
+                let mut queue = vec![event];
+                while !rx.is_empty(){
+                    queue.push(rx.recv().unwrap());
+                }
+
+                let mut needs_redraw = None;
+                queue.drain(..).for_each(|event|{
+                    match event {
+                        Event::RedrawRequested(_) => needs_redraw = Some(event),
+                        _ => window.handle_event(event)
+                    }
+                });
+
+                if let Some(event) = needs_redraw {
+                    window.handle_event(event)
+                }
             }
         });
     }
