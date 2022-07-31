@@ -160,6 +160,11 @@ impl Window {
                         CanvasEvent::Background(color) => {
                             self.background = color;
                         }
+                        CanvasEvent::Size(size) => {
+                            let size = size.to_physical(self.handle.scale_factor());
+                            self.handle.set_inner_size(size);
+                            self.resize(size);
+                        }
                         CanvasEvent::Fullscreen(to_fullscreen) => {
                             match to_fullscreen{
                                 true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
