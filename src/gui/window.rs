@@ -1,8 +1,8 @@
 use std::thread;
 use neon::prelude::*;
 use serde_json::json;
-use skia_safe::{Matrix, Point, Color, Paint};
-use crossbeam::channel::{self, Sender, Receiver};
+use skia_safe::{Matrix, Color, Paint};
+use crossbeam::channel::{self, Sender};
 use serde::{Serialize, Deserialize};
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize, PhysicalPosition},
@@ -166,11 +166,11 @@ impl Window {
                                 false => self.handle.set_fullscreen( None )
                             }
                         }
-                        _ => { println!("update {:?}", canvas_event); }
+                        _ => { }
                     }
                 }
 
-                Event::WindowEvent { event, window_id } => match event {
+                Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => {
                         self.resize(size);
                         self.handle.request_redraw();
@@ -259,10 +259,6 @@ impl WindowManager {
         self.windows.retain(|win| win.spec.id != token);
     }
 
-    pub fn id_for(&self, token:&str) -> Option<WindowId> {
-        self.windows.iter().find(|win| win.spec.id == *token).map(|win| win.id.clone())
-    }
-
     pub fn send_event(&self, window_id:&WindowId, event:Event<CanvasEvent>){
         if let Some(tx) = self.windows.iter().find(|win| win.id == *window_id).map(|win| &win.tx){
             if let Some(event) = event.to_static() {
@@ -320,13 +316,13 @@ impl WindowManager {
     }
 
     pub fn capture_ui_event(&mut self, window_id:&WindowId, event:&WindowEvent){
-        if let Some(mut win) = self.windows.iter_mut().find(|win| win.id == *window_id){
+        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
             win.sieve.capture(event, 1.0);
         }
     }
 
     pub fn use_ui_transform(&mut self, window_id:&WindowId, matrix:&Option<Matrix>){
-        if let Some(mut win) = self.windows.iter_mut().find(|win| win.id == *window_id){
+        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
             if let Some(matrix) = matrix {
                 win.sieve.use_transform(*matrix);
             }

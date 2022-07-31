@@ -1,4 +1,4 @@
-use skia_safe::{Matrix, Point, Color};
+use skia_safe::{Matrix, Color};
 use serde::Serialize;
 use serde_json::json;
 use std::{
@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 use winit::{
-  dpi::{LogicalSize, LogicalPosition, PhysicalSize, PhysicalPosition},
+  dpi::{LogicalSize, LogicalPosition, PhysicalPosition},
   event_loop::{ControlFlow},
   event::{WindowEvent, ElementState,  KeyboardInput, VirtualKeyCode, ModifiersState, MouseButton, MouseScrollDelta},
   window::{CursorIcon, WindowId},
@@ -38,13 +38,10 @@ pub enum CanvasEvent{
   Fullscreen(bool),
   Visible(bool),
   Cursor(CursorIcon),
-  CursorVisible(bool),
   Background(Color),
   Fit(Fit),
   Position(LogicalPosition<i32>),
   Size(LogicalSize<u32>),
-  Resized(PhysicalSize<u32>),
-  Heartbeat,
 }
 
 #[derive(Debug, Serialize)]
@@ -93,10 +90,6 @@ impl Sieve{
   pub fn go_fullscreen(&mut self, is_full:bool){
     self.queue.push(UiEvent::Fullscreen(is_full));
     self.key_repeats.clear(); // keyups don't get delivered during the transition apparently?
-  }
-
-  pub fn is_empty(&self) -> bool{
-    self.queue.len() == 0
   }
 
   pub fn capture(&mut self, event:&WindowEvent, dpr:f64){

@@ -111,9 +111,6 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 cadence.set_frame_rate(fps)
                             }
                             _ => {}
-                        //   CanvasEvent::Heartbeat => window.autohide_cursor(),
-                        //   CanvasEvent::InFullscreen(to_full) => window.went_fullscreen(to_full),
-                        //   _ => window.send_js_event(canvas_event)
                         }
                     }
 
@@ -125,8 +122,8 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                             windows.set_fullscreen_state(&window_id, false);
                         }
                         WindowEvent::Resized(_) => {
-                            windows.capture_ui_event(&window_id, win_event);
-                            windows.send_event(&window_id, event);
+                            windows.capture_ui_event(&window_id, win_event); // update state
+                            windows.send_event(&window_id, event); // update the window
                         }
                         _ => {
                             windows.capture_ui_event(&window_id, win_event);
