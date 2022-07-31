@@ -22,8 +22,8 @@ use super::event::{CanvasEvent, Sieve};
 #[serde(rename_all = "kebab-case")]
 pub struct WindowSpec {
     pub id: String,
-    pub left: i32,
-    pub top: i32,
+    pub left: Option<f32>,
+    pub top: Option<f32>,
     title: String,
     visible: bool,
     fullscreen: bool,
@@ -65,14 +65,18 @@ impl Finalize for Window {}
 impl Window {
     pub fn new(event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>, spec: &WindowSpec, page: &Page) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
-        // let loc:LogicalPosition<i32> = LogicalPosition::new(500+spec.x, 300+spec.y);
         let handle = WindowBuilder::new()
             .with_inner_size(size)
-            // .with_position(loc)
             .with_transparent(true)
             .with_title(spec.title.clone())
+            .with_visible(false)
             .build(&event_loop)
             .unwrap();
+
+        if let (Some(left), Some(top)) = (spec.left, spec.top){
+            handle.set_outer_position(LogicalPosition::new(left, top));
+        }
+
         let renderer = Renderer::for_window(&handle);
         let background = css_to_color(&spec.background).unwrap_or(Color::BLACK);
 
@@ -165,6 +169,9 @@ impl Window {
                             self.handle.set_inner_size(size);
                             self.resize(size);
                         }
+                        CanvasEvent::Position(loc) => {
+                            self.handle.set_outer_position(loc);
+                        }
                         CanvasEvent::Fullscreen(to_fullscreen) => {
                             match to_fullscreen{
                                 true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
@@ -195,7 +202,7 @@ impl Window {
 struct WindowRef { tx: Sender<Event<'static, CanvasEvent>>, id: WindowId, spec: WindowSpec, sieve:Sieve }
 pub struct WindowManager {
     windows: Vec<WindowRef>,
-    last: Option<PhysicalPosition<i32>>,
+    last: Option<LogicalPosition<f32>>,
 }
 
 impl Default for WindowManager {
@@ -206,7 +213,8 @@ impl Default for WindowManager {
 
 impl WindowManager {
 
-    pub fn add(&mut self, mut window:Window, mut spec:WindowSpec){
+    pub fn add(&mut self, event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>, mut spec: WindowSpec, page: Page) {
+        let mut window = Window::new(event_loop, proxy, &spec, &page);
         let id = window.handle.id();
         let (tx, rx) = channel::bounded(50);
         let mut sieve = Sieve::new(window.handle.scale_factor());
@@ -215,21 +223,20 @@ impl WindowManager {
         }
 
         // cascade the windows based on the position of the most recently opened
-        if let Ok(loc) = window.handle.outer_position(){
-            if let Ok(inset) = window.handle.inner_position(){
-                let delta = inset.y - loc.y;
-                let corner = match self.last {
-                    Some(last) => PhysicalPosition::new(last.x + delta, last.y + delta),
-                    None => loc
-                };
-                self.last = Some(corner);
-                window.handle.set_outer_position(corner);
-            }
-        }
+        let dpr = window.handle.scale_factor();
+        if let Ok(auto_loc) = window.handle.outer_position().map(|pt| pt.to_logical::<f32>(dpr)){
+            if let Ok(inset) = window.handle.inner_position().map(|pt| pt.to_logical::<f32>(dpr)){
+                let delta = inset.y - auto_loc.y;
+                let reference = self.last.unwrap_or(auto_loc);
+                let (left, top) = ( spec.left.unwrap_or(reference.x), spec.top.unwrap_or(reference.y) );
 
-        if let Ok(loc) = window.handle.outer_position(){
-            spec.left = loc.x;
-            spec.top = loc.y;
+                window.handle.set_outer_position(LogicalPosition::new(left, top));
+                window.handle.set_visible(true);
+
+                spec.left = Some(left);
+                spec.top = Some(top);
+                self.last = Some(LogicalPosition::new(left + delta, top + delta));
+            }
         }
 
         self.windows.push( WindowRef{ id, spec, tx, sieve } );
@@ -280,8 +287,10 @@ impl WindowManager {
                 updates.push(CanvasEvent::Size(LogicalSize::new(spec.width as u32, spec.height as u32)));
             }
 
-            if spec.left != win.spec.left || spec.top != win.spec.top {
-                updates.push(CanvasEvent::Position(LogicalPosition::new(spec.left as i32, spec.top as i32)));
+            if let (Some(left), Some(top)) = (spec.left, spec.top){
+                if spec.left != win.spec.left || spec.top != win.spec.top {
+                    updates.push(CanvasEvent::Position(LogicalPosition::new(left as i32, top as i32)));
+                }
             }
 
             if spec.title != win.spec.title {
@@ -368,6 +377,14 @@ impl WindowManager {
             changes.insert(win.spec.id.clone(), json!(win.spec));
         });
         json!(changes)
+    }
+
+    pub fn get_geometry(&mut self) -> serde_json::Value {
+        let mut positions = serde_json::Map::new();
+        self.windows.iter_mut().for_each(|win|{
+            positions.insert(win.spec.id.clone(), json!({"left":win.spec.left, "top":win.spec.top}));
+        });
+        json!(positions)
     }
 
     pub fn len(&self) -> usize {

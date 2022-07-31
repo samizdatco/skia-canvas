@@ -81,8 +81,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                     Event::UserEvent(canvas_event) => {
                         match canvas_event{
                             CanvasEvent::Open(spec, page) => {
-                                let new_window = Window::new(event_loop, new_proxy(), &spec, &page);
-                                windows.add(new_window, spec);
+                                windows.add(event_loop, new_proxy(), spec, page);
                             }
                             CanvasEvent::Close(token) => {
                                 windows.remove_by_token(&token);
@@ -91,10 +90,11 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 return *control_flow = ControlFlow::Exit;
                             }
                             CanvasEvent::Render => {
-                                // on initial pass, do a roundtrip to sync up the Window object's state attrs
+                                // on initial pass, do a roundtrip to sync up the Window object's state attrs:
+                                // send just the initial window positions then read back all state
                                 cadence.on_startup(||{
-                                    roundtrip(&mut cx, json!({}), &callback, |spec, page|
-                                        windows.update_window(spec, page)
+                                    roundtrip(&mut cx, json!({"geom":windows.get_geometry()}), &callback,
+                                        |spec, page| windows.update_window(spec, page)
                                     ).ok();
                                 });
 
@@ -105,8 +105,8 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                     "changes": windows.get_ui_changes(),
                                     "state": windows.get_state(),
                                 }};
-                                roundtrip(&mut cx, payload, &callback, |spec, page|
-                                    windows.update_window(spec, page)
+                                roundtrip(&mut cx, payload, &callback,
+                                    |spec, page| windows.update_window(spec, page)
                                 ).ok();
                             }
                             CanvasEvent::Transform(window_id, matrix) => {
