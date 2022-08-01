@@ -98,11 +98,11 @@ describe("Canvas", ()=>{
     test("new page dimensions", () => {
       expect(canvas.width).toBe(WIDTH)
       expect(canvas.height).toBe(HEIGHT)
-      expect(Canvas.contexts.get(canvas).length).toBe(1)
+      expect(canvas.pages.length).toBe(1)
       canvas.getContext()
-      expect(Canvas.contexts.get(canvas).length).toBe(1)
+      expect(canvas.pages.length).toBe(1)
       canvas.newPage()
-      expect(Canvas.contexts.get(canvas).length).toBe(2)
+      expect(canvas.pages.length).toBe(2)
 
       let W = 300,
           H = 150,
@@ -112,11 +112,11 @@ describe("Canvas", ()=>{
       expect(c.width).toBe(123)
       expect(c.height).toBe(456)
 
-      expect(Canvas.contexts.get(c).length).toBe(0)
+      expect(c.pages.length).toBe(0)
       pg = c.newPage().canvas
-      expect(Canvas.contexts.get(c).length).toBe(1)
+      expect(c.pages.length).toBe(1)
       c.getContext()
-      expect(Canvas.contexts.get(c).length).toBe(1)
+      expect(c.pages.length).toBe(1)
 
       expect(pg.width).toBe(123)
       expect(pg.height).toBe(456)
