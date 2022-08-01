@@ -35,10 +35,17 @@ jobs:
       with:
         toolchain: stable
 
-    - name: Build module
+    - name: Build module (metal)
+      if: ${{ matrix.os == 'macos-latest' }}
       run: |
         npm ci --ignore-scripts
-        npm run build -- --release
+        npm run build -- --release --features metal,window
+
+    - name: Build module (vulkan)
+      if: ${{ matrix.os != 'macos-latest' }}
+      run: |
+        npm ci --ignore-scripts
+        npm run build -- --release --features vulkan,window
 
     - name: Run tests
       run: npm test
