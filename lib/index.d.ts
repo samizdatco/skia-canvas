@@ -56,6 +56,9 @@ export class Canvas {
   newPage(width?: number, height?: number): CanvasRenderingContext2D
   readonly pages: CanvasRenderingContext2D[]
 
+  get gpu(): boolean
+  set gpu(enabled: boolean): void
+
   saveAs(filename: string, options?: SaveOptions): Promise<void>
   toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
   toDataURL(format: ExportFormat, options?: RenderOptions): Promise<string>

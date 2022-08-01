@@ -30,7 +30,7 @@ jobs:
     - name: Determine current upstream version
       id: rust-skia
       run: |
-        export TAG=$(awk '/\[dependencies.skia-safe\]/{getline; print}' skia-canvas/Cargo.toml | egrep -o '[0-9\.]+')
+        export TAG=$(make -sC skia-canvas skia-version)
         echo "::set-output name=VERSION::$TAG"
 
     - name: Checkout rust-skia
@@ -46,7 +46,7 @@ jobs:
       if: ${{ matrix.libc == 'musl' }}
       run: |
         patch -p0 < /code/alpine-build.patch
-        perl -0777 -pi.bak -e 's/(\[dependencies.skia-safe\]\n)version.*/$1path = "..\/rust-skia\/skia-safe"/m' skia-canvas/Cargo.toml
+        make -sC skia-canvas with-local-skia
 
     - name: Build module
       run: |
@@ -100,8 +100,8 @@ jobs:
         REPO: ${{ github.repository }}
       run: |
         git clone --depth 1 ${SERVER}/${REPO} skia-canvas
-        export TAG=$(awk '/\[dependencies.skia-safe\]/{getline; print}' skia-canvas/Cargo.toml | egrep -o '[0-9\.]+')
-        perl -0777 -pi.bak -e 's/(\[dependencies.skia-safe\]\n)version.*/$1path = "..\/rust-skia\/skia-safe"/m' skia-canvas/Cargo.toml
+        export TAG=$(make -sC skia-canvas skia-version)
+        make -sC skia-canvas with-local-skia
         echo "::set-output name=VERSION::$TAG"
 
     - name: Checkout rust-skia
@@ -173,7 +173,7 @@ jobs:
     - name: Determine current upstream version
       id: rust-skia
       run: |
-        export TAG=$(awk '/skia-safe/{getline; print}' skia-canvas/Cargo.toml | egrep -o '[0-9\.]+')
+        export TAG=$(make -sC skia-canvas skia-version)
         echo "::set-output name=VERSION::$TAG"
 
     - name: Checkout rust-skia
@@ -186,7 +186,7 @@ jobs:
 
     - name: Patch sources
       run: |
-        perl -0777 -pi.bak -e 's/(\[dependencies.skia-safe\]\n)version.*/$1path = "..\/rust-skia\/skia-safe"/m' skia-canvas/Cargo.toml
+        make -sC skia-canvas with-local-skia
 
     - name: Use system GN
       run: |

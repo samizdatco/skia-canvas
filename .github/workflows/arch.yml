@@ -1,4 +1,4 @@
-name: Build containers
+name: Rebuild containers
 on:
   workflow_dispatch:
 

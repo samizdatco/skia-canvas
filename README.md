@@ -6,7 +6,7 @@ While the primary goal of this project is to provide a reliable emulation of the
 
 In particular, Skia Canvas:
 
-  - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
+  - is fast and compact since rendering leverages the GPU and all the heavy lifting is done by native code written in Rust and C++
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
@@ -163,15 +163,16 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 
 | Image Dimensions             | Rendering Contexts            | Output                                           |
 | --                           | --                            | --                                               |
-| [**width**][canvas_width]    | [**pages**][canvas_pages] ⚡  | ~~[**async**][canvas_async]~~  ⚡                    |
-| [**height**][canvas_height]  | [getContext()][getContext]    | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
-|                              | [newPage()][newPage] ⚡       | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
-|                              |                               | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡                        |
+| [**width**][canvas_width]    | [**gpu**][canvas_gpu] ⚡      | ~~[**async**][canvas_async]~~  ⚡                    |
+| [**height**][canvas_height]  | [**pages**][canvas_pages] ⚡  | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
+|                              | [getContext()][getContext]    | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
+|                              | [newPage()][newPage] ⚡       | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡                        |
 |                              |                               | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] ⚡ |
 
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
 [canvas_async]: #async
+[canvas_gpu]: #gpu
 [canvas_pages]: #pages
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
 [saveAs]: #saveasfilename-page-format-matte-density1-quality092-outlinefalse
@@ -225,6 +226,10 @@ function synchronous(){
 #### ~~`.async`~~
 
 **The async property has been deprecated** and will be removed in a future release. Use the [`saveAsSync()`][saveAs], [`toBufferSync()`][toBuffer], and [`toDataURLSync()`][toDataURL_ext] methods if the default, asynchronous versions aren't to your liking.
+
+#### `.gpu`
+
+The `.gpu` attribute allows you to control whether rendering occurs on the graphics card or uses the CPU. Rendering is hardware accelerated by default, using [Metal](https://developer.apple.com/metal/) on macOS and [Vulkan](https://www.vulkan.org) on Linux and Windows. To use software-based rendering, set the `.gpu` property to the `false`. If the current platform doesn't support GPU-based rendering, the property will be `false` by default (see [this article](https://linuxconfig.org/install-and-test-vulkan-on-linux) for some tips on getting Vulkan working on Linux).
 
 #### `.pages`
 

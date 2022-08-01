@@ -9,11 +9,13 @@ mod canvas;
 mod context;
 mod path;
 mod image;
+mod filter;
 mod gradient;
 mod pattern;
 mod texture;
 mod typography;
 mod utils;
+mod gpu;
 
 use context::api as ctx;
 use typography::FontLibrary;
@@ -97,6 +99,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- Canvas ------------------------------------------------------------------------------------
 
   cx.export_function("Canvas_new", canvas::new)?;
+
+  cx.export_function("Canvas_get_engine", canvas::get_engine)?;
+  cx.export_function("Canvas_set_engine", canvas::set_engine)?;
+
   cx.export_function("Canvas_get_width", canvas::get_width)?;
   cx.export_function("Canvas_set_width", canvas::set_width)?;
   cx.export_function("Canvas_get_height", canvas::get_height)?;

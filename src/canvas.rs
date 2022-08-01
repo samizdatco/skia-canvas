@@ -4,6 +4,7 @@ use neon::{prelude::*, types::buffer::TypedArray};
 
 use crate::utils::*;
 use crate::context::page::pages_arg;
+use crate::gpu;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -11,12 +12,13 @@ impl Finalize for Canvas {}
 pub struct Canvas{
   pub width: f32,
   pub height: f32,
+  pub engine: gpu::RenderingEngine,
   async_io: bool,
 }
 
 impl Canvas{
   pub fn new() -> Self{
-    Canvas{width:300.0, height:150.0, async_io:true}
+    Canvas{width:300.0, height:150.0, async_io:true, engine:gpu::RenderingEngine::default()}
   }
 }
 
@@ -68,9 +70,29 @@ pub fn set_async(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+
+pub fn get_engine(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let this = this.borrow();
+  Ok(cx.string(from_engine(this.engine)))
+}
+
+pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  if let Some(engine_name) = opt_string_arg(&mut cx, 1){
+    if let Some(new_engine) = to_engine(&engine_name){
+      if new_engine.supported() {
+        this.borrow_mut().engine = new_engine
+      }
+    }
+  }
+
+  Ok(cx.undefined())
+}
+
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
-  // let this = cx.argument::<BoxedCanvas>(0)?;
-  let pages = pages_arg(&mut cx, 1)?;
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
   let file_format = string_arg(&mut cx, 2, "format")?;
   let quality = float_arg(&mut cx, 3, "quality")?;
   let density = float_arg(&mut cx, 4, "density")?;
@@ -82,7 +104,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
       if file_format=="pdf" && pages.len() > 1 {
         pages.as_pdf(quality, density, matte)
       }else{
-        pages.first().encoded_as(&file_format, quality, density, outline, matte)
+        pages.first().encoded_as(&file_format, quality, density, outline, matte, pages.engine)
       }
     })
     .promise(move |mut cx, result| {
@@ -96,8 +118,8 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
 }
 
 pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
-  // let this = cx.argument::<BoxedCanvas>(0)?;
-  let pages = pages_arg(&mut cx, 1)?;
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
   let file_format = string_arg(&mut cx, 2, "format")?;
   let quality = float_arg(&mut cx, 3, "quality")?;
   let density = float_arg(&mut cx, 4, "density")?;
@@ -108,7 +130,7 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
       if file_format=="pdf" && pages.len() > 1 {
         pages.as_pdf(quality, density, matte)
       }else{
-        pages.first().encoded_as(&file_format, quality, density, outline, matte)
+        pages.first().encoded_as(&file_format, quality, density, outline, matte, pages.engine)
       }
     };
 
@@ -123,8 +145,8 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 }
 
 pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
-  // let this = cx.argument::<BoxedCanvas>(0)?;
-  let pages = pages_arg(&mut cx, 1)?;
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
   let name_pattern = string_arg(&mut cx, 2, "filePath")?;
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
@@ -141,7 +163,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
       } else if file_format == "pdf" {
         pages.write_pdf(&name_pattern, quality, density, matte)
       } else {
-        pages.first().write(&name_pattern, &file_format, quality, density, outline, matte)
+        pages.write_image(&name_pattern, &file_format, quality, density, outline, matte)
       }
     })
     .promise(move |mut cx, result| {
@@ -153,8 +175,8 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
 }
 
 pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  // let this = cx.argument::<BoxedCanvas>(0)?;
-  let pages = pages_arg(&mut cx, 1)?;
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
   let name_pattern = string_arg(&mut cx, 2, "filePath")?;
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
@@ -170,7 +192,7 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     } else if file_format == "pdf" {
       pages.write_pdf(&name_pattern, quality, density, matte)
     } else {
-      pages.first().write(&name_pattern, &file_format, quality, density, outline, matte)
+      pages.write_image(&name_pattern, &file_format, quality, density, outline, matte)
     }
   };
 
