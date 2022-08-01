@@ -223,7 +223,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   // -- Window -----------------------------------------------------------------------------------
 
-  if cfg!(feature = "window"){
+  #[cfg(feature = "window")] {
     cx.export_function("App_launch", gui::launch)?;
     cx.export_function("App_quit", gui::quit)?;
     cx.export_function("App_closeWindow", gui::close)?;
