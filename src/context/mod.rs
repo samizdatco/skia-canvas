@@ -5,10 +5,10 @@
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
-use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo,
-                Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType,
-                PaintStyle, BlendMode, AlphaType, ClipOp, Data, PictureRecorder, Picture,
-                Drawable, image::CachingHint, image_filters, dash_path_effect, path_1d_path_effect};
+use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo, Contains,
+                Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType, Data,
+                PaintStyle, BlendMode, AlphaType, ClipOp, PictureRecorder, Picture, Drawable,
+                image::CachingHint, image_filters, dash_path_effect, path_1d_path_effect};
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
@@ -370,13 +370,24 @@ impl Context2D{
   }
 
   pub fn clear_rect(&mut self, rect:&Rect){
-    self.with_canvas(|canvas| {
-      let mut paint = Paint::default();
-      paint.set_anti_alias(true)
-           .set_style(PaintStyle::Fill)
-           .set_blend_mode(BlendMode::Clear);
-      canvas.draw_rect(&rect, &paint);
-    });
+    match self.state.matrix.map_rect(rect).0.contains(self.bounds){
+
+      // if rect fully encloses canvas, erase existing content (but preserve CTM, path, etc.)
+      true =>  self.with_recorder(|mut recorder|{
+        recorder.set_bounds(self.bounds);
+        recorder.set_matrix(self.state.matrix);
+        recorder.set_clip(&self.state.clip);
+      }),
+
+      // otherwise, paint over the specified region but preserve overdrawn vectors
+      false => self.with_canvas(|canvas| {
+        let mut paint = Paint::default();
+        paint.set_anti_alias(true)
+             .set_style(PaintStyle::Fill)
+             .set_blend_mode(BlendMode::Clear);
+        canvas.draw_rect(&rect, &paint);
+      })
+    }
   }
 
   pub fn draw_picture(&mut self, picture:&Option<Picture>, src_rect:&Rect, dst_rect:&Rect){
