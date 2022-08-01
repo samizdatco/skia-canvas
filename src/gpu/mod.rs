@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use skia_safe::{ImageInfo, Surface};
 
 #[cfg(feature = "metal")]

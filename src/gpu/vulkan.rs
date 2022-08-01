@@ -1,6 +1,3 @@
-#![allow(unused_imports)]
-#![allow(dead_code)]
-
 use std::ptr;
 use std::cell::RefCell;
 use std::ffi::CString;
@@ -17,13 +14,9 @@ use skulpin::rafx::api::RafxExtents2D;
 
 #[cfg(feature = "window")]
 use winit::{
-    dpi::{LogicalSize, LogicalPosition, PhysicalSize},
-    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode, ElementState},
-    event_loop::{ControlFlow, EventLoop},
-    platform::macos::WindowExtMacOS,
-    window::{WindowBuilder, Window},
+    dpi::{LogicalSize, PhysicalSize},
+    window::{Window},
 };
-
 
 thread_local!(static VK_CONTEXT: RefCell<Option<VulkanEngine>> = RefCell::new(None));
 
