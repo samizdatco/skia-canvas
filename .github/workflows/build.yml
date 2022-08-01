@@ -27,27 +27,6 @@ jobs:
       with:
         path: skia-canvas
 
-    - name: Determine current upstream version
-      id: rust-skia
-      run: |
-        export TAG=$(make -sC skia-canvas skia-version)
-        echo "::set-output name=VERSION::$TAG"
-
-    - name: Checkout rust-skia
-      if: ${{ matrix.libc == 'musl' }}
-      uses: actions/checkout@v2
-      with:
-        repository: rust-skia/rust-skia
-        ref: ${{ steps.rust-skia.outputs.VERSION }}
-        submodules: true
-        path: rust-skia
-
-    - name: Patch build files
-      if: ${{ matrix.libc == 'musl' }}
-      run: |
-        patch -p0 < /code/alpine-build.patch
-        make -sC skia-canvas with-local-skia
-
     - name: Build module
       run: |
         cd skia-canvas
