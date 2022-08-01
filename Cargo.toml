@@ -11,8 +11,6 @@ exclude = ["index.node"]
 crate-type = ["cdylib"]
 
 [features]
-# default = ["vulkan", "window"]
-default = ["metal", "window"]
 metal = ["skia-safe/metal", "dep:metal", "dep:core-graphics-types", "dep:foreign-types", "dep:cocoa", "dep:objc"]
 vulkan = ["skia-safe/vulkan", "dep:skulpin", "dep:ash"]
 window = ["dep:winit"]
