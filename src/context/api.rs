@@ -29,7 +29,7 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedContext2D> {
   let parent = cx.argument::<BoxedCanvas>(1)?;
   let parent = parent.borrow();
 
-  this.borrow_mut().resize((parent.width, parent.height));
+  this.borrow_mut().reset_size((parent.width, parent.height));
   Ok(cx.boxed(this))
 }
 
@@ -38,7 +38,29 @@ pub fn resetSize(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let parent = cx.argument::<BoxedCanvas>(1)?;
   let parent = parent.borrow();
 
-  this.borrow_mut().resize((parent.width, parent.height));
+  this.borrow_mut().reset_size((parent.width, parent.height));
+  Ok(cx.undefined())
+}
+
+pub fn get_size(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let bounds = this.borrow().bounds;
+
+  let array = JsArray::new(&mut cx, 2);
+  let width = cx.number(bounds.size().width);
+  let height = cx.number(bounds.size().height);
+  array.set(&mut cx, 0, width)?;
+  array.set(&mut cx, 1, height)?;
+  Ok(array)
+}
+
+pub fn set_size(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let xy = opt_float_args(&mut cx, 1..3);
+
+  if let [width, height] = xy.as_slice(){
+    this.borrow_mut().resize((*width, *height));
+  }
   Ok(cx.undefined())
 }
 

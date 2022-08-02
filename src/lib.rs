@@ -117,6 +117,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   cx.export_function("CanvasRenderingContext2D_new", ctx::new)?;
   cx.export_function("CanvasRenderingContext2D_resetSize", ctx::resetSize)?;
+  cx.export_function("CanvasRenderingContext2D_get_size", ctx::get_size)?;
+  cx.export_function("CanvasRenderingContext2D_set_size", ctx::set_size)?;
 
   // grid state
   cx.export_function("CanvasRenderingContext2D_save", ctx::save)?;

@@ -268,7 +268,7 @@ impl Context2D{
           .collect()
   }
 
-  pub fn resize(&mut self, dims: impl Into<Size>) {
+  pub fn reset_size(&mut self, dims: impl Into<Size>) {
     // called by the canvas when .width or .height are assigned to
     self.bounds = Rect::from_size(dims);
     self.path = Path::default();
@@ -278,6 +278,14 @@ impl Context2D{
     // erase any existing content
     self.with_recorder(|mut recorder| {
       recorder.set_bounds(self.bounds);
+    });
+  }
+
+  pub fn resize(&mut self, dims: impl Into<Size>) {
+    // non-destructively resize the canvas (via the canvas.resize() extension)
+    self.bounds = Rect::from_size(dims);
+    self.with_recorder(|mut recorder| {
+      recorder.update_bounds(self.bounds);
     });
   }
 
