@@ -90,11 +90,6 @@ jobs:
         git submodule update --init --depth 1 skia-bindings/skia
         git submodule update --init --depth 1 skia-bindings/depot_tools
 
-    - name: Apply patches
-      if: ${{ matrix.libc == 'musl' }}
-      run: |
-        patch -p0 < /code/alpine-build.patch
-
     - name: Use system GN
       if: ${{ matrix.libc == 'musl' }}
       run: |
@@ -104,7 +99,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
 
     - name: Package module
       run: |
@@ -175,7 +170,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
 
     - name: Package module
       run: |
