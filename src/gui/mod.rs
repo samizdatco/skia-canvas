@@ -66,7 +66,6 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
     let mut windows = WindowManager::default();
     let mut cadence = Cadence::default();
-    let mut frame:u64 = 0;
 
     cadence.set_frame_rate(60);
 
@@ -99,10 +98,8 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 });
 
                                 // relay UI-driven state changes to js and render the response
-                                frame += 1;
                                 let payload = json!{{
-                                    "frame": frame,
-                                    "changes": windows.get_ui_changes(),
+                                    "ui": windows.get_ui_changes(),
                                     "state": windows.get_state(),
                                 }};
                                 roundtrip(&mut cx, payload, &callback,
