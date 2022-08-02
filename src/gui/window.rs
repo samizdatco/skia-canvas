@@ -39,7 +39,7 @@ pub struct WindowSpec {
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Fit{
-  None, ContainX, ContainY, Contain, Cover, Fill, ScaleDown
+  None, ContainX, ContainY, Contain, Cover, Fill, ScaleDown, Resize
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -114,8 +114,11 @@ impl Window {
             _ => (sf, sf)
         };
 
-        let x_shift = (size.width - dims.width * x_scale) / 2.0;
-        let y_shift = (size.height - dims.height * y_scale) / 2.0;
+        let (x_shift, y_shift) = match self.fit{
+            Fit::Resize => (0.0, 0.0),
+            _ => ( (size.width - dims.width * x_scale) / 2.0,
+                   (size.height - dims.height * y_scale) / 2.0 )
+        };
 
         let mut matrix = Matrix::new_identity();
         matrix.set_scale_translate(
