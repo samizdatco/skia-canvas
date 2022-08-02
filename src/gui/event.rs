@@ -92,15 +92,15 @@ impl Sieve{
     self.key_repeats.clear(); // keyups don't get delivered during the transition apparently?
   }
 
-  pub fn capture(&mut self, event:&WindowEvent, dpr:f64){
+  pub fn capture(&mut self, event:&WindowEvent){
     match event{
       WindowEvent::Moved(physical_pt) => {
-        let LogicalPosition{x, y} = physical_pt.to_logical(dpr);
+        let LogicalPosition{x, y} = physical_pt.to_logical(self.dpr);
         self.queue.push(UiEvent::Move{left:x, top:y});
       }
 
       WindowEvent::Resized(physical_size) => {
-        let logical_size = LogicalSize::from_physical(*physical_size, dpr);
+        let logical_size = LogicalSize::from_physical(*physical_size, self.dpr);
         self.queue.push(UiEvent::Resize(logical_size));
       }
 
@@ -136,7 +136,7 @@ impl Sieve{
       WindowEvent::MouseWheel{delta, ..} => {
         let LogicalPosition{x, y} = match delta {
           MouseScrollDelta::PixelDelta(physical_pt) => {
-            LogicalPosition::from_physical(*physical_pt, dpr)
+            LogicalPosition::from_physical(*physical_pt, self.dpr)
           },
           MouseScrollDelta::LineDelta(h, v) => {
             LogicalPosition{x:*h as f32, y:*v as f32}

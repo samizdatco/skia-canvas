@@ -331,7 +331,7 @@ impl WindowManager {
 
     pub fn capture_ui_event(&mut self, window_id:&WindowId, event:&WindowEvent){
         if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
-            win.sieve.capture(event, 1.0);
+            win.sieve.capture(event);
         }
     }
 
