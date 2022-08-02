@@ -45,15 +45,15 @@ pub enum CanvasEvent{
 }
 
 #[derive(Debug, Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "lowercase")]
 pub enum UiEvent{
+  #[allow(non_snake_case)]
+  Mousewheel{deltaX:f32, deltaY:f32},
+  Move{left:f32, top:f32},
   Keyboard{event:String, key:VirtualKeyCode, code:u32, repeat:bool},
   Input(char),
   Mouse(String),
   Focus(bool),
-  Mousewheel(LogicalPosition<f64>),
-  #[serde(rename = "move")]
-  Position(LogicalPosition<i32>),
   Resize(LogicalSize<u32>),
   Fullscreen(bool),
 }
@@ -95,8 +95,8 @@ impl Sieve{
   pub fn capture(&mut self, event:&WindowEvent, dpr:f64){
     match event{
       WindowEvent::Moved(physical_pt) => {
-        let logical_pt = LogicalPosition::from_physical(*physical_pt, dpr);
-        self.queue.push(UiEvent::Position(logical_pt));
+        let LogicalPosition{x, y} = physical_pt.to_logical(dpr);
+        self.queue.push(UiEvent::Move{left:x, top:y});
       }
 
       WindowEvent::Resized(physical_size) => {
@@ -134,15 +134,15 @@ impl Sieve{
       }
 
       WindowEvent::MouseWheel{delta, ..} => {
-        let dxdy:LogicalPosition<f64> = match delta {
+        let LogicalPosition{x, y} = match delta {
           MouseScrollDelta::PixelDelta(physical_pt) => {
             LogicalPosition::from_physical(*physical_pt, dpr)
           },
           MouseScrollDelta::LineDelta(h, v) => {
-            LogicalPosition::<f64>{x:*h as f64, y:*v as f64}
+            LogicalPosition{x:*h as f32, y:*v as f32}
           }
         };
-        self.queue.push(UiEvent::Mousewheel(dxdy));
+        self.queue.push(UiEvent::Mousewheel{deltaX:x, deltaY:y});
       }
 
       WindowEvent::MouseInput{state, button, ..} => {
@@ -203,7 +203,7 @@ impl Sieve{
           modifiers = Some(self.key_modifiers);
           mouse_events.insert(event_type.clone());
         }
-        UiEvent::Mousewheel(..) => {
+        UiEvent::Mousewheel{..} => {
           modifiers = Some(self.key_modifiers);
           last_wheel = Some(&change);
         }
