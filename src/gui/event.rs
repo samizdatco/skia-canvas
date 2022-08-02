@@ -48,7 +48,7 @@ pub enum CanvasEvent{
 #[serde(rename_all = "lowercase")]
 pub enum UiEvent{
   #[allow(non_snake_case)]
-  Mousewheel{deltaX:f32, deltaY:f32},
+  Wheel{deltaX:f32, deltaY:f32},
   Move{left:f32, top:f32},
   Keyboard{event:String, key:VirtualKeyCode, code:u32, repeat:bool},
   Input(char),
@@ -142,7 +142,7 @@ impl Sieve{
             LogicalPosition{x:*h as f32, y:*v as f32}
           }
         };
-        self.queue.push(UiEvent::Mousewheel{deltaX:x, deltaY:y});
+        self.queue.push(UiEvent::Wheel{deltaX:x, deltaY:y});
       }
 
       WindowEvent::MouseInput{state, button, ..} => {
@@ -203,7 +203,7 @@ impl Sieve{
           modifiers = Some(self.key_modifiers);
           mouse_events.insert(event_type.clone());
         }
-        UiEvent::Mousewheel{..} => {
+        UiEvent::Wheel{..} => {
           modifiers = Some(self.key_modifiers);
           last_wheel = Some(&change);
         }
