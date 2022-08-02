@@ -13,7 +13,7 @@ use winit::{
 #[cfg(target_os = "macos" )]
 use winit::platform::macos::WindowExtMacOS;
 
-use crate::utils::css_to_color;
+use crate::utils::{css_to_color, color_to_css};
 use crate::gpu::{Renderer, runloop};
 use crate::context::page::Page;
 use super::event::{CanvasEvent, Sieve};
@@ -63,7 +63,7 @@ pub struct Window {
 impl Finalize for Window {}
 
 impl Window {
-    pub fn new(event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>, spec: &WindowSpec, page: &Page) -> Self {
+    pub fn new(event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>, spec: &mut WindowSpec, page: &Page) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
         let handle = WindowBuilder::new()
             .with_inner_size(size)
@@ -78,7 +78,13 @@ impl Window {
         }
 
         let renderer = Renderer::for_window(&handle);
-        let background = css_to_color(&spec.background).unwrap_or(Color::BLACK);
+        let background = match css_to_color(&spec.background){
+            Some(color) => color,
+            None => {
+                spec.background = "rgba(16,16,16,0.85)".to_string();
+                css_to_color(&spec.background).unwrap()
+            }
+        };
 
         Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, background }
     }
@@ -217,7 +223,7 @@ impl Default for WindowManager {
 impl WindowManager {
 
     pub fn add(&mut self, event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>, mut spec: WindowSpec, page: Page) {
-        let mut window = Window::new(event_loop, proxy, &spec, &page);
+        let mut window = Window::new(event_loop, proxy, &mut spec, &page);
         let id = window.handle.id();
         let (tx, rx) = channel::bounded(50);
         let mut sieve = Sieve::new(window.handle.scale_factor());
@@ -282,7 +288,7 @@ impl WindowManager {
         }
     }
 
-    pub fn update_window(&mut self, spec:WindowSpec, page:Page){
+    pub fn update_window(&mut self, mut spec:WindowSpec, page:Page){
         let mut updates:Vec<CanvasEvent> = vec![];
 
         if let Some(mut win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
@@ -319,6 +325,8 @@ impl WindowManager {
             if spec.background != win.spec.background {
                 if let Some(color) = css_to_color(&spec.background) {
                     updates.push(CanvasEvent::Background(color));
+                }else{
+                    spec.background = win.spec.background.clone();
                 }
             }
 
