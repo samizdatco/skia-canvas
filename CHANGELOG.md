@@ -12,6 +12,7 @@
 ### Misc. Improvements
 - The [`.filter`][filter] property's `"blur(…)"` and `"drop-shadow(…)"` effects now match browser behavior much more closely and scale appropriately with the `density` export option.
 - Antialiasing is smoother, particularly when down-scaling images, thanks to the use of mipmaps rather than Skia's (apparently buggy?) implementation of bucubic interpolation.
+- Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up). Assigning a new `width` or `height` to the canvas will have a similar effect.
 - Upgraded Skia to milestone 103
 
 [canvas_gpu]: https://github.com/samizdatco/skia-canvas#gpu
