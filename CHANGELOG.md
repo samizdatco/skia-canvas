@@ -3,7 +3,7 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### New Features
-- The new **Window** class can display a **Canvas** on screen, respond to mouse and keyboard input, and fluidly animate by calling user-defined event handlers.
+- The new [Window][window] class can display a **Canvas** on screen, respond to mouse and keyboard input, and fluidly [animate][window_anim] by calling user-defined [event handlers][window_events].
 - Bitmap rendering now occurs on the GPU by default and can be configured using the **Canvas**'s [`.gpu`][canvas_gpu] property. If the platform supports hardware-accelerated rendering (using Metal on macOS and Vulkan on Linux & Windows), the property will be `true` by default and can be set to `false` to use the software renderer.
 
 ### Bugfixes
@@ -16,6 +16,9 @@
 - Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up). Assigning a new `width` or `height` to the canvas will have a similar effect.
 - Upgraded Skia to milestone 103
 
+[window]: https://github.com/samizdatco/skia-canvas#window
+[window_anim]: https://github.com/samizdatco/skia-canvas#events--animation
+[window_events]: https://github.com/samizdatco/skia-canvas#on--off--once
 [canvas_gpu]: https://github.com/samizdatco/skia-canvas#gpu
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 
