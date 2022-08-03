@@ -1,12 +1,13 @@
 # Skia Canvas
 
-Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and as a result produces very similar results to Chrome’s `<canvas>` element.
+Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and as a result produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
 
-While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas that are more relevant to the generation of static graphics files rather than ‘live’ display in a browser.
+While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas to take advantage of Skia's more advanced graphical features and provide a more expressive coding environment.
 
 In particular, Skia Canvas:
 
   - is fast and compact since rendering leverages the GPU and all the heavy lifting is done by native code written in Rust and C++
+  - can render directly to windows using the OS's native drawing routines and provides a browser-like user interface event-handling framework
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
@@ -152,6 +153,8 @@ The library exports a number of classes emulating familiar browser objects inclu
 
 In addition, the module contains:
 
+- [Window](#window) a class allowing you to display your canvases on screen in an OS window
+- [App](#app) a helper class for coordinating multiple windows in a single script
 - [loadImage()](#loadimage) a utility function for loading `Image` objects asynchronously
 - [FontLibrary](#fontlibrary) a class allowing you to inspect the system’s installed fonts and load additional ones
 
@@ -778,6 +781,192 @@ let orig = new Path2D(`
 let unwound = orig.unwind()
 ```
 ![convert winding rule subpaths](/test/assets/path/effect-unwind@2x.png)
+
+
+## Window
+
+The `Window` class allows you to open a native OS window and draw to a `Canvas` within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and create or close windows in response to user input.
+
+| Content                          | Layout                   | Interface            | Mode                         | Methods            |
+| --                               | --                       | --                   | --                           | --                 |
+| [**background**][win_background] | [**left**][win_layout]   | [**title**][title]   | [**visible**][visible]       | [on()][win_bind]   |
+| [**canvas**][win_canvas]         | [**top**][win_layout]    | [**cursor**][cursor] | [**fullscreen**][fullscreen] | [off()][win_bind]  |
+| [**ctx**][win_ctx]               | [**width**][win_layout]  | [**fit**][fit]       |                              | [once()][win_bind] |
+| [**page**][win_page]             | [**height**][win_layout] |                      |                              | [close()][close]   | 
+
+[win_background]: #background
+[win_canvas]: #canvas-1
+[win_ctx]: #ctx
+[win_page]: #page-1
+[win_layout]: #left--top--width--height
+[title]: #title
+[cursor]: #cursor
+[fit]: #fit
+[visible]: #visible
+[fullscreen]: #fullscreen
+[win_bind]: #on--off--once
+[close]: #close
+
+#### Creating new `Window` objects
+
+It has a number of properties which can be set on the object itself or included in the constructor call as options:
+```js
+let win = new Window({width:800, height:600, title="Canvas Window"})
+win.background = "skyblue"
+win.top = 40
+win.left = 40
+```
+
+Each `Window` has an associated `Canvas` which will either be created for you (using the same dimensions as the window) or can be a pre-existing canvas object that you pass to the constructor (or assign later to its `.canvas` property:
+
+```js
+let myCanvas = new Canvas(512, 512)
+let win = new Window(myCanvas, {background:"white"})
+// or
+win.canvas = new Canvas(1024, 768)
+````
+
+The `Window` and its `Canvas` don't need to have the same size (and indeed are unlikely to if you start resizing the window with the mouse). You can control what happens when these sizes don't match by setting the window's [`fit`][fit] property. By default it will scale your canvas to fit within the window and add extra space at the sides as needed to prevent anything being clipped out. 
+
+#### Events & Animation
+
+Once you've created one or more `Window` objects, Node will wait for your current function to end and then switch over to an OS-controlled event loop for the rest of your program. This means that the standard asynchronous callbacks like `setTimeout` and `setInterval` **will not work**. If you want your window's content to change over time, you'll need to use the `.on()` or `.once` method to tie your code's execution to [events generated by the user interface][win_bind].
+
+One of the easiest ways to get started is to define a handler for the [`draw`][draw] event, which automatically clears the canvas and calls your code at 60 frames per second (though you can override this via the [`App.fps`][fps] property). The object it passes as an argument contains a property called `frame` which will increment by one each time you draw:
+
+```js
+let win = new Window({width:300, height:300, background:'white'}),
+    {ctx} = win
+
+win.on("draw", e => {
+  ctx.lineWidth = 25 + 25 * Math.cos(e.frame/10)
+  ctx.beginPath()
+  ctx.moveTo(100,100)
+  ctx.lineTo(200,200)
+  ctx.moveTo(100,200)
+  ctx.lineTo(200,100)
+  ctx.stroke()
+})
+
+````
+
+ Note that you can also get a reference to the window associated with the event by using a `function(e){…}` defintion (rather than a `e => {…}` arrow expression) in which case the `this` variable will point to the window. For instance:
+```js
+win.on('mousedown', function(e){
+  console.log("now closing window:", this)
+  this.close()
+})
+```
+
+
+
+
+##### PROPERTIES
+
+#### `background`
+This specifies the color of the window's background which is drawn behind your canvas content. It supports all the same CSS color formats as the `fillStyle` and `strokeStyle` properties. Defaults to a dark grey (which is semi-transparent on macOS).
+
+#### `canvas`
+The `Canvas` object associated with the window. By default the window will create a canvas with the same size as the window dimensions, but the canvas can also be replaced at any time by assigning a new one to this property. 
+
+#### `ctx`
+A convenience property rendering context for the window's canvas. This is a shortcut equivalent to calling `win.canvas.getContext("2d")`. If the canvas has multiple pages, this will point to the most recent (i.e., the ‘topmost’ page in the stack).
+
+#### `page`
+A 1-based index into the canvas's pages array. Only one page can be displayed on screen at a time and setting this property allows you to pick which one. Page `1` is the earliest (or ‘bottommost’) page created.
+
+#### `left` / `top` / `width` / `height` 
+The current location and size of the window as specified in resolution-independent ‘points’. Note that the window and the canvas have independent sizes: the window will scale the canvas's content to fit its current dimensions (using the `fit` property to determine how to deal with differences in aspect ratio). If you want to ensure that the canvas size matches the window size, try listening for a `resize` event and updating the canvas dimensions when it fires.
+
+#### `title`
+The string that is displayed in the window's title bar.
+
+#### `cursor`
+The icon used for the mouse pointer. By default a standard arrow pointer is used, but other styles can be selected by setting the property to one of the standard [CSS cursor][mdn_cursor] values.
+
+#### `fit`
+When the window is resized, it is likely that it will not perfectly match the aspect ratio of the underlying canvas. This property selects how the layout should adapt—whether it should add margins, allow portions of the canvas to be cropped, or stretch the image to fit. It supports all of the [CSS object-fit][mdn_object_fit] values plus some additions: 
+  - `contain-x` and `contain-y` extend the `contain` mode to choose which axis to use when fitting the canvas
+  - `resize` will update the window's canvas to match the new window size (you'll probably also want to define an `.on("resize")` handler to update the contents)
+
+
+#### `visible`
+When set to `false`, the window will become invisible but will not be permanently ‘closed’. It can be made visible again by setting the property back to `true`.
+
+#### `fullscreen`
+A boolean flag determining whether the window should expand to fill the screen.
+
+##### METHODS
+
+#### `close()`
+Removes the window from the screen permanently. The `Window` object will continue to exist and its canvas can still be used to export images to file, be inserted into other windows, etc.
+
+#### `on()` / `off()` / `once()`
+The `Window` object is an [Event Emitter][event_emitter] subclass and supports all the standard methods for adding and removing event listeners. The supported events are mostly consistent with browser-based DOM events, but include some non-standard additions (⚡) specific to Skia Canvas:
+
+| Mouse                      | Keyboard             | Window                   | Focus            | Animation                 |  
+| --                         | --                   | --                       | --               | --                        | 
+| [`mousedown`][mousedown]   | [`keydown`][keydown] | [`move`](#move-event) ⚡ | [`blur`][blur]   | [`setup`][setup] ⚡|
+| [`mouseup`][mouseup]       | [`keyup`][keyup]     | [`resize`][resize]       | [`focus`][focus] | [`frame`][frame] ⚡|
+| [`mousemove`][mousemove]   | [`input`][input]     |                          |                  | [`draw`][draw] ⚡  |
+| [`wheel`][wheel] |                    
+
+##### `move` event
+Emitted when the user drags the window to a new position. The event object includes `top` and `left` properties expressed in resolution-independent points.
+
+##### `setup` event
+The `setup` event is emitted right after the window is created and is about to be displayed on screen. This can be a good place to collect the data you'll need for an animation. Immediately after `setup`, the `frame` and `draw` events will fire.
+
+##### `frame` event
+Similar to the `requestAnimationFrame` callback system in browsers, the `frame` event allows you to schedule redrawing your canvas to maintain a constant frame rate. The event object provides a window-specific frame counter that begins ticking upward from zero as soon as the window appears.
+
+##### `draw` event
+The `draw` event is similar to `frame`, but has the potentially convenient side effect of automatically erasing the window's canvas before calling your event handler. 
+
+> Note that this canvas-clearing behavior depends upon your having set up an event handler using `.on()` and will continue until you delete the window's `draw` event handlers using `.off()`
+
+[mdn_cursor]: https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
+[mdn_object_fit]: https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit
+[event_emitter]: https://nodejs.org/api/events.html#events
+[mousedown]: https://developer.mozilla.org/en-US/docs/Web/API/Element/mousedown_event
+[mouseup]: https://developer.mozilla.org/en-US/docs/Web/API/Element/mouseup_event
+[mousemove]: https://developer.mozilla.org/en-US/docs/Web/API/Element/mousemove_event
+[wheel]: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event
+[keydown]: https://developer.mozilla.org/en-US/docs/Web/API/Element/keydown_event
+[keyup]: https://developer.mozilla.org/en-US/docs/Web/API/Element/keyup_event
+[input]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/input_event
+[resize]: https://developer.mozilla.org/en-US/docs/Web/API/Window/resize_event
+[focus]: https://developer.mozilla.org/en-US/docs/Web/API/Window/focus_event
+[blur]: https://developer.mozilla.org/en-US/docs/Web/API/Window/blur_event
+[setup]: #setup-event
+[frame]: #frame-event
+[draw]: #draw-event
+
+## App
+
+The `App` global variable is a static class which does not need to be instantiated with `new`. Instead you can directly access its properties and methods on the `App` you import from the module. It allows you to access all the windows that are currently on screen, choose a frame rate for the `frame` and `draw` events, and control when the GUI event loop phase of your script begins and terminates.
+
+[fps]: #fps
+
+##### PROPERTIES
+
+#### `fps`
+By default, each window will attempt to update its display 60 times per second. You can reduce this by setting `App.fps` to a smaller integer value. You can raise it as well but on the majority of LCD monitors you won't see any benefit and are likely to get worse performance as you begin to swamp the CPU with your rendering code.
+
+
+#### `running`
+A read-only boolean flagging whether the GUI event loop has taken control away from Node in order to display your windows. 
+
+#### `windows`
+An array of references to all of the `Window` objects that have been created and not yet [closed][close].
+
+##### METHODS
+
+#### `launch()`
+Any `Window` you create will schedule the `App` to begin running as soon as the current function returns. You can make this happen sooner by calling `App.launch` within your code. The `launch()` method will not return until the last window is called so you may find it handy to place ‘clean up’ code after the `launch()` invocation. Note, however, that the `App` **cannot be launched a second time** once it terminates due to limitiations in the underlying platform libraries.
+
+#### `quit()`
+By default your process will terminate once the final window has closed. If you wish to bring things to a swifter conclusion from code, call the `App.quit()` method from one of your event handlers instead.
 
 ## Utilities
 
