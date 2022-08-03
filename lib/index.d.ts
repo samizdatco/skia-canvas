@@ -57,7 +57,7 @@ export class Canvas {
   readonly pages: CanvasRenderingContext2D[]
 
   get gpu(): boolean
-  set gpu(enabled: boolean): void
+  set gpu(enabled: boolean)
 
   saveAs(filename: string, options?: SaveOptions): Promise<void>
   toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
@@ -237,3 +237,59 @@ export interface FontLibrary {
 }
 
 export const FontLibrary: FontLibrary
+
+//
+// Window & App
+//
+
+export type FitStyle = "none" | "contain-x" | "contain-y" | "contain" | "cover" | "fill" | "scale-down" | "resize"
+export type CursorStyle = "default" | "crosshair" | "hand" | "arrow" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
+                          "cell" | "vertical-text" | "alias" | "copy" | "no-drop" | "grab" | "grabbing" | "all-scroll" | "zoom-in" | "zoom-out" |
+                          "e-resize" | "n-resize" | "ne-resize" | "nw-resize" | "s-resize" | "se-resize" | "sw-resize" | "w-resize" | "ew-resize" |
+                          "ns-resize" | "nesw-resize" | "nwse-resize" | "col-resize" | "row-resize"
+
+export type WindowOptions = {
+  title?: string
+  left?: number
+  top?: number
+  width?: number
+  height?: number
+  fit?: FitStyle
+  page?: number
+  background?: string
+  fullscreen?: boolean
+  visible?: boolean
+  cursor?: CursorStyle
+}
+
+export class Window{
+  constructor(options?: WindowOptions)
+  constructor(canvas: Canvas, options?: WindowOptions)
+
+  readonly ctx: CanvasRenderingContext2D
+  canvas: Canvas
+  visible: boolean
+  fullscreen: boolean
+  title: string
+  cursor: CursorStyle
+  fit: FitStyle
+  left: number
+  top: number
+  width: number
+  height: number
+  page: number
+  background: string
+
+  close(): void
+}
+
+export interface App{
+  readonly windows: Window[]
+  readonly running: boolean
+  fps: number
+
+  launch(): void
+  quit(): void
+}
+
+export const App: App
