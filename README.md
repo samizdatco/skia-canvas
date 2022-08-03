@@ -7,7 +7,7 @@ While the primary goal of this project is to provide a reliable emulation of the
 In particular, Skia Canvas:
 
   - is fast and compact since rendering leverages the GPU and all the heavy lifting is done by native code written in Rust and C++
-  - can render directly to windows using the OS's native drawing routines and provides a browser-like user interface event-handling framework
+  - can render directly to [windows](#window) using the OS's native drawing routines and provides a browser-like [UI event][win_bind] framework
   - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
@@ -24,7 +24,6 @@ In particular, Skia Canvas:
     - proportional letter-spacing (a.k.a. [‘tracking’](#texttracking)) and leading
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
     - use of non-system fonts [loaded](#usefamilyname-fontpaths) from local files
-
 
 ## Installation
 
@@ -785,7 +784,11 @@ let unwound = orig.unwind()
 
 ## Window
 
-The `Window` class allows you to open a native OS window and draw to a `Canvas` within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and create or close windows in response to user input.
+The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and create or close windows in response to user input.
+
+Each `Window` has an associated `Canvas` object, whose dimensions can be set independently of the size of the window. Resizing the window will scale the canvas using the approach selected via its [`fit`][fit] property. Window attributes can specified as part of an options object passed to the constructor or assigned to object properties after instantiation. 
+
+Its configurable attributes include:
 
 | Content                          | Layout                   | Interface            | Mode                         | Methods            |
 | --                               | --                       | --                   | --                           | --                 |
@@ -809,7 +812,7 @@ The `Window` class allows you to open a native OS window and draw to a `Canvas` 
 
 #### Creating new `Window` objects
 
-It has a number of properties which can be set on the object itself or included in the constructor call as options:
+`Window` properties can be defined at initialization by including them in an options object. They can also be added or redefined after the objet has been instantiated::
 ```js
 let win = new Window({width:800, height:600, title="Canvas Window"})
 win.background = "skyblue"
@@ -817,20 +820,26 @@ win.top = 40
 win.left = 40
 ```
 
-Each `Window` has an associated `Canvas` which will either be created for you (using the same dimensions as the window) or can be a pre-existing canvas object that you pass to the constructor (or assign later to its `.canvas` property:
+Each `Window` has an associated `Canvas` which will either be created for you (using the same dimensions as the window) or can be a pre-existing canvas object that is passed to the constructor (or assigned later to its `.canvas` property):
 
 ```js
 let myCanvas = new Canvas(512, 512)
-let win = new Window(myCanvas, {background:"white"})
-// or
-win.canvas = new Canvas(1024, 768)
+let win = new Window(myCanvas, {background:"black"}))
+// or, equivalently:
+let win = new Window({background:"black"})
+win.canvas = new Canvas(512, 512)
 ````
 
-The `Window` and its `Canvas` don't need to have the same size (and indeed are unlikely to if you start resizing the window with the mouse). You can control what happens when these sizes don't match by setting the window's [`fit`][fit] property. By default it will scale your canvas to fit within the window and add extra space at the sides as needed to prevent anything being clipped out. 
+#### Drawing to a Window
+
+The `Canvas` object accessible through the `.canvas` attribute is no different than any other `Canvas` you create (and can be swapped for other canvases at will).
+Once you've created a `Window` object, Node will wait for your current function to end and then switch over to an OS-controlled event loop for the rest of your program. Any changes you make to the window's canvas or to the window's attributes will be displayed in the next pass through the event loop.
 
 #### Events & Animation
 
-Once you've created one or more `Window` objects, Node will wait for your current function to end and then switch over to an OS-controlled event loop for the rest of your program. This means that the standard asynchronous callbacks like `setTimeout` and `setInterval` **will not work**. If you want your window's content to change over time, you'll need to use the `.on()` or `.once` method to tie your code's execution to [events generated by the user interface][win_bind].
+Since displaying windows requires transferring control to the OS's event loop, you can no longer count on Node's traditional asynchrononous behavior for structuring your program. In particular, the standard asynchronous callbacks `setTimeout` and `setInterval` **will not work**.
+
+Instead, you must use event handlers attached to the `Window` object. These allow you to respond to user interface events (e.g., mouse and keyboard input, the window being dragged or resized, changes in which window is currently active, etc.). `Window` objects support the standard `.on()`, `.off()`, and `.once()` methods for setting event handlers, allowing your program's execution to be driven by [user interaction][win_bind].
 
 One of the easiest ways to get started is to define a handler for the [`draw`][draw] event, which automatically clears the canvas and calls your code at 60 frames per second (though you can override this via the [`App.fps`][fps] property). The object it passes as an argument contains a property called `frame` which will increment by one each time you draw:
 
@@ -915,15 +924,15 @@ The `Window` object is an [Event Emitter][event_emitter] subclass and supports a
 Emitted when the user drags the window to a new position. The event object includes `top` and `left` properties expressed in resolution-independent points.
 
 ##### `setup` event
-The `setup` event is emitted right after the window is created and is about to be displayed on screen. This can be a good place to collect the data you'll need for an animation. Immediately after `setup`, the `frame` and `draw` events will fire.
+The `setup` event is emitted just before a newly created window is displayed on screen. This can be a good place to collect the data you'll need for an animation. Immediately after `setup`, the `frame` and `draw` events will fire.
 
 ##### `frame` event
 Similar to the `requestAnimationFrame` callback system in browsers, the `frame` event allows you to schedule redrawing your canvas to maintain a constant frame rate. The event object provides a window-specific frame counter that begins ticking upward from zero as soon as the window appears.
 
 ##### `draw` event
-The `draw` event is similar to `frame`, but has the potentially convenient side effect of automatically erasing the window's canvas before calling your event handler. 
+The `draw` event fires immediately after `frame` and  has the potentially convenient side effect of automatically erasing the window's canvas before calling your event handler. 
 
-> Note that this canvas-clearing behavior depends upon your having set up an event handler using `.on()` and will continue until you delete the window's `draw` event handlers using `.off()`
+> Note that this canvas-clearing behavior depends upon your having set up an event handler using `.on("draw", …)` and will continue until (and unless) you delete the window's `draw` event handlers using `.off()`
 
 [mdn_cursor]: https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
 [mdn_object_fit]: https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit
