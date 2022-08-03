@@ -242,6 +242,7 @@ export const FontLibrary: FontLibrary
 // Window & App
 //
 
+import { EventEmitter } from "stream";
 export type FitStyle = "none" | "contain-x" | "contain-y" | "contain" | "cover" | "fill" | "scale-down" | "resize"
 export type CursorStyle = "default" | "crosshair" | "hand" | "arrow" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
                           "cell" | "vertical-text" | "alias" | "copy" | "no-drop" | "grab" | "grabbing" | "all-scroll" | "zoom-in" | "zoom-out" |
@@ -262,7 +263,7 @@ export type WindowOptions = {
   cursor?: CursorStyle
 }
 
-export class Window{
+export class Window extends EventEmitter{
   constructor(options?: WindowOptions)
   constructor(canvas: Canvas, options?: WindowOptions)
 
