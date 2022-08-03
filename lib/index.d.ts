@@ -247,7 +247,7 @@ export type FitStyle = "none" | "contain-x" | "contain-y" | "contain" | "cover" 
 export type CursorStyle = "default" | "crosshair" | "hand" | "arrow" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
                           "cell" | "vertical-text" | "alias" | "copy" | "no-drop" | "grab" | "grabbing" | "all-scroll" | "zoom-in" | "zoom-out" |
                           "e-resize" | "n-resize" | "ne-resize" | "nw-resize" | "s-resize" | "se-resize" | "sw-resize" | "w-resize" | "ew-resize" |
-                          "ns-resize" | "nesw-resize" | "nwse-resize" | "col-resize" | "row-resize"
+                          "ns-resize" | "nesw-resize" | "nwse-resize" | "col-resize" | "row-resize" | "none"
 
 export type WindowOptions = {
   title?: string

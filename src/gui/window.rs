@@ -19,7 +19,7 @@ use crate::context::page::Page;
 use super::event::{CanvasEvent, Sieve};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "camelCase")]
 pub struct WindowSpec {
     pub id: String,
     pub left: Option<f32>,
@@ -33,6 +33,7 @@ pub struct WindowSpec {
     height: f32,
     #[serde(with = "Cursor")]
     cursor: CursorIcon,
+    cursor_hidden: bool,
     fit: Fit,
 }
 
@@ -163,7 +164,10 @@ impl Window {
                             self.handle.set_title(&title);
                         }
                         CanvasEvent::Cursor(icon) => {
-                            self.handle.set_cursor_icon(icon);
+                            if let Some(icon) = icon{
+                                self.handle.set_cursor_icon(icon);
+                            }
+                            self.handle.set_cursor_visible(icon.is_some());
                         }
                         CanvasEvent::Fit(mode) => {
                             self.fit = mode;
@@ -312,8 +316,9 @@ impl WindowManager {
                 updates.push(CanvasEvent::Fullscreen(spec.fullscreen));
             }
 
-            if spec.cursor != win.spec.cursor {
-                updates.push(CanvasEvent::Cursor(spec.cursor));
+            if spec.cursor != win.spec.cursor || spec.cursor_hidden != win.spec.cursor_hidden {
+                let icon = if spec.cursor_hidden{ None }else{ Some(spec.cursor) };
+                updates.push(CanvasEvent::Cursor(icon));
             }
 
             if spec.fit != win.spec.fit {
