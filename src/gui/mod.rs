@@ -106,21 +106,22 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                         }
                     }
 
-                    Event::WindowEvent { event:ref win_event, window_id } => match win_event {
-                        WindowEvent::Destroyed | WindowEvent::CloseRequested => {
-                            windows.remove(&window_id);
+                    Event::WindowEvent { event:ref win_event, window_id } => {
+                        windows.capture_ui_event(&window_id, win_event);
+
+                        match win_event {
+                            WindowEvent::Destroyed | WindowEvent::CloseRequested => {
+                                windows.remove(&window_id);
+                            }
+                            WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), state: ElementState::Released,.. }, .. } => {
+                                windows.set_fullscreen_state(&window_id, false);
+                            }
+                            WindowEvent::Resized(_) => {
+                                windows.send_event(&window_id, event); // update the window
+                            }
+                            _ => {}
                         }
-                        WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), state: ElementState::Released,.. }, .. } => {
-                            windows.set_fullscreen_state(&window_id, false);
-                        }
-                        WindowEvent::Resized(_) => {
-                            windows.capture_ui_event(&window_id, win_event); // update state
-                            windows.send_event(&window_id, event); // update the window
-                        }
-                        _ => {
-                            windows.capture_ui_event(&window_id, win_event);
-                        }
-                    },
+                    }
 
                     Event::MainEventsCleared => {
                         // on initial pass, do a roundtrip to sync up the Window object's state attrs:
