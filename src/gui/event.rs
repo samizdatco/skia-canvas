@@ -280,6 +280,8 @@ impl Cadence{
   }
 
   pub fn set_frame_rate(&mut self, rate:u64){
+    if rate == self.rate{ return }
+
     let frame_time = 1_000_000_000/rate.max(1);
     let watch_interval = 1_000_000.max(frame_time/10);
     self.render = Duration::from_nanos(frame_time);
@@ -288,7 +290,7 @@ impl Cadence{
   }
 
   pub fn on_next_frame<F:Fn()>(&mut self, draw:F) -> ControlFlow{
-    if self.rate == 0{
+    if !self.active(){
       return ControlFlow::Wait;
     }
 

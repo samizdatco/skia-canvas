@@ -67,13 +67,12 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let mut windows = WindowManager::default();
     let mut cadence = Cadence::default();
 
-    cadence.set_frame_rate(60);
-
     EVENT_LOOP.with(|event_loop| {
         event_loop.borrow_mut().run_return(|event, event_loop, control_flow| {
             runloop(|| {
                 match event {
                     Event::NewEvents(..) => {
+                        // trigger a Render if the cadence is active, otherwise handle UI events in MainEventsCleared
                         *control_flow = cadence.on_next_frame(|| add_event(CanvasEvent::Render) );
                     }
 
@@ -89,7 +88,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 return *control_flow = ControlFlow::Exit;
                             }
                             CanvasEvent::Render => {
-                                // relay UI-driven state changes to js and render the response
+                                // relay UI-driven state changes to js and render the next frame in the (active) cadence
                                 roundtrip(&mut cx, windows.get_ui_changes(), &callback,
                                     |spec, page| windows.update_window(spec, page)
                                 ).ok();
@@ -131,6 +130,14 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 |spec, page| windows.update_window(spec, page)
                             ).ok();
                         });
+
+                        // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
+                        // a Render event, so only do a roundtrip if there are new UI events to be relayed
+                        if !cadence.active() && windows.has_ui_changes() {
+                            roundtrip(&mut cx, windows.get_ui_changes(), &callback,
+                                |spec, page| windows.update_window(spec, page)
+                            ).ok();
+                        }
                     }
 
                     Event::RedrawRequested(window_id) => {
@@ -138,8 +145,9 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                     }
 
                     Event::RedrawEventsCleared => {
-                        *control_flow = match windows.len(){
-                            0 => ControlFlow::Exit,
+                        *control_flow = match (windows.len(), cadence.active()) {
+                            (0, _) => ControlFlow::Exit,
+                            (_, false) => ControlFlow::Wait,
                             _ => ControlFlow::Poll
                         }
                     }
