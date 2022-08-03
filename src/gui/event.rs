@@ -247,6 +247,9 @@ impl Sieve{
     Some(json!(payload))
   }
 
+  pub fn is_empty(&self) -> bool {
+    self.queue.is_empty()
+  }
 }
 
 pub struct Cadence{

@@ -98,11 +98,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 });
 
                                 // relay UI-driven state changes to js and render the response
-                                let payload = json!{{
-                                    "ui": windows.get_ui_changes(),
-                                    "state": windows.get_state(),
-                                }};
-                                roundtrip(&mut cx, payload, &callback,
+                                roundtrip(&mut cx, windows.get_ui_changes(), &callback,
                                     |spec, page| windows.update_window(spec, page)
                                 ).ok();
                             }

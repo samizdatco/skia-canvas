@@ -3,6 +3,7 @@ use serde_json::json;
 use skia_safe::{Matrix, Color, Paint};
 use crossbeam::channel::{self, Sender};
 use serde::{Serialize, Deserialize};
+use serde_json::{Map, Value};
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize, PhysicalPosition},
     event::{Event, WindowEvent},
@@ -369,22 +370,20 @@ impl WindowManager {
         }
     }
 
-    pub fn get_ui_changes(&mut self) -> serde_json::Value {
-        let mut changes = serde_json::Map::new();
-        self.windows.iter_mut().for_each(|win|{
-            if let Some(payload) = win.sieve.serialize(){
-                changes.insert(win.spec.id.clone(), payload);
-            }
-        });
-        serde_json::json!(changes)
+    pub fn has_ui_changes(&self) -> bool {
+        self.windows.iter().any(|win| !win.sieve.is_empty() )
     }
 
-    pub fn get_state(&mut self) -> serde_json::Value {
-        let mut changes = serde_json::Map::new();
+    pub fn get_ui_changes(&mut self) -> Value {
+        let mut ui = Map::new();
+        let mut state = Map::new();
         self.windows.iter_mut().for_each(|win|{
-            changes.insert(win.spec.id.clone(), json!(win.spec));
+            if let Some(payload) = win.sieve.serialize(){
+                ui.insert(win.spec.id.clone(), payload);
+            }
+            state.insert(win.spec.id.clone(), json!(win.spec));
         });
-        json!(changes)
+        json!({ "ui": ui, "state": state })
     }
 
     pub fn get_geometry(&mut self) -> serde_json::Value {
