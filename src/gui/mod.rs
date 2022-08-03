@@ -89,14 +89,6 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 return *control_flow = ControlFlow::Exit;
                             }
                             CanvasEvent::Render => {
-                                // on initial pass, do a roundtrip to sync up the Window object's state attrs:
-                                // send just the initial window positions then read back all state
-                                cadence.on_startup(||{
-                                    roundtrip(&mut cx, json!({"geom":windows.get_geometry()}), &callback,
-                                        |spec, page| windows.update_window(spec, page)
-                                    ).ok();
-                                });
-
                                 // relay UI-driven state changes to js and render the response
                                 roundtrip(&mut cx, windows.get_ui_changes(), &callback,
                                     |spec, page| windows.update_window(spec, page)
@@ -130,6 +122,16 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                             windows.capture_ui_event(&window_id, win_event);
                         }
                     },
+
+                    Event::MainEventsCleared => {
+                        // on initial pass, do a roundtrip to sync up the Window object's state attrs:
+                        // send just the initial window positions then read back all state
+                        cadence.on_startup(||{
+                            roundtrip(&mut cx, json!({"geom":windows.get_geometry()}), &callback,
+                                |spec, page| windows.update_window(spec, page)
+                            ).ok();
+                        });
+                    }
 
                     Event::RedrawRequested(window_id) => {
                         windows.send_event(&window_id, event);
