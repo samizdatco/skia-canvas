@@ -1,5 +1,4 @@
 use std::thread;
-use neon::prelude::*;
 use serde_json::json;
 use skia_safe::{Matrix, Color, Paint};
 use crossbeam::channel::{self, Sender};
@@ -59,8 +58,6 @@ pub struct Window {
     pub background: Color,
     pub page: Page
 }
-
-impl Finalize for Window {}
 
 impl Window {
     pub fn new(event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>, spec: &mut WindowSpec, page: &Page) -> Self {
