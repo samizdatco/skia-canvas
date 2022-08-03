@@ -78,7 +78,7 @@ jobs:
         SERVER: ${{ github.server_url }}
         REPO: ${{ github.repository }}
       run: |
-        git clone --depth 1 ${SERVER}/${REPO} skia-canvas
+        git clone --depth 1 --branch ${GITHUB_REF_NAME} ${SERVER}/${REPO} skia-canvas
         export TAG=$(make -sC skia-canvas skia-version)
         make -sC skia-canvas with-local-skia
         echo "::set-output name=VERSION::$TAG"
