@@ -1,4 +1,4 @@
-# Skia Canvas
+![Skia Canvas](https://repository-images.githubusercontent.com/285112082/4d0650b6-a4bc-4308-98b7-3980f0282589)
 
 Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and as a result produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
 
@@ -1069,7 +1069,7 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 
 > Note that this canvas-clearing behavior depends upon your having set up an event handler using `.on("draw", …)` and will continue until (and unless) you delete the window's `draw` event handlers using `.off()` or [`removeAllListeners()`][remove_all].
 
-[event_emitter]: https://nodejs.org/api/events.html#events
+[event_emitter]: https://nodejs.org/api/events.html#class-eventemitter
 [event_on]: https://nodejs.org/api/events.html#emitteroneventname-listener
 [event_off]: https://nodejs.org/api/events.html#emitteroffeventname-listener
 [event_once]: https://nodejs.org/api/events.html#emitteronceeventname-listener
