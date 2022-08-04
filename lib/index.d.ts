@@ -261,11 +261,12 @@ export type WindowOptions = {
   fullscreen?: boolean
   visible?: boolean
   cursor?: CursorStyle
+  canvas?: Canvas
 }
 
 export class Window extends EventEmitter{
+  constructor(width: number, height: number, options?: WindowOptions)
   constructor(options?: WindowOptions)
-  constructor(canvas: Canvas, options?: WindowOptions)
 
   readonly ctx: CanvasRenderingContext2D
   canvas: Canvas
