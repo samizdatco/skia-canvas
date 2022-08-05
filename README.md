@@ -94,49 +94,63 @@ Start by installing:
 #### Generating image files
 
 ```js
-const {Canvas, loadImage} = require('skia-canvas'),
-      rand = n => Math.floor(n * Math.random()),
-      fs = require('fs')
+const {Canvas} = require('skia-canvas')
 
-let canvas = new Canvas(600, 600),
-    ctx = canvas.getContext("2d"),
-    {width, height} = canvas;
+let canvas = new Canvas(400, 400),
+    {width, height} = canvas,
+    ctx = canvas.getContext("2d");
 
-// draw a sea of blurred dots filling the canvas
-ctx.filter = 'blur(12px) hue-rotate(20deg)'
-for (let i=0; i<800; i++){
-  ctx.fillStyle = `hsl(${rand(40)}deg, 80%, 50%)`
-  ctx.beginPath()
-  ctx.arc(rand(width), rand(height), rand(20)+5, 0, 2*Math.PI)
-  ctx.fill()
-}
+let sweep = ctx.createConicGradient(Math.PI * 1.2, width/2, height/2)
+sweep.addColorStop(0, "red")
+sweep.addColorStop(0.25, "orange")
+sweep.addColorStop(0.5, "yellow")
+sweep.addColorStop(0.75, "green")
+sweep.addColorStop(1, "red")
+ctx.strokeStyle = sweep
+ctx.lineWidth = 100
+ctx.strokeRect(100,100, 200,200)
 
-// mask all of the dots that don't overlap with the text
-ctx.filter = 'none'
-ctx.globalCompositeOperation = 'destination-in'
-ctx.font='italic 480px Times, DejaVu Serif'
-ctx.textAlign = 'center'
-ctx.textBaseline = 'top'
-ctx.fillText('¶', width/2, 0)
-
-// draw a background behind the clipped text
-ctx.globalCompositeOperation = 'destination-over'
-ctx.fillStyle = '#182927'
-ctx.fillRect(0,0, width,height)
-
-// render to files using a background thread
+// render to multiple destinations using a background thread
 async function render(){
-  // save the graphic...
-  await canvas.saveAs("pilcrow.png")
+  // save a ‘retina’ image...
+  await canvas.saveAs("rainbox.png", {density:2})
   // ...or use a shorthand for canvas.toBuffer("png")
   let pngData = await canvas.png
   // ...or embed it in a string
-  console.log(`<img src="${await canvas.toDataURL("png")}">`)
+  let pngEmbed = `<img src="${await canvas.toDataURL("png")}">`
 }
 render()
 
 // ...or save the file synchronously from the main thread
-canvas.saveAsSync("pilcrow.png")
+canvas.saveAsSync("rainbox.pdf")
+```
+
+#### Multi-page sequences
+
+```js
+const {Canvas} = require('skia-canvas')
+
+let canvas = new Canvas(400, 400),
+    {width, height} = canvas;
+
+for (const color of ['orange', 'yellow', 'green', 'skyblue', 'purple']){
+  ctx = canvas.newPage()
+  ctx.fillStyle = color
+  ctx.fillRect(0,0, width, height)
+  ctx.fillStyle = 'white'
+  ctx.arc(width/2, height/2, 40, 0, 2 * Math.PI)
+  ctx.fill()
+}
+
+async function render(){
+  // save to a multi-page PDF file
+  await canvas.saveAs("all-pages.pdf")
+
+  // save to files named `page-01.png`, `page-02.png`, etc.
+  await canvas.saveAs("page-{2}.png")
+}
+render()
+
 ```
 
 #### Rendering to a window
