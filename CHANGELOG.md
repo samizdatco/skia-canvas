@@ -1,6 +1,8 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!-- ## 🥚 ⟩ [Unreleased] -->
+
+## 📦 ⟩ [v1.0.0] ⟩ Aug 5, 2022
 
 ### New Features
 - The new [Window][window] class can display a **Canvas** on screen, respond to mouse and keyboard input, and fluidly [animate][window_anim] by calling user-defined [event handlers][window_events].
@@ -16,7 +18,7 @@
 ### Misc. Improvements
 - The [`.filter`][filter] property's `"blur(…)"` and `"drop-shadow(…)"` effects now match browser behavior much more closely and scale appropriately with the `density` export option.
 - Antialiasing is smoother, particularly when down-scaling images, thanks to the use of mipmaps rather than Skia's (apparently buggy?) implementation of bucubic interpolation.
-- Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up). 
+- Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up).
 - Upgraded Skia to milestone 103
 
 [window]: https://github.com/samizdatco/skia-canvas#window
@@ -253,7 +255,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v0.9.30...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v1.0.0...HEAD
+[v1.0.0]: https://github.com/samizdatco/skia-canvas/compare/v0.9.30...v1.0.0
 [v0.9.30]: https://github.com/samizdatco/skia-canvas/compare/v0.9.29...v0.9.30
 [v0.9.29]: https://github.com/samizdatco/skia-canvas/compare/v0.9.28...v0.9.29
 [v0.9.28]: https://github.com/samizdatco/skia-canvas/compare/v0.9.27...v0.9.28
