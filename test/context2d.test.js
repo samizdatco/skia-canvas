@@ -752,7 +752,28 @@ describe("Context2D", ()=>{
       expect( () => ctx.drawCanvas(image, 0, 0) ).not.toThrow()
     })
 
+    test('reset()', async () => {
+      ctx.fillStyle = 'green'
+      ctx.scale(2, 2)
+      ctx.translate(0, -HEIGHT/4)
 
+      ctx.fillRect(WIDTH/4, HEIGHT/4, WIDTH/8, HEIGHT/8)
+      expect(pixel(WIDTH * .5 + 1, 0)).toEqual(GREEN)
+      expect(pixel(WIDTH * .75 - 1, 0)).toEqual(GREEN)
+
+      ctx.beginPath()
+      ctx.rect(WIDTH/4, HEIGHT/2, 100, 100)
+      ctx.reset()
+      ctx.fill()
+      expect(pixel(WIDTH/2 + 1, HEIGHT/2 + 1)).toEqual(CLEAR)
+      expect(pixel(WIDTH * .5 + 1, 0)).toEqual(CLEAR)
+      expect(pixel(WIDTH * .75 - 1, 0)).toEqual(CLEAR)
+
+      ctx.globalAlpha = 0.4
+      ctx.reset()
+      ctx.fillRect(WIDTH/2, HEIGHT/2, 3, 3)
+      expect(pixel(WIDTH/2 + 1, HEIGHT/2 + 1)).toEqual(BLACK)
+    })
   })
 
 

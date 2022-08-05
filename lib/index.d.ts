@@ -139,6 +139,8 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   strokeText(text: string, x: number, y:number, maxWidth?: number): void
   measureText(text: string, maxWidth?: number): TextMetrics
   outlineText(text: string): Path2D
+
+  reset(): void
 }
 
 //

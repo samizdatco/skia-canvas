@@ -64,6 +64,15 @@ pub fn set_size(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let size = this.bounds.size();
+
+  this.reset_size(size);
+  Ok(cx.undefined())
+}
+
 //
 // Grid State
 //
