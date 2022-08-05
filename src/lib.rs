@@ -1,9 +1,7 @@
 #![allow(clippy::unnecessary_wraps)]
 use std::sync::{Mutex};
 use neon::prelude::*;
-
-#[macro_use]
-extern crate lazy_static;
+use once_cell::sync::Lazy;
 
 mod canvas;
 mod context;
@@ -16,13 +14,13 @@ mod texture;
 mod typography;
 mod utils;
 mod gpu;
+#[cfg(feature = "window")]
+mod gui;
 
 use context::api as ctx;
 use typography::FontLibrary;
 
-lazy_static! {
-  pub static ref FONT_LIBRARY:Mutex<FontLibrary> = FontLibrary::shared();
-}
+pub static FONT_LIBRARY: Lazy<Mutex<FontLibrary>> = Lazy::new(|| FontLibrary::shared() );
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
@@ -53,6 +51,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_arcTo", path::arcTo)?;
   cx.export_function("Path2D_ellipse", path::ellipse)?;
   cx.export_function("Path2D_rect", path::rect)?;
+  cx.export_function("Path2D_roundRect", path::roundRect)?;
   cx.export_function("Path2D_op", path::op)?;
   cx.export_function("Path2D_interpolate", path::interpolate)?;
   cx.export_function("Path2D_simplify", path::simplify)?;
@@ -119,6 +118,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   cx.export_function("CanvasRenderingContext2D_new", ctx::new)?;
   cx.export_function("CanvasRenderingContext2D_resetSize", ctx::resetSize)?;
+  cx.export_function("CanvasRenderingContext2D_get_size", ctx::get_size)?;
+  cx.export_function("CanvasRenderingContext2D_set_size", ctx::set_size)?;
+  cx.export_function("CanvasRenderingContext2D_reset", ctx::reset)?;
 
   // grid state
   cx.export_function("CanvasRenderingContext2D_save", ctx::save)?;
@@ -135,6 +137,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // bézier paths
   cx.export_function("CanvasRenderingContext2D_beginPath", ctx::beginPath)?;
   cx.export_function("CanvasRenderingContext2D_rect", ctx::rect)?;
+  cx.export_function("CanvasRenderingContext2D_roundRect", ctx::roundRect)?;
   cx.export_function("CanvasRenderingContext2D_arc", ctx::arc)?;
   cx.export_function("CanvasRenderingContext2D_ellipse", ctx::ellipse)?;
   cx.export_function("CanvasRenderingContext2D_moveTo", ctx::moveTo)?;
@@ -222,6 +225,16 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_get_shadowOffsetY", ctx::get_shadowOffsetY)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetX", ctx::set_shadowOffsetX)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetY", ctx::set_shadowOffsetY)?;
+
+  // -- Window -----------------------------------------------------------------------------------
+
+  #[cfg(feature = "window")] {
+    cx.export_function("App_launch", gui::launch)?;
+    cx.export_function("App_quit", gui::quit)?;
+    cx.export_function("App_closeWindow", gui::close)?;
+    cx.export_function("App_openWindow", gui::open)?;
+    cx.export_function("App_setRate", gui::set_rate)?;
+  }
 
   Ok(())
 }

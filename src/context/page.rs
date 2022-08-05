@@ -49,6 +49,10 @@ impl PageRecorder{
     *self = PageRecorder::new(bounds);
   }
 
+  pub fn update_bounds(&mut self, bounds:Rect){
+    self.bounds = bounds; // non-destructively update the size
+  }
+
   pub fn set_matrix(&mut self, matrix:Matrix){
     self.matrix = matrix;
     if let Some(canvas) = self.current.recording_canvas() {
@@ -106,6 +110,7 @@ impl PageRecorder{
 // Image generator for a single drawing context
 //
 
+#[derive(Debug, Clone)]
 pub struct Page{
   pub layers: Vec<Picture>,
   pub bounds: Rect,

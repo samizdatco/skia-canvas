@@ -288,7 +288,7 @@ pub fn float_args(cx: &mut FunctionContext, rng: Range<usize>) -> NeonResult<Vec
 //
 
 
-pub fn css_to_color<'a>(cx: &mut FunctionContext<'a>, css:&str) -> Option<Color> {
+pub fn css_to_color<'a>(css:&str) -> Option<Color> {
   css.parse::<Rgba>().ok().map(|Rgba{red, green, blue, alpha}|
     Color::from_argb(
       (alpha*255.0).round() as u8,
@@ -302,7 +302,7 @@ pub fn css_to_color<'a>(cx: &mut FunctionContext<'a>, css:&str) -> Option<Color>
 pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
   if val.is_a::<JsString, _>(cx) {
     let css = val.downcast::<JsString, _>(cx).unwrap().value(cx);
-    return css_to_color(cx, &css)
+    return css_to_color(&css)
   }
 
   if let Ok(obj) = val.downcast::<JsObject, _>(cx){
@@ -312,7 +312,7 @@ pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> O
         if let Ok(result) = to_string.call(cx, obj, args){
           if let Ok(clr) = result.downcast::<JsString, _>(cx){
             let css = &clr.value(cx);
-            return css_to_color(cx, css)
+            return css_to_color(css)
           }
         }
       }
@@ -456,7 +456,7 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, V
         let nums = values.to_vec(cx)?;
         let dims = floats_in(cx, &nums);
         let color_str = values.get::<JsString, _, _>(cx, 3)?.value(cx);
-        if let Some(color) = css_to_color(cx, &color_str) {
+        if let Some(color) = css_to_color(&color_str) {
           filters.push(FilterSpec::Shadow{
             offset: Point::new(dims[0], dims[1]), blur: dims[2], color
           });

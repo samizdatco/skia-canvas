@@ -5,22 +5,32 @@ use std::os::raw;
 
 use ash::{Entry, Instance, vk};
 use ash::vk::Handle;
-use skia_safe::gpu;
-use skia_safe::gpu::DirectContext;
+use skia_safe::gpu::{self, DirectContext, SurfaceOrigin};
+use skia_safe::{ImageInfo, Budgeted, Surface};
 
-thread_local!(static VK_CONTEXT: RefCell<Option<Vulkan>> = RefCell::new(None));
+use std::sync::{Arc, Mutex};
+use skulpin::{CoordinateSystem, Renderer, RendererBuilder};
+use skulpin::rafx::api::RafxExtents2D;
 
-pub struct Vulkan {
+#[cfg(feature = "window")]
+use winit::{
+    dpi::{LogicalSize, PhysicalSize},
+    window::{Window},
+};
+
+thread_local!(static VK_CONTEXT: RefCell<Option<VulkanEngine>> = RefCell::new(None));
+
+pub struct VulkanEngine {
     context: gpu::DirectContext,
     _ash_graphics: AshGraphics,
 }
 
-impl Vulkan {
+impl VulkanEngine {
     fn init() {
         VK_CONTEXT.with(|cell| {
             let mut local_ctx = cell.borrow_mut();
             if local_ctx.is_none() {
-                if let Ok(ctx) = Vulkan::new() {
+                if let Ok(ctx) = VulkanEngine::new() {
                     local_ctx.replace(ctx);
                 }
             }
@@ -67,12 +77,77 @@ impl Vulkan {
         })
     }
 
-    pub fn direct_context() -> Option<DirectContext> {
+    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
         Self::init();
         VK_CONTEXT.with(|cell| {
             let local_ctx = cell.borrow();
-            Some(local_ctx.as_ref().unwrap().context.clone())
+            let mut context = local_ctx.as_ref().unwrap().context.clone();
+            Surface::new_render_target(
+                &mut context,
+                Budgeted::Yes,
+                image_info,
+                Some(4),
+                SurfaceOrigin::BottomLeft,
+                None,
+                true,
+            )
         })
+    }
+}
+
+
+pub struct VulkanRenderer {
+    skulpin: Arc<Mutex<Renderer>>,
+}
+
+unsafe impl Send for VulkanRenderer {}
+
+#[cfg(feature = "window")]
+impl VulkanRenderer {
+    pub fn for_window(window: &Window) -> Self {
+        let window_size = window.inner_size();
+        let window_extents = RafxExtents2D {
+            width: window_size.width,
+            height: window_size.height,
+        };
+
+        let skulpin = RendererBuilder::new()
+            .coordinate_system(CoordinateSystem::Logical)
+            .build(&window, window_extents)
+            .unwrap();
+        let skulpin = Arc::new(Mutex::new(skulpin));
+        VulkanRenderer { skulpin }
+    }
+
+    pub fn resize(&self, _size: PhysicalSize<u32>) {
+
+    }
+
+    pub fn draw<F: FnOnce(&mut skia_safe::Canvas, LogicalSize<f32>)>(
+        &mut self,
+        window: &Window,
+        f: F,
+    ) -> Result<(), String> {
+
+        let size = window.inner_size();
+        let window_extents = RafxExtents2D {
+            width: size.width,
+            height: size.height,
+        };
+
+        if let Err(e) = self.skulpin.lock().unwrap().draw(
+            window_extents,
+            window.scale_factor(),
+            |canvas, coords| {
+                let size = coords.window_logical_size();
+                f(canvas, LogicalSize::new(size.width as f32, size.height as f32))
+            })
+        {
+            Err(format!("Rendering error {:?}", e))
+        }else{
+            Ok(())
+        }
+
 
     }
 }

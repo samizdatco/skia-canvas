@@ -1,20 +1,32 @@
-use skia_safe::gpu::{DirectContext, SurfaceOrigin};
-use skia_safe::{Budgeted, ImageInfo, Surface};
+use skia_safe::{ImageInfo, Surface};
 
-#[cfg(target_os = "macos")]
-use crate::gpu::metal::Metal as Engine;
-
-#[cfg(target_os = "macos")]
+#[cfg(feature = "metal")]
 mod metal;
+#[cfg(feature = "metal")]
+use crate::gpu::metal::MetalEngine as Engine;
+#[cfg(all(feature = "metal", feature = "window"))]
+pub use crate::gpu::metal::MetalRenderer as Renderer;
 
-#[cfg(not(target_os = "macos"))]
+
+#[cfg(feature = "vulkan")]
 mod vulkan;
+#[cfg(feature = "vulkan")]
+use crate::gpu::vulkan::VulkanEngine as Engine;
+#[cfg(all(feature = "vulkan", feature = "window"))]
+pub use crate::gpu::vulkan::VulkanRenderer as Renderer;
 
-#[cfg(not(target_os = "macos"))]
-use crate::gpu::vulkan::Vulkan as Engine;
+#[cfg(not(any(feature = "vulkan", feature = "metal")))]
+struct Engine { }
+#[cfg(not(any(feature = "vulkan", feature = "metal")))]
+impl Engine {
+    pub fn supported() -> bool { false }
+    pub fn surface(_: &ImageInfo) -> Option<Surface> { None }
+}
 
-
-// mod gl;
+#[cfg(feature = "metal")]
+pub use crate::gpu::metal::autoreleasepool as runloop;
+#[cfg(not(feature = "metal"))]
+pub fn runloop<T, F: FnOnce() -> T>(f: F) -> T { f() }
 
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
@@ -37,25 +49,9 @@ impl RenderingEngine{
     }
 
     pub fn get_surface(&self, image_info: &ImageInfo) -> Option<Surface> {
-        if let Some(mut context) = self.get_direct_context() {
-            Surface::new_render_target(
-                &mut context,
-                Budgeted::Yes,
-                image_info,
-                Some(4),
-                SurfaceOrigin::BottomLeft,
-                None,
-                true,
-            )
-        } else {
-            Surface::new_raster(image_info, None, None)
-        }
-    }
-
-    fn get_direct_context(&self) -> Option<DirectContext> {
         match self {
-            Self::GPU => Engine::direct_context(),
-            Self::CPU => None
+            Self::GPU => Engine::surface(image_info),
+            Self::CPU => Surface::new_raster(image_info, None, None)
         }
     }
 }

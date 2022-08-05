@@ -27,32 +27,11 @@ jobs:
       with:
         path: skia-canvas
 
-    - name: Determine current upstream version
-      id: rust-skia
-      run: |
-        export TAG=$(make -sC skia-canvas skia-version)
-        echo "::set-output name=VERSION::$TAG"
-
-    - name: Checkout rust-skia
-      if: ${{ matrix.libc == 'musl' }}
-      uses: actions/checkout@v2
-      with:
-        repository: rust-skia/rust-skia
-        ref: ${{ steps.rust-skia.outputs.VERSION }}
-        submodules: true
-        path: rust-skia
-
-    - name: Patch build files
-      if: ${{ matrix.libc == 'musl' }}
-      run: |
-        patch -p0 < /code/alpine-build.patch
-        make -sC skia-canvas with-local-skia
-
     - name: Build module
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
 
     - name: Package module
       run: |
@@ -99,7 +78,7 @@ jobs:
         SERVER: ${{ github.server_url }}
         REPO: ${{ github.repository }}
       run: |
-        git clone --depth 1 ${SERVER}/${REPO} skia-canvas
+        git clone --depth 1 --branch ${GITHUB_REF_NAME} ${SERVER}/${REPO} skia-canvas
         export TAG=$(make -sC skia-canvas skia-version)
         make -sC skia-canvas with-local-skia
         echo "::set-output name=VERSION::$TAG"
@@ -111,11 +90,6 @@ jobs:
         git submodule update --init --depth 1 skia-bindings/skia
         git submodule update --init --depth 1 skia-bindings/depot_tools
 
-    - name: Apply patches
-      if: ${{ matrix.libc == 'musl' }}
-      run: |
-        patch -p0 < /code/alpine-build.patch
-
     - name: Use system GN
       if: ${{ matrix.libc == 'musl' }}
       run: |
@@ -125,7 +99,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
 
     - name: Package module
       run: |
@@ -196,7 +170,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
 
     - name: Package module
       run: |
@@ -234,7 +208,7 @@ jobs:
         MACOSX_DEPLOYMENT_TARGET: 10.13
       run: |
         npm ci --ignore-scripts
-        npm run build -- --release
+        npm run build -- --release --features metal,window
 
     - name: Package module
       run: |
@@ -277,7 +251,7 @@ jobs:
         MACOSX_DEPLOYMENT_TARGET: 11.1
       run: |
         npm ci --ignore-scripts
-        npm run build -- --release --target aarch64-apple-darwin
+        npm run build -- --release --features metal,window --target aarch64-apple-darwin
         sed -i.bak 's/"package_name":.*/"package_name": "{platform}-arm64-{node_napi_label}-{libc}.tar.gz",/' package.json
         npm run package
 
@@ -309,7 +283,7 @@ jobs:
     - name: Build module
       run: |
         npm ci --ignore-scripts
-        npm run build -- --release
+        npm run build -- --release --features vulkan,window
 
     - name: Package module
       run: |

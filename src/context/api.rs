@@ -6,7 +6,7 @@
 use std::f32::consts::PI;
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
-use skia_safe::{Point, Rect, Matrix, Path, PathDirection, PaintStyle};
+use skia_safe::{Point, Rect, RRect, Matrix, Path, PathDirection::{CW, CCW}, PaintStyle};
 use skia_safe::path::AddPathMode::Append;
 use skia_safe::path::AddPathMode::Extend;
 use skia_safe::textlayout::{TextDirection};
@@ -29,7 +29,7 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedContext2D> {
   let parent = cx.argument::<BoxedCanvas>(1)?;
   let parent = parent.borrow();
 
-  this.borrow_mut().resize((parent.width, parent.height));
+  this.borrow_mut().reset_size((parent.width, parent.height));
   Ok(cx.boxed(this))
 }
 
@@ -38,7 +38,38 @@ pub fn resetSize(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let parent = cx.argument::<BoxedCanvas>(1)?;
   let parent = parent.borrow();
 
-  this.borrow_mut().resize((parent.width, parent.height));
+  this.borrow_mut().reset_size((parent.width, parent.height));
+  Ok(cx.undefined())
+}
+
+pub fn get_size(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let bounds = this.borrow().bounds;
+
+  let array = JsArray::new(&mut cx, 2);
+  let width = cx.number(bounds.size().width);
+  let height = cx.number(bounds.size().height);
+  array.set(&mut cx, 0, width)?;
+  array.set(&mut cx, 1, height)?;
+  Ok(array)
+}
+
+pub fn set_size(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let xy = opt_float_args(&mut cx, 1..3);
+
+  if let [width, height] = xy.as_slice(){
+    this.borrow_mut().resize((*width, *height));
+  }
+  Ok(cx.undefined())
+}
+
+pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let size = this.bounds.size();
+
+  this.reset_size(size);
   Ok(cx.undefined())
 }
 
@@ -206,6 +237,23 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     this.path.line_to(quad[3]);
     this.path.close();
   }
+  Ok(cx.undefined())
+}
+
+pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  check_argc(&mut cx, 13)?;
+
+  let nums = opt_float_args(&mut cx, 1..13);
+  if let [x, y, w, h] = &nums[..4]{
+    let rect = Rect::from_xywh(*x, *y, *w, *h);
+    let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
+    let rrect = RRect::new_rect_radii(rect, &[radii[0], radii[1], radii[2], radii[3]]);
+    let direction = if w.signum() == h.signum(){ CW }else{ CCW };
+    this.path.add_rrect(rrect, Some((direction, 0)));
+  }
+
   Ok(cx.undefined())
 }
 

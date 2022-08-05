@@ -57,7 +57,7 @@ export class Canvas {
   readonly pages: CanvasRenderingContext2D[]
 
   get gpu(): boolean
-  set gpu(enabled: boolean): void
+  set gpu(enabled: boolean)
 
   saveAs(filename: string, options?: SaveOptions): Promise<void>
   toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
@@ -120,6 +120,8 @@ interface CanvasFillStrokeStyles {
 type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:number, x4:number, y4:number] |
                   [left:number, top:number, right:number, bottom:number] | [width:number, height:number]
 
+type CornerRadius = number | DOMPoint
+
 export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform, CanvasUserInterface {
   readonly canvas: Canvas;
   fontVariant: string;
@@ -133,12 +135,15 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
 
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
+  roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[])
   // getContextAttributes(): CanvasRenderingContext2DSettings;
 
   fillText(text: string, x: number, y:number, maxWidth?: number): void
   strokeText(text: string, x: number, y:number, maxWidth?: number): void
   measureText(text: string, maxWidth?: number): TextMetrics
   outlineText(text: string): Path2D
+
+  reset(): void
 }
 
 //
@@ -169,6 +174,8 @@ export class Path2D extends globalThis.Path2D {
     y: number,
     weight: number
   ): void
+
+  roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[])
 
   complement(otherPath: Path2D): Path2D
   difference(otherPath: Path2D): Path2D
@@ -237,3 +244,61 @@ export interface FontLibrary {
 }
 
 export const FontLibrary: FontLibrary
+
+//
+// Window & App
+//
+
+import { EventEmitter } from "stream";
+export type FitStyle = "none" | "contain-x" | "contain-y" | "contain" | "cover" | "fill" | "scale-down" | "resize"
+export type CursorStyle = "default" | "crosshair" | "hand" | "arrow" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
+                          "cell" | "vertical-text" | "alias" | "copy" | "no-drop" | "grab" | "grabbing" | "all-scroll" | "zoom-in" | "zoom-out" |
+                          "e-resize" | "n-resize" | "ne-resize" | "nw-resize" | "s-resize" | "se-resize" | "sw-resize" | "w-resize" | "ew-resize" |
+                          "ns-resize" | "nesw-resize" | "nwse-resize" | "col-resize" | "row-resize" | "none"
+
+export type WindowOptions = {
+  title?: string
+  left?: number
+  top?: number
+  width?: number
+  height?: number
+  fit?: FitStyle
+  page?: number
+  background?: string
+  fullscreen?: boolean
+  visible?: boolean
+  cursor?: CursorStyle
+  canvas?: Canvas
+}
+
+export class Window extends EventEmitter{
+  constructor(width: number, height: number, options?: WindowOptions)
+  constructor(options?: WindowOptions)
+
+  readonly ctx: CanvasRenderingContext2D
+  canvas: Canvas
+  visible: boolean
+  fullscreen: boolean
+  title: string
+  cursor: CursorStyle
+  fit: FitStyle
+  left: number
+  top: number
+  width: number
+  height: number
+  page: number
+  background: string
+
+  close(): void
+}
+
+export interface App{
+  readonly windows: Window[]
+  readonly running: boolean
+  fps: number
+
+  launch(): void
+  quit(): void
+}
+
+export const App: App
