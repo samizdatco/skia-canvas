@@ -3,14 +3,14 @@
   <img alt="Skia Canvas" src="test/assets/readme-header@2x.png">
 </picture>
 
-Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and as a result produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
+Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and, accordingly, produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
 
 While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas to take greater advantage of Skia's advanced graphical features and provide a more expressive coding environment.
 
 In particular, Skia Canvas:
 
   - is fast and compact since rendering takes place on the GPU and all the heavy lifting is done by native code written in Rust and C++
-  - renders directly to [windows](#window) using the OS's native drawing routines and provides a browser-like [UI event][win_bind] framework
+  - can render to [windows](#window) using an OS-native graphics pipeline and provides a browser-like [UI event][win_bind] framework
   - generates output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
@@ -271,7 +271,7 @@ function synchronous(){
 
 #### `.gpu`
 
-The `.gpu` attribute allows you to control whether rendering occurs on the graphics card or uses the CPU. Rendering is hardware accelerated by default, using [Metal](https://developer.apple.com/metal/) on macOS and [Vulkan](https://www.vulkan.org) on Linux and Windows. To use software-based rendering, set the `.gpu` property to the `false`. If the current platform doesn't support GPU-based rendering, the property will be `false` by default (see [this article](https://linuxconfig.org/install-and-test-vulkan-on-linux) for some tips on getting Vulkan working on Linux).
+The `.gpu` attribute allows you to control whether rendering occurs on the graphics card or uses the CPU. Rendering is hardware accelerated by default, using [Metal](https://developer.apple.com/metal/) on macOS and [Vulkan](https://www.vulkan.org) on Linux and Windows. To use software-based rendering, set the `.gpu` property to `false`. If the current platform doesn't support GPU-based rendering, the property will be `false` by default (see [this article](https://linuxconfig.org/install-and-test-vulkan-on-linux) for some tips on getting Vulkan working on Linux).
 
 #### `.pages`
 
@@ -279,7 +279,7 @@ The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][Ca
 
 #### `.pdf`, `.svg`, `.jpg`, and `.png`
 
-These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
+These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
 
 ##### METHODS
 
@@ -971,7 +971,7 @@ win.on('keydown', ({key}) => {
 })
 ```
 
-In the previous example, we created references to the window’s `ctx` and `canvas` objects from outside the event handler, but sometimes you'll want to use the same handler function in more than one window. You can get a reference to the specific window associated with an event through its `target` attribute, allowing us to write an event handler that doesn't contain a reference to the `win` variable it's attached to:
+In the previous example, we used references to the window’s `ctx` and `canvas` that were created outside the event handler, but this makes the function less general since it's tied to a single window. We can get a reference to the specific window associated with an event through its `.target` attribute, allowing us to write an event handler that doesn't contain a reference to the `win` variable it's attached to:
 ```js
 const closeWindow = (e) => {
   console.log("now closing window:", e.target)
@@ -1128,7 +1128,7 @@ An array of references to all of the `Window` objects that have been created and
 ##### METHODS
 
 #### `launch()`
-Any `Window` you create will schedule the `App` to begin running as soon as the current function returns. You can make this happen sooner by calling `App.launch` within your code. The `launch()` method will not return until the last window is called so you may find it handy to place ‘clean up’ code after the `launch()` invocation. 
+Any `Window` you create will schedule the `App` to begin running as soon as the current function returns. You can make this happen sooner by calling `App.launch` within your code. The `launch()` method will not return until the last window is closed so you may find it handy to place ‘clean up’ code after the `launch()` invocation. 
 >Note, however, that the `App` **cannot be launched a second time** once it terminates due to limitiations in the underlying platform libraries.
 
 #### `quit()`
