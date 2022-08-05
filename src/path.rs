@@ -6,7 +6,7 @@
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Point, PathDirection, Rect, Matrix, PathOp, StrokeRec,};
+use skia_safe::{Path, Point, PathDirection::{CW, CCW}, Rect, RRect, Matrix, PathOp, StrokeRec,};
 use skia_safe::{PathEffect, trim_path_effect};
 use skia_safe::path::{self, AddPathMode, Verb, FillType};
 
@@ -266,7 +266,27 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let nums = opt_float_args(&mut cx, 1..5);
   if let [x, y, w, h] = nums.as_slice(){
     let rect = Rect::from_xywh(*x, *y, *w, *h);
-    this.path.add_rect(rect, Some((PathDirection::CW, 0)));
+    let direction = if w.signum() == h.signum(){ CW }else{ CCW };
+    this.path.add_rect(rect, Some((direction, 0)));
+  }
+
+  Ok(cx.undefined())
+}
+
+// Creates a path for a rounded rectangle at position (x, y) with a size (w, h) and whose radii
+// are specified in x/y pairs for top_left, top_right, bottom_right, and bottom_left
+pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let mut this = this.borrow_mut();
+  check_argc(&mut cx, 13)?;
+
+  let nums = opt_float_args(&mut cx, 1..13);
+  if let [x, y, w, h] = &nums[..4]{
+    let rect = Rect::from_xywh(*x, *y, *w, *h);
+    let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
+    let rrect = RRect::new_rect_radii(rect, &[radii[0], radii[1], radii[2], radii[3]]);
+    let direction = if w.signum() == h.signum(){ CW }else{ CCW };
+    this.path.add_rrect(rrect, Some((direction, 0)));
   }
 
   Ok(cx.undefined())

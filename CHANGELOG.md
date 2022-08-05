@@ -5,7 +5,9 @@
 ### New Features
 - The new [Window][window] class can display a **Canvas** on screen, respond to mouse and keyboard input, and fluidly [animate][window_anim] by calling user-defined [event handlers][window_events].
 - Bitmap rendering now occurs on the GPU by default and can be configured using the **Canvas**'s [`.gpu`][canvas_gpu] property. If the platform supports hardware-accelerated rendering (using Metal on macOS and Vulkan on Linux & Windows), the property will be `true` by default and can be set to `false` to use the software renderer.
-- Added support for Chrome’s [`reset()`][chrome_reset] context method which erases the canvas, resets the transformation state, and clears the current path
+- Added support for recent Chrome features:
+  - the [`reset()`][chrome_reset] context method which erases the canvas, resets the transformation state, and clears the current path
+  - the [`roundRect()`][chrome_rrect] method on contexts and **Path2D** objects which adds a rounded rectangle using 1–4 corner radii (provided as a single value or an array of numbers and/or **DOMPoint** objects)
 
 ### Bugfixes
 - The `FontLibrary.reset()` method didn't actually remove previously installed fonts that had already been drawn with (and thus cached). It now clears those caches, which also means previously used fonts can now be replaced by calling `.use()` again with the same family name.
@@ -14,7 +16,7 @@
 ### Misc. Improvements
 - The [`.filter`][filter] property's `"blur(…)"` and `"drop-shadow(…)"` effects now match browser behavior much more closely and scale appropriately with the `density` export option.
 - Antialiasing is smoother, particularly when down-scaling images, thanks to the use of mipmaps rather than Skia's (apparently buggy?) implementation of bucubic interpolation.
-- Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up). Assigning a new `width` or `height` to the canvas will have a similar effect.
+- Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up). 
 - Upgraded Skia to milestone 103
 
 [window]: https://github.com/samizdatco/skia-canvas#window
@@ -23,6 +25,7 @@
 [canvas_gpu]: https://github.com/samizdatco/skia-canvas#gpu
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [chrome_reset]: https://developer.chrome.com/blog/canvas2d/#context-reset
+[chrome_rrect]: https://developer.chrome.com/blog/canvas2d/#round-rect
 
 ## 📦 ⟩ [v0.9.30] ⟩ Jun 7, 2022
 

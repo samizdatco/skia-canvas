@@ -6,7 +6,7 @@
 use std::f32::consts::PI;
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
-use skia_safe::{Point, Rect, Matrix, Path, PathDirection, PaintStyle};
+use skia_safe::{Point, Rect, RRect, Matrix, Path, PathDirection::{CW, CCW}, PaintStyle};
 use skia_safe::path::AddPathMode::Append;
 use skia_safe::path::AddPathMode::Extend;
 use skia_safe::textlayout::{TextDirection};
@@ -237,6 +237,23 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     this.path.line_to(quad[3]);
     this.path.close();
   }
+  Ok(cx.undefined())
+}
+
+pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  check_argc(&mut cx, 13)?;
+
+  let nums = opt_float_args(&mut cx, 1..13);
+  if let [x, y, w, h] = &nums[..4]{
+    let rect = Rect::from_xywh(*x, *y, *w, *h);
+    let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
+    let rrect = RRect::new_rect_radii(rect, &[radii[0], radii[1], radii[2], radii[3]]);
+    let direction = if w.signum() == h.signum(){ CW }else{ CCW };
+    this.path.add_rrect(rrect, Some((direction, 0)));
+  }
+
   Ok(cx.undefined())
 }
 

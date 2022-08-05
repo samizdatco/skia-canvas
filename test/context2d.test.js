@@ -3,7 +3,7 @@
 "use strict"
 
 const _ = require('lodash'),
-      {Canvas, DOMMatrix, ImageData, loadImage} = require('../lib'),
+      {Canvas, DOMMatrix, DOMPoint, ImageData, loadImage} = require('../lib'),
       css = require('../lib/css');
 
 const BLACK = [0,0,0,255],
@@ -514,6 +514,35 @@ describe("Context2D", ()=>{
         ctx.fillText(...args)
         expect(ctx.getImageData(0, 0, 20, 20).data.some(a => a)).toBe(shouldDraw)
       })
+    })
+
+    test("roundRect", () => {
+      let dim = WIDTH/2
+      let radii = [50, 25, 15, new DOMPoint(20, 10)]
+      ctx.beginPath()
+      ctx.roundRect(dim, dim, dim, dim, radii)
+      ctx.roundRect(dim, dim, -dim, -dim, radii)
+      ctx.roundRect(dim, dim, -dim, dim, radii)
+      ctx.roundRect(dim, dim, dim, -dim, radii)
+      ctx.fill()
+
+      let off = [ [3,3], [dim-14, dim-14], [dim-4, 3], [7, dim-6]]
+      let on = [ [5,5], [dim-17, dim-17], [dim-9, 3], [9, dim-9] ]
+
+      for (const [x, y] of on){
+        console.log(x, y);
+        expect(pixel(x, y)).toEqual(BLACK)
+        expect(pixel(x, HEIGHT - y - 1)).toEqual(BLACK)
+        expect(pixel(WIDTH - x - 1, y)).toEqual(BLACK)
+        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(BLACK)
+      }
+
+      for (const [x, y] of off){
+        expect(pixel(x, y)).toEqual(CLEAR)
+        expect(pixel(x, HEIGHT - y - 1)).toEqual(CLEAR)
+        expect(pixel(WIDTH - x - 1, y)).toEqual(CLEAR)
+        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(CLEAR)
+      }
     })
 
     test('getImageData()', () => {

@@ -51,6 +51,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_arcTo", path::arcTo)?;
   cx.export_function("Path2D_ellipse", path::ellipse)?;
   cx.export_function("Path2D_rect", path::rect)?;
+  cx.export_function("Path2D_roundRect", path::roundRect)?;
   cx.export_function("Path2D_op", path::op)?;
   cx.export_function("Path2D_interpolate", path::interpolate)?;
   cx.export_function("Path2D_simplify", path::simplify)?;
@@ -136,6 +137,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // bézier paths
   cx.export_function("CanvasRenderingContext2D_beginPath", ctx::beginPath)?;
   cx.export_function("CanvasRenderingContext2D_rect", ctx::rect)?;
+  cx.export_function("CanvasRenderingContext2D_roundRect", ctx::roundRect)?;
   cx.export_function("CanvasRenderingContext2D_arc", ctx::arc)?;
   cx.export_function("CanvasRenderingContext2D_ellipse", ctx::ellipse)?;
   cx.export_function("CanvasRenderingContext2D_moveTo", ctx::moveTo)?;

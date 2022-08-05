@@ -120,6 +120,8 @@ interface CanvasFillStrokeStyles {
 type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:number, x4:number, y4:number] |
                   [left:number, top:number, right:number, bottom:number] | [width:number, height:number]
 
+type CornerRadius = number | DOMPoint
+
 export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform, CanvasUserInterface {
   readonly canvas: Canvas;
   fontVariant: string;
@@ -133,6 +135,7 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
 
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
+  roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[])
   // getContextAttributes(): CanvasRenderingContext2DSettings;
 
   fillText(text: string, x: number, y:number, maxWidth?: number): void
@@ -171,6 +174,8 @@ export class Path2D extends globalThis.Path2D {
     y: number,
     weight: number
   ): void
+
+  roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[])
 
   complement(otherPath: Path2D): Path2D
   difference(otherPath: Path2D): Path2D
