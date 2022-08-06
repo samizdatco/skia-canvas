@@ -1065,12 +1065,15 @@ Removes the window from the screen permanently. References to the `Window` objec
 #### `on()` / `off()` / `once()`
 The `Window` object is an [Event Emitter][event_emitter] subclass and supports all the standard methods for adding and removing event listeners. The supported events are mostly consistent with browser-based DOM events, but include some non-standard additions (⚡) specific to Skia Canvas:
 
-| Mouse                      | Keyboard             | Window                   | Focus            | Animation                 |  
-| --                         | --                   | --                       | --               | --                        | 
-| [`mousedown`][mousedown]   | [`keydown`][keydown] | [`move`](#move-event) ⚡ | [`blur`][blur]   | [`setup`][setup] ⚡|
-| [`mouseup`][mouseup]       | [`keyup`][keyup]     | [`resize`][resize]       | [`focus`][focus] | [`frame`][frame] ⚡|
-| [`mousemove`][mousemove]   | [`input`][input]     |                          |                  | [`draw`][draw] ⚡  |
-| [`wheel`][wheel] |                    
+| Mouse                      | Keyboard             | Window                               | Focus            | Animation          |  
+| --                         | --                   | --                                   | --               | --                 | 
+| [`mousedown`][mousedown]   | [`keydown`][keydown] | [`fullscreen`](#fullscreen-event) ⚡ | [`blur`][blur]   | [`setup`][setup] ⚡|
+| [`mouseup`][mouseup]       | [`keyup`][keyup]     | [`move`](#move-event) ⚡             | [`focus`][focus] | [`frame`][frame] ⚡|
+| [`mousemove`][mousemove]   | [`input`][input]     | [`resize`][resize]                   |                  | [`draw`][draw] ⚡  |
+| [`wheel`][wheel]           |
+
+##### `fullscreen` event
+Emitted when the a window switches into or out of full-screen mode. The event object includes a boolean `enabled` property flagging the new state.
 
 ##### `move` event
 Emitted when the user drags the window to a new position. The event object includes `top` and `left` properties expressed in resolution-independent points.

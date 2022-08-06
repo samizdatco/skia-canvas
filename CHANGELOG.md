@@ -5,6 +5,9 @@
 ### Bugfixes
 - The `drawCanvas()` routine now works even when the destination canvas is later saved as an SVG (previously the drawn canvas would be missing from the output). Caveat: this only works if the destination canvas is using the default `source-over` blend mode, has its `globalAlpha` set to 1, and is not using shadows or the `effect` property. If any of those are in effect, the drawn canvas will not appear in the saved SVG.
 
+### Misc. Improvements
+- Added a `fullscreen` event to the `Window` class to flag changes into and out of full-screen mode.
+
 ## 📦 ⟩ [v1.0.0] ⟩ Aug 5, 2022
 
 ### New Features
