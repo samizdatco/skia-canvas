@@ -408,7 +408,13 @@ impl Context2D{
 
     if let Some(picture) = picture{
       self.render_to_canvas(&paint, |canvas, paint| {
-        canvas.draw_picture(&picture, Some(&matrix), Some(&paint));
+        // only use paint if we need it for alpha, blend, shadow, or effect since otherwise
+        // the SVG exporter will omit the picture altogether
+        let paint = match (paint.as_blend_mode(), paint.alpha(), paint.image_filter()) {
+          (Some(BlendMode::SrcOver), 255, None) => None,
+          _ => Some(paint)
+        };
+        canvas.draw_picture(&picture, Some(&matrix), paint);
       });
     }
   }
