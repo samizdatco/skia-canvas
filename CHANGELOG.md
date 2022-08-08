@@ -3,7 +3,7 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### Bugfixes
-- The `drawCanvas()` routine now works even when the destination canvas is later saved as an SVG (previously the drawn canvas would be missing from the output). Caveat: this only works if the destination canvas is using the default `source-over` blend mode, has its `globalAlpha` set to 1, and is not using shadows or the `effect` property. If any of those are in effect, the drawn canvas will not appear in the saved SVG.
+- The `drawCanvas()` routine now works even when the destination canvas is later saved as an SVG (previously, the source canvas would be missing from the output). Caveat: this only works if the destination canvas is using the default `source-over` blend mode, has its `globalAlpha` set to 1, and is not using shadows or the `effect` property. If any of those defaults have been changed, the drawn canvas will not appear in the saved SVG. Bitmap and PDF exports do not have this restriction.
 
 ### Misc. Improvements
 - Added a `fullscreen` event to the `Window` class to flag changes into and out of full-screen mode.
@@ -23,7 +23,7 @@
 
 ### Misc. Improvements
 - The [`.filter`][filter] property's `"blur(…)"` and `"drop-shadow(…)"` effects now match browser behavior much more closely and scale appropriately with the `density` export option.
-- Antialiasing is smoother, particularly when down-scaling images, thanks to the use of mipmaps rather than Skia's (apparently buggy?) implementation of bucubic interpolation.
+- Antialiasing is smoother, particularly when down-scaling images, thanks to the use of mipmaps rather than Skia's (apparently buggy?) implementation of bicubic interpolation.
 - Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up).
 - Upgraded Skia to milestone 103
 
