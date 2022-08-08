@@ -10,6 +10,9 @@ exclude = ["index.node"]
 [lib]
 crate-type = ["cdylib"]
 
+[profile.release]
+lto = "fat"
+
 [features]
 metal = ["skia-safe/metal", "dep:metal", "dep:core-graphics-types", "dep:foreign-types", "dep:cocoa", "dep:objc"]
 vulkan = ["skia-safe/vulkan", "dep:skulpin", "dep:ash"]
