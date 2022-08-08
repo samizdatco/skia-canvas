@@ -6,7 +6,7 @@ use std::os::raw;
 use ash::{Entry, Instance, vk};
 use ash::vk::Handle;
 use skia_safe::gpu::{self, DirectContext, SurfaceOrigin};
-use skia_safe::{ImageInfo, Budgeted, Surface};
+use skia_safe::{ImageInfo, ISize, Budgeted, Surface, ColorSpace};
 
 use std::sync::{Arc, Mutex};
 use skulpin::{CoordinateSystem, Renderer, RendererBuilder};
@@ -39,7 +39,9 @@ impl VulkanEngine {
 
     pub fn supported() -> bool {
         Self::init();
-        VK_CONTEXT.with(|cell| cell.borrow().is_some() )
+        VK_CONTEXT.with(|cell| cell.borrow().is_some()) && Self::surface(
+            &ImageInfo::new_n32_premul(ISize::new(100, 100), Some(ColorSpace::new_srgb()))
+        ).is_some()
     }
 
     fn new() -> Result<Self, String> {
