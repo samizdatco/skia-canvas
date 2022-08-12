@@ -146,7 +146,8 @@ impl Page{
       if let Some(img_format) = img_format{
         let img_scale = Matrix::scale((density, density));
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
-        let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
+        // let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
+        let img_info = ImageInfo::new_n32_premul(img_dims, None);
 
         if let Some(mut surface) = engine.get_surface(&img_info){
           surface
