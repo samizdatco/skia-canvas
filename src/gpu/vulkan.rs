@@ -40,8 +40,7 @@ impl VulkanEngine {
     pub fn supported() -> bool {
         Self::init();
         VK_CONTEXT.with(|cell| cell.borrow().is_some()) && Self::surface(
-            // &ImageInfo::new_n32_premul(ISize::new(100, 100), Some(ColorSpace::new_srgb()))
-            &ImageInfo::new_n32_premul(ISize::new(100, 100), None)
+            &ImageInfo::new_n32_premul(ISize::new(100, 100), Some(ColorSpace::new_srgb()))
         ).is_some()
     }
 
