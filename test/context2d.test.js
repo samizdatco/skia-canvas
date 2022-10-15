@@ -530,7 +530,6 @@ describe("Context2D", ()=>{
       let on = [ [5,5], [dim-17, dim-17], [dim-9, 3], [9, dim-9] ]
 
       for (const [x, y] of on){
-        console.log(x, y);
         expect(pixel(x, y)).toEqual(BLACK)
         expect(pixel(x, HEIGHT - y - 1)).toEqual(BLACK)
         expect(pixel(WIDTH - x - 1, y)).toEqual(BLACK)
