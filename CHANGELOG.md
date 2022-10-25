@@ -10,6 +10,7 @@
 
 ### Misc. Improvements
 - Added a `fullscreen` event to the `Window` class to flag changes into and out of full-screen mode.
+- Added TypeScript return type for roundedRect
 
 ## 📦 ⟩ [v1.0.0] ⟩ Aug 5, 2022
 
