@@ -37,6 +37,7 @@ pub enum CanvasEvent{
   Title(String),
   Fullscreen(bool),
   Visible(bool),
+  Resizable(bool),
   Cursor(Option<CursorIcon>),
   Background(Color),
   Fit(Fit),
