@@ -3,7 +3,7 @@
 "use strict"
 
 const _ = require('lodash'),
-      {Canvas, DOMMatrix, ImageData, loadImage} = require('../lib'),
+      {Canvas, DOMMatrix, DOMPoint, ImageData, loadImage} = require('../lib'),
       css = require('../lib/css');
 
 const BLACK = [0,0,0,255],
@@ -377,7 +377,7 @@ describe("Context2D", ()=>{
       // make sure chains of filters compose correctly <https://codepen.io/sosuke/pen/Pjoqqp>
       ctx.filter = 'blur(5px) invert(56%) sepia(63%) saturate(4837%) hue-rotate(163deg) brightness(96%) contrast(101%)'
       ctx.fillRect(0,0,20,20)
-      expect(pixel(10, 10)).toEqual([0, 162, 213, 245])
+      expect(pixel(10, 10)).toEqual([0, 161, 212, 245])
     })
 
     test("clip()", () => {
@@ -514,6 +514,34 @@ describe("Context2D", ()=>{
         ctx.fillText(...args)
         expect(ctx.getImageData(0, 0, 20, 20).data.some(a => a)).toBe(shouldDraw)
       })
+    })
+
+    test("roundRect", () => {
+      let dim = WIDTH/2
+      let radii = [50, 25, 15, new DOMPoint(20, 10)]
+      ctx.beginPath()
+      ctx.roundRect(dim, dim, dim, dim, radii)
+      ctx.roundRect(dim, dim, -dim, -dim, radii)
+      ctx.roundRect(dim, dim, -dim, dim, radii)
+      ctx.roundRect(dim, dim, dim, -dim, radii)
+      ctx.fill()
+
+      let off = [ [3,3], [dim-14, dim-14], [dim-4, 3], [7, dim-6]]
+      let on = [ [5,5], [dim-17, dim-17], [dim-9, 3], [9, dim-9] ]
+
+      for (const [x, y] of on){
+        expect(pixel(x, y)).toEqual(BLACK)
+        expect(pixel(x, HEIGHT - y - 1)).toEqual(BLACK)
+        expect(pixel(WIDTH - x - 1, y)).toEqual(BLACK)
+        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(BLACK)
+      }
+
+      for (const [x, y] of off){
+        expect(pixel(x, y)).toEqual(CLEAR)
+        expect(pixel(x, HEIGHT - y - 1)).toEqual(CLEAR)
+        expect(pixel(WIDTH - x - 1, y)).toEqual(CLEAR)
+        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(CLEAR)
+      }
     })
 
     test('getImageData()', () => {
@@ -752,7 +780,28 @@ describe("Context2D", ()=>{
       expect( () => ctx.drawCanvas(image, 0, 0) ).not.toThrow()
     })
 
+    test('reset()', async () => {
+      ctx.fillStyle = 'green'
+      ctx.scale(2, 2)
+      ctx.translate(0, -HEIGHT/4)
 
+      ctx.fillRect(WIDTH/4, HEIGHT/4, WIDTH/8, HEIGHT/8)
+      expect(pixel(WIDTH * .5 + 1, 0)).toEqual(GREEN)
+      expect(pixel(WIDTH * .75 - 1, 0)).toEqual(GREEN)
+
+      ctx.beginPath()
+      ctx.rect(WIDTH/4, HEIGHT/2, 100, 100)
+      ctx.reset()
+      ctx.fill()
+      expect(pixel(WIDTH/2 + 1, HEIGHT/2 + 1)).toEqual(CLEAR)
+      expect(pixel(WIDTH * .5 + 1, 0)).toEqual(CLEAR)
+      expect(pixel(WIDTH * .75 - 1, 0)).toEqual(CLEAR)
+
+      ctx.globalAlpha = 0.4
+      ctx.reset()
+      ctx.fillRect(WIDTH/2, HEIGHT/2, 3, 3)
+      expect(pixel(WIDTH/2 + 1, HEIGHT/2 + 1)).toEqual(BLACK)
+    })
   })
 
 

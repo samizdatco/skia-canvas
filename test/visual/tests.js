@@ -1897,9 +1897,9 @@ tests['shadow image with crop'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.shadowColor = '#000'
-    ctx.shadowBlur = 4
-    ctx.shadowOffsetX = 4
-    ctx.shadowOffsetY = 4
+    ctx.shadowBlur = 12
+    ctx.shadowOffsetX = 10
+    ctx.shadowOffsetY = 10
 
     // cropped
     ctx.drawImage(img, 100, 100, 150, 150, 25, 25, 150, 150)
@@ -1915,12 +1915,12 @@ tests['shadow image with crop and zoom'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.shadowColor = '#000'
-    ctx.shadowBlur = 4
-    ctx.shadowOffsetX = 4
-    ctx.shadowOffsetY = 4
+    ctx.shadowBlur = 12
+    ctx.shadowOffsetX = 10
+    ctx.shadowOffsetY = 10
 
     // cropped
-    ctx.drawImage(img, 100, 100, 40, 40, 25, 25, 150, 150)
+    ctx.drawImage(img, 100, 220, 40, 40, 25, 25, 150, 150)
     done(null)
   }
   img.onerror = function () {
@@ -2062,6 +2062,40 @@ tests['shadow integration'] = function (ctx) {
   ctx.arc(50, 151, 50, 0, Math.PI * 2, false)
   ctx.fillStyle = 'gold'
   ctx.fill()
+}
+
+tests['shadow vs blur filter'] = function (ctx) {
+  ctx.rotate(.33)
+  ctx.scale(3, 3)
+  ctx.shadowBlur = 20
+  ctx.shadowOffsetX = 10
+  ctx.shadowOffsetY = 10
+  ctx.shadowColor = '#333'
+
+  ctx.filter = 'blur(5px)'
+  ctx.fillStyle = 'orange'
+  ctx.fillRect(20, 0, 33, 33)
+}
+
+tests['blur + shadow in filter'] = function (ctx) {
+  ctx.rotate(.33)
+  ctx.scale(3, 3)
+  ctx.filter = 'drop-shadow(10px 10px 20px #333) blur(5px)'
+  ctx.fillStyle = 'orange'
+  ctx.fillRect(20, 0, 33, 33)
+}
+
+tests['shadow in filter'] = function (ctx) {
+  ctx.rotate(.33)
+  ctx.scale(3, 3)
+  ctx.filter = 'drop-shadow(10px 10px 20px #333)'
+  ctx.fillStyle = 'orange'
+  ctx.fillRect(20, 0, 33, 33)
+}
+
+tests['filter chains'] = function (ctx) {
+  ctx.filter = 'blur(5px) invert(56%) sepia(63%) saturate(4837%) hue-rotate(163deg) brightness(96%) contrast(101%)'
+  ctx.fillRect(40,40,120,120)
 }
 
 tests['font state'] = function (ctx) {

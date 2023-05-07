@@ -55,6 +55,17 @@ release:
 	git push origin --tags
 	@printf "\nNext: publish the release on github to submit to npm\n"
 
+# linux-build helpers
+skia-version:
+	@grep -m 1 '^skia-safe' Cargo.toml | egrep -o '[0-9\.]+'
+
+with-local-skia:
+	echo '' >> Cargo.toml
+	echo '[patch.crates-io]' >> Cargo.toml
+	echo 'skia-safe = { path = "../rust-skia/skia-safe" }' >> Cargo.toml
+	echo 'skia-bindings = { path = "../rust-skia/skia-bindings" }' >> Cargo.toml
+
+# debugging
 run: build
 	@node check.js
 

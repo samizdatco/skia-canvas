@@ -50,6 +50,22 @@ impl Typesetter{
       }
     };
 
+    if wrap {
+      // make sure line-breaks use the current leading
+      let mut strut_style = graf_style.strut_style().clone();
+      let (leading, size) = if char_style.height() < 1.0 {
+        ( strut_style.leading(), char_style.font_size() * char_style.height() )
+      }else{
+        ( char_style.height() - 1.0, char_style.font_size() )
+      };
+      strut_style
+        .set_strut_enabled(true)
+        .set_force_strut_height(true)
+        .set_font_size(size)
+        .set_leading(leading);
+      graf_style.set_strut_style(strut_style);
+    }
+
     Typesetter{text, width, baseline, typefaces, char_style, graf_style}
   }
 
@@ -98,7 +114,7 @@ impl Typesetter{
       let range = string_idx_range(&self.text, line.start_index,
         if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces }
       );
-      (rect.with_offset((alignment, offset)), range, baseline as f32)
+      (rect.with_offset((alignment, offset)), range, baseline as f32 + offset)
     }).collect();
 
     // take their union to find the bounds for the whole text run
@@ -152,7 +168,7 @@ pub struct FontSpec{
   pub canonical: String
 }
 
-pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> Result<Option<FontSpec>, Throw> {
+pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<Option<FontSpec>> {
   let arg = cx.argument::<JsValue>(idx)?;
   if arg.is_a::<JsNull, _>(cx){ return Ok(None) }
 
@@ -167,14 +183,14 @@ pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> Result<Option<FontSpec>, 
   let slant = to_slant(string_for_key(cx, &font_desc, "style")?.as_str());
   let width = to_width(string_for_key(cx, &font_desc, "stretch")?.as_str());
 
-  let feat_obj = font_desc.get(cx, "features")?.downcast::<JsObject, _>(cx).or_throw(cx)?;
+  let feat_obj:Handle<JsObject> = font_desc.get(cx, "features")?;
   let features = font_features(cx, &feat_obj)?;
 
   let style = FontStyle::new(weight, width, slant);
   Ok(Some(FontSpec{ families, size, leading, style, features, variant, canonical}))
 }
 
-pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> Result<Vec<(String, i32)>, Throw>{
+pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut features:Vec<(String, i32)> = vec![];
   for key in strings_in(cx, &keys).iter() {
@@ -392,8 +408,7 @@ impl FontLibrary{
 
   fn families(&self) -> Vec<String>{
     let font_mgr = FontMgr::new();
-    let count = font_mgr.count_families();
-    let mut names:Vec<String> = (0..count).map(|i| font_mgr.family_name(i)).collect();
+    let mut names:Vec<String> = font_mgr.family_names().collect();
     for (font, alias) in &self.fonts {
       names.push(match alias{
         Some(name) => name.clone(),
@@ -451,6 +466,15 @@ impl FontLibrary{
   }
 
   fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
+    // replace any previously added font with the same metadata/alias
+    if let Some(idx) = self.fonts.iter().position(|(old_font, old_alias)|
+      match alias.is_some(){
+        true => old_alias == &alias,
+        false => old_font.family_name() == font.family_name()
+      } && old_font.font_style() == font.font_style()
+    ){
+      self.fonts.remove(idx);
+    }
     self.fonts.push((font, alias));
 
     let mut assets = TypefaceFontProvider::new();
@@ -458,7 +482,10 @@ impl FontLibrary{
       assets.register_typeface(font.clone(), alias.as_ref());
     }
 
-    self.collection.set_asset_font_manager(Some(assets.into()));
+    let mut collection = FontCollection::new();
+    collection.set_default_font_manager(FontMgr::new(), None);
+    collection.set_asset_font_manager(Some(assets.into()));
+    self.collection = collection;
     self.collection_cache.drain();
   }
 
@@ -622,3 +649,14 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
   Ok(results.upcast())
 }
 
+pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let mut library = FONT_LIBRARY.lock().unwrap();
+  library.fonts.clear();
+
+  let mut collection = FontCollection::new();
+  collection.set_default_font_manager(FontMgr::new(), None);
+  library.collection = collection;
+  library.collection_cache.drain();
+
+  Ok(cx.undefined())
+}

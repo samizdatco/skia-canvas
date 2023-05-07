@@ -10,8 +10,9 @@ use skia_safe::{Shader, TileMode, TileMode::{Decal, Repeat}, SamplingOptions, Si
                 Image as SkImage, Picture, Matrix, FilterMode};
 
 use crate::utils::*;
-use crate::image::{BoxedImage};
-use crate::context::{BoxedContext2D};
+use crate::image::BoxedImage;
+use crate::context::BoxedContext2D;
+use crate::filter::ImageFilter;
 
 pub type BoxedCanvasPattern = JsBox<RefCell<CanvasPattern>>;
 impl Finalize for CanvasPattern {}
@@ -31,17 +32,12 @@ pub struct CanvasPattern{
 }
 
 impl CanvasPattern{
-  pub fn shader(&self, smoothing: bool) -> Option<Shader>{
+  pub fn shader(&self, image_filter: ImageFilter) -> Option<Shader>{
     let stamp = Arc::clone(&self.stamp);
     let stamp = stamp.lock().unwrap();
 
     if let Some(image) = &stamp.image{
-      let quality = match smoothing{
-        true => FilterQuality::High,
-        false => FilterQuality::None
-      };
-
-      image.to_shader(stamp.repeat, to_sampling_opts(quality), None).map(|shader|
+      image.to_shader(stamp.repeat, image_filter.sampling(), None).map(|shader|
         shader.with_local_matrix(&stamp.matrix)
       )
     }else if let Some(pict) = &stamp.pict{

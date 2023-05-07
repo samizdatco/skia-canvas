@@ -1,20 +1,24 @@
-# Skia Canvas
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="test/assets/readme-header-dark@2x.png">
+  <img alt="Skia Canvas" src="test/assets/readme-header@2x.png">
+</picture>
 
-Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and as a result produces very similar results to Chrome’s `<canvas>` element.
+Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and, accordingly, produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
 
-While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas that are more relevant to the generation of static graphics files rather than ‘live’ display in a browser.
+While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas to take greater advantage of Skia's advanced graphical features and provide a more expressive coding environment.
 
 In particular, Skia Canvas:
 
-  - is fast and compact since all the heavy lifting is done by native code written in Rust and C++
-  - can generate output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
+  - is fast and compact since rendering takes place on the GPU and all the heavy lifting is done by native code written in Rust and C++
+  - can render to [windows](#window) using an OS-native graphics pipeline and provides a browser-like [UI event][win_bind] framework
+  - generates output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
-  - uses native threads and [channels](https://docs.rs/neon/0.9.0/neon/event/struct.Channel.html) for asynchronous rendering and file I/O
+  - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
-  - can apply [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
+  - provides [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
   - can fill shapes with vector-based [Textures][createTexture()] in addition to bitmap-based [Patterns][createPattern()] and supports line-drawing with custom [markers][lineDashMarker]
-  - fully supports the [CSS filter effects][filter] image processing operators
+  - supports the full set of [CSS filter][filter] image processing operators
   - offers rich typographic control including:
 
     - multi-line, [word-wrapped](#textwrap) text
@@ -23,7 +27,6 @@ In particular, Skia Canvas:
     - proportional letter-spacing (a.k.a. [‘tracking’](#texttracking)) and leading
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
     - use of non-system fonts [loaded](#usefamilyname-fontpaths) from local files
-
 
 ## Installation
 
@@ -52,9 +55,9 @@ Nearly everything you need is statically linked into the library. A notable exce
 
 ### Running in Docker
 
-The library is compatible with Linux systems using [glibc](https://www.gnu.org/software/libc/) 2.24 or later as well as Alpine Linux (x64) and the [musl](https://musl.libc.org) C library it favors. In both cases, Fontconfig must be installed on the system for `skia-canvas` to operate correctly.
+The library is compatible with Linux systems using [glibc](https://www.gnu.org/software/libc/) 2.28 or later as well as Alpine Linux (x64 & arm64) and the [musl](https://musl.libc.org) C library it favors. In both cases, Fontconfig must be installed on the system for `skia-canvas` to operate correctly.
 
-If you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, the simplest approach is to set your `FROM` image to one of the (Debian-derived) defaults like `node:16`, `node:14`, `node:12`, `node:buster`, `node:stretch`, or simply:
+If you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, the simplest approach is to set your `FROM` image to one of the (Debian-derived) defaults like `node:lts`, `node:18`, `node:16`, `node:14-buster`, `node:12-buster`, `node:bullseye`, `node:buster`, or simply:
 ```dockerfile
 FROM node
 ```
@@ -87,52 +90,89 @@ Start by installing:
 [Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
 
 ## Example Usage
+
+#### Generating image files
+
 ```js
-const {Canvas, loadImage} = require('skia-canvas'),
-      rand = n => Math.floor(n * Math.random()),
-      fs = require('fs')
+const {Canvas} = require('skia-canvas')
 
-let canvas = new Canvas(600, 600),
-    ctx = canvas.getContext("2d"),
-    {width, height} = canvas;
+let canvas = new Canvas(400, 400),
+    {width, height} = canvas,
+    ctx = canvas.getContext("2d");
 
-// draw a sea of blurred dots filling the canvas
-ctx.filter = 'blur(12px) hue-rotate(20deg)'
-for (let i=0; i<800; i++){
-  ctx.fillStyle = `hsl(${rand(40)}deg, 80%, 50%)`
-  ctx.beginPath()
-  ctx.arc(rand(width), rand(height), rand(20)+5, 0, 2*Math.PI)
-  ctx.fill()
-}
+let sweep = ctx.createConicGradient(Math.PI * 1.2, width/2, height/2)
+sweep.addColorStop(0, "red")
+sweep.addColorStop(0.25, "orange")
+sweep.addColorStop(0.5, "yellow")
+sweep.addColorStop(0.75, "green")
+sweep.addColorStop(1, "red")
+ctx.strokeStyle = sweep
+ctx.lineWidth = 100
+ctx.strokeRect(100,100, 200,200)
 
-// mask all of the dots that don't overlap with the text
-ctx.filter = 'none'
-ctx.globalCompositeOperation = 'destination-in'
-ctx.font='italic 480px Times, DejaVu Serif'
-ctx.textAlign = 'center'
-ctx.textBaseline = 'top'
-ctx.fillText('¶', width/2, 0)
-
-// draw a background behind the clipped text
-ctx.globalCompositeOperation = 'destination-over'
-ctx.fillStyle = '#182927'
-ctx.fillRect(0,0, width,height)
-
-// render to files using a background thread
+// render to multiple destinations using a background thread
 async function render(){
-  // save the graphic...
-  await canvas.saveAs("pilcrow.png")
+  // save a ‘retina’ image...
+  await canvas.saveAs("rainbox.png", {density:2})
   // ...or use a shorthand for canvas.toBuffer("png")
   let pngData = await canvas.png
   // ...or embed it in a string
-  console.log(`<img src="${await canvas.toDataURL("png")}">`)
+  let pngEmbed = `<img src="${await canvas.toDataURL("png")}">`
 }
 render()
 
 // ...or save the file synchronously from the main thread
-canvas.saveAsSync("pilcrow.png")
+canvas.saveAsSync("rainbox.pdf")
 ```
 
+#### Multi-page sequences
+
+```js
+const {Canvas} = require('skia-canvas')
+
+let canvas = new Canvas(400, 400),
+    {width, height} = canvas;
+
+for (const color of ['orange', 'yellow', 'green', 'skyblue', 'purple']){
+  ctx = canvas.newPage()
+  ctx.fillStyle = color
+  ctx.fillRect(0,0, width, height)
+  ctx.fillStyle = 'white'
+  ctx.arc(width/2, height/2, 40, 0, 2 * Math.PI)
+  ctx.fill()
+}
+
+async function render(){
+  // save to a multi-page PDF file
+  await canvas.saveAs("all-pages.pdf")
+
+  // save to files named `page-01.png`, `page-02.png`, etc.
+  await canvas.saveAs("page-{2}.png")
+}
+render()
+
+```
+
+#### Rendering to a window
+
+```js
+const {Window} = require('skia-canvas')
+
+let win = new Window(300, 300)
+win.title = "Canvas Window"
+win.on("draw", e => {
+  let ctx = e.target.canvas.getContext("2d")
+  ctx.lineWidth = 25 + 25 * Math.cos(e.frame / 10)
+  ctx.beginPath()
+  ctx.arc(150, 150, 50, 0, 2 * Math.PI)
+  ctx.stroke()
+
+  ctx.beginPath()
+  ctx.arc(150, 150, 10, 0, 2 * Math.PI)
+  ctx.stroke()
+  ctx.fill()
+})
+```
 
 
 # API Documentation
@@ -152,6 +192,8 @@ The library exports a number of classes emulating familiar browser objects inclu
 
 In addition, the module contains:
 
+- [Window](#window) a class allowing you to display your canvas interactively in an on-screen window
+- [App](#app) a helper class for coordinating multiple windows in a single script
 - [loadImage()](#loadimage) a utility function for loading `Image` objects asynchronously
 - [FontLibrary](#fontlibrary) a class allowing you to inspect the system’s installed fonts and load additional ones
 
@@ -163,15 +205,16 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 
 | Image Dimensions             | Rendering Contexts            | Output                                           |
 | --                           | --                            | --                                               |
-| [**width**][canvas_width]    | [**pages**][canvas_pages] ⚡  | ~~[**async**][canvas_async]~~  ⚡                    |
-| [**height**][canvas_height]  | [getContext()][getContext]    | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
-|                              | [newPage()][newPage] ⚡       | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
-|                              |                               | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡                        |
+| [**width**][canvas_width]    | [**gpu**][canvas_gpu] ⚡      | ~~[**async**][canvas_async]~~  ⚡                    |
+| [**height**][canvas_height]  | [**pages**][canvas_pages] ⚡  | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
+|                              | [getContext()][getContext]    | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
+|                              | [newPage()][newPage] ⚡       | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡                        |
 |                              |                               | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] ⚡ |
 
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
 [canvas_async]: #async
+[canvas_gpu]: #gpu
 [canvas_pages]: #pages
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
 [saveAs]: #saveasfilename-page-format-matte-density1-quality092-outlinefalse
@@ -226,13 +269,17 @@ function synchronous(){
 
 **The async property has been deprecated** and will be removed in a future release. Use the [`saveAsSync()`][saveAs], [`toBufferSync()`][toBuffer], and [`toDataURLSync()`][toDataURL_ext] methods if the default, asynchronous versions aren't to your liking.
 
+#### `.gpu`
+
+The `.gpu` attribute allows you to control whether rendering occurs on the graphics card or uses the CPU. Rendering is hardware accelerated by default, using [Metal](https://developer.apple.com/metal/) on macOS and [Vulkan](https://www.vulkan.org) on Linux and Windows. To use software-based rendering, set the `.gpu` property to `false`. If the current platform doesn't support GPU-based rendering, the property will be `false` by default (see [this article](https://linuxconfig.org/install-and-test-vulkan-on-linux) for some tips on getting Vulkan working on Linux).
+
 #### `.pages`
 
 The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the `newPage()` method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
 
 #### `.pdf`, `.svg`, `.jpg`, and `.png`
 
-These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
+These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
 
 ##### METHODS
 
@@ -291,14 +338,14 @@ Most of your interaction with the canvas will actually be directed toward its �
 |-----------------------------------------------|---------------------------------------------------|---------------------------------------------------|----------------------------------------------|--------------------------------------------------|------------------------------------------|------------------------------------------------------------------|----------------------------------------------------|----------------------------------------------------------|
 | [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [clearRect()][clearRect()]                        | [**fillStyle**][fillStyle]                        | [**lineCap**][lineCap]                       | [**currentTransform**][currentTransform]         | [moveTo()][moveTo()]                     | [**direction**][direction]                                       | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**filter**][filter]                                     |
 | [beginPath()][beginPath()]                    | [fillRect()][fillRect()]                          | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [createProjection() ⚡][createProjection()] | [lineTo()][lineTo()]                     | [**font**][font] ⧸[⚡](#font)                               | [**imageSmoothingQuality**][imageSmoothingQuality] | [**globalAlpha**][globalAlpha]                           |
-| [isPointInPath()][isPointInPath()]            | [strokeRect()][strokeRect()]                      | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [getTransform()][getTransform()]                 | [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createImageData()][createImageData()]             | [**globalCompositeOperation**][globalCompositeOperation] |
-| [isPointInStroke()][isPointInStroke()]        | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]         | [setTransform()][setTransform()]                 | [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                       | [getImageData()][getImageData()]                   | [**shadowBlur**][shadowBlur]                             |
-| [save()][save()]                              | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                     | [resetTransform()][resetTransform()]             | [conicCurveTo() ⚡][conicCurveTo]   | [**textBaseline**][textBaseline]                                 | [putImageData()][putImageData()]                   | [**shadowColor**][shadowColor]                           |
-| [restore()][restore()]                        | [fill()][fill()]                                  | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]                   | [transform()][transform()]                       | [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [drawCanvas() ⚡](#drawcanvascanvas-x-y-)     | [**shadowOffsetX**][shadowOffsetX]                       |
-| [clip()][clip()]                              | [stroke()][stroke()]                              | [createTexture() ⚡][createTexture()]        | [**miterLimit**][miterLimit]                 | [translate()][translate()]                       | [closePath()][closePath()]               | [**textWrap** ⚡](#textwrap)                                | [drawImage()][drawImage()]                         | [**shadowOffsetY**][shadowOffsetY]                       |
-|                                               |                                                   |                                                   | [getLineDash()][getLineDash()]               | [rotate()][rotate()]                             | [arc()][arc()]                           | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) |                                                    |                                                          |
-|                                               |                                                   |                                                   | [setLineDash()][setLineDash()]               | [scale()][scale()]                               | [ellipse()][ellipse()]                   | [outlineText() ⚡][outlineText()]                           |                                                    |                                                          |
-|                                               |                                                   |                                                   |                                              |                                                  | [rect()][rect()]                         |                                                                  |                                                    |
+| [closePath()][closePath()]                    | [strokeRect()][strokeRect()]                      | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [getTransform()][getTransform()]                 | [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createImageData()][createImageData()]             | [**globalCompositeOperation**][globalCompositeOperation] |
+| [isPointInPath()][isPointInPath()]            | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]         | [setTransform()][setTransform()]                 | [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                       | [getImageData()][getImageData()]                   | [**shadowBlur**][shadowBlur]                             |
+| [isPointInStroke()][isPointInStroke()]        | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                     | [resetTransform()][resetTransform()]             | [conicCurveTo() ⚡][conicCurveTo]   | [**textBaseline**][textBaseline]                                 | [putImageData()][putImageData()]                   | [**shadowColor**][shadowColor]                           |
+| [save()][save()]                              | [fill()][fill()]                                  | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]                   | [transform()][transform()]                       | [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [drawCanvas() ⚡](#drawcanvascanvas-x-y-)     | [**shadowOffsetX**][shadowOffsetX]                       |
+| [restore()][restore()]                        | [stroke()][stroke()]                              | [createTexture() ⚡][createTexture()]        | [**miterLimit**][miterLimit]                 | [translate()][translate()]                       | [arc()][arc()]                           | [**textWrap** ⚡](#textwrap)                                | [drawImage()][drawImage()]                         | [**shadowOffsetY**][shadowOffsetY]                       |
+| [reset()][reset()]                            |                                                   |                                                   | [getLineDash()][getLineDash()]               | [rotate()][rotate()]                             | [ellipse()][ellipse()]                   | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) |                                                    |                                                          |
+| [clip()][clip()]                              |                                                   |                                                   | [setLineDash()][setLineDash()]               | [scale()][scale()]                               | [rect()][rect()]                         | [outlineText() ⚡][outlineText()]                           |                                                    |                                                          |
+|                                               |                                                   |                                                   |                                              |                                                  | [roundRect()][roundRect()]               |                                                                  |                                                    |
 
 ##### PROPERTIES
 
@@ -540,14 +587,14 @@ for (let i=0; i<8000; i++){
 The `Path2D` class allows you to create paths independent of a given [Canvas](#canvas) or [graphics context](#canvasrenderingcontext2d). These paths can be modified over time and drawn repeatedly (potentially on multiple canvases). `Path2D` objects can also be used as [lineDashMarker][lineDashMarker]s or as the repeating pattern in a [CanvasTexture][createTexture()].
 
 
-| Line Segments                              | Shapes                   | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                  |
-| --                                         | --                       | --                       | --                               | --                           |
-| [**d** ⚡](#d)                             | [addPath()][p2d_addPath] | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
-| [moveTo()][p2d_moveTo]                     | [arc()][p2d_arc]         | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)          |
-| [lineTo()][p2d_lineTo]                     | [arcTo()][p2d_arcTo]     | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains]   |
-| [bezierCurveTo()][p2d_bezierCurveTo]       | [ellipse()][p2d_ellipse] | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]       |
-| [conicCurveTo() ⚡][conicCurveTo]          | [rect()][p2d_rect]       | [xor()][bool-ops]        | [trim()][p2d_trim]               | [offset()][p2d_offset]       |
-| [quadraticCurveTo()][p2d_quadraticCurveTo] |                          |                          | [unwind()][p2d_unwind]           | [transform()][p2d_transform] |
+| Line Segments                              | Shapes                     | Boolean Ops ⚡           | Filters ⚡                       | Geometry ⚡                  |
+| --                                         | --                         | --                       | --                               | --                           |
+| [**d** ⚡](#d)                             | [addPath()][p2d_addPath]   | [complement()][bool-ops] | [interpolate()][p2d_interpolate] | [**bounds**](#bounds)        |
+| [moveTo()][p2d_moveTo]                     | [arc()][p2d_arc]           | [difference()][bool-ops] | [jitter()][p2d_jitter]           | [**edges**](#edges)          |
+| [lineTo()][p2d_lineTo]                     | [arcTo()][p2d_arcTo]       | [intersect()][bool-ops]  | [round()][p2d_round]             | [contains()][p2d_contains]   |
+| [bezierCurveTo()][p2d_bezierCurveTo]       | [ellipse()][p2d_ellipse]   | [union()][bool-ops]      | [simplify()][p2d_simplify]       | [points()][p2d_points]       |
+| [conicCurveTo() ⚡][conicCurveTo]          | [rect()][p2d_rect]         | [xor()][bool-ops]        | [trim()][p2d_trim]               | [offset()][p2d_offset]       |
+| [quadraticCurveTo()][p2d_quadraticCurveTo] | [roundRect()][roundRect()] |                          | [unwind()][p2d_unwind]           | [transform()][p2d_transform] |
 | [closePath()][p2d_closePath]               |
 
 #### Creating `Path2D` objects
@@ -774,6 +821,322 @@ let unwound = orig.unwind()
 ```
 ![convert winding rule subpaths](/test/assets/path/effect-unwind@2x.png)
 
+
+## Window
+
+The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and update them in response to user input.
+
+Its attributes and methods include:
+
+| Dimensions               | Content                          | Interface            | Mode                         | Methods            |
+| --                       | --                               | --                   | --                           | --                 |
+| [**left**][win_layout]   | [**background**][win_background] | [**title**][title]   | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind]  |
+| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor] | [**fullscreen**][fullscreen] | [off()][win_bind]  |
+| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]       |                              | [close()][close] |
+| [**height**][win_layout] | [**page**][win_page]             |                      |                              |    | 
+
+[win_background]: #background
+[win_canvas]: #canvas-1
+[win_ctx]: #ctx
+[win_page]: #page-1
+[win_layout]: #left--top--width--height
+[title]: #title
+[cursor]: #cursor
+[fit]: #fit
+[visible]: #visible
+[fullscreen]: #fullscreen
+[win_bind]: #on--off--once
+[close]: #close
+
+#### Creating new `Window` objects
+
+When called with no arguments, the `Window` constructor will return a 512 × 512 pt window with a white background and automatically create a `Canvas` of the same size that you can access through its `.canvas` property:
+
+```js
+let win = new Window()
+console.log(win.canvas)
+// Canvas {width:512, height:512, gpu:true, pages:[CanvasRenderingContext2D{}]}
+```
+
+You can specify a size (to be shared by the window and canvas) by passing width & height arguments:
+```js
+let smaller = new Window(256, 128)
+````
+
+All of the other window properties can be customized by passing an options object, either in addition to the width & height or all by itself:
+
+```js
+let orange = new Window(1024, 768, {background:"orange"})
+let titled = new Window({title:"Canvas Window"}) // use default 512×512 size 
+```
+
+After creating the window, you can modify these properties through simple assignment:
+
+```js
+let win = new Window(800, 600, {title="Multi-step Window"})
+win.background = "skyblue"
+win.top = 40
+win.left = 40
+```
+
+The object accessible through the window’s `.canvas` attribute is no different than any other `Canvas` you create. You can even create a `Window` after setting up a canvas and tell the window to use it instead of automatically creating one. If you pass it to the constructor without specifying a window size, the window will match the dimensions of the canvas:
+
+```js
+let bigCanvas = new Canvas(1024, 1024)
+let win = new Window({canvas:bigCanvas})
+console.log([win.width, win.height])
+// [1024, 1024]
+```
+
+Likewise, assigning a new `.canvas` will replace the contents of the window (though it won’t affect the window’s size):
+
+```js
+let win = new Window()
+win.canvas = new Canvas(1024, 32)
+
+console.log([win.width, win.height])
+// [512, 512]
+console.log([win.canvas.width, win.canvas.height])
+// [1024, 32]
+```
+
+> When the window and canvas sizes don’t perfectly match, the canvas will be scaled using the approach selected via the window’s [`fit`][fit] property. 
+
+#### Drawing to a Window
+
+To draw to the window’s canvas, you can either use the reference to its `.canvas` property to create a context, or use the shortcut `.ctx` property which skips that step:
+
+```js
+let win = new Window({background:"olive", fit:"contain-y"})
+console.log(win.ctx === win.canvas.getContext("2d"))
+// true
+
+let {canvas, ctx} = win
+ctx.fillStyle = 'lightskyblue'
+ctx.fillRect(10, 10, canvas.width-20, canvas.height-20)
+```
+
+If you create multiple pages in your canvas using [newPage()][newPage], you can select which one is currently displayed by setting the window’s [`.page`][win_page]. By default, the most recently created page will be visible, but if you create a new page after the window is on screen, you’ll need to update the `.page` attribute manually to display it. The window’s `.ctx` shortcut will always point to the context for the currently visible page.
+
+```js
+let canvas = new Canvas(32, 32),
+    colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
+
+for (var c of colors){
+  ctx = canvas.newPage(canvas.width * 2, canvas.height * 2)
+  ctx.fillStyle = c
+  ctx.fillRect(0,0, canvas.width, canvas.height)
+  ctx.fillStyle = 'white'
+  ctx.arc(canvas.width/2, canvas.height/2, 40, 0, 2 * Math.PI)
+  ctx.fill()
+}
+
+let win = new Window({canvas, page:-2})
+win.on('keydown', e => {
+  if (e.key=='Left') win.page--
+  if (e.key=='Right') win.page++
+  console.log(`page ${win.page}/${canvas.pages.length}: ${canvas.width} × ${canvas.height}`)
+})
+```
+
+#### Responding to Events
+
+Once you've created a `Window` object, Node will wait for your current function to end and then switch over to an OS-controlled event loop for the rest of your program’s runtime. This means it can actively redraw your canvas when you resize the window or update its contents, but also means the Node interpreter will be frozen for the duration. 
+
+As a result, you cannot rely upon Node's traditional asynchrononous behavior for structuring your program. In particular, the usual methods for scheduling callbacks like `setTimeout`, `setImmediate`, and `setInterval` **will not work**.
+
+Instead, you must use event handlers attached to the `Window` object. By calling the window’s `.on()`, `.off()`, and `.once()` methods, you can respond to [user interface events][win_bind] like mouse and keyboard input, the window being dragged or resized, a new window becoming active, etc.
+
+Any changes you make in an event handler (whether to the window's canvas or its attributes) will become visible in the next pass through the event loop. For example, you can let the user scribble to the canvas with the mouse and clear it via the escape key with:
+
+```js
+let win = new Window(400, 300, {background:'rgba(16, 16, 16, 0.35)'}),
+    {canvas, ctx} = win // use the canvas & context created by the window
+
+win.on('mousemove', ({button, x, y}) => {
+  if (button == 0){ // a left click
+    ctx.fillStyle = `rgb(${Math.floor(255 * Math.random())},0,0)`
+    ctx.beginPath()
+    ctx.arc(x, y, 10 + 30 * Math.random(), 0, 2 * Math.PI)
+    ctx.fill()
+  }
+
+  win.cursor = button === 0 ? 'none' : 'crosshair'
+})
+
+win.on('keydown', ({key}) => {
+  if (key == 'Escape'){
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+  }
+})
+```
+
+In the previous example, we used references to the window’s `ctx` and `canvas` that were created outside the event handler, but this makes the function less general since it's tied to a single window. We can get a reference to the specific window associated with an event through its `.target` attribute, allowing us to write an event handler that doesn't contain a reference to the `win` variable it's attached to:
+```js
+const closeWindow = (e) => {
+  console.log("now closing window:", e.target)
+  e.target.close()
+}
+
+let win1 = new Window(), 
+    win2 = new Window();
+win1.on('mousedown', closeWindow)
+win2.on('mousedown', closeWindow)
+```
+
+Alternatively, we could have created our event handler using a `function(e){…}` defintion (rather than an `(e) => {…}` arrow expression) in which case the `this` variable will point to the window:
+```js
+function closeWindow(e){
+  console.log("now closing window:", this)
+  this.close()
+}
+```
+
+
+#### Events for Animation
+
+In the previous example you may have noticed that the canvas’s contents were preserved in between events and the screen was only being updated in response to user interaction. In general, this is the behavior you want for UI-driven graphics. 
+
+But another common case is creating animations in which you redraw the canvas at regular intervals (quite possibly from scratch rather than layering atop the previous contents). In these situations you’ll want to use a set of events that are driven by *timing* rather than interaction:
+  - [`setup`][setup] fires once, just before your window is first drawn to the screen
+  - [`frame`][frame] fires [60 times per second][fps] and provides a frame counter in its event object
+  - [`draw`][draw] fires immediately after `frame` and **clears the canvas** of any window that has event handlers for it
+
+
+To create a ‘flipbook’ animation (in which the screen is fully redrawn in each pass), your best choice is set up an event handler for the `draw` event. Since `draw` automatically erases the canvas before your code begins to run, you can presume a clean slate each time. The event object passed as an argument to your handler contains a propery called `frame` which will increment by one each time you draw (making it handy for advancing the ‘state’ of your animation):
+
+```js
+let win = new Window(300, 300, {background:'red'}),
+    {ctx} = win
+
+win.on("draw", e => {
+  ctx.strokeStyle = 'white'
+  ctx.lineWidth = 60 + 80 * Math.sin(e.frame/20)
+  ctx.beginPath()
+  ctx.moveTo(100,100)
+  ctx.lineTo(200,200)
+  ctx.moveTo(100,200)
+  ctx.lineTo(200,100)
+  ctx.stroke()
+})
+````
+
+
+##### PROPERTIES
+
+#### `background`
+This specifies the color of the window's background which is drawn behind your canvas content. It supports all the same CSS color formats as the `fillStyle` and `strokeStyle` properties. Defaults to white.
+
+#### `canvas`
+The `Canvas` object associated with the window. By default the window will create a canvas with the same size as the window dimensions, but the canvas can also be replaced at any time by assigning a new one to this property. 
+
+#### `ctx`
+The rendering context of the window's canvas. This is a shortcut to calling `win.canvas.getContext("2d")`. If the canvas has multiple pages, this will point to the most recent (i.e., the ‘topmost’ page in the stack).
+
+#### `page`
+A 1-based index into the canvas's pages array. If the canvas has multiple pages, this property allows you to select which one to display (potentially allowing for pre-rendering a canvas then animating it as a flip-book). Page `1` is the earliest (or ‘bottommost’) page created. Negative page numbers also work, counting backward from `-1` (the ‘topmost’ page).
+
+#### `left` / `top` / `width` / `height` 
+The current location and size of the window as specified in resolution-independent ‘points’. Defaults to a 512 × 512 pt window in the center of the screen. Note that the window and the canvas have independent sizes: the window will scale the canvas's content to fit its current dimensions (using the `fit` property to determine how to deal with differences in aspect ratio). 
+
+#### `title`
+The string that is displayed in the window's title bar.
+
+#### `cursor`
+The icon used for the mouse pointer. By default an arrow cursor is used, but other styles can be selected by setting the property to one of the standard [CSS cursor][mdn_cursor] values.
+
+#### `fit`
+When the window is resized, it is likely that it will not perfectly match the aspect ratio of the underlying canvas. This property selects how the layout should adapt—whether it should add margins, allow portions of the canvas to be cropped, or stretch the image to fit. It supports the standard [CSS modes][mdn_object_fit] (`"none"`, `"contain"`, `"cover"`, `"fill"`, and `"scale-down"`) plus some additions: 
+  - `contain-x` and `contain-y` extend the `contain` mode to choose which axis to use when fitting the canvas
+  - `resize` will modify the window's canvas to match the new window size (you'll probably also want to define an `.on("resize")` handler to update the contents)
+
+
+#### `visible`
+When set to `false`, the window will become invisible but will not be permanently ‘closed’. It can be made visible again by setting the property back to `true`.
+
+#### `fullscreen`
+A boolean flag determining whether the window should expand to fill the screen.
+
+##### METHODS
+
+#### `close()`
+Removes the window from the screen permanently. References to the `Window` object will remain valid however, and its canvas can still be used to export images to file, be inserted into other windows, etc.
+
+#### `on()` / `off()` / `once()`
+The `Window` object is an [Event Emitter][event_emitter] subclass and supports all the standard methods for adding and removing event listeners. The supported events are mostly consistent with browser-based DOM events, but include some non-standard additions (⚡) specific to Skia Canvas:
+
+| Mouse                      | Keyboard             | Window                               | Focus            | Animation          |  
+| --                         | --                   | --                                   | --               | --                 | 
+| [`mousedown`][mousedown]   | [`keydown`][keydown] | [`fullscreen`](#fullscreen-event) ⚡ | [`blur`][blur]   | [`setup`][setup] ⚡|
+| [`mouseup`][mouseup]       | [`keyup`][keyup]     | [`move`](#move-event) ⚡             | [`focus`][focus] | [`frame`][frame] ⚡|
+| [`mousemove`][mousemove]   | [`input`][input]     | [`resize`][resize]                   |                  | [`draw`][draw] ⚡  |
+| [`wheel`][wheel]           |
+
+##### `fullscreen` event
+Emitted when the a window switches into or out of full-screen mode. The event object includes a boolean `enabled` property flagging the new state.
+
+##### `move` event
+Emitted when the user drags the window to a new position. The event object includes `top` and `left` properties expressed in resolution-independent points.
+
+##### `setup` event
+The `setup` event is emitted just before a newly created window is displayed on screen. This can be a good place to collect the data you'll need for an animation. Immediately after `setup`, the `frame` and `draw` events will fire.
+
+##### `frame` event
+Similar to the `requestAnimationFrame` callback system in browsers, the `frame` event allows you to schedule redrawing your canvas to maintain a constant frame rate. The event object provides a window-specific frame counter that begins ticking upward from zero as soon as the window appears.
+
+##### `draw` event
+The `draw` event fires immediately after `frame` and has the potentially convenient side effect of automatically erasing the window's canvas before calling your event handler. 
+
+> Note that this canvas-clearing behavior depends upon your having set up an event handler using `.on("draw", …)` and will continue until (and unless) you delete the window's `draw` event handlers using `.off()` or [`removeAllListeners()`][remove_all].
+
+[event_emitter]: https://nodejs.org/api/events.html#class-eventemitter
+[event_on]: https://nodejs.org/api/events.html#emitteroneventname-listener
+[event_off]: https://nodejs.org/api/events.html#emitteroffeventname-listener
+[event_once]: https://nodejs.org/api/events.html#emitteronceeventname-listener
+[remove_all]: https://nodejs.org/api/events.html#emitterremovealllistenerseventname
+[mdn_cursor]: https://developer.mozilla.org/en-US/docs/Web/CSS/cursor
+[mdn_object_fit]: https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit
+[mousedown]: https://developer.mozilla.org/en-US/docs/Web/API/Element/mousedown_event
+[mouseup]: https://developer.mozilla.org/en-US/docs/Web/API/Element/mouseup_event
+[mousemove]: https://developer.mozilla.org/en-US/docs/Web/API/Element/mousemove_event
+[wheel]: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event
+[keydown]: https://developer.mozilla.org/en-US/docs/Web/API/Element/keydown_event
+[keyup]: https://developer.mozilla.org/en-US/docs/Web/API/Element/keyup_event
+[input]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/input_event
+[resize]: https://developer.mozilla.org/en-US/docs/Web/API/Window/resize_event
+[focus]: https://developer.mozilla.org/en-US/docs/Web/API/Window/focus_event
+[blur]: https://developer.mozilla.org/en-US/docs/Web/API/Window/blur_event
+[setup]: #setup-event
+[frame]: #frame-event
+[draw]: #draw-event
+
+## App
+
+The `App` global variable is a static class which does not need to be instantiated with `new`. Instead you can directly access its properties and methods on the `App` you import from the module. It allows you to access all the windows that are currently on screen, choose a frame rate for the `frame` and `draw` events, and control when the GUI event loop begins and terminates.
+
+[fps]: #fps
+
+##### PROPERTIES
+
+#### `fps`
+By default, each window will attempt to update its display 60 times per second. You can reduce this by setting `App.fps` to a smaller integer value. You can raise it as well but on the majority of LCD monitors you won't see any benefit and are likely to get worse performance as you begin to swamp the CPU with your rendering code. 
+> This setting is only relevant if you are listening for `frame` or `draw` events on your windows. Otherwise the canvas will only be updated when responding to UI interactions like keyboard and mouse events.
+
+#### `running`
+A read-only boolean flagging whether the GUI event loop has taken control away from Node in order to display your windows. 
+
+#### `windows`
+An array of references to all of the `Window` objects that have been created and not yet [closed][close].
+
+##### METHODS
+
+#### `launch()`
+Any `Window` you create will schedule the `App` to begin running as soon as the current function returns. You can make this happen sooner by calling `App.launch` within your code. The `launch()` method will not return until the last window is closed so you may find it handy to place ‘clean up’ code after the `launch()` invocation. 
+>Note, however, that the `App` **cannot be launched a second time** once it terminates due to limitiations in the underlying platform libraries.
+
+#### `quit()`
+By default your process will terminate once the final window has closed. If you wish to bring things to a swifter conclusion from code, call the `App.quit()` method from one of your event handlers instead.
+
 ## Utilities
 
 ### loadImage()
@@ -828,6 +1191,10 @@ Asking for details about an unknown family will return `undefined`.
 
 Returns `true` if the family is installed on the system or has been added via `FontLibrary.use()`.
 
+##### `reset()`
+
+Uninstalls any dynamically loaded fonts that had been added via `FontLibrary.use()`.
+
 ##### `use(familyName, [...fontPaths])`
 
 The `FontLibrary.use()` method allows you to dynamically load local font files and use them with your canvases. By default it will use whatever family name is in the font metadata, but this can be overridden by an alias you provide. Since font-wrangling can be messy, `use` can be called in a number of different ways:
@@ -850,6 +1217,8 @@ FontLibrary.use("Grizwald", [
 ```
 
 ###### with a list of ‘glob’ patterns
+
+> Note to Windows users: Due to recent changes to the [glob][glob] module, you must write paths using unix-style forward slashes. Backslashes are now used solely for escaping wildcard characters.
 
 ```js
 // with default family name
@@ -995,6 +1364,10 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [strokeText()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/strokeText
 [transform()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/transform
 [translate()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/translate
+[reset()]: https://developer.chrome.com/blog/canvas2d/#context-reset
+[roundRect()]: https://developer.chrome.com/blog/canvas2d/#round-rect
 
 [nonzero]: https://en.wikipedia.org/wiki/Nonzero-rule
 [evenodd]: https://en.wikipedia.org/wiki/Even–odd_rule
+
+[glob]: https://github.com/isaacs/node-glob/blob/main/changelog.md#80

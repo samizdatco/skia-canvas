@@ -1,16 +1,68 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!-- ## 🥚 ⟩ [Unreleased] -->
+
+## 📦 ⟩ [v1.0.1] ⟩ Oct 15, 2022
 
 ### Bugfixes
+- If an offscreen buffer can't be allocated using the Vulkan renderer, CPU rendering is used as a fallback
+- The `drawCanvas()` routine now works even when the destination canvas is later saved as an SVG (previously, the source canvas would be missing from the output). Caveat: this only works if the destination canvas is using the default `source-over` blend mode, has its `globalAlpha` set to 1, and is not using shadows or the `effect` property. If any of those defaults have been changed, the drawn canvas will not appear in the saved SVG. Bitmap and PDF exports do not have this restriction.
 
+### Misc. Improvements
+- Added a `fullscreen` event to the `Window` class to flag changes into and out of full-screen mode.
+
+## 📦 ⟩ [v1.0.0] ⟩ Aug 5, 2022
+
+### New Features
+- The new [Window][window] class can display a **Canvas** on screen, respond to mouse and keyboard input, and fluidly [animate][window_anim] by calling user-defined [event handlers][window_events].
+- Bitmap rendering now occurs on the GPU by default and can be configured using the **Canvas**'s [`.gpu`][canvas_gpu] property. If the platform supports hardware-accelerated rendering (using Metal on macOS and Vulkan on Linux & Windows), the property will be `true` by default and can be set to `false` to use the software renderer.
+- Added support for recent Chrome features:
+  - the [`reset()`][chrome_reset] context method which erases the canvas, resets the transformation state, and clears the current path
+  - the [`roundRect()`][chrome_rrect] method on contexts and **Path2D** objects which adds a rounded rectangle using 1–4 corner radii (provided as a single value or an array of numbers and/or **DOMPoint** objects)
+
+### Bugfixes
+- The `FontLibrary.reset()` method didn't actually remove previously installed fonts that had already been drawn with (and thus cached). It now clears those caches, which also means previously used fonts can now be replaced by calling `.use()` again with the same family name.
+- The [`.drawCanvas()`][drawCanvas] routine now applies filter effects and shadows consistent with the current resolution and transformation state.
+
+### Misc. Improvements
+- The [`.filter`][filter] property's `"blur(…)"` and `"drop-shadow(…)"` effects now match browser behavior much more closely and scale appropriately with the `density` export option.
+- Antialiasing is smoother, particularly when down-scaling images, thanks to the use of mipmaps rather than Skia's (apparently buggy?) implementation of bicubic interpolation.
+- Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up).
+- Upgraded Skia to milestone 103
+
+[window]: https://github.com/samizdatco/skia-canvas#window
+[window_anim]: https://github.com/samizdatco/skia-canvas#events--animation
+[window_events]: https://github.com/samizdatco/skia-canvas#on--off--once
+[canvas_gpu]: https://github.com/samizdatco/skia-canvas#gpu
+[filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
+[chrome_reset]: https://developer.chrome.com/blog/canvas2d/#context-reset
+[chrome_rrect]: https://developer.chrome.com/blog/canvas2d/#round-rect
+
+## 📦 ⟩ [v0.9.30] ⟩ Jun 7, 2022
+
+### New Features
+- Enhacements to the shared **FontLibrary** object:
+  - Added a [`reset()`][FontLibrary.reset] method to FontLibrary which uninstalls any fonts that had been dynamically installed via `FontLibrary.use()`
+  - The [`use()`][FontLibrary.use] method now checks for previously installed fonts with the same family name (or alias) and will replace them with the newly added font
+- Added pre-compiled binaries for Alpine Linux on arm64
+
+### Bugfixes
 - Calling `clip` with an empty path (or one that does not intersect the current clipping mask) will now prevent drawing altogether
 - Transformation (`translate`, `rotate`, etc.) and line-drawing methods (`moveTo`, `lineTo`, `ellipse`, etc.) are now silently ignored if called with `NaN`, `Infinity`, or non-**Number** values in the arguments rather than throwing an error
   - applies to both the Context and Path2D versions of the drawing methods
   - a **TypeError** is thrown only if the number of arguments is too low (mirroring browser behavior)
 - [`conicCurveTo()`][conicCurveTo] now correctly reflects the canvas's transform state
+- The browser-based version of [`loadImage()`][loadImage] now returns a **Promise** that correctly resolves to an **Image** object
+- SVG exports no longer have an invisible, canvas-sized `<rect/>` as their first element
+- Fixed an incompatibility on Alpine between the version of libstdc++ present on the `node:alpine` docker images and the version used when building the precompiled binaries
+
+### Misc. Improvements
+- Upgraded Skia to milestone 101
 
 [conicCurveTo]: https://github.com/samizdatco/skia-canvas#coniccurvetocpx-cpy-x-y-weight
+[FontLibrary.reset]: https://github.com/samizdatco/skia-canvas#reset
+[FontLibrary.use]: https://github.com/samizdatco/skia-canvas#usefamilyname-fontpaths
+[loadImage]: https://github.com/samizdatco/skia-canvas/#loadimage
 
 ## 📦 ⟩ [v0.9.29] ⟩ Feb 7, 2022
 
@@ -212,7 +264,9 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v0.9.29...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v1.0.0...HEAD
+[v1.0.0]: https://github.com/samizdatco/skia-canvas/compare/v0.9.30...v1.0.0
+[v0.9.30]: https://github.com/samizdatco/skia-canvas/compare/v0.9.29...v0.9.30
 [v0.9.29]: https://github.com/samizdatco/skia-canvas/compare/v0.9.28...v0.9.29
 [v0.9.28]: https://github.com/samizdatco/skia-canvas/compare/v0.9.27...v0.9.28
 [v0.9.27]: https://github.com/samizdatco/skia-canvas/compare/v0.9.26...v0.9.27

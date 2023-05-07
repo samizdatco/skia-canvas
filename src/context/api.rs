@@ -5,8 +5,8 @@
 #![allow(non_snake_case)]
 use std::f32::consts::PI;
 use std::cell::RefCell;
-use neon::prelude::*;
-use skia_safe::{Point, Rect, Matrix, Path, PathDirection, PaintStyle};
+use neon::{prelude::*, types::buffer::TypedArray};
+use skia_safe::{Point, Rect, RRect, Matrix, Path, PathDirection::{CW, CCW}, PaintStyle};
 use skia_safe::path::AddPathMode::Append;
 use skia_safe::path::AddPathMode::Extend;
 use skia_safe::textlayout::{TextDirection};
@@ -16,6 +16,7 @@ use super::{Context2D, BoxedContext2D, Dye};
 use crate::canvas::{Canvas, BoxedCanvas};
 use crate::path::{Path2D, BoxedPath2D};
 use crate::image::{Image, BoxedImage};
+use crate::filter::Filter;
 use crate::typography::*;
 use crate::utils::*;
 
@@ -28,7 +29,7 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedContext2D> {
   let parent = cx.argument::<BoxedCanvas>(1)?;
   let parent = parent.borrow();
 
-  this.borrow_mut().resize((parent.width, parent.height));
+  this.borrow_mut().reset_size((parent.width, parent.height));
   Ok(cx.boxed(this))
 }
 
@@ -37,7 +38,38 @@ pub fn resetSize(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let parent = cx.argument::<BoxedCanvas>(1)?;
   let parent = parent.borrow();
 
-  this.borrow_mut().resize((parent.width, parent.height));
+  this.borrow_mut().reset_size((parent.width, parent.height));
+  Ok(cx.undefined())
+}
+
+pub fn get_size(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let bounds = this.borrow().bounds;
+
+  let array = JsArray::new(&mut cx, 2);
+  let width = cx.number(bounds.size().width);
+  let height = cx.number(bounds.size().height);
+  array.set(&mut cx, 0, width)?;
+  array.set(&mut cx, 1, height)?;
+  Ok(array)
+}
+
+pub fn set_size(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let xy = opt_float_args(&mut cx, 1..3);
+
+  if let [width, height] = xy.as_slice(){
+    this.borrow_mut().resize((*width, *height));
+  }
+  Ok(cx.undefined())
+}
+
+pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let size = this.bounds.size();
+
+  this.reset_size(size);
   Ok(cx.undefined())
 }
 
@@ -205,6 +237,23 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     this.path.line_to(quad[3]);
     this.path.close();
   }
+  Ok(cx.undefined())
+}
+
+pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  check_argc(&mut cx, 13)?;
+
+  let nums = opt_float_args(&mut cx, 1..13);
+  if let [x, y, w, h] = &nums[..4]{
+    let rect = Rect::from_xywh(*x, *y, *w, *h);
+    let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
+    let rrect = RRect::new_rect_radii(rect, &[radii[0], radii[1], radii[2], radii[3]]);
+    let direction = if w.signum() == h.signum(){ CW }else{ CCW };
+    this.path.add_rrect(rrect, Some((direction, 0)));
+  }
+
   Ok(cx.undefined())
 }
 
@@ -739,10 +788,9 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let width = float_arg(&mut cx, 3, "width")? as i32;
   let height = float_arg(&mut cx, 4, "height")? as i32;
 
-  let buffer = JsBuffer::new(&mut cx, 4 * (width * height) as u32)?;
-  cx.borrow(&buffer, |data| {
-    this.get_pixels(data.as_mut_slice(), (x, y), (width, height));
-  });
+  let mut buffer = cx.buffer(4 * (width * height) as usize)?;
+  this.get_pixels(buffer.as_mut_slice(&mut cx), (x, y), (width, height));
+
   Ok(buffer)
 }
 
@@ -772,11 +820,9 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       Rect::from_xywh(x, y, width, height)
   )};
 
-  let buffer = img_data.get(&mut cx, "data")?.downcast_or_throw::<JsBuffer, _>(&mut cx)?;
+  let buffer: Handle<JsBuffer> = img_data.get(&mut cx, "data")?;
   let info = Image::info(width, height);
-  cx.borrow(&buffer, |data| {
-    this.blit_pixels(data.as_slice(), &info, &src, &dst ,antialias);
-  });
+  this.blit_pixels(buffer.as_slice(&cx), &info, &src, &dst,antialias);
   Ok(cx.undefined())
 }
 
@@ -785,7 +831,8 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn get_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  Ok(cx.boolean(this.state.image_smoothing_enabled))
+  // Ok(cx.boolean(this.state.image_smoothing_enabled))
+  Ok(cx.boolean(this.state.image_filter.smoothing))
 }
 
 pub fn set_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -793,14 +840,14 @@ pub fn set_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsUndefine
   let mut this = this.borrow_mut();
   let flag = bool_arg(&mut cx, 1, "imageSmoothingEnabled")?;
 
-  this.state.image_smoothing_enabled = flag;
+  this.state.image_filter.smoothing = flag;
   Ok(cx.undefined())
 }
 
 pub fn get_imageSmoothingQuality(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let mode = from_filter_quality(this.state.image_filter_quality);
+  let mode = from_filter_quality(this.state.image_filter.quality);
   Ok(cx.string(mode))
 }
 
@@ -810,7 +857,7 @@ pub fn set_imageSmoothingQuality(mut cx: FunctionContext) -> JsResult<JsUndefine
   let name = string_arg(&mut cx, 1, "imageSmoothingQuality")?;
 
   if let Some(mode) = to_filter_quality(&name){
-    this.state.image_filter_quality = mode;
+    this.state.image_filter.quality = mode;
   }
   Ok(cx.undefined())
 }
@@ -966,7 +1013,7 @@ pub fn set_fontVariant(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let arg = cx.argument::<JsObject>(1)?;
 
   let variant = string_for_key(&mut cx, &arg, "variant")?;
-  let feat_obj = arg.get(&mut cx, "features")?.downcast_or_throw::<JsObject, _>(&mut cx)?;
+  let feat_obj: Handle<JsObject> = arg.get(&mut cx, "features")?;
   let features = font_features(&mut cx, &feat_obj)?;
   this.set_font_variant(&variant, &features);
   Ok(cx.undefined())
@@ -1050,15 +1097,17 @@ pub fn set_globalCompositeOperation(mut cx: FunctionContext) -> JsResult<JsUndef
 pub fn get_filter(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  Ok(cx.string(this.state.filter.clone()))
+  Ok(cx.string(this.state.filter.to_string()))
 }
 
 pub fn set_filter(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
   if !cx.argument::<JsValue>(1)?.is_a::<JsNull, _>(&mut cx) {
-    let (filter_text, filters) = filter_arg(&mut cx, 1)?;
-    this.set_filter(&filter_text, &filters);
+    let (filter_text, specs) = filter_arg(&mut cx, 1)?;
+    if filter_text != this.state.filter.to_string() {
+      this.state.filter = Filter::new(&filter_text, &specs);
+    }
   }
   Ok(cx.undefined())
 }
@@ -1129,6 +1178,7 @@ pub fn set_shadowOffsetY(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 pub fn set_antialias(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+ 
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
   let flag = string_arg(&mut cx, 1, "antialias")?;
@@ -1146,5 +1196,4 @@ pub fn get_antialias(mut cx: FunctionContext) -> JsResult<JsString> {
   }else{
     Ok(cx.string("none"))
   }
-  
 }

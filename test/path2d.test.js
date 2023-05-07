@@ -1,7 +1,7 @@
 // @ts-check
 
 const _ = require('lodash'),
-      {Canvas, DOMMatrix, Path2D} = require('../lib');
+      {Canvas, DOMMatrix, Path2D, DOMPoint} = require('../lib');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -178,6 +178,33 @@ describe("Path2D", ()=>{
 
       expect(pixel(150, 150)).toEqual(BLACK)
       expect(() => p.rect(0,0, 20) ).toThrowError("Not enough arguments")
+    })
+
+    test("roundRect", () => {
+      let dim = WIDTH/2
+      let radii = [50, 25, 15, new DOMPoint(20, 10)]
+      p.roundRect(dim, dim, dim, dim, radii)
+      p.roundRect(dim, dim, -dim, -dim, radii)
+      p.roundRect(dim, dim, -dim, dim, radii)
+      p.roundRect(dim, dim, dim, -dim, radii)
+      ctx.fill(p)
+
+      let off = [ [3,3], [dim-14, dim-14], [dim-4, 3], [7, dim-6]]
+      let on = [ [5,5], [dim-17, dim-17], [dim-9, 3], [9, dim-9] ]
+
+      for (const [x, y] of on){
+        expect(pixel(x, y)).toEqual(BLACK)
+        expect(pixel(x, HEIGHT - y - 1)).toEqual(BLACK)
+        expect(pixel(WIDTH - x - 1, y)).toEqual(BLACK)
+        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(BLACK)
+      }
+
+      for (const [x, y] of off){
+        expect(pixel(x, y)).toEqual(CLEAR)
+        expect(pixel(x, HEIGHT - y - 1)).toEqual(CLEAR)
+        expect(pixel(WIDTH - x - 1, y)).toEqual(CLEAR)
+        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(CLEAR)
+      }
     })
 
     test("arc", () => {
