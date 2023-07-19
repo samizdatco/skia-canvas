@@ -1,8 +1,11 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!-- ## 🥚 ⟩ [Unreleased] -->
+
+## 📦 ⟩ [v1.0.1] ⟩ Oct 15, 2022
 
 ### Bugfixes
+- If an offscreen buffer can't be allocated using the Vulkan renderer, CPU rendering is used as a fallback
 - The `drawCanvas()` routine now works even when the destination canvas is later saved as an SVG (previously, the source canvas would be missing from the output). Caveat: this only works if the destination canvas is using the default `source-over` blend mode, has its `globalAlpha` set to 1, and is not using shadows or the `effect` property. If any of those defaults have been changed, the drawn canvas will not appear in the saved SVG. Bitmap and PDF exports do not have this restriction.
 
 ### Misc. Improvements
