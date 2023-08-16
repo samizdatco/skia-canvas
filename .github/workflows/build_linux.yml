@@ -1,0 +1,44 @@
+name: Compile and upload Linux binaries
+on:
+  workflow_dispatch:
+
+jobs:
+
+  linux-x86:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        libc: [glibc, musl]
+    container:
+      image: ${{ format('ghcr.io/samizdatco/skia-canvas-{0}:latest', matrix.libc) }}
+
+    steps:
+    - name: Install rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Checkout skia-canvas
+      uses: actions/checkout@v2
+      with:
+        path: skia-canvas
+
+    - name: Build module
+      run: |
+        cd skia-canvas
+        npm ci --ignore-scripts
+        npm run build -- --release --features vulkan,skia-safe/embed-freetype
+
+    - name: Package module
+      run: |
+        cd skia-canvas
+        npm test && npm run package
+
+    - name: Upload
+      env:
+        NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      run: |
+        cd skia-canvas
+        npm run upload
+

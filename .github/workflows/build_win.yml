@@ -1,0 +1,37 @@
+name: Compile and upload Windows binaries
+on:
+  workflow_dispatch:
+
+jobs:
+
+  windows-x86:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Use Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: 16
+
+    - name: Use Rust
+      uses: actions-rs/toolchain@v1.0.6
+      with:
+        toolchain: stable
+
+    - name: Build module
+      run: |
+        npm ci --ignore-scripts
+        npm run build -- --release --features vulkan
+
+    - name: Package module
+      run: |
+        npm test && npm run package
+
+    - name: Upload to S3
+      env:
+        NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      run: |
+        npm run upload
