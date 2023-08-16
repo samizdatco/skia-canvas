@@ -30,7 +30,7 @@ jobs:
       run: |
         npm test && npm run package
 
-    - name: Upload to S3
+    - name: Upload
       env:
         NODE_PRE_GYP_GITHUB_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
       run: |
