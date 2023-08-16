@@ -21,7 +21,7 @@
     "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
     "install": "node-pre-gyp install --fallback-to-build || npm run build -- --release",
     "package": "node-pre-gyp package",
-    "upload": "node-pre-gyp publish",
+    "upload": "node-pre-gyp-github publish",
     "test": "jest"
   },
   "dependencies": {
@@ -40,7 +40,8 @@
     "jest": "^28.1.3",
     "lodash": "^4.17.21",
     "nodemon": "^2.0.19",
-    "tmp": "^0.2.1"
+    "tmp": "^0.2.1",
+    "node-pre-gyp-github": "^1.4.4"
   },
   "files": [
     "lib"
@@ -48,9 +49,9 @@
   "binary": {
     "module_name": "index",
     "module_path": "./lib/v{napi_build_version}",
-    "remote_path": "./tpp/di/skia-canvas/dist/v{version}",
+    "remote_path": "{version}",
     "package_name": "{platform}-{arch}-{node_napi_label}-{libc}.tar.gz",
-    "host": "https://max.paperno.us",
+    "host": "https://github.com/mpaperno/skia-canvas/releases/download/",
     "napi_versions": [
       6
     ]
