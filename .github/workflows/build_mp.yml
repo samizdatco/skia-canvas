@@ -1,0 +1,86 @@
+name: Compile and upload binaries
+on:
+  workflow_dispatch:
+
+jobs:
+
+  linux-x86:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        libc: [glibc]
+    container:
+      image: ${{ format('ghcr.io/samizdatco/skia-canvas-{0}:latest', matrix.libc) }}
+
+    steps:
+    - name: Install rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+    - name: Checkout skia-canvas
+      uses: actions/checkout@v2
+      with:
+        path: skia-canvas
+
+    - name: Build module
+      run: |
+        cd skia-canvas
+        npm ci --ignore-scripts
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
+
+    - name: Package module
+      run: |
+        cd skia-canvas
+        npm test && npm run package
+
+    - name: Upload
+      uses: Penguibird/FTP-Deploy-Action@master
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USER }}
+        password: ${{ secrets.FTP_PASS }}
+        local-dir: "./skia-canvas/build/stage/tpp/"
+        server-dir: "./"
+        log-level: verbose
+
+
+  mac-x86:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Use Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: 16
+
+    - name: Use Rust
+      uses: actions-rs/toolchain@v1.0.6
+      with:
+        toolchain: stable
+
+    - name: Build module
+      env:
+        MACOSX_DEPLOYMENT_TARGET: 10.13
+      run: |
+        npm ci --ignore-scripts
+        npm run build -- --release --features metal,window
+
+    - name: Package module
+      run: |
+        npm test && npm run package
+
+    - name: Upload
+      uses: Penguibird/FTP-Deploy-Action@master
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USER }}
+        password: ${{ secrets.FTP_PASS }}
+        local-dir: "./build/stage/tpp/"
+        server-dir: "./"
+        log-level: verbose
+
