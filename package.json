@@ -6,12 +6,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/samizdatco/skia-canvas.git"
+    "url": "git+https://github.com/mpaperno/skia-canvas.git"
   },
   "bugs": {
-    "url": "https://github.com/samizdatco/skia-canvas/issues"
+    "url": "https://github.com/mpaperno/skia-canvas/issues"
   },
-  "homepage": "https://github.com/samizdatco/skia-canvas#readme",
+  "homepage": "https://github.com/mpaperno/skia-canvas#readme",
   "main": "lib",
   "browser": {
     "lib": "./lib/browser.js",
