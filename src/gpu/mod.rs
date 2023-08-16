@@ -38,7 +38,8 @@ pub enum RenderingEngine{
 
 impl Default for RenderingEngine {
     fn default() -> Self {
-        if Engine::supported() { Self::GPU } else { Self::CPU }
+        Self::CPU
+        // if Engine::supported() { Self::GPU } else { Self::CPU }
     }
 }
 
