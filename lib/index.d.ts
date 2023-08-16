@@ -12,9 +12,26 @@ export class CanvasTexture {}
 // Images
 //
 
-export function loadImage(src: string | Buffer): Promise<Image>
+export type ColorType = "rgba" | "rgb" | "bgra" | "argb"
+
+export interface ImageInfo {
+  /** Image width */
+  width: number
+  /** Image height */
+  height: number
+  /** Color type of pixel */
+  colorType: ColorType
+}
+
+export interface ImageOptions {
+  /** Describes how to process raw image buffer with decoded pixels */
+  raw?: ImageInfo | undefined
+}
+
+export function loadImage(src: string | Buffer, options: ImageOptions? = null): Promise<Image>
 export class ImageData extends globalThis.ImageData {}
 export class Image extends globalThis.Image {
+  constructor(options: ImageOptions? = null)
   get src(): string
   set src(src: string | Buffer)
 }
