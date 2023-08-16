@@ -23,6 +23,7 @@ thread_local!(static VK_CONTEXT: RefCell<Option<VulkanEngine>> = RefCell::new(No
 pub struct VulkanEngine {
     context: gpu::DirectContext,
     _ash_graphics: AshGraphics,
+    _supported: u8,
 }
 
 impl VulkanEngine {
@@ -39,9 +40,34 @@ impl VulkanEngine {
 
     pub fn supported() -> bool {
         Self::init();
-        VK_CONTEXT.with(|cell| cell.borrow().is_some()) && Self::surface(
-            &ImageInfo::new_n32_premul(ISize::new(100, 100), Some(ColorSpace::new_srgb()))
-        ).is_some()
+        VK_CONTEXT.with(|cell| {
+            let mut local_ctx = cell.borrow_mut();
+            if local_ctx.is_some() {
+                let this = local_ctx.as_mut().unwrap();
+                if this._supported == 0 {
+                    let mut context = this.context.clone();
+                    let surface = Surface::new_render_target(
+                        &mut context,
+                        Budgeted::Yes,
+                        &ImageInfo::new_n32_premul(ISize::new(10, 10), Some(ColorSpace::new_srgb())),
+                        Some(4),
+                        SurfaceOrigin::BottomLeft,
+                        None,
+                        true,
+                    );
+                    if surface.is_some() {
+                        this._supported = 1;
+                    }
+                    else {
+                        this._supported = 2;
+                    }
+                }
+                this._supported == 1
+            }
+            else {
+                false
+            }
+        })
     }
 
     fn new() -> Result<Self, String> {
@@ -76,6 +102,7 @@ impl VulkanEngine {
         Ok(Self {
             context,
             _ash_graphics: ash_graphics,
+            _supported: 0,
         })
     }
 
