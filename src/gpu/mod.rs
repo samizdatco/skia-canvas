@@ -30,6 +30,7 @@ pub use crate::gpu::metal::autoreleasepool as runloop;
 pub fn runloop<T, F: FnOnce() -> T>(f: F) -> T { f() }
 
 #[derive(Copy, Clone, Debug)]
+#[derive(PartialEq)]
 pub enum RenderingEngine{
     CPU,
     GPU,
