@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A GPU-accelerated Canvas Graphics API for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
@@ -19,7 +19,7 @@
   },
   "scripts": {
     "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
-    "install": "node-pre-gyp install || npm run build -- --release",
+    "install": "node-pre-gyp install --fallback-to-build || npm run build -- --release",
     "package": "node-pre-gyp package",
     "upload": "node-pre-gyp publish",
     "test": "jest"
@@ -48,9 +48,9 @@
   "binary": {
     "module_name": "index",
     "module_path": "./lib/v{napi_build_version}",
-    "remote_path": "./v{version}",
+    "remote_path": "./tpp/di/skia-canvas/dist/v{version}",
     "package_name": "{platform}-{arch}-{node_napi_label}-{libc}.tar.gz",
-    "host": "https://skia-canvas.s3.us-east-1.amazonaws.com",
+    "host": "https://max.paperno.us",
     "napi_versions": [
       6
     ]
