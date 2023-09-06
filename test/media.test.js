@@ -48,6 +48,20 @@ describe("Image", () => {
       expect(img).toMatchObject(LOADED)
     })
 
+    test("pixel buffer", () => {
+      const buffer = fs.readFileSync('test/assets/pentagon.raw');
+      let rawImage = new Image({
+        raw: {
+          width: 125,
+          height: 125,
+          colorType: 'rgba',
+        }
+      });
+
+      rawImage.src = buffer;
+      expect(rawImage).toMatchObject(LOADED);
+    })
+
     test("local file", () => {
       expect(img).toMatchObject(FRESH)
       img.src = PATH
@@ -79,6 +93,15 @@ describe("Image", () => {
       img = await loadImage(PATH)
       expect(img).toMatchObject(LOADED)
 
+      img = await loadImage(PATH.replace('.png', '.raw'), {
+        raw: {
+          width: 125,
+          height: 125,
+          colorType: 'rgba'
+        }
+      })
+      expect(img).toMatchObject(LOADED)
+
       expect(async () => { await loadImage('http://nonesuch') }).rejects.toEqual("HTTP_ERROR_404")
     })
   })
@@ -89,6 +112,21 @@ describe("Image", () => {
 
       img.src = PATH
       expect(img.complete).toEqual(true)
+    })
+
+    test(".complete flag false with incorrect pixel buffer", () => {
+      const buffer = Buffer.alloc(10);
+      let rawImage = new Image({
+        raw: {
+          width: 60,
+          height: 60,
+          colorType: 'rgba',
+        }
+      })
+
+      rawImage.src = buffer
+
+      expect(rawImage.complete).toEqual(false)
     })
 
     test(".onload callback", done => {
@@ -106,6 +144,24 @@ describe("Image", () => {
         done()
       }
       img.src = 'http://nonesuch'
+    })
+
+    test(".onerror callback with incorrect image data", done => {
+      const buffer = fs.readFileSync('test/assets/pentagon.raw');
+      let rawImage = new Image({
+        raw: {
+          width: 700,
+          height: 700,
+          colorType: 'rgba',
+        }
+      })
+
+      rawImage.onerror = err => {
+        expect(err).toBeInstanceOf(Error)
+        done()
+      }
+
+      rawImage.src = buffer;
     })
 
     test(".decode promise", async () => {
@@ -207,4 +263,3 @@ describe("FontLibrary", ()=>{
     expect(FontLibrary.has(alias)).toBe(false)
   })
 })
-
