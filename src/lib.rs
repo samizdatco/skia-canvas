@@ -114,6 +114,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Canvas_saveSync", canvas::saveSync)?;
   cx.export_function("Canvas_toBuffer", canvas::toBuffer)?;
   cx.export_function("Canvas_toBufferSync", canvas::toBufferSync)?;
+  cx.export_function("Canvas_toRaw", canvas::toRaw)?;
 
   // -- Context -----------------------------------------------------------------------------------
 
