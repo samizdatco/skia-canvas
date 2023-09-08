@@ -210,7 +210,7 @@ impl Page{
     else if format == "raw" {
       let img_dims = render_bounds.size().to_floor();
       let info = make_raw_image_info(img_dims, premultiplied, color_type);
-      let mut buffer: Vec<u8> = vec![0; info.bytes_per_pixel() * (img_dims.width * img_dims.height) as usize];
+      let mut buffer: Vec<u8> = vec![0; info.compute_min_byte_size()];
       if self.get_pixels(&mut buffer, &picture, &info /*, (bounds.left.floor() as i32, bounds.top.floor() as i32) */) {
         return Ok(Data::new_copy(&buffer));
       }
