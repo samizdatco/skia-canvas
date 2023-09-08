@@ -187,7 +187,7 @@ The library exports a number of classes emulating familiar browser objects inclu
  - [CanvasRenderingContext2D][CanvasRenderingContext2D] ⧸[⚡](#canvasrenderingcontext2d)
  - [DOMMatrix][DOMMatrix]
  - [Image][Image]
- - [ImageData][ImageData]
+ - [ImageData][ImageData] /[⚡](ImageData_ext)
  - [Path2D][Path2D] ⧸[⚡](#path2d)
 
 In addition, the module contains:
@@ -206,10 +206,11 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 | Image Dimensions             | Rendering Contexts            | Output                                           |
 | --                           | --                            | --                                               |
 | [**width**][canvas_width]    | [**gpu**][canvas_gpu] ⚡      | ~~[**async**][canvas_async]~~  ⚡                    |
-| [**height**][canvas_height]  | [**pages**][canvas_pages] ⚡  | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
-|                              | [getContext()][getContext]    | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
+| [**height**][canvas_height]  | [**pages**][canvas_pages] ⚡  | [**pdf**, **png**, **svg**, **jpg**, **raw**][shorthands] ⚡ |
+| [**size**][canvas_size]      | [getContext()][getContext]    | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
 |                              | [newPage()][newPage] ⚡       | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡                        |
 |                              |                               | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] ⚡ |
+|                              |                               | [toRaw()][toRaw] ⚡ / [toImageData()][toImageData] ⚡ |
 
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
@@ -218,12 +219,15 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 [canvas_pages]: #pages
 [canvas_pages]: #size
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
-[saveAs]: #saveasfilename-page-format-matte-density1-quality092-outlinefalse-left-top-width-height
-[toBuffer]: #tobufferformat-page-matte-density-quality-outline-left-top-width-height
+[saveAs]: #saveasfilename-page-format-matte-density1-quality092-outlinefalse-left-top-width-height-colortypergba-premultiplied
+[toBuffer]: #tobufferformat-page-matte-density-quality-outline-left-top-width-height-colortypergba-premultiplied
+[toRaw]: #torawpage-matte-left-top-width-height-colortypergba-premultipliedfalse
+[toImageData]: #torawpage-matte-left-top-width-height-colortypergba-premultipliedfalse
 [newPage]: #newpagewidth-height
 [toDataURL_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
 [toDataURL_ext]: #todataurlformat-page-matte-density-quality-outline-left-top-width-height
 [shorthands]: #pdf-svg-jpg-and-png
+[ImageData_ext]: #imagedata
 
 #### Creating new `Canvas` objects
 
@@ -240,7 +244,9 @@ When the canvas renders images and writes them to disk, it does so in a backgrou
   - [`saveAs()`][saveAs]
   - [`toBuffer()`][toBuffer]
   - [`toDataURL()`][toDataURL_ext]
-  - [`.pdf`, `.svg`, `.jpg`, and `.png`][shorthands]
+  - [`toRaw()`][toRaw]
+  - [`toImageData()`][toImageData]
+  - [`.pdf`, `.svg`, `.jpg`, `.png`, `raw`][shorthands]
 
 
 In cases where this is not the desired behavior, you can use the synchronous equivalents for the primary export functions. They accept identical arguments to their async versions but block execution and return their values synchronously rather than wrapped in Promises. Also note that the [shorthand properties][shorthands] do not have synchronous versions:
@@ -284,7 +290,7 @@ Shorthand for the standard `width` and `height` properties (readable and settabl
 { width: number, height: number }
 ```
 
-#### `.pdf`, `.svg`, `.jpg`, and `.png`
+#### `.pdf`, `.svg`, `.jpg`, `.png`, and `raw`
 
 These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
 
@@ -296,7 +302,7 @@ This method allows for the creation of additional drawing contexts that are full
 
 The method’s return value is a `CanvasRenderingContext2D` object which you can either save a reference to or recover later from the `.pages` array.
 
-#### `saveAs(filename, {page, format, matte, density=1, quality=0.92, outline=false, left, top, width, height})`
+#### `saveAs(filename, {page, format, matte, density=1, quality=0.92, outline=false, left, top, width, height, colorType, premultiplied})`
 
 The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
 
@@ -333,13 +339,33 @@ These can specify a cropping area of the overall canvas to export. `left` and `t
 
 Note that currently PDF and SVG output does not support cropping.
 
-#### `toBuffer(format, {page, matte, density, quality, outline, left, top, width, height})`
+##### colorType
+Specifies the color type to use when exporting `raw` pixel data. The default is '**rgba**'.  Available color types are:
+
+```
+"rgba" (alias for BGRA8888) | "rgb" (alias for RGB888x) | "bgra" (alias for BGRA8888) | "argb" (alias for ARGB4444) |
+"Alpha8"  | "RGB565"  | "ARGB4444"  | "RGBA8888"  | "RGB888x"  | "BGRA8888"  | "RGBA1010102"  | "BGRA1010102"  |
+"RGB101010x"  |"BGR101010x"  | "Gray8"  | "RGBAF16Norm"  | "RGBAF16"  | "RGBAF32"  | "R8G8UNorm"  | "A16Float"  |
+"R16G16Float"  | "A16UNorm"  | "R16G16UNorm"  | "R16G16B16A16UNorm"  | "SRGBA8888"  | "R8UNorm"
+```
+
+##### premultiplied
+Specifies if the `raw` pixel data colors should be pre-multiplied with the alpha channel.  Default is `false`
+
+
+#### `toBuffer(format, {page, matte, density, quality, outline, left, top, width, height, colorType, premultiplied})`
 
 Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the `saveAs` method.
 
 #### `toDataURL(format, {page, matte, density, quality, outline, left, top, width, height})`
 
 This method accepts the same arguments and behaves similarly to `.toBuffer`. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
+
+#### `toRaw({page, matte, left, top, width, height, colorType='rgba', premultiplied=false})`
+This method accepts the same arguments and behaves the same as `.toBuffer('raw')`, though is slightly more efficient on the library side. Irrelevant options are ignored.
+
+#### `toImageData({page, matte, left, top, width, height, colorType='rgba', premultiplied=false})`
+Same as `.toRaw()` with the result wrapped in an [ImageData][ImageData_ext] type object.
 
 
 ## CanvasRenderingContext2D
@@ -834,6 +860,42 @@ let unwound = orig.unwind()
 ![convert winding rule subpaths](/test/assets/path/effect-unwind@2x.png)
 
 
+## ImageData
+
+The custom `ImageData` class extends the [standard one][ImageData] with the following constructor options and read-only properties.
+
+NOTE: The standard `colorSpace` setting/property is currently ignored. No color space conversion is supported.
+
+##### CONSTRUCTORS
+The class supports the following _additional_ constructors.
+
+```ts
+new ImageData(buffer: Buffer, width: number [,height: number [, settings: ImageDataSettings ]])
+new ImageData(other: ImageData)
+```
+
+##### CONSTRUCTOR SETTINGS (`ImageDataSettings`)
+The optional `settings` object passed to the constructor adds the following optional parameters:
+
+#### `colorType`
+Color type of pixel. Defaults to 'rgba'.
+
+#### `premultiplied`
+Whether stored color data is pre-multiplied with alpha value. Default is `undefined` (unknown).
+
+##### PROPERTIES
+The following additional read-only properties are added:
+
+#### `.colorType`
+Color type of pixel data. Typically 'rgba' ('RGBA8888') unless specifically set when `ImageData` was created.
+
+#### `.bytesPerPixel`
+Number of bytes representing one pixel in the data. This will depend on the `colorType` property.
+
+#### `.premultiplied`
+Whether stored color data is pre-multiplied with alpha value. `undefined` if unknown (ie. was not specified).
+
+
 ## Window
 
 The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and update them in response to user input.
@@ -1185,7 +1247,6 @@ let img = await loadImage(pixelBuffer, {
   raw: {
     width: 1920,
     height: 1080,
-    colorType: 'rgba'
   }
 })
 ctx.drawImage(img, 100, 100)
@@ -1195,12 +1256,18 @@ let img = new Image({
   raw: {
     width: 1920,
     height: 1080,
-    colorType: 'rgba'
+    colorType: 'rbga',
+    premultiplied: true
   }
 })
 img.src = pixelBuffer
 ctx.drawImage(img, 100, 100)
 ```
+
+See the [colorType](#colortype) export option for a list of `colorType` values (default is '**rgba**').
+
+The `premultiplied` option specifies if the pixel color data has already been pre-multiplied with the alpha value so that recalculation can be skipped.  Default is `false`.
+
 ### FontLibrary
 
 The `FontLibrary` is a static class which does not need to be instantiated with `new`. Instead you can access the properties and methods on the global `FontLibrary` you import from the module and its contents will be shared across all canvases you create.
