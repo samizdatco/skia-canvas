@@ -20,6 +20,8 @@ impl Canvas{
   pub fn new() -> Self{
     Canvas{width:300.0, height:150.0, async_io:true, engine:gpu::RenderingEngine::default()}
   }
+
+  pub fn size(&self) -> skia_safe::Size { skia_safe::Size::new(self.width, self.height) }
 }
 
 //
@@ -100,13 +102,14 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let density = float_arg(&mut cx, 4, "density")?;
   let outline = bool_arg(&mut cx, 5, "outline")?;
   let matte = color_arg(&mut cx, 6);
+  let bounds = opt_rect_obj_arg(&mut cx, 7, this.borrow().size());
 
   let promise = cx
     .task(move || {
       if file_format=="pdf" && pages.len() > 1 {
         pages.as_pdf(quality, density, matte)
       }else{
-        pages.first().encoded_as(&file_format, quality, density, outline, matte, pages.engine)
+        pages.first().encoded_as(&file_format, quality, density, outline, matte, bounds, pages.engine)
       }
     })
     .promise(move |mut cx, result| {
@@ -127,12 +130,13 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
   let density = float_arg(&mut cx, 4, "density")?;
   let outline = bool_arg(&mut cx, 5, "outline")?;
   let matte = color_arg(&mut cx, 6);
+  let bounds = opt_rect_obj_arg(&mut cx, 7, this.borrow().size());
 
     let encoded = {
       if file_format=="pdf" && pages.len() > 1 {
         pages.as_pdf(quality, density, matte)
       }else{
-        pages.first().encoded_as(&file_format, quality, density, outline, matte, pages.engine)
+        pages.first().encoded_as(&file_format, quality, density, outline, matte, bounds, pages.engine)
       }
     };
 
@@ -157,15 +161,16 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let density = float_arg(&mut cx, 6, "density")?;
   let outline = bool_arg(&mut cx, 7, "outline")?;
   let matte = color_arg(&mut cx, 8);
+  let bounds = opt_rect_obj_arg(&mut cx, 9, this.borrow().size());
 
   let promise = cx
     .task(move || {
       if sequence {
-        pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
+        pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte, bounds)
       } else if file_format == "pdf" {
         pages.write_pdf(&name_pattern, quality, density, matte)
       } else {
-        pages.write_image(&name_pattern, &file_format, quality, density, outline, matte)
+        pages.write_image(&name_pattern, &file_format, quality, density, outline, matte, bounds)
       }
     })
     .promise(move |mut cx, result| {
@@ -187,14 +192,15 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let density = float_arg(&mut cx, 6, "density")?;
   let outline = bool_arg(&mut cx, 7, "outline")?;
   let matte = color_arg(&mut cx, 8);
+  let bounds = opt_rect_obj_arg(&mut cx, 9, this.borrow().size());
 
   let result = {
     if sequence {
-      pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
+      pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte, bounds)
     } else if file_format == "pdf" {
       pages.write_pdf(&name_pattern, quality, density, matte)
     } else {
-      pages.write_image(&name_pattern, &file_format, quality, density, outline, matte)
+      pages.write_image(&name_pattern, &file_format, quality, density, outline, matte, bounds)
     }
   };
 

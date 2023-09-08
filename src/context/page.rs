@@ -2,9 +2,10 @@ use std::fs;
 use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
-use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color, ColorSpace,
+use skia_safe::{Canvas as SkCanvas, Path, Matrix, ClipOp, Rect, IRect, Size, ISize, IPoint,
+                Data, Color, ColorSpace,
                 PictureRecorder, Picture, EncodedImageFormat, Image as SkImage,
-                svg::{self, canvas::Flags}, pdf, Document, ImageInfo,
+                svg::{self, canvas::Flags}, pdf, Document, ImageInfo, RoundOut,
                 image::BitDepth};
 
 use crc::{Crc, CRC_32_ISO_HDLC};
@@ -97,7 +98,7 @@ impl PageRecorder{
   pub fn get_image(&mut self) -> Option<SkImage>{
     let page = self.get_page();
     if self.cache.is_none(){
-      if let Some(pict) = page.get_picture(None){
+      if let Some(pict) = page.get_picture(None, None){
         let size = page.bounds.size().to_floor();
         self.cache = SkImage::from_picture(pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()));
       }
@@ -118,69 +119,93 @@ pub struct Page{
 
 impl Page{
 
-  pub fn get_picture(&self, matte:Option<Color>) -> Option<Picture> {
+  pub fn get_picture(&self, matte:Option<Color>, bounds:Option<&Rect>) -> Option<Picture> {
     let mut compositor = PictureRecorder::new();
-    compositor.begin_recording(self.bounds, None);
+    let bounds = bounds.unwrap_or(&self.bounds);
+    compositor.begin_recording(bounds, None);
     if let Some(output) = compositor.recording_canvas() {
       matte.map(|c| output.clear(c));
       for pict in self.layers.iter(){
         pict.playback(output);
       }
     }
-    compositor.finish_recording_as_picture(Some(&self.bounds))
+    compositor.finish_recording_as_picture(Some(bounds))
   }
 
-  pub fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>, engine:RenderingEngine) -> Result<Data, String> {
-    let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
+  pub fn encoded_as(&self,
+      format:&str,
+      quality:f32,
+      density:f32,
+      outline:bool,
+      matte:Option<Color>,
+      bounds: Option<Rect>,           // clip area, for raster
+      engine:RenderingEngine
+  ) -> Result<Data, String> {
+    let render_bounds = bounds.unwrap_or(self.bounds);
+    if render_bounds.is_empty() || !self.bounds.intersects(render_bounds) {
+      return Err(
+        format!("Render bounds ({:?}) must be non-empty and intersect the canvas bounds ({:?}).", render_bounds, self.bounds)
+      );
+    }
+    let picture = self.get_picture(matte, Some(&render_bounds)).ok_or("Could not generate picture")?;
 
-    if self.bounds.is_empty(){
-      Err("Width and height must be non-zero to generate an image".to_string())
-    }else{
-      let img_dims = self.bounds.size();
-      let img_format = match format {
-        "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
-        "png" => Some(EncodedImageFormat::PNG),
-        _ => None
-      };
+    let img_format = match format {
+      "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
+      "png" => Some(EncodedImageFormat::PNG),
+      _ => None
+    };
 
-      if let Some(img_format) = img_format{
-        let img_scale = Matrix::scale((density, density));
-        let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
-        let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
+    if let Some(img_format) = img_format {
+      let img_scale = Matrix::scale((density, density));
+      // start with full `self.bounds` size since image_snapshot_with_bounds() will crop as needed
+      let img_dims = Size::new(self.bounds.width() * density, self.bounds.height() * density).to_floor();
+      let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
 
-        if let Some(mut surface) = engine.get_surface(&img_info){
-          surface
-            .canvas()
-            .set_matrix(&img_scale.into())
-            .draw_picture(&picture, None, None);
-          surface
-            .image_snapshot()
-            .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
-            .map(|data| with_dpi(data, img_format, density))
-            .ok_or(format!("Could not encode as {}", format))
-        }else{
-          Err(format!("Could not allocate new {}×{} bitmap", img_dims.width, img_dims.height))
-        }
-      }else if format == "pdf"{
-        let mut document = pdf_document(quality, density).begin_page(img_dims, None);
-        let canvas = document.canvas();
-        canvas.draw_picture(&picture, None, None);
-        Ok(document.end_page().close())
-      }else if format == "svg"{
-        let flags = outline.then(|| Flags::CONVERT_TEXT_TO_PATHS);
-        let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
-        canvas.draw_picture(&picture, None, None);
-        Ok(canvas.end())
+      if let Some(mut surface) = engine.get_surface(&img_info){
+        surface
+          .canvas()
+          .set_matrix(&img_scale.into())
+          .draw_picture(&picture, None, None);
+        // This unwrap() should never panic because we validated the render bounds already.
+        surface.image_snapshot_with_bounds(&render_bounds.round_in()).unwrap()
+          .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
+          .map(|data| with_dpi(data, img_format, density))
+          .ok_or(format!("Could not encode as {}", format))
       }else{
-        Err(format!("Unsupported file format {}", format))
+        Err(format!("Could not allocate new {}×{} bitmap", img_dims.width, img_dims.height))
       }
+    }
+    else if format == "pdf" {
+      let mut document = pdf_document(quality, density).begin_page(self.bounds.size().to_floor(), None);
+      let canvas = document.canvas();
+      canvas.draw_picture(&picture, None, None);
+      Ok(document.end_page().close())
+    }
+    else if format == "svg" {
+      let flags = outline.then(|| Flags::CONVERT_TEXT_TO_PATHS);
+      let mut canvas = svg::Canvas::new(Rect::from_size(self.bounds.size()), flags);
+      canvas.draw_picture(&picture, None, None);
+      Ok(canvas.end())
+    }
+    else {
+      Err(format!("Unsupported file format {}", format))
     }
   }
 
 
-  pub fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>, engine:RenderingEngine) -> Result<(), String> {
+  #[allow(clippy::too_many_arguments)]
+  pub fn write(&self,
+      filename: &str,
+      file_format:&str,
+      quality:f32,
+      density:f32,
+      outline:bool,
+      matte:Option<Color>,
+      bounds: Option<Rect>,
+      engine:RenderingEngine
+  ) -> Result<(), String> {
     let path = FilePath::new(&filename);
-    let data = self.encoded_as(file_format, quality, density, outline, matte, engine)?;
+    let data = self.encoded_as(file_format, quality, density, outline, matte, bounds, engine)?;
     fs::write(path, data.as_bytes()).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     )
@@ -190,7 +215,7 @@ impl Page{
     if !self.bounds.is_empty(){
       let mut doc = doc.begin_page(self.bounds.size(), None);
       let canvas = doc.canvas();
-      if let Some(picture) = self.get_picture(matte){
+      if let Some(picture) = self.get_picture(matte, None){
         canvas.draw_picture(&picture, None, None);
       }
       Ok(doc.end_page())
@@ -230,12 +255,30 @@ impl PageSequence{
       .map(|doc| doc.close())
   }
 
-  pub fn write_image(&self, pattern:&str, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
-    self.first().write(&pattern, &format, quality, density, outline, matte, self.engine)
+  #[allow(clippy::too_many_arguments)]
+  pub fn write_image(&self,
+      pattern:&str,
+      format:&str,
+      quality:f32,
+      density:f32,
+      outline:bool,
+      matte:Option<Color>,
+      bounds: Option<Rect>
+    ) -> Result<(), String>{
+    self.first().write(&pattern, &format, quality, density, outline, matte, bounds, self.engine)
   }
 
   #[allow(clippy::too_many_arguments)]
-  pub fn write_sequence(&self, pattern:&str, format:&str, padding:f32, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
+  pub fn write_sequence(&self,
+      pattern:&str,
+      format:&str,
+      padding:f32,
+      quality:f32,
+      density:f32,
+      outline:bool,
+      matte:Option<Color>,
+      bounds: Option<Rect>
+  ) -> Result<(), String>{
     let padding = match padding as i32{
       -1 => (1.0 + (self.pages.len() as f32).log10().floor()) as usize,
       pad => pad as usize
@@ -247,7 +290,7 @@ impl PageSequence{
       .try_for_each(|(pp, page)|{
         let folio = format!("{:0width$}", pp+1, width=padding);
         let filename = pattern.replace("{}", folio.as_str());
-        page.write(&filename, format, quality, density, outline, matte, self.engine)
+        page.write(&filename, format, quality, density, outline, matte, bounds, self.engine)
       })
   }
 

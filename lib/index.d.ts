@@ -57,6 +57,18 @@ export interface RenderOptions {
 
   /** Convert text to paths for SVG exports */
   outline?: boolean
+
+   /** Render area bounds left origin. Default is (0). */
+  left?: number,
+
+  /** Render area bounds top origin. Default is (0). */
+  top?:number,
+
+  /** Render area bounds width. Default is canvas width. */
+  width?: number
+
+  /** Render area bounds height. Default is canvas height. */
+  height?: number
 }
 
 export interface SaveOptions extends RenderOptions {
@@ -76,6 +88,7 @@ export class Canvas {
   async: boolean
   width: number
   height: number
+  size: { width: number, height: number }
 
   getContext(type?: "2d"): CanvasRenderingContext2D
   newPage(width?: number, height?: number): CanvasRenderingContext2D
