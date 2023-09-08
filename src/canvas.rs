@@ -179,7 +179,7 @@ pub fn toRaw(mut cx: FunctionContext) -> JsResult<JsPromise> {
         let picture = pages.first().get_picture(matte, Some(&bounds)).ok_or("Could not generate picture")?;
         let size = bounds.size().to_floor();
         let info = make_raw_image_info(size, premult, ctype);
-        let mut buffer: Vec<u8> = vec![0; 4 * (size.width * size.height) as usize];
+        let mut buffer: Vec<u8> = vec![0; info.compute_min_byte_size()];
         if pages.first().get_pixels(&mut buffer, &picture, &info /*, (bounds.left.floor() as i32, bounds.top.floor() as i32) */) {
           Ok(buffer)
         } else {
