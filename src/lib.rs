@@ -228,6 +228,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetX", ctx::set_shadowOffsetX)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetY", ctx::set_shadowOffsetY)?;
 
+  // -- Utilities---------------------------------------------------------------------------------
+
+  cx.export_function("utils_colorTypeBytesPerPixel", utils::to_color_type_bytes_per_pixel)?;
+
   // -- Window -----------------------------------------------------------------------------------
 
   #[cfg(feature = "window")] {

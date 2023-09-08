@@ -362,6 +362,14 @@ pub fn color_type_arg(cx: &mut FunctionContext, idx: usize) -> Option<ColorType>
   None
 }
 
+// Exported utility to return bytes per pixel of a color type.
+pub fn to_color_type_bytes_per_pixel(mut cx: FunctionContext) -> JsResult<JsValue> {
+  if let Some(ctype) = color_type_arg(&mut cx, 0) {
+    Ok(cx.number(ctype.bytes_per_pixel() as i32).upcast::<JsValue>())
+  }
+  else { Ok(cx.undefined().upcast::<JsValue>()) }
+}
+
 use skia_safe::{AlphaType, ColorSpace, ImageInfo, ISize};
 
 // Internal utility; make ImageInfo from optional arguments, used for raw image data import and export generation;
