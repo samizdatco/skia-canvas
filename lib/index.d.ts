@@ -66,12 +66,33 @@ export interface ImageOptions {
   raw?: ImageInfo | undefined
 }
 
-export function loadImage(src: string | Buffer, options: ImageOptions? = null): Promise<Image>
-export class ImageData extends globalThis.ImageData {}
+export function loadImage(src: string | Buffer, options: ImageOptions | undefined): Promise<Image>
+
 export class Image extends globalThis.Image {
-  constructor(options: ImageOptions? = null)
+  constructor(options: ImageOptions | undefined)
   get src(): string
   set src(src: string | Buffer)
+}
+
+/** Extended ImageDataSettings for the extended ImageData type. */
+export interface ImageDataSettings extends globalThis.ImageDataSettings {
+  /** Color type of pixel. Defaults to 'rgba'. */
+  colorType?: ColorType
+  /** Whether stored color data is pre-multiplied with alpha value. Default is `undefined` (unknown). */
+  premultiplied?: boolean
+}
+
+/** An extension of the standard ImageData type. */
+export class ImageData extends globalThis.ImageData {
+  constructor(sw: number, sh: number, settings?: ImageDataSettings);
+  constructor(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings);
+  constructor(other: ImageData);
+  /** Color type of pixel data. Typically 'rgba' ('RGBA8888') unless specifically set when ImageData was created. */
+  readonly colorType: ColorType
+  /** Number of bytes representing one pixel in the data. This will depend on the `colorType` property. */
+  readonly bytesPerPixel: number
+  /** Whether stored color data is pre-multiplied with alpha value. `undefined` if unknown (ie. was not specified). */
+  readonly premultiplied: boolean | undefined
 }
 
 //
@@ -145,6 +166,7 @@ export class Canvas {
   toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
   toDataURL(format: ExportFormat, options?: RenderOptions): Promise<string>
   toRaw(options?: RenderOptions): Promise<Buffer>
+  toImageData(options?: RenderOptions): Promise<ImageData>
 
   saveAsSync(filename: string, options?: SaveOptions): void
   toBufferSync(format: ExportFormat, options?: RenderOptions): Buffer
