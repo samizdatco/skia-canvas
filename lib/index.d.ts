@@ -12,35 +12,94 @@ export class CanvasTexture {}
 // Images
 //
 
-export type ColorType = "rgba" | "rgb" | "bgra" | "argb"
+export type ColorType =
+  /** alias for BGRA8888 */
+  "rgba"               |
+  /** alias for RGB888x */
+  "rgb"                |
+  /** alias for BGRA8888 */
+  "bgra"               |
+  /** alias for ARGB4444 */
+  "argb"               |
+  // these correspond to skia_safe::ColorType enum names and are mapped in src/utils.rs
+  "Alpha8"             |
+  "RGB565"             |
+  "ARGB4444"           |
+  "RGBA8888"           |
+  "RGB888x"            |
+  "BGRA8888"           |
+  "RGBA1010102"        |
+  "BGRA1010102"        |
+  "RGB101010x"         |
+  "BGR101010x"         |
+  "Gray8"              |
+  "RGBAF16Norm"        |
+  "RGBAF16"            |
+  "RGBAF32"            |
+  "R8G8UNorm"          |
+  "A16Float"           |
+  "R16G16Float"        |
+  "A16UNorm"           |
+  "R16G16UNorm"        |
+  "R16G16B16A16UNorm"  |
+  "SRGBA8888"          |
+  "R8UNorm"            |
+  /** N32 indicates to use the default color type of the paint device,
+   * which must be an actual surface (not raw pixels). */
+  "N32"
+;
 
 export interface ImageInfo {
   /** Image width */
   width: number
   /** Image height */
   height: number
-  /** Color type of pixel */
-  colorType: ColorType
+  /** Color type of pixel. Default is 'rgba'. */
+  colorType?: ColorType,
+  /** Whether image color data is premultiplied with alpha value. Default is `false`. */
+  premultiplied?: boolean,
 }
 
+/** Options for `loadImage` and `Image()` constructor. */
 export interface ImageOptions {
   /** Describes how to process raw image buffer with decoded pixels */
   raw?: ImageInfo | undefined
 }
 
-export function loadImage(src: string | Buffer, options: ImageOptions? = null): Promise<Image>
-export class ImageData extends globalThis.ImageData {}
+export function loadImage(src: string | Buffer, options: ImageOptions | undefined): Promise<Image>
+
 export class Image extends globalThis.Image {
-  constructor(options: ImageOptions? = null)
+  constructor(options: ImageOptions | undefined)
   get src(): string
   set src(src: string | Buffer)
+}
+
+/** Extended ImageDataSettings for the extended ImageData type. */
+export interface ImageDataSettings extends globalThis.ImageDataSettings {
+  /** Color type of pixel. Defaults to 'rgba'. */
+  colorType?: ColorType
+  /** Whether stored color data is pre-multiplied with alpha value. Default is `undefined` (unknown). */
+  premultiplied?: boolean
+}
+
+/** An extension of the standard ImageData type. */
+export class ImageData extends globalThis.ImageData {
+  constructor(sw: number, sh: number, settings?: ImageDataSettings);
+  constructor(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings);
+  constructor(other: ImageData);
+  /** Color type of pixel data. Typically 'rgba' ('RGBA8888') unless specifically set when ImageData was created. */
+  readonly colorType: ColorType
+  /** Number of bytes representing one pixel in the data. This will depend on the `colorType` property. */
+  readonly bytesPerPixel: number
+  /** Whether stored color data is pre-multiplied with alpha value. `undefined` if unknown (ie. was not specified). */
+  readonly premultiplied: boolean | undefined
 }
 
 //
 // Canvas
 //
 
-export type ExportFormat = "png" | "jpg" | "jpeg" | "pdf" | "svg";
+export type ExportFormat = "png" | "jpg" | "jpeg" | "pdf" | "svg" | "raw";
 
 export interface RenderOptions {
   /** Page to export: Defaults to 1 (i.e., first page) */
@@ -69,6 +128,12 @@ export interface RenderOptions {
 
   /** Render area bounds height. Default is canvas height. */
   height?: number
+
+  /** Color type of pixel for raw output. Default is 'rgba'. */
+  colorType?: ColorType,
+
+  /** Whether raw output color data is premultiplied with alpha value. Default is `false`. */
+  premultiplied?: boolean,
 }
 
 export interface SaveOptions extends RenderOptions {
@@ -100,6 +165,8 @@ export class Canvas {
   saveAs(filename: string, options?: SaveOptions): Promise<void>
   toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
   toDataURL(format: ExportFormat, options?: RenderOptions): Promise<string>
+  toRaw(options?: RenderOptions): Promise<Buffer>
+  toImageData(options?: RenderOptions): Promise<ImageData>
 
   saveAsSync(filename: string, options?: SaveOptions): void
   toBufferSync(format: ExportFormat, options?: RenderOptions): Buffer
@@ -109,6 +176,7 @@ export class Canvas {
   get svg(): Promise<Buffer>
   get jpg(): Promise<Buffer>
   get png(): Promise<Buffer>
+  get raw(): Promise<Buffer>
 }
 
 //

@@ -114,6 +114,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Canvas_saveSync", canvas::saveSync)?;
   cx.export_function("Canvas_toBuffer", canvas::toBuffer)?;
   cx.export_function("Canvas_toBufferSync", canvas::toBufferSync)?;
+  cx.export_function("Canvas_toRaw", canvas::toRaw)?;
 
   // -- Context -----------------------------------------------------------------------------------
 
@@ -226,6 +227,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_get_shadowOffsetY", ctx::get_shadowOffsetY)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetX", ctx::set_shadowOffsetX)?;
   cx.export_function("CanvasRenderingContext2D_set_shadowOffsetY", ctx::set_shadowOffsetY)?;
+
+  // -- Utilities---------------------------------------------------------------------------------
+
+  cx.export_function("utils_colorTypeBytesPerPixel", utils::to_color_type_bytes_per_pixel)?;
 
   // -- Window -----------------------------------------------------------------------------------
 
