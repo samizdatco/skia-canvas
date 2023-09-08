@@ -216,12 +216,13 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 [canvas_async]: #async
 [canvas_gpu]: #gpu
 [canvas_pages]: #pages
+[canvas_pages]: #size
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
-[saveAs]: #saveasfilename-page-format-matte-density1-quality092-outlinefalse
-[toBuffer]: #tobufferformat-page-matte-density-quality-outline
+[saveAs]: #saveasfilename-page-format-matte-density1-quality092-outlinefalse-left-top-width-height
+[toBuffer]: #tobufferformat-page-matte-density-quality-outline-left-top-width-height
 [newPage]: #newpagewidth-height
 [toDataURL_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
-[toDataURL_ext]: #todataurlformat-page-matte-density-quality-outline
+[toDataURL_ext]: #todataurlformat-page-matte-density-quality-outline-left-top-width-height
 [shorthands]: #pdf-svg-jpg-and-png
 
 #### Creating new `Canvas` objects
@@ -277,6 +278,12 @@ The `.gpu` attribute allows you to control whether rendering occurs on the graph
 
 The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the `newPage()` method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
 
+#### `.size`
+Shorthand for the standard `width` and `height` properties (readable and settable). An object in the form of:
+```ts
+{ width: number, height: number }
+```
+
 #### `.pdf`, `.svg`, `.jpg`, and `.png`
 
 These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
@@ -289,7 +296,7 @@ This method allows for the creation of additional drawing contexts that are full
 
 The method’s return value is a `CanvasRenderingContext2D` object which you can either save a reference to or recover later from the `.pages` array.
 
-#### `saveAs(filename, {page, format, matte, density=1, quality=0.92, outline=false})`
+#### `saveAs(filename, {page, format, matte, density=1, quality=0.92, outline=false, left, top, width, height})`
 
 The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
 
@@ -321,11 +328,16 @@ The `quality` option is a number between 0 and 1.0 that controls the level of JP
 ##### outline
 When generating SVG output containing text, you have two options for how to handle the fonts that were used. By default, SVG files will contain `<text>` elements that refer to the fonts by name in the embedded stylesheet. This requires that viewers of the SVG have the same fonts available on their system (or accessible as webfonts). Setting the optional `outline` argument to `true` will trace all the letterforms and ‘burn’ them into the file as bézier paths. This will result in a much larger file (and one in which the original text strings will be unrecoverable), but it will be viewable regardless of the specifics of the system it’s displayed on.
 
-#### `toBuffer(format, {page, matte, density, quality, outline})`
+##### left, top, width, height
+These can specify a cropping area of the overall canvas to export. `left` and `top` must be within the canvas bounds. If `width` and/or `height` are greater then the remaining canvas size then the extra area will be filled with `matte` color (by default transparent for formats supporting transparency).
+
+Note that currently PDF and SVG output does not support cropping.
+
+#### `toBuffer(format, {page, matte, density, quality, outline, left, top, width, height})`
 
 Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the `saveAs` method.
 
-#### `toDataURL(format, {page, matte, density, quality, outline})`
+#### `toDataURL(format, {page, matte, density, quality, outline, left, top, width, height})`
 
 This method accepts the same arguments and behaves similarly to `.toBuffer`. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
 
