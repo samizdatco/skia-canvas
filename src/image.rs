@@ -80,15 +80,16 @@ pub fn load_pixel_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let image_parameters = cx.argument::<JsObject>(2)?;
   let js_width: Handle<JsNumber> = image_parameters.get(&mut cx, "width")?;
   let js_height: Handle<JsNumber> = image_parameters.get(&mut cx, "height")?;
-  let js_color_type: Handle<JsString> = image_parameters.get(&mut cx, "colorType")?;
+  let js_color_type: Option<Handle<JsString>> = image_parameters.get_opt(&mut cx, "colorType")?;
+  let js_premult: Option<Handle<JsBoolean>> = image_parameters.get_opt(&mut cx, "premultiplied")?;
 
-  let color_type = map_color_type(js_color_type.value(&mut cx).as_str());
   let width = js_width.value(&mut cx) as i32;
   let height = js_height.value(&mut cx) as i32;
-  let row_bytes = (width as usize) * color_type.bytes_per_pixel();
+  let ctype = if js_color_type.is_some() { Some(to_color_type(js_color_type.unwrap().value(&mut cx).as_str())) } else { None };
+  let premult = if js_premult.is_some() { Some(js_premult.unwrap().value(&mut cx)) } else { Some(false) };
 
-  let image_info = ImageInfo::new((width, height), color_type, AlphaType::Unpremul, None);
-  this.image = SkImage::from_raster_data(&image_info, data, row_bytes);
+  let image_info = make_raw_image_info((width, height), premult, ctype);
+  this.image = SkImage::from_raster_data(&image_info, data, image_info.min_row_bytes());
 
   Ok(cx.boolean(this.image.is_some()))
 }
@@ -117,14 +118,4 @@ pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
   Ok(cx.boolean(this.image.is_some()))
-}
-
-fn map_color_type(color_type: &str) -> ColorType {
-  match color_type {
-    "rgba" => ColorType::RGBA8888,
-    "rgb" => ColorType::RGB888x,
-    "bgra" => ColorType::BGRA8888,
-    "argb" => ColorType::ARGB4444,
-    _ => ColorType::RGBA8888,
-  }
 }
