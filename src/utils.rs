@@ -191,12 +191,22 @@ pub fn bool_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<b
 //
 
 
-pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<f32>{
+pub fn opt_float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<f32>{
   let key = cx.string(attr);
-  let val:Handle<JsValue> = obj.get(cx, key)?;
-  match val.downcast::<JsNumber, _>(cx){
-    Ok(num) => Ok(num.value(cx) as f32),
-    Err(_e) => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
+  if let Ok(val) = obj.get_value(cx, key) {
+    if let Ok(num) = val.downcast::<JsNumber, _>(cx) {
+      if num.value(cx).is_finite(){
+        return Some(num.value(cx) as f32)
+      }
+    }
+  }
+  None
+}
+
+pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<f32>{
+  match opt_float_for_key(cx, obj, attr){
+    Some(v) => Ok(v),
+    None => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
   }
 }
 
@@ -418,6 +428,37 @@ pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Vec<Point>
       .collect();
     Ok(points)
   }
+}
+
+
+//
+// Rect
+//
+
+use skia_safe::Size;
+
+pub fn rect_obj_arg(cx: &mut FunctionContext, idx: usize, default_size: impl Into<Size>) -> NeonResult<Rect> {
+  let rect = cx.argument::<JsObject>(idx as i32)?;
+  let x = opt_float_for_key(cx, &rect, "left");
+  let y = opt_float_for_key(cx, &rect, "top");
+  let w = opt_float_for_key(cx, &rect, "width");
+  let h = opt_float_for_key(cx, &rect, "height");
+  let size = default_size.into();
+  Ok(skia_safe::Rect::from_xywh(
+    x.unwrap_or(0.0f32),
+    y.unwrap_or(0.0f32),
+    w.unwrap_or(size.width),
+    h.unwrap_or(size.height)
+  ))
+}
+
+pub fn opt_rect_obj_arg(cx: &mut FunctionContext, idx: usize, default_size: impl Into<Size>) -> Option<Rect> {
+  if cx.len() > (idx as i32) {
+    if let Ok(rect) = rect_obj_arg(cx, idx, default_size) {
+      return Some(rect);
+    }
+  }
+  None
 }
 
 //

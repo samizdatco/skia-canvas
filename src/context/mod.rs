@@ -442,7 +442,7 @@ impl Context2D{
   }
 
   pub fn get_picture(&mut self) -> Option<Picture> {
-    self.get_page().get_picture(None)
+    self.get_page().get_picture(None, None)
   }
 
   pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
