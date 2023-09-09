@@ -310,7 +310,7 @@ describe("Canvas", ()=>{
       let width = 0, height = 128
       Object.assign(canvas, {width, height})
       expect(canvas).toMatchObject({width, height})
-      await expect(canvas.saveAs(`${TMP}/zeroed.png`)).rejects.toThrowError("must be non-zero")
+      await expect(canvas.saveAs(`${TMP}/zeroed.png`)).rejects.toThrowError("must be non-empty")
     })
   })
 
@@ -475,7 +475,7 @@ describe("Canvas", ()=>{
       let width = 0, height = 128
       Object.assign(canvas, {width, height})
       expect(canvas).toMatchObject({width, height})
-      expect( () => canvas.saveAsSync(`${TMP}/zeroed.png`)).toThrowError("must be non-zero")
+      expect( () => canvas.saveAsSync(`${TMP}/zeroed.png`)).toThrowError("must be non-empty")
     })
   })
 
