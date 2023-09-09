@@ -2,6 +2,58 @@
 
 <!-- ## 🥚 ⟩ [Unreleased] -->
 
+## 📦 ⟩ [v1.1.0-mp] ⟩ Sep 8, 2023
+### New Features
+- Added ability to specify a crop area when rendering/exporting the canvas with `toBuffer()`, `saveAs()`, etc. using new `left`, `top`, `width`, and `height` options. ([08128c7e])
+- Added option to export canvas as raw pixel data. Adds 'raw' as an option to existing methods as well as dedicated `toRaw()` and `toImageData()` methods (both are async only). The color type and pre-multiplied attributes of the generated pixels can be specified as options. ([a2dbd258])
+- Added functionality to load images from decoded pixel buffers. Thanks to @Salmondx for PR [#147](https://github.com/samizdatco/skia-canvas/pull/147)! ([7c5cbcdc])
+- Extend the JS lib `ImageData` type with `colorType`, `premultiplied`, and `bytesPerPixel` properties. ([40a50f18])
+- Added JS lib `colorTypeBytesPerPixel()` utility function to look up channel counts for various image format.
+- Fix missing return type on `roundRect()` methods in TypeScript definitions. ([b959f0a3])
+
+All new features have been documented in the main [README].
+
+Prebuilt binaries published at https://github.com/mpaperno/skia-canvas/releases/tag/v1.1.0-mp<br/>
+NOTE: no Window support in these builds
+
+[v1.1.0-mp]: https://github.com/mpaperno/skia-canvas/compare/1.0.3...v1.1.0-mp
+[08128c7e]: https://github.com/mpaperno/skia-canvas/commit/08128c7e4a5c74dcf16f54c4af7c528cbb2249ff
+[40a50f18]: https://github.com/mpaperno/skia-canvas/commit/40a50f18ccfa1f3097fe8c1d7bf1fab9c0c654b8
+[a2dbd258]: https://github.com/mpaperno/skia-canvas/commit/a2dbd258fd6cc19bbb5cf020163898fac1307049
+[7c5cbcdc]: https://github.com/mpaperno/skia-canvas/commit/7c5cbcdc0ab0eabd98e097ec6a80186f7314834b
+[b959f0a3]: https://github.com/mpaperno/skia-canvas/commit/b959f0a3860d7ff21ad05b70e22c4d5cb70f8e1b
+
+[README]: https://github.com/mpaperno/skia-canvas/blob/mp/main/README.md
+
+## 📦 ⟩ [v1.0.3] ⟩ Aug 16, 2023
+
+### BREAKING Change
+- GPU rendering is now disabled by default due to [issues][issue_126] with thread management and the fact that it [doesn't seem to actually help][issue_127] with anything. ([522388c3])
+
+Prebuilt binaries published at https://github.com/mpaperno/skia-canvas/releases/tag/1.0.3<br/>
+NOTE: no Window support in these builds
+
+[v1.0.3]: https://github.com/mpaperno/skia-canvas/compare/1.0.2...1.0.3
+[issue_126]: https://github.com/samizdatco/skia-canvas/issues/126
+[issue_127]: https://github.com/samizdatco/skia-canvas/issues/127
+[522388c3]: https://github.com/mpaperno/skia-canvas/commit/522388c35999e0a96c7c056dacf64573301fc569
+
+
+## 📦 ⟩ [v1.0.2] ⟩ Aug 16, 2023
+
+### Bugfixes
+- Fixes a [memory leak][issue_145] when GPU rendering is enabled with Vulkan drivers and async export methods were used. Workaround involves only checking if a Vulkan surface is available once at startup, instead of each time a canvas is created or `gpu` option is set. ([b11ff4d2])
+- Don't check or switch rendering engine types if the current type matches new type when setting `gpu` option. ([c364fbdb])
+
+Prebuilt binaries published at https://github.com/mpaperno/skia-canvas/releases/tag/1.0.2<br/>
+NOTE: no Window support in these builds
+
+[v1.0.2]: https://github.com/mpaperno/skia-canvas/compare/v1.0.1...1.0.2
+[issue_145]: https://github.com/samizdatco/skia-canvas/issues/145
+[b11ff4d2]: https://github.com/mpaperno/skia-canvas/commit/f0e6d816fd4770e313ed29c284e773eb947d7600
+[c364fbdb]: https://github.com/mpaperno/skia-canvas/commit/c364fbdb5d109187b9aa8bf0676497a2c64a4b90
+
+
 ## 📦 ⟩ [v1.0.1] ⟩ Oct 15, 2022
 
 ### Bugfixes
@@ -265,6 +317,7 @@
 **Initial public release** 🎉
 
 [unreleased]: https://github.com/samizdatco/skia-canvas/compare/v1.0.0...HEAD
+[v1.0.1]: https://github.com/samizdatco/skia-canvas/compare/v1.0.0...v1.0.1
 [v1.0.0]: https://github.com/samizdatco/skia-canvas/compare/v0.9.30...v1.0.0
 [v0.9.30]: https://github.com/samizdatco/skia-canvas/compare/v0.9.29...v0.9.30
 [v0.9.29]: https://github.com/samizdatco/skia-canvas/compare/v0.9.28...v0.9.29
