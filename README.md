@@ -187,7 +187,7 @@ The library exports a number of classes emulating familiar browser objects inclu
  - [CanvasRenderingContext2D][CanvasRenderingContext2D] ⧸[⚡](#canvasrenderingcontext2d)
  - [DOMMatrix][DOMMatrix]
  - [Image][Image]
- - [ImageData][ImageData] /[⚡](ImageData_ext)
+ - [ImageData][ImageData] /[⚡][ImageData_ext]
  - [Path2D][Path2D] ⧸[⚡](#path2d)
 
 In addition, the module contains:
