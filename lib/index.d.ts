@@ -66,10 +66,10 @@ export interface ImageOptions {
   raw?: ImageInfo | undefined
 }
 
-export function loadImage(src: string | Buffer, options: ImageOptions | undefined): Promise<Image>
+export function loadImage(src: string | Buffer, options?: ImageOptions): Promise<Image>
 
 export class Image extends globalThis.Image {
-  constructor(options: ImageOptions | undefined)
+  constructor(options?: ImageOptions)
   get src(): string
   set src(src: string | Buffer)
 }
