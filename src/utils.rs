@@ -1,19 +1,21 @@
-#![allow(unused_variables)]
-#![allow(unused_mut)]
+// #![allow(unused_variables)]
+// #![allow(unused_mut)]
 #![allow(dead_code)]
-#![allow(unused_imports)]
+// #![allow(unused_imports)]
 use std::cmp;
 use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
-use neon::result::Throw;
-use neon::object::This;
 use css_color::Rgba;
 use skia_safe::{
-  Path, Matrix, Point, Color, Color4f, RGB, Rect, FontArguments,
-  font_style::{FontStyle, Weight, Width, Slant},
-  font_arguments::{VariationPosition, variation_position::{Coordinate}}
+  AlphaType, BlendMode, Color, ColorType, ColorSpace, ImageInfo, ISize, Matrix,
+  PaintCap, PaintJoin, Path, path_1d_path_effect, path::FillType, PathOp, Point,
+  Rect, RGB, Size, TileMode, TileMode::{Decal, Repeat}
 };
+
+use crate::filter::{FilterSpec, FilterQuality};
+use crate::path::BoxedPath2D;
+use crate::gpu::RenderingEngine;
 
 
 //
@@ -81,7 +83,7 @@ pub fn check_argc(cx: &mut FunctionContext, argc:i32) -> NeonResult<()>{
 
 pub fn strings_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<String>{
   let mut strs:Vec<String> = Vec::new();
-  for (i, val) in vals.iter().enumerate() {
+  for (_i, val) in vals.iter().enumerate() {
     if let Ok(txt) = val.downcast::<JsString, _>(cx){
       let val = txt.value(cx);
       strs.push(val);
@@ -212,7 +214,7 @@ pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str
 
 pub fn floats_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<f32>{
   let mut nums:Vec<f32> = Vec::new();
-  for (i, val) in vals.iter().enumerate() {
+  for (_i, val) in vals.iter().enumerate() {
     if let Ok(num) = val.downcast::<JsNumber, _>(cx){
       let val = num.value(cx) as f32;
       if val.is_finite(){
@@ -352,8 +354,6 @@ pub fn color_to_css<'a>(cx: &mut FunctionContext<'a>, color:&Color) -> JsResult<
   Ok(cx.string(css).upcast())
 }
 
-use skia_safe::ColorType;
-
 pub fn color_type_arg(cx: &mut FunctionContext, idx: usize) -> Option<ColorType> {
   let ctype_opt = opt_string_arg(cx, idx);
   if ctype_opt.is_some() {
@@ -369,8 +369,6 @@ pub fn to_color_type_bytes_per_pixel(mut cx: FunctionContext) -> JsResult<JsValu
   }
   else { Ok(cx.undefined().upcast::<JsValue>()) }
 }
-
-use skia_safe::{AlphaType, ColorSpace, ImageInfo, ISize};
 
 // Internal utility; make ImageInfo from optional arguments, used for raw image data import and export generation;
 // Defaults are `AlphaType::Unpremul` (premultiplied=false) and `ColorType::RGBA8888`. Uses SRGB color space.
@@ -464,8 +462,6 @@ pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Vec<Point>
 // Rect
 //
 
-use skia_safe::Size;
-
 pub fn rect_obj_arg(cx: &mut FunctionContext, idx: usize, default_size: impl Into<Size>) -> NeonResult<Rect> {
   let rect = cx.argument::<JsObject>(idx as i32)?;
   let x = opt_float_for_key(cx, &rect, "left");
@@ -494,8 +490,6 @@ pub fn opt_rect_obj_arg(cx: &mut FunctionContext, idx: usize, default_size: impl
 // Path2D
 //
 
-use crate::path::{BoxedPath2D};
-
 pub fn opt_path2d_arg(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
   if let Some(arg) = cx.argument_opt(idx as i32){
     if let Ok(arg) = arg.downcast::<BoxedPath2D, _>(cx){
@@ -510,7 +504,6 @@ pub fn opt_path2d_arg(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
 // Filters
 //
 
-use crate::filter::{FilterSpec, FilterQuality};
 
 pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, Vec<FilterSpec>)> {
   let arg = cx.argument::<JsObject>(idx as i32)?;
@@ -567,7 +560,6 @@ pub fn from_filter_quality(mode:FilterQuality) -> String{
 // Skia Enums
 //
 
-use skia_safe::{TileMode, TileMode::{Decal, Repeat}};
 pub fn to_repeat_mode(repeat:&str) -> Option<(TileMode, TileMode)> {
   let mode = match repeat.to_lowercase().as_str() {
     "repeat" | "" => (Repeat, Repeat),
@@ -579,7 +571,6 @@ pub fn to_repeat_mode(repeat:&str) -> Option<(TileMode, TileMode)> {
   Some(mode)
 }
 
-use skia_safe::{PaintCap};
 pub fn to_stroke_cap(mode_name:&str) -> Option<PaintCap>{
   let mode = match mode_name.to_lowercase().as_str(){
     "butt" => PaintCap::Butt,
@@ -598,7 +589,6 @@ pub fn from_stroke_cap(mode:PaintCap) -> String{
   }.to_string()
 }
 
-use skia_safe::{PaintJoin};
 pub fn to_stroke_join(mode_name:&str) -> Option<PaintJoin>{
   let mode = match mode_name.to_lowercase().as_str(){
     "miter" => PaintJoin::Miter,
@@ -618,7 +608,6 @@ pub fn from_stroke_join(mode:PaintJoin) -> String{
 }
 
 
-use skia_safe::{BlendMode};
 pub fn to_blend_mode(mode_name:&str) -> Option<BlendMode>{
   let mode = match mode_name.to_lowercase().as_str(){
     "source-over" => BlendMode::SrcOver,
@@ -688,7 +677,6 @@ pub fn from_blend_mode(mode:BlendMode) -> String{
   }.to_string()
 }
 
-use skia_safe::{PathOp};
 pub fn to_path_op(op_name:&str) -> Option<PathOp> {
   let op = match op_name.to_lowercase().as_str() {
     "difference" => PathOp::Difference,
@@ -701,7 +689,6 @@ pub fn to_path_op(op_name:&str) -> Option<PathOp> {
   Some(op)
 }
 
-use skia_safe::path_1d_path_effect;
 pub fn to_1d_style(mode_name:&str) -> Option<path_1d_path_effect::Style>{
   let mode = match mode_name.to_lowercase().as_str(){
     "move" => path_1d_path_effect::Style::Translate,
@@ -720,7 +707,6 @@ pub fn from_1d_style(mode:path_1d_path_effect::Style) -> String{
   }.to_string()
 }
 
-use skia_safe::path::FillType;
 
 pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> NeonResult<FillType>{
   let rule = match string_arg_or(cx, idx, default).as_str(){
@@ -734,7 +720,6 @@ pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> 
   Ok(rule)
 }
 
-use crate::gpu::RenderingEngine;
 pub fn to_engine(engine_name:&str) -> Option<RenderingEngine>{
   let mode = match engine_name.to_lowercase().as_str(){
     "gpu" => RenderingEngine::GPU,

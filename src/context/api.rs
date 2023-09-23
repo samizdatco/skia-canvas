@@ -9,7 +9,7 @@ use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{Point, Rect, RRect, Matrix, Path, PathDirection::{CW, CCW}, PaintStyle};
 use skia_safe::path::AddPathMode::Append;
 use skia_safe::path::AddPathMode::Extend;
-use skia_safe::textlayout::{TextDirection};
+use skia_safe::textlayout::TextDirection;
 use skia_safe::PaintStyle::{Fill, Stroke};
 
 use super::{Context2D, BoxedContext2D, Dye};

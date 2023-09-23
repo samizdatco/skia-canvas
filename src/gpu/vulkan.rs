@@ -15,7 +15,7 @@ use skulpin::rafx::api::RafxExtents2D;
 #[cfg(feature = "window")]
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
-    window::{Window},
+    window::Window,
 };
 
 thread_local!(static VK_CONTEXT: RefCell<Option<VulkanEngine>> = RefCell::new(None));

@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(non_snake_case)]
-use std::sync::{Mutex};
+use std::sync::Mutex;
 use std::fs;
 use std::ops::Range;
 use std::path::Path;
@@ -13,7 +13,7 @@ use neon::result::Throw;
 
 use skia_safe::{Font, FontMgr, FontMetrics, FontArguments, Typeface, Data, Paint, Point, Rect, Path as SkPath};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
-use skia_safe::font_arguments::{VariationPosition, variation_position::{Coordinate}};
+use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
                             TextDirection, ParagraphStyle, Paragraph, ParagraphBuilder};
 
