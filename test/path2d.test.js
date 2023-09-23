@@ -243,6 +243,27 @@ describe("Path2D", ()=>{
       expect(pixel(127, 175)).toEqual(CLEAR)
       expect(pixel(130, 60)).toEqual(CLEAR)
       expect(pixel(163, 100)).toEqual(BLACK)
+
+      // full ellipse from offset angles, clockwise
+      p.ellipse(100,100, 100, 50, .25*Math.PI, -.5*Math.PI, 1.5*Math.PI, false)
+      ctx.lineWidth = 5
+      ctx.strokeStyle = 'black'
+      ctx.stroke(p)
+
+      expect(pixel(127, 175)).toEqual(BLACK)
+      expect(pixel(130, 60)).toEqual(BLACK)
+      expect(pixel(163, 100)).toEqual(BLACK)
+
+      // full ellipse from offset angles, CCW
+      p.ellipse(100,100, 100, 50, .25*Math.PI, -.5*Math.PI, 1.5*Math.PI, true)
+      ctx.lineWidth = 5
+      ctx.strokeStyle = 'black'
+      ctx.stroke(p)
+
+      expect(pixel(127, 175)).toEqual(BLACK)
+      expect(pixel(130, 60)).toEqual(BLACK)
+      expect(pixel(163, 100)).toEqual(BLACK)
+
     })
   })
 
