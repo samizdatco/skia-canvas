@@ -379,7 +379,7 @@ Most of your interaction with the canvas will actually be directed toward its �
 | [closePath()][closePath()]                    | [strokeRect()][strokeRect()]                      | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [getTransform()][getTransform()]                 | [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createImageData()][createImageData()]             | [**globalCompositeOperation**][globalCompositeOperation] |
 | [isPointInPath()][isPointInPath()]            | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]         | [setTransform()][setTransform()]                 | [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                       | [getImageData()][getImageData()]                   | [**shadowBlur**][shadowBlur]                             |
 | [isPointInStroke()][isPointInStroke()]        | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                     | [resetTransform()][resetTransform()]             | [conicCurveTo() ⚡][conicCurveTo]   | [**textBaseline**][textBaseline]                                 | [putImageData()][putImageData()]                   | [**shadowColor**][shadowColor]                           |
-| [save()][save()]                              | [fill()][fill()]                                  | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]                   | [transform()][transform()]                       | [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [drawCanvas() ⚡](#drawcanvascanvas-x-y-)     | [**shadowOffsetX**][shadowOffsetX]                       |
+| [save()][save()]                              | [fill()][fill()]                                  | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]                   | [transform()][transform()] ⧸[⚡][transform]                      | [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [drawCanvas() ⚡](#drawcanvascanvas-x-y-)     | [**shadowOffsetX**][shadowOffsetX]                       |
 | [restore()][restore()]                        | [stroke()][stroke()]                              | [createTexture() ⚡][createTexture()]        | [**miterLimit**][miterLimit]                 | [translate()][translate()]                       | [arc()][arc()]                           | [**textWrap** ⚡](#textwrap)                                | [drawImage()][drawImage()]                         | [**shadowOffsetY**][shadowOffsetY]                       |
 | [reset()][reset()]                            |                                                   |                                                   | [getLineDash()][getLineDash()]               | [rotate()][rotate()]                             | [ellipse()][ellipse()]                   | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) |                                                    |                                                          |
 | [clip()][clip()]                              |                                                   |                                                   | [setLineDash()][setLineDash()]               | [scale()][scale()]                               | [rect()][rect()]                         | [outlineText() ⚡][outlineText()]                           |                                                    |                                                          |
@@ -531,6 +531,11 @@ ctx.fillText("@", w/2, h-40)
 The results below show the image generated when the `createProjection()` call is omitted entirely, called (as above) with just a `quad` argument, or called with two different values for the optional `basis` argument:
 
 ![Paths and text with a perspective transform](/test/assets/path/projection@2x.png)
+
+
+#### `transform(DOMMatrix | a, b, c, d, e, f)`
+
+This performs exactly the same function as the [standard][transform()], but can accept a [DOMMatrix][DOMMatrix] instance as the first argument instead of using individual matrix terms.
 
 
 #### `createTexture(spacing, {path, line, color, angle, offset=0})`
@@ -1394,6 +1399,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [outlineText()]: #outlinetextstr
 [createTexture()]: #createtexturespacing-path-line-color-angle-offset0
 [createProjection()]: #createprojectionquad-basis
+[transform]: #transformdommatrix--a-b-c-d-e-f
 [lineDashMarker]: #linedashmarker
 [lineDashFit]: #linedashfit
 
