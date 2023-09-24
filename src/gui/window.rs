@@ -143,7 +143,7 @@ impl Window {
             self.renderer.draw(&self.handle, |canvas, _size| {
                 canvas.clear(self.background);
                 canvas.clip_rect(&clip, None, Some(true));
-                canvas.draw_picture(self.page.get_picture(None).unwrap(), Some(&matrix), Some(&paint));
+                canvas.draw_picture(self.page.get_picture(None, None).unwrap(), Some(&matrix), Some(&paint));
             }).unwrap();
         })
     }
