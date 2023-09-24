@@ -6,11 +6,16 @@
 use std::cell::RefCell;
 use std::f32::consts::PI;
 use neon::prelude::*;
+use once_cell::sync::Lazy;
 use skia_safe::{Path, Point, PathDirection::{CW, CCW}, Rect, RRect, Matrix, PathOp, StrokeRec,};
 use skia_safe::{PathEffect, trim_path_effect};
 use skia_safe::path::{self, AddPathMode, Verb, FillType};
 
 use crate::utils::*;
+
+static DRAW_ELLIPSE_PAST_FULL_CIRCLE: Lazy<bool> = Lazy::new(||
+  std::env::var("SKIA_CANVAS_DRAW_ELLIPSE_PAST_FULL_CIRCLE").unwrap_or_default() == "1"
+);
 
 pub type BoxedPath2D = JsBox<RefCell<Path2D>>;
 impl Finalize for Path2D {}
@@ -42,16 +47,51 @@ impl Path2D{
     let mut sweep_deg = (to_degrees(end_angle - start_angle) * 10000.0).round() / 10000.0;
     let mut start_deg = (to_degrees(start_angle) * 10000.0).round() / 10000.0;
 
-    // draw in 2 180 degree segments because trying to draw all 360 degrees at once draws nothing.
+    // For >= 360 degree ellipses we draw in mutiple segments up to 180 degrees each because trying to draw circles all at once draws nothing.
+    // Behavior past a full 360 degree circle depends on `DRAW_ELLIPSE_PAST_FULL_CIRCLE` setting:
+    // When enabled, after drawing, this should still leave the current position where the user (presumably) intended,
+    //  even if it wraps around more than 360 degrees. We also respect the directionality.
+    // When disabled, preserves "standard" behavior of always stopping at a full circle. See further notes below.
+
     if sweep_deg >= 359.9999  {
-      self.path.arc_to(oval, start_deg, 180.0, false);
-      self.path.arc_to(oval, start_deg + 180.0, 180.0, false);
+      if *DRAW_ELLIPSE_PAST_FULL_CIRCLE {
+        // This following way leaves the path position where the user specified, even it it wraps around more than
+        // a full circle. In this case it will also create the "extra" path segments, essentialy overlapping the path again.
+        // This is _not_ the same behavior I observed in Chrome and Firefox, which only draw 360 degrees regardless of what the user wanted.
+        let mut part = 180.0;
+        while part > 0.0 {
+          self.path.arc_to(oval, start_deg, part, false);
+          sweep_deg -= part;
+          if sweep_deg <= 0.0 { break; }
+          start_deg += part;
+          part = sweep_deg.min(180.0);
+        }
+      }
+      else {
+        // This other way is simpler and browser-compliant (it seems), but always leaves the current position
+        // at the end of the circle, not where the user actually specified.
+        self.path.arc_to(oval, start_deg, 180.0, false);
+        self.path.arc_to(oval, start_deg + 180.0, 180.0, false);
+      }
       return;
     }
 
     if sweep_deg <= -359.9999 {
-      self.path.arc_to(oval, start_deg, -180.0, false);
-      self.path.arc_to(oval, start_deg - 180.0, -180.0, false);
+      // Same notes as above apply here.
+      if *DRAW_ELLIPSE_PAST_FULL_CIRCLE {
+        let mut part = -180.0;
+        while part < 0.0 {
+          self.path.arc_to(oval, start_deg, part, false);
+          sweep_deg -= part;
+          if sweep_deg >= 0.0 { break; }
+          start_deg += part;
+          part = sweep_deg.max(-180.0);
+        }
+      }
+      else {
+        self.path.arc_to(oval, start_deg, -180.0, false);
+        self.path.arc_to(oval, start_deg - 180.0, -180.0, false);
+      }
       return;
     }
 

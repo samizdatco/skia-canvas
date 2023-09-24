@@ -652,6 +652,16 @@ A canvas’s context always contains an implicit ‘current’ bézier path whic
 
 You can then use these objects by passing them as the first argument to the context’s `fill()`, `stroke()`, and `clip()` methods (along with an optional second argument specifying the winding rule).
 
+#### Ellipse drawing option
+
+By default drawing complete circles with `ellipse()` and `arc()` methods stops at 360 degrees even if the specfied arc was larger. For example drawing a circle from 0 to 450 degrees clockwise would end the path at 360 degrees. If you continue the path to another point/etc, it may not start where you expect. This appears to be default browser behaviour, however.
+
+This version introduces an environment varaiable to control this behavor: `SKIA_CANVAS_DRAW_ELLIPSE_PAST_FULL_CIRCLE`
+
+Set the variable to "1" (w/out quotes) to allow `ellipse()` and `arc()` drawing actions to continue past a complete 360 degree circle if so directed.
+This is a global setting affecting both the `CanvasRenderingContext2D` and `Path2D` versions of `arc()` and `ellipse()`. It must be set **before** any calls to these functions are made, any changes after that are ignored.
+
+
 ##### PROPERTIES
 
 #### `.bounds`
