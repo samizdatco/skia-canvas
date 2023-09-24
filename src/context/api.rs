@@ -94,12 +94,11 @@ pub fn restore(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn transform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 7)?;
 
-  let nums = opt_float_args(&mut cx, 1..7);
-  if let [m11, m12, m21, m22, dx, dy] = nums.as_slice(){
-    let matrix = Matrix::new_all(*m11, *m21, *dx, *m12, *m22, *dy, 0.0, 0.0, 1.0);
-    this.with_matrix(|ctm| ctm.pre_concat(&matrix) );
+  if let Some(matrix) = opt_matrix_arg(&mut cx, 1) {
+    if !matrix.is_identity() {
+      this.with_matrix(|ctm| ctm.pre_concat(&matrix) );
+    }
   }
   Ok(cx.undefined())
 }

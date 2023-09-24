@@ -142,6 +142,7 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   get currentTransform(): DOMMatrix
   set currentTransform(matrix: DOMMatrix)
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
+  transform(...args: [matrix: DOMMatrix] | [a: number, b: number, c: number, d: number, e: number, f: number]): void;
 
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
   roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[]): void
