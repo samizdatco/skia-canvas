@@ -95,6 +95,9 @@ export class ImageData extends globalThis.ImageData {
   readonly premultiplied: boolean | undefined
 }
 
+/** Utility function to look up depth of a given color type. */
+export function colorTypeBytesPerPixel(colorType: ColorType): number
+
 //
 // Canvas
 //
