@@ -3,6 +3,8 @@ var express = require('express')
 var {Canvas} = require('../../lib')
 var tests = require('./tests')
 
+process.env.SKIA_CANVAS_DRAW_ELLIPSE_PAST_FULL_CIRCLE = "1";
+
 function renderTest (canvas, name, cb) {
   if (!tests[name]) {
     throw new Error('Unknown test: ' + name)

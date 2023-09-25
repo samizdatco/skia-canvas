@@ -239,6 +239,45 @@ tests["ellipse() 5"] = function (ctx) {
   ctx.fill()
 }
 
+const D2R = Math.PI / 180;
+
+tests["ellipse() negative to positive angles circle bug"] = function (ctx) {
+  ctx.beginPath()
+  ctx.ellipse(100, 100, 50, 50, 0, -90 * D2R, 270 * D2R, false)
+  ctx.strokeStyle = 'black'
+  ctx.stroke()
+}
+
+tests["ellipse() CCW complete circle"] = function (ctx) {
+  ctx.beginPath()
+  ctx.ellipse(100, 100, 50, 50, 0, -90 * D2R, 270 * D2R, true)
+  ctx.strokeStyle = 'black'
+  ctx.stroke()
+}
+
+tests["ellipse() CCW incomplete circle"] = function (ctx) {
+  ctx.beginPath()
+  ctx.ellipse(100, 100, 50, 50, 0, -90 * D2R, 360 * D2R, true)
+  ctx.strokeStyle = 'black'
+  ctx.stroke()
+}
+
+tests["ellipse() 450° CW ending point difference"] = function (ctx) {
+  ctx.beginPath()
+  ctx.ellipse(100, 100, 50, 50, 0, -90 * D2R, 360 * D2R, false)
+  ctx.lineTo(150, 0);
+  ctx.strokeStyle = 'black'
+  ctx.stroke()
+}
+
+tests["ellipse() 450° CCW ending point difference"] = function (ctx) {
+  ctx.beginPath()
+  ctx.ellipse(100, 100, 50, 50, 0, 270 * D2R, -180 * D2R, true)
+  ctx.lineTo(50, 0);
+  ctx.strokeStyle = 'black'
+  ctx.stroke()
+}
+
 tests['bezierCurveTo()'] = function (ctx) {
   ctx.beginPath()
   ctx.moveTo(75, 40)
