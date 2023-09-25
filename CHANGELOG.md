@@ -2,6 +2,28 @@
 
 <!-- ## 🥚 ⟩ [Unreleased] -->
 
+## 📦 ⟩ [v1.1.1-mp] ⟩ Sep 25, 2023
+### Fixes
+- Fixed issue in `Path2D::add_ellipse()` (basis for context and path `ellipse()` and `arc()` JS API) where trying to draw a complete circle from certain angle combinations produced nothing (eg. -90° to 270° clockwise). ([bb99a3ad])
+- Fixed a missed `get_picture()` call in `window` class missing required parameter since v1.1.0, breaking those builds. ([2f8b175d])
+
+### Improvements
+- `CanvasRenderingContext2D.transform()` can now accept a `DOMMatrix` instance as the argument (like the similar Path2D method). ([b6b31c04])
+- Minor optimization in `add_ellipse()` as it now skips transform creation if there is no rotation to be applied (as with any `arc()` call). ([bb99a3ad])
+- Added option to "properly" draw ellipses spanning more than 360 degrees. The default method always stops at 360 even if the user wanted the ending point further along the path (eg. 0° to 450°). This option "fixes" that behavior, but is non-standard (not how browsers draw it). The option is settable via an `SKIA_CANVAS_DRAW_ELLIPSE_PAST_FULL_CIRCLE` environment variable ("1" to enable). ([f1864b86])
+
+### Other
+- [Released binaries][v1.1.1-mp_release] are now built with support for `Window`.
+- Package name has been scoped to "@mpaperno/skia-canvas".
+
+[v1.1.1-mp]: https://github.com/mpaperno/skia-canvas/compare/603d4d9422ea58ed16c4854208ec2c96177707a0...v1.1.1-mp
+[v1.1.1-mp_release]: https://github.com/mpaperno/skia-canvas/releases/tag/v1.1.1-mp
+[bb99a3ad]: https://github.com/mpaperno/skia-canvas/commit/bb99a3adb98648b6d24a4d4488a9577d57586683
+[2f8b175d]: https://github.com/mpaperno/skia-canvas/commit/2f8b175da5520358e4eaac4daf6e17bb8750e4bc
+[b6b31c04]: https://github.com/mpaperno/skia-canvas/commit/b6b31c045bf4f65d48368476bb7f448fc1c80e13
+[f1864b86]: https://github.com/mpaperno/skia-canvas/commit/f1864b86085128e6205033975049729463657d98
+
+
 ## 📦 ⟩ [v1.1.0-mp] ⟩ Sep 8, 2023
 ### New Features
 - Added ability to specify a crop area when rendering/exporting the canvas with `toBuffer()`, `saveAs()`, etc. using new `left`, `top`, `width`, and `height` options. ([08128c7e])
@@ -22,8 +44,8 @@ NOTE: no Window support in these builds
 [a2dbd258]: https://github.com/mpaperno/skia-canvas/commit/a2dbd258fd6cc19bbb5cf020163898fac1307049
 [7c5cbcdc]: https://github.com/mpaperno/skia-canvas/commit/7c5cbcdc0ab0eabd98e097ec6a80186f7314834b
 [b959f0a3]: https://github.com/mpaperno/skia-canvas/commit/b959f0a3860d7ff21ad05b70e22c4d5cb70f8e1b
-
 [README]: https://github.com/mpaperno/skia-canvas/blob/mp/main/README.md
+
 
 ## 📦 ⟩ [v1.0.3] ⟩ Aug 16, 2023
 
