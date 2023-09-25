@@ -24,7 +24,7 @@ jobs:
     - name: Build module
       run: |
         npm ci --ignore-scripts
-        npm run build -- --release --features vulkan
+        npm run build -- --release --features vulkan,window
 
     - name: Package module
       run: |

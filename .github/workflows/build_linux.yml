@@ -28,7 +28,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
 
     - name: Package module
       run: |
