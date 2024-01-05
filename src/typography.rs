@@ -71,7 +71,7 @@ impl Typesetter{
 
   pub fn layout(&self, paint:&Paint) -> (Paragraph, Point) {
     let mut char_style = self.char_style.clone();
-    char_style.set_foreground_color(Some(paint.clone()));
+    char_style.set_foreground_paint(&paint.clone());
 
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
     paragraph_builder.push_style(&char_style);
