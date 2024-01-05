@@ -37,7 +37,7 @@ impl PageRecorder{
   }
 
   pub fn append<F>(&mut self, f:F)
-    where F:FnOnce(&mut SkCanvas)
+    where F:FnOnce(&SkCanvas)
   {
     if let Some(canvas) = self.current.recording_canvas() {
       f(canvas);
@@ -155,7 +155,7 @@ impl Page{
             .draw_picture(&picture, None, None);
           surface
             .image_snapshot()
-            .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
+            .encode_to_data_with_quality(img_format, (quality*100.0) as u32)
             .map(|data| with_dpi(data, img_format, density))
             .ok_or(format!("Could not encode as {}", format))
         }else{
