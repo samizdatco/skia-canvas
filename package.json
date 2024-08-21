@@ -21,7 +21,7 @@
     "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
     "install": "node-pre-gyp install || npm run build -- --release",
     "package": "node-pre-gyp package",
-    "upload": "node-pre-gyp publish",
+    "upload": "gh release upload v$npm_package_version build/stage/v$npm_package_version/*",
     "test": "jest"
   },
   "dependencies": {
@@ -35,7 +35,6 @@
   "devDependencies": {
     "@types/jest": "^28.1.6",
     "@types/node": "^18.6.1",
-    "aws-sdk": "^2.1181.0",
     "express": "^4.18.1",
     "jest": "^28.1.3",
     "lodash": "^4.17.21",
@@ -47,13 +46,10 @@
   ],
   "binary": {
     "module_name": "index",
-    "module_path": "./lib/v{napi_build_version}",
+    "module_path": "./lib/v6",
     "remote_path": "./v{version}",
-    "package_name": "{platform}-{arch}-{node_napi_label}-{libc}.tar.gz",
-    "host": "https://skia-canvas.s3.us-east-1.amazonaws.com",
-    "napi_versions": [
-      6
-    ]
+    "package_name": "{platform}-{arch}-{libc}.tar.gz",
+    "host": "https://github.com/samizdatco/skia-canvas/releases/download"
   },
   "keywords": [
     "canvas",
