@@ -2,6 +2,14 @@
 
 <!-- ## 🥚 ⟩ [Unreleased] -->
 
+## 📦 ⟩ [v1.0.2] ⟩ Aug 21, 2024
+
+### Maintenance
+- After getting a surprise bill from Amazon for the S3 bucket hosting the pre-compiled binaries, I've moved them to GitHub Releases instead. Aside from resolving some security warnings by upgrading dependencies, this version *should* be functionally identical to 1.0.1…
+
+### Breaking Changes
+- The 32-bit ARM-based linux builds are no longer provided pre-compiled; you'll now need to build from source.
+
 ## 📦 ⟩ [v1.0.1] ⟩ Oct 15, 2022
 
 ### Bugfixes
@@ -264,7 +272,9 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v1.0.0...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v1.0.2...HEAD
+[v1.0.2]: https://github.com/samizdatco/skia-canvas/compare/v1.0.1...v1.0.2
+[v1.0.1]: https://github.com/samizdatco/skia-canvas/compare/v1.0.0...v1.0.1
 [v1.0.0]: https://github.com/samizdatco/skia-canvas/compare/v0.9.30...v1.0.0
 [v0.9.30]: https://github.com/samizdatco/skia-canvas/compare/v0.9.29...v0.9.30
 [v0.9.29]: https://github.com/samizdatco/skia-canvas/compare/v0.9.28...v0.9.29
