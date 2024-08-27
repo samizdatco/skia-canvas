@@ -27,7 +27,7 @@
   "dependencies": {
     "@mapbox/node-pre-gyp": "^1.0.9",
     "cargo-cp-artifact": "^0.1",
-    "glob": "^8.0.3",
+    "fast-glob": "^3.3.2",
     "path-browserify": "^1.0.1",
     "simple-get": "^4.0.1",
     "string-split-by": "^1.0.0"
