@@ -70,6 +70,29 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   Ok(cx.boolean(this.image.is_some()))
 }
 
+pub fn load_pixel_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let this = cx.argument::<BoxedImage>(0)?;
+  let mut this = this.borrow_mut();
+
+  let buffer = cx.argument::<JsBuffer>(1)?;
+  let data = Data::new_copy(buffer.as_slice(&mut cx));
+
+  let image_parameters = cx.argument::<JsObject>(2)?;
+  let js_width: Handle<JsNumber> = image_parameters.get(&mut cx, "width")?;
+  let js_height: Handle<JsNumber> = image_parameters.get(&mut cx, "height")?;
+  let js_color_type: Handle<JsString> = image_parameters.get(&mut cx, "colorType")?;
+
+  let color_type = map_color_type(js_color_type.value(&mut cx).as_str());
+  let width = js_width.value(&mut cx) as i32;
+  let height = js_height.value(&mut cx) as i32;
+  let row_bytes = (width as usize) * color_type.bytes_per_pixel();
+
+  let image_info = ImageInfo::new((width, height), color_type, AlphaType::Unpremul, None);
+  this.image = SkImage::from_raster_data(&image_info, data, row_bytes);
+
+  Ok(cx.boolean(this.image.is_some()))
+}
+
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
@@ -94,4 +117,14 @@ pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
   Ok(cx.boolean(this.image.is_some()))
+}
+
+fn map_color_type(color_type: &str) -> ColorType {
+  match color_type {
+    "rgba" => ColorType::RGBA8888,
+    "rgb" => ColorType::RGB888x,
+    "bgra" => ColorType::BGRA8888,
+    "argb" => ColorType::ARGB4444,
+    _ => ColorType::RGBA8888,
+  }
 }
