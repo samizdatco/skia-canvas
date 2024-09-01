@@ -140,6 +140,7 @@ impl Page{
       let img_format = match format {
         "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
         "png" => Some(EncodedImageFormat::PNG),
+        "webp" => Some(EncodedImageFormat::WEBP),
         _ => None
       };
 
