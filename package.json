@@ -1,6 +1,6 @@
 {
   "name": "@willbot-koishi/skia-canvas",
-  "version": "1.0.2",
+  "version": "1.0.3-alpha",
   "description": "A GPU-accelerated Canvas Graphics API for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
@@ -47,7 +47,7 @@
   "binary": {
     "module_name": "index",
     "module_path": "./lib/v6",
-    "remote_path": "./v{version}",
+    "remote_path": "./v1.0.2",
     "package_name": "{platform}-{arch}-{libc}.tar.gz",
     "host": "https://github.com/samizdatco/skia-canvas/releases/download"
   },
