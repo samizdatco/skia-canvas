@@ -25,7 +25,7 @@ fn arg_num(o:usize) -> String{
   let n = o; // arg 0 is always self, so no need to increment the idx
   let ords = ["st","nd","rd"];
   let slot = ((n+90)%100-10)%10 - 1;
-  let suffix = if (0..=2).contains(&slot) { ords[slot as usize] } else { "th" };
+  let suffix = if (0..=2).contains(&slot) { ords[slot] } else { "th" };
   format!("{}{}", n, suffix)
 }
 
@@ -122,7 +122,7 @@ pub fn string_arg_or(cx: &mut FunctionContext, idx: usize, default:&str) -> Stri
   }
 }
 
-pub fn string_arg<'a>(cx: &mut FunctionContext<'a>, idx: usize, attr:&str) -> NeonResult<String> {
+pub fn string_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<String> {
   let exists = cx.len() > idx as i32;
   match opt_string_arg(cx, idx){
     Some(v) => Ok(v),
@@ -149,8 +149,8 @@ pub fn string_idx_range(text: &str, start_idx: usize, end_idx: usize) -> Range<u
   let str_len = text.len();
 
   Range{
-    start: indices.nth(start_idx).map_or(str_len, &obtain_index),
-    end: indices.nth((end_idx - start_idx).max(1) - 1).map_or(str_len, &obtain_index),
+    start: indices.nth(start_idx).map_or(str_len, obtain_index),
+    end: indices.nth((end_idx - start_idx).max(1) - 1).map_or(str_len, obtain_index),
   }
 }
 
@@ -288,7 +288,7 @@ pub fn float_args(cx: &mut FunctionContext, rng: Range<usize>) -> NeonResult<Vec
 //
 
 
-pub fn css_to_color<'a>(css:&str) -> Option<Color> {
+pub fn css_to_color(css:&str) -> Option<Color> {
   css.parse::<Rgba>().ok().map(|Rgba{red, green, blue, alpha}|
     Color::from_argb(
       (alpha*255.0).round() as u8,

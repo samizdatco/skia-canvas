@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+use std::fmt;
 use skia_safe::{Paint, Matrix, Point, Color, MaskFilter, ImageFilter as SkImageFilter,
                 BlurStyle, FilterMode, MipmapMode, SamplingOptions, TileMode,
                 image_filters, color_filters, table_color_filter};
@@ -45,15 +46,17 @@ impl Default for Filter{
   }
 }
 
+impl fmt::Display for Filter {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+      write!(f, "{}", self.css)
+  }
+}
+
 impl Filter {
   pub fn new(css:&str, specs:&[FilterSpec]) -> Self {
     let css = css.to_string();
     let specs = specs.to_vec();
     Filter{ css, specs, _raster:None, _vector:None }
-  }
-
-  pub fn to_string(&self) -> String {
-    self.css.clone()
   }
 
   pub fn mix_into<'a>(&mut self, paint:&'a mut Paint, matrix:Matrix, raster:bool) -> &'a mut Paint {
@@ -115,7 +118,7 @@ impl Filter {
               image_filters::color_filter(color_table, chain, None)
             },
             "grayscale" => {
-              let amt = 1.0 - value.max(0.0).min(1.0);
+              let amt = 1.0 - value.clamp(0.0, 1.0);
               let color_matrix = color_filters::matrix_row_major(&[
                 (0.2126 + 0.7874 * amt), (0.7152 - 0.7152  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
                 (0.2126 - 0.2126 * amt), (0.7152 + 0.2848  * amt), (0.0722 - 0.0722 * amt), 0.0, 0.0,
@@ -125,7 +128,7 @@ impl Filter {
               image_filters::color_filter(color_matrix, chain, None)
             },
             "invert" => {
-              let amt = value.max(0.0).min(1.0);
+              let amt = value.clamp(0.0, 1.0);
               let mut ramp = [0u8; 256];
               for (i, val) in ramp.iter_mut().take(256).enumerate().map(|(i,v)| (i as f32, v)) {
                 let (orig, inv) = (i, 255.0-i);
@@ -136,7 +139,7 @@ impl Filter {
               image_filters::color_filter(color_table, chain, None)
             },
             "opacity" => {
-              let amt = value.max(0.0).min(1.0);
+              let amt = value.clamp(0.0, 1.0);
               let color_matrix = color_filters::matrix_row_major(&[
                 1.0,  0.0,  0.0,  0.0,  0.0,
                 0.0,  1.0,  0.0,  0.0,  0.0,
@@ -156,7 +159,7 @@ impl Filter {
               image_filters::color_filter(color_matrix, chain, None)
             },
             "sepia" => {
-              let amt = 1.0 - value.max(0.0).min(1.0);
+              let amt = 1.0 - value.clamp(0.0, 1.0);
               let color_matrix = color_filters::matrix_row_major(&[
                 (0.393 + 0.607 * amt), (0.769 - 0.769 * amt), (0.189 - 0.189 * amt), 0.0, 0.0,
                 (0.349 - 0.349 * amt), (0.686 + 0.314 * amt), (0.168 - 0.168 * amt), 0.0, 0.0,
@@ -181,7 +184,7 @@ impl Filter {
         }
       );
 
-      let filters = Some(LastFilter{matrix:matrix, mask:mask_filter, image:image_filter});
+      let filters = Some(LastFilter{matrix, mask:mask_filter, image:image_filter});
       if raster{ self._raster = filters.clone(); }
       else{ self._vector = filters.clone(); }
       filters

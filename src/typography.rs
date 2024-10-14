@@ -428,8 +428,8 @@ impl FontLibrary{
     }
     let std_mgr = FontMgr::new();
     let dyn_mgr:FontMgr = dynamic.into();
-    let mut std_set = std_mgr.match_family(&family);
-    let mut dyn_set = dyn_mgr.match_family(&family);
+    let mut std_set = std_mgr.match_family(family);
+    let mut dyn_set = dyn_mgr.match_family(family);
     let std_styles = (0..std_set.count()).map(|i| std_set.style(i));
     let dyn_styles = (0..dyn_set.count()).map(|i| dyn_set.style(i));
     let all_styles = std_styles.chain(dyn_styles);

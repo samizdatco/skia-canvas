@@ -70,7 +70,7 @@ impl PageRecorder{
       canvas.restore_to_count(1);
       canvas.save();
       if let Some(clip) = &self.clip{
-        canvas.clip_path(&clip, ClipOp::Intersect, true /* antialias */);
+        canvas.clip_path(clip, ClipOp::Intersect, true /* antialias */);
       }
       canvas.set_matrix(&self.matrix.into());
     }
@@ -167,7 +167,7 @@ impl Page{
         canvas.draw_picture(&picture, None, None);
         Ok(document.end_page().close())
       }else if format == "svg"{
-        let flags = outline.then(|| Flags::CONVERT_TEXT_TO_PATHS);
+        let flags = outline.then_some(Flags::CONVERT_TEXT_TO_PATHS);
         let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end())
@@ -177,7 +177,7 @@ impl Page{
     }
   }
 
-
+  #[allow(clippy::too_many_arguments)]
   pub fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>, engine:RenderingEngine) -> Result<(), String> {
     let path = FilePath::new(&filename);
     let data = self.encoded_as(file_format, quality, density, outline, matte, engine)?;
@@ -231,7 +231,7 @@ impl PageSequence{
   }
 
   pub fn write_image(&self, pattern:&str, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
-    self.first().write(&pattern, &format, quality, density, outline, matte, self.engine)
+    self.first().write(pattern, format, quality, density, outline, matte, self.engine)
   }
 
   #[allow(clippy::too_many_arguments)]

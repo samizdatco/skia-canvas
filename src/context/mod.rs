@@ -393,7 +393,7 @@ impl Context2D{
         paint.set_anti_alias(true)
              .set_style(PaintStyle::Fill)
              .set_blend_mode(BlendMode::Clear);
-        canvas.draw_rect(&rect, &paint);
+        canvas.draw_rect(rect, &paint);
       })
     }
   }
@@ -414,7 +414,7 @@ impl Context2D{
           (Some(BlendMode::SrcOver), 255, None) => None,
           _ => Some(paint)
         };
-        canvas.draw_picture(&picture, Some(&matrix), paint);
+        canvas.draw_picture(picture, Some(&matrix), paint);
       });
     }
   }
@@ -424,7 +424,7 @@ impl Context2D{
     if let Some(image) = &img {
       self.render_to_canvas(&paint, |canvas, paint| {
         let sampling = self.state.image_filter.sampling();
-        canvas.draw_image_rect_with_sampling_options(&image, Some((src_rect, Strict)), dst_rect, sampling, paint);
+        canvas.draw_image_rect_with_sampling_options(image, Some((src_rect, Strict)), dst_rect, sampling, paint);
       });
     }
   }

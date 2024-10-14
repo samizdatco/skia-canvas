@@ -1,3 +1,4 @@
+#![allow(clippy::upper_case_acronyms)]
 use skia_safe::{ImageInfo, Surface};
 
 #[cfg(feature = "metal")]
