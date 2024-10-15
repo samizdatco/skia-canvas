@@ -8,10 +8,11 @@ use neon::prelude::*;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo, Contains,
                 Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType, Data,
                 PaintStyle, BlendMode, AlphaType, ClipOp, PictureRecorder, Picture, Drawable,
-                image::CachingHint, image_filters, dash_path_effect, path_1d_path_effect};
+                image::CachingHint, images, image_filters, dash_path_effect, path_1d_path_effect};
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
+use skia_safe::path_utils::fill_path_with_paint;
 
 pub mod api;
 pub mod page;
@@ -184,7 +185,7 @@ impl Context2D{
   }
 
   pub fn with_canvas<F>(&self, f:F)
-    where F:FnOnce(&mut SkCanvas)
+    where F:FnOnce(&SkCanvas)
   {
     self.with_recorder(|mut recorder|{
       recorder.append(f);
@@ -201,7 +202,7 @@ impl Context2D{
   }
 
   pub fn render_to_canvas<F>(&self, paint:&Paint, f:F)
-    where F:Fn(&mut SkCanvas, &Paint)
+    where F:Fn(&SkCanvas, &Paint)
   {
     match self.state.global_composite_operation{
       BlendMode::SrcIn | BlendMode::SrcOut |
@@ -322,12 +323,14 @@ impl Context2D{
         canvas.save();
         let spacing = tile.spacing();
         let offset = (-spacing.0/2.0, -spacing.1/2.0);
-        let stencil = paint.get_fill_path(&path, None, None).unwrap();
+        let mut stencil = Path::default();
+        fill_path_with_paint(&path, paint, &mut stencil, None, None);
         let stencil_frame = &Path::rect(stencil.bounds().with_offset(offset).with_outset(spacing), None);
 
         let mut tile_paint = paint.clone();
         tile.mix_into(&mut tile_paint, self.state.global_alpha);
-        let tile_path = tile_paint.get_fill_path(stencil_frame, None, None).unwrap();
+        let mut tile_path = Path::default();
+        fill_path_with_paint(stencil_frame, &tile_paint, &mut tile_path, None, None);
 
         let mut fill_paint = paint.clone();
         fill_paint.set_style(PaintStyle::Fill);
@@ -365,9 +368,13 @@ impl Context2D{
       PaintStyle::Stroke => {
         let paint = self.paint_for_drawing(PaintStyle::Stroke);
         let precision = 0.3; // this is what Chrome uses to compute this
-        match paint.get_fill_path(path, None, Some(precision)){
-          Some(traced_path) => traced_path.contains(point),
-          None => path.contains(point)
+        let scale = Matrix::scale((precision, precision));
+
+        let mut traced_path = Path::default();
+        if fill_path_with_paint(path, &paint, &mut traced_path, None, Some(scale)){
+          traced_path.contains(point)
+        }else{
+          path.contains(point)
         }
       },
       _ => path.contains(point)
@@ -459,7 +466,7 @@ impl Context2D{
     // works just like draw_image in terms of src/dst rects, but clears the dst_rect and then draws
     // without clips, transforms, alpha, blend, or shadows
     let data = Data::new_copy(buffer);
-    if let Some(bitmap) = Image::from_raster_data(info, data, info.min_row_bytes()) {
+    if let Some(bitmap) = images::raster_from_data(info, data, info.min_row_bytes()) {
       self.push(); // cache matrix & clip in self.state
       self.with_canvas(|canvas| {
         let paint = Paint::default();
@@ -526,7 +533,11 @@ impl Context2D{
         Some(path) => {
           let marker = match path.is_last_contour_closed(){
             true => path.clone(),
-            false => paint.get_fill_path(path, None, None).unwrap()
+            false => {
+              let mut traced_path = Path::default();
+              fill_path_with_paint(path, &paint, &mut traced_path, None, None);
+              traced_path      
+            }
           };
           path_1d_path_effect::new(
             &marker,

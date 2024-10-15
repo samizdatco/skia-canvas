@@ -377,7 +377,7 @@ describe("Context2D", ()=>{
       // make sure chains of filters compose correctly <https://codepen.io/sosuke/pen/Pjoqqp>
       ctx.filter = 'blur(5px) invert(56%) sepia(63%) saturate(4837%) hue-rotate(163deg) brightness(96%) contrast(101%)'
       ctx.fillRect(0,0,20,20)
-      expect(pixel(10, 10)).toEqual([0, 161, 212, 245])
+      expect(pixel(10, 10)).toEqual([0, 162, 213, 245])
     })
 
     test("clip()", () => {
