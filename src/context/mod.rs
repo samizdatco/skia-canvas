@@ -571,7 +571,7 @@ impl Context2D{
     let sigma_x = shadow_blur / (2.0 * self.state.matrix.scale_x());
     let sigma_y = shadow_blur / (2.0 * self.state.matrix.scale_y());
     let mut paint = base_paint.clone();
-    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma_x, sigma_y), shadow_color, None, None));
+    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma_x, sigma_y), shadow_color, None, None, None));
     Some(paint)
   }
 
