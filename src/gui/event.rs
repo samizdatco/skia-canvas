@@ -140,7 +140,7 @@ impl Sieve{
             LogicalPosition::from_physical(*physical_pt, self.dpr)
           },
           MouseScrollDelta::LineDelta(h, v) => {
-            LogicalPosition{x:*h as f32, y:*v as f32}
+            LogicalPosition{x:*h, y:*v}
           }
         };
         self.queue.push(UiEvent::Wheel{deltaX:x, deltaY:y});
@@ -171,7 +171,7 @@ impl Sieve{
             ("keydown", *count)
           },
           ElementState::Released => {
-            self.key_repeats.remove(&keycode);
+            self.key_repeats.remove(keycode);
             ("keyup", 0)
           }
         };
@@ -206,7 +206,7 @@ impl Sieve{
         }
         UiEvent::Wheel{..} => {
           modifiers = Some(self.key_modifiers);
-          last_wheel = Some(&change);
+          last_wheel = Some(change);
         }
         UiEvent::Input(..) | UiEvent::Keyboard{..} => {
           modifiers = Some(self.key_modifiers);

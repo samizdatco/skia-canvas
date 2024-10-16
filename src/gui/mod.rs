@@ -37,7 +37,7 @@ fn add_event(event: CanvasEvent){
     PROXY.with(|cell| cell.borrow().send_event(event).ok() );
 }
 
-fn roundtrip<'a, F>(cx: &'a mut FunctionContext, payload:serde_json::Value, callback:&Handle<JsFunction>, mut f:F) -> NeonResult<()>
+fn roundtrip<F>(cx: &mut FunctionContext, payload:serde_json::Value, callback:&Handle<JsFunction>, mut f:F) -> NeonResult<()>
     where F:FnMut(WindowSpec, Page)
 {
     let null = cx.null();
@@ -85,7 +85,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 windows.remove_by_token(&token);
                             }
                             CanvasEvent::Quit => {
-                                return *control_flow = ControlFlow::Exit;
+                                *control_flow = ControlFlow::Exit;
                             }
                             CanvasEvent::Render => {
                                 // relay UI-driven state changes to js and render the next frame in the (active) cadence

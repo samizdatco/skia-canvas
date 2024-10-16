@@ -140,11 +140,11 @@ impl Window {
         runloop(|| {
             let paint = Paint::default();
             let matrix = self.fitting_matrix();
-            let (clip, _) = matrix.map_rect(&self.page.bounds);
-
+            let (clip, _) = matrix.map_rect(self.page.bounds);
+            
             self.renderer.draw(&self.handle, |canvas, _size| {
                 canvas.clear(self.background);
-                canvas.clip_rect(&clip, None, Some(true));
+                canvas.clip_rect(clip, None, Some(true));
                 canvas.draw_picture(self.page.get_picture(None).unwrap(), Some(&matrix), Some(&paint));
             }).unwrap();
         })
@@ -198,12 +198,9 @@ impl Window {
                     }
                 }
 
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::Resized(size) => {
-                        self.resize(size);
-                        self.handle.request_redraw();
-                    },
-                    _ => {}
+                Event::WindowEvent { event:WindowEvent::Resized(size), .. } => {
+                    self.resize(size);
+                    self.handle.request_redraw();
                 }
                 Event::RedrawRequested(_) => {
                     self.redraw()
@@ -216,15 +213,11 @@ impl Window {
 }
 
 struct WindowRef { tx: Sender<Event<'static, CanvasEvent>>, id: WindowId, spec: WindowSpec, sieve:Sieve }
+
+#[derive(Default)]
 pub struct WindowManager {
     windows: Vec<WindowRef>,
     last: Option<LogicalPosition<f32>>,
-}
-
-impl Default for WindowManager {
-    fn default() -> Self {
-        Self{ windows: vec![], last: None }
-    }
 }
 
 impl WindowManager {
