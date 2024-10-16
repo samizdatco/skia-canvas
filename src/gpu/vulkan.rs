@@ -5,12 +5,12 @@ use std::os::raw;
 
 use ash::{Entry, Instance, vk};
 use ash::vk::Handle;
-use skia_safe::gpu::{self, DirectContext, SurfaceOrigin};
-use skia_safe::{ImageInfo, ISize, Budgeted, Surface, ColorSpace};
+use skia_safe::gpu::{self, direct_contexts, surfaces, Budgeted, SurfaceOrigin};
+use skia_safe::{ImageInfo, ISize, Surface, ColorSpace};
 
 use std::sync::{Arc, Mutex};
-use skulpin::{CoordinateSystem, Renderer, RendererBuilder};
-use skulpin::rafx::api::RafxExtents2D;
+use skulpin_renderer::{CoordinateSystem, Renderer, RendererBuilder};
+use skulpin_renderer::rafx::api::RafxExtents2D;
 
 #[cfg(feature = "window")]
 use winit::{
@@ -70,7 +70,7 @@ impl VulkanEngine {
                 )
             };
 
-            DirectContext::new_vulkan(&backend_context, None)
+            direct_contexts::make_vulkan(&backend_context, None)
         }.ok_or("Failed to create Vulkan context")?;
 
         Ok(Self {
@@ -84,7 +84,8 @@ impl VulkanEngine {
         VK_CONTEXT.with(|cell| {
             let local_ctx = cell.borrow();
             let mut context = local_ctx.as_ref().unwrap().context.clone();
-            Surface::new_render_target(
+
+            surfaces::render_target(
                 &mut context,
                 Budgeted::Yes,
                 image_info,
@@ -92,6 +93,7 @@ impl VulkanEngine {
                 SurfaceOrigin::BottomLeft,
                 None,
                 true,
+                None,
             )
         })
     }
@@ -125,7 +127,7 @@ impl VulkanRenderer {
 
     }
 
-    pub fn draw<F: FnOnce(&mut skia_safe::Canvas, LogicalSize<f32>)>(
+    pub fn draw<F: FnOnce(&skia_safe::Canvas, LogicalSize<f32>)>(
         &mut self,
         window: &Window,
         f: F,

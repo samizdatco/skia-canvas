@@ -15,7 +15,7 @@ lto = "fat"
 
 [features]
 metal = ["skia-safe/metal", "dep:metal", "dep:core-graphics-types", "dep:foreign-types", "dep:cocoa", "dep:objc"]
-vulkan = ["skia-safe/vulkan", "dep:skulpin", "dep:ash"]
+vulkan = ["skia-safe/vulkan", "dep:skulpin-renderer", "dep:ash"]
 window = ["dep:winit"]
 
 [dependencies]
@@ -30,7 +30,7 @@ skia-safe = { version = "0.78.2", features = ["textlayout"] }
 
 # vulkan
 ash = { version = "0.37", optional = true }
-skulpin = { git = "https://github.com/aclysma/skulpin.git", rev="c5fb342", optional = true }
+skulpin-renderer = { version = "0.14.2", path = "vendor/skulpin-renderer", optional = true }
 
 # metal
 metal = { version = "0.24", optional = true }
