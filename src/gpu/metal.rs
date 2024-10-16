@@ -2,16 +2,16 @@
 #![allow(dead_code)]
 
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
+use foreign_types::{ForeignType, ForeignTypeRef};
 use cocoa::{appkit::NSView, base::id as cocoa_id};
 use core_graphics_types::geometry::CGSize;
-use foreign_types::{ForeignType, ForeignTypeRef};
 use metal::{CommandQueue, Device, MTLPixelFormat, MetalLayer};
-use objc::runtime::YES;
-use std::sync::{Arc, Mutex};
-use skia_safe::{
-    gpu::{mtl, BackendRenderTarget, DirectContext, SurfaceOrigin},
-    scalar, Budgeted, ImageInfo, ColorType, Size, Surface,
+use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
+use skia_safe::gpu::{
+    mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
+use objc::runtime::YES;
 pub use objc::rc::autoreleasepool;
 
 #[cfg(feature = "window")]
@@ -21,7 +21,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 
-thread_local!(static MTL_CONTEXT: RefCell<Option<MetalEngine>> = RefCell::new(None));
+thread_local!(static MTL_CONTEXT: RefCell<Option<MetalEngine>> = const { RefCell::new(None) } );
 
 pub struct MetalEngine {
     context: DirectContext,
@@ -51,15 +51,10 @@ impl MetalEngine {
           mtl::BackendContext::new(
               device.as_ptr() as mtl::Handle,
               command_queue.as_ptr() as mtl::Handle,
-              std::ptr::null(),
           )
       };
-      if let Some(context) = DirectContext::new_metal(&backend_context, None){
-          Some(MetalEngine{context})
-      }else{
-          None
-      }
-
+      direct_contexts::make_metal(&backend_context, None)
+        .map(|context| MetalEngine{context})
     }
 
     pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
@@ -68,7 +63,7 @@ impl MetalEngine {
             let local_ctx = cell.borrow();
             let mut context = local_ctx.as_ref().unwrap().context.clone();
 
-            Surface::new_render_target(
+            surfaces::render_target(
                 &mut context,
                 Budgeted::Yes,
                 image_info,
@@ -76,6 +71,7 @@ impl MetalEngine {
                 SurfaceOrigin::BottomLeft,
                 None,
                 true,
+                None
             )
         })
     }
@@ -118,11 +114,10 @@ impl MetalRenderer {
             mtl::BackendContext::new(
                 device.as_ptr() as mtl::Handle,
                 queue.as_ptr() as mtl::Handle,
-                std::ptr::null(),
             )
         };
 
-        let context = DirectContext::new_metal(&backend, None).unwrap();
+        let context = direct_contexts::make_metal(&backend, None).unwrap();
         MetalRenderer {
             layer: Arc::new(Mutex::new(layer)),
             context: Arc::new(Mutex::new(context)),
@@ -137,7 +132,7 @@ impl MetalRenderer {
             .set_drawable_size(CGSize::new(size.width as f64, size.height as f64));
     }
 
-    pub fn draw<F: FnOnce(&mut skia_safe::Canvas, LogicalSize<f32>)>(
+    pub fn draw<F: FnOnce(&skia_safe::Canvas, LogicalSize<f32>)>(
         &mut self,
         window: &Window,
         f: F,
@@ -145,39 +140,37 @@ impl MetalRenderer {
         let dpr = window.scale_factor();
         let size = window.inner_size();
         let layer = self.layer.lock().unwrap();
+        let mut context = self.context.lock().unwrap();
 
         if let Some(drawable) = layer.next_drawable() {
             let drawable_size = {
                 let size = layer.drawable_size();
                 Size::new(size.width as scalar, size.height as scalar)
             };
-
-            let mut surface = unsafe {
+            
+            let backend_render_target = unsafe {
                 let texture_info =
                     mtl::TextureInfo::new(drawable.texture().as_ptr() as mtl::Handle);
-
-                let backend_render_target = BackendRenderTarget::new_metal(
+                backend_render_targets::make_mtl(
                     (drawable_size.width as i32, drawable_size.height as i32),
-                    1,
                     &texture_info,
-                );
-
-                Surface::from_backend_render_target(
-                    &mut self.context.lock().unwrap(),
-                    &backend_render_target,
-                    SurfaceOrigin::TopLeft,
-                    ColorType::BGRA8888,
-                    None,
-                    None,
                 )
-                .unwrap()
             };
+            
+            let mut surface = surfaces::wrap_backend_render_target(
+                &mut context,
+                &backend_render_target,
+                SurfaceOrigin::TopLeft,
+                ColorType::BGRA8888,
+                None,
+                None,
+            ).unwrap();
 
             let canvas = surface.canvas();
             canvas.reset_matrix();
             canvas.scale((dpr as f32, dpr as f32));
             f(canvas, LogicalSize::from_physical(size, dpr));
-            surface.flush_and_submit();
+            context.flush_and_submit();
             drop(surface);
 
             let queue = self.queue.lock().unwrap();
@@ -186,7 +179,7 @@ impl MetalRenderer {
             command_buffer.commit();
             Ok(())
         }else{
-            Err(format!("Could not allocate frame buffer"))
+            Err("Could not allocate frame buffer".to_string())
         }
 
     }
