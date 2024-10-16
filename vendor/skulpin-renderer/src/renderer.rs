@@ -229,7 +229,7 @@ impl Renderer {
 
     /// Call to render a frame. This can block for certain presentation modes. This will rebuild
     /// the swapchain if necessary.
-    pub fn draw<F: FnOnce(&mut skia_safe::Canvas, CoordinateSystemHelper)>(
+    pub fn draw<F: FnOnce(&skia_safe::Canvas, CoordinateSystemHelper)>(
         &mut self,
         window_size: RafxExtents2D,
         scale_factor: f64,
@@ -254,27 +254,27 @@ impl Renderer {
         //
         // Do skia drawing (including the user's callback)
         //
-        let mut canvas = self.skia_surface.as_mut().unwrap().surface.canvas();
+        let canvas = self.skia_surface.as_mut().unwrap().surface.canvas();
 
         let coordinate_system_helper = CoordinateSystemHelper::new(window_size, scale_factor);
 
         match self.coordinate_system {
             CoordinateSystem::None => {}
             CoordinateSystem::Physical => {
-                coordinate_system_helper.use_physical_coordinates(&mut canvas)
+                coordinate_system_helper.use_physical_coordinates(&canvas)
             }
             CoordinateSystem::Logical => {
-                coordinate_system_helper.use_logical_coordinates(&mut canvas)
+                coordinate_system_helper.use_logical_coordinates(&canvas)
             }
             CoordinateSystem::VisibleRange(range, scale_to_fit) => coordinate_system_helper
-                .use_visible_range(&mut canvas, range, scale_to_fit)
+                .use_visible_range(&canvas, range, scale_to_fit)
                 .unwrap(),
             CoordinateSystem::FixedWidth(center, x_half_extents) => coordinate_system_helper
-                .use_fixed_width(&mut canvas, center, x_half_extents)
+                .use_fixed_width(&canvas, center, x_half_extents)
                 .unwrap(),
         }
 
-        f(&mut canvas, coordinate_system_helper);
+        f(&canvas, coordinate_system_helper);
         self.skia_context.context.flush_and_submit();
 
         //

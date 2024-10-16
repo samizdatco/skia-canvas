@@ -56,7 +56,7 @@ impl VkSkiaContext {
             )
         };
 
-        let context = skia_safe::gpu::DirectContext::new_vulkan(&backend_context, None).unwrap();
+        let context = skia_safe::gpu::direct_contexts::make_vulkan(&backend_context, None).unwrap();
 
         VkSkiaContext { context }
     }
@@ -92,7 +92,7 @@ pub struct VkSkiaSurface {
 
 impl VkSkiaSurface {
     pub fn get_image_from_skia_texture(texture: &skia_safe::gpu::BackendTexture) -> vk::Image {
-        unsafe { std::mem::transmute(texture.vulkan_image_info().unwrap().image.as_ref().unwrap()) }
+        unsafe { std::mem::transmute(texture.vulkan_image_info().unwrap().image().as_ref().unwrap()) }
     }
 
     pub fn new(
@@ -115,20 +115,24 @@ impl VkSkiaSurface {
             color_space,
         );
 
-        let mut surface = skia_safe::Surface::new_render_target(
+        let mut surface = skia_safe::gpu::surfaces::render_target(
             &mut context.context,
-            skia_safe::Budgeted::Yes,
+            skia_safe::gpu::Budgeted::Yes,
             &image_info,
             None,
             skia_safe::gpu::SurfaceOrigin::TopLeft,
             None,
             false,
+            None,
         )
         .unwrap();
 
-        let texture = surface
-            .get_backend_texture(skia_safe::surface::BackendHandleAccess::FlushRead)
-            .unwrap();
+        let texture = skia_safe::gpu::surfaces::get_backend_texture(
+            &mut surface,
+            skia_safe::surface::BackendHandleAccess::FlushRead,
+        )
+        .unwrap();
+        
         let image = Self::get_image_from_skia_texture(&texture);
 
         // According to docs, kN32_SkColorType can only be kRGBA_8888_SkColorType or

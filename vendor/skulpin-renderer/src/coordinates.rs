@@ -57,7 +57,7 @@ impl LogicalSize {
 
 /// A size that's either physical or logical.
 #[derive(Debug, Copy, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+// #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Size {
     Physical(PhysicalSize),
     Logical(LogicalSize),
@@ -202,7 +202,7 @@ impl CoordinateSystemHelper {
     /// Use raw pixels for the coordinate system. Top-left is (0, 0), bottom-right is (+X, +Y)
     pub fn use_physical_coordinates(
         &self,
-        canvas: &mut skia_safe::Canvas,
+        canvas: &skia_safe::Canvas,
     ) {
         // For raw physical pixels, no need to do anything
         canvas.reset_matrix();
@@ -213,7 +213,7 @@ impl CoordinateSystemHelper {
     ///   4K displays would probably have a high-dpi factor of 2.0, simulating a 1080p display.
     pub fn use_logical_coordinates(
         &self,
-        canvas: &mut skia_safe::Canvas,
+        canvas: &skia_safe::Canvas,
     ) {
         // To handle hi-dpi displays, we need to compare the logical size of the window with the
         // actual canvas size. Critically, the canvas size won't necessarily be the size of the
@@ -245,7 +245,7 @@ impl CoordinateSystemHelper {
     /// See https://skia.org/user/api/SkMatrix_Reference#SkMatrix_ScaleToFit
     pub fn use_visible_range(
         &self,
-        canvas: &mut skia_safe::Canvas,
+        canvas: &skia_safe::Canvas,
         mut visible_range: skia_safe::Rect,
         scale_to_fit: skia_safe::matrix::ScaleToFit,
     ) -> Result<(), ()> {
@@ -287,7 +287,7 @@ impl CoordinateSystemHelper {
     /// is consistent with the aspect ratio.
     pub fn use_fixed_width(
         &self,
-        canvas: &mut skia_safe::Canvas,
+        canvas: &skia_safe::Canvas,
         center: skia_safe::Point,
         x_half_extents: f32,
     ) -> Result<(), ()> {
