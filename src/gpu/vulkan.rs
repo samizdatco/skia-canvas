@@ -4,8 +4,9 @@ use std::ptr;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 
-use skia_safe::gpu::{self, direct_contexts, surfaces, Budgeted, SurfaceOrigin};
 use skia_safe::{ImageInfo, ISize, Surface, ColorSpace};
+use skia_safe::gpu::{direct_contexts, surfaces, DirectContext, Budgeted, SurfaceOrigin};
+use skia_safe::gpu::vk::{BackendContext, GetProcOf};
 
 use skulpin_renderer::{CoordinateSystem, Renderer, RendererBuilder};
 use skulpin_renderer::rafx::api::RafxExtents2D;
@@ -25,9 +26,10 @@ use winit::{
 };
 
 thread_local!(static VK_CONTEXT: RefCell<Option<VulkanEngine>> = const { RefCell::new(None) } );
+thread_local!(static VK_STATUS: RefCell<Option<String>> = const { RefCell::new(None) } );
 
 pub struct VulkanEngine {
-    context: gpu::DirectContext,
+    context: DirectContext,
     library: Arc<VulkanLibrary>,
     instance: Arc<Instance>,
     physical_device: Arc<PhysicalDevice>,
@@ -110,11 +112,11 @@ impl VulkanEngine {
         let context = {
             let get_proc = |of| unsafe {
                 let proc = match of {
-                    gpu::vk::GetProcOf::Instance(instance, name) => {
+                    GetProcOf::Instance(instance, name) => {
                         let vk_instance = ash::vk::Instance::from_raw(instance as _);
                         library.get_instance_proc_addr(vk_instance, name)
                     }
-                    gpu::vk::GetProcOf::Device(device, name) => {
+                    GetProcOf::Device(device, name) => {
                         let get_device_proc_addr = instance.fns().v1_0.get_device_proc_addr;
                         let vk_device = ash::vk::Device::from_raw(device as _);
                         get_device_proc_addr(vk_device, name)
@@ -130,7 +132,7 @@ impl VulkanEngine {
                 }
             };
             let backend_context = unsafe {
-                gpu::vk::BackendContext::new(
+                BackendContext::new(
                     instance.handle().as_raw() as _,
                     physical_device.handle().as_raw() as _,
                     device.handle().as_raw() as _,
