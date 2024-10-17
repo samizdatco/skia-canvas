@@ -6,10 +6,12 @@ use std::{
     time::{Duration, Instant},
 };
 use winit::{
-  dpi::{LogicalSize, LogicalPosition, PhysicalPosition},
-  event_loop::{ControlFlow},
-  event::{WindowEvent, ElementState,  KeyboardInput, VirtualKeyCode, ModifiersState, MouseButton, MouseScrollDelta},
-  window::{CursorIcon, WindowId},
+  dpi::{LogicalPosition, LogicalSize, PhysicalPosition}, 
+  event::{ElementState, Ime, KeyEvent, Modifiers, MouseButton, MouseScrollDelta, WindowEvent}, 
+  event_loop::ControlFlow, 
+  keyboard::{ModifiersState, KeyCode, PhysicalKey::Code},
+  platform::scancode::PhysicalKeyExtScancode, 
+  window::{CursorIcon, WindowId}
 };
 
 use crate::context::page::Page;
@@ -51,8 +53,8 @@ pub enum UiEvent{
   #[allow(non_snake_case)]
   Wheel{deltaX:f32, deltaY:f32},
   Move{left:f32, top:f32},
-  Keyboard{event:String, key:VirtualKeyCode, code:u32, repeat:bool},
-  Input(char),
+  Keyboard{event:String, key:KeyCode, code:u32, repeat:bool},
+  Input(String),
   Mouse(String),
   Focus(bool),
   Resize(LogicalSize<u32>),
@@ -65,7 +67,6 @@ pub struct Sieve{
   dpr: f64,
   queue: Vec<UiEvent>,
   key_modifiers: ModifiersState,
-  key_repeats: HashMap<VirtualKeyCode, i32>,
   mouse_point: PhysicalPosition::<f64>,
   mouse_button: Option<u16>,
   mouse_transform: Matrix,
@@ -76,8 +77,7 @@ impl Sieve{
     Sieve{
       dpr,
       queue: vec![],
-      key_modifiers: ModifiersState::empty(),
-      key_repeats: HashMap::new(),
+      key_modifiers: Modifiers::default().state(),
       mouse_point: PhysicalPosition::default(),
       mouse_button: None,
       mouse_transform: Matrix::new_identity(),
@@ -90,7 +90,6 @@ impl Sieve{
 
   pub fn go_fullscreen(&mut self, is_full:bool){
     self.queue.push(UiEvent::Fullscreen(is_full));
-    self.key_repeats.clear(); // keyups don't get delivered during the transition apparently?
   }
 
   pub fn capture(&mut self, event:&WindowEvent){
@@ -109,12 +108,12 @@ impl Sieve{
         self.queue.push(UiEvent::Focus(*in_focus));
       }
 
-      WindowEvent::ModifiersChanged(state) => {
-        self.key_modifiers = *state;
+      WindowEvent::ModifiersChanged(modifiers) => {
+        self.key_modifiers = modifiers.state();
       }
 
-      WindowEvent::ReceivedCharacter(character) => {
-        self.queue.push(UiEvent::Input(*character));
+      WindowEvent::Ime(Ime::Commit(character)) => {
+        self.queue.push(UiEvent::Input(character.clone()));
       }
 
       WindowEvent::CursorEntered{..} => {
@@ -156,36 +155,32 @@ impl Sieve{
           MouseButton::Left => Some(0),
           MouseButton::Middle => Some(1),
           MouseButton::Right => Some(2),
+          MouseButton::Back => Some(3),
+          MouseButton::Forward => Some(4),
           MouseButton::Other(num) => Some(*num)
         };
         self.queue.push(UiEvent::Mouse(mouse_event));
       }
 
-      WindowEvent::KeyboardInput { input:
-        KeyboardInput { scancode, state, virtual_keycode: Some(keycode), ..}, ..
-      } => {
-        let (event_type, count) = match state{
-          ElementState::Pressed => {
-            let count = self.key_repeats.entry(*keycode).or_insert(-1);
-            *count += 1;
-            ("keydown", *count)
-          },
-          ElementState::Released => {
-            self.key_repeats.remove(keycode);
-            ("keyup", 0)
-          }
-        };
+      WindowEvent::KeyboardInput { event: KeyEvent {
+          physical_key:Code(key_code), state, repeat, ..
+      }, .. } => {
 
-        if event_type == "keyup" || count < 2{
+        let event_type = match state {
+          ElementState::Pressed => "keydown",
+          ElementState::Released => "keyup",
+        }.to_string();
+
+        if event_type == "keyup" || !repeat {
           self.queue.push(UiEvent::Keyboard{
-            event: event_type.to_string(),
-            key: *keycode,
-            code: *scancode,
-            repeat: count > 0
+            event: event_type,
+            key: key_code.clone(),
+            code: key_code.to_scancode().unwrap_or(0),
+            repeat: *repeat
           });
         }
-
       }
+
       _ => {}
     }
   }
@@ -206,7 +201,7 @@ impl Sieve{
         }
         UiEvent::Wheel{..} => {
           modifiers = Some(self.key_modifiers);
-          last_wheel = Some(change);
+          last_wheel = Some(&change);
         }
         UiEvent::Input(..) | UiEvent::Keyboard{..} => {
           modifiers = Some(self.key_modifiers);

@@ -6,9 +6,10 @@ use neon::prelude::*;
 use serde_json::json;
 use std::cell::RefCell;
 use winit::{
-    event_loop::{ControlFlow, EventLoop, EventLoopProxy},
-    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode, ElementState},
-    platform::run_return::EventLoopExtRunReturn
+    event::{ElementState, Event, KeyEvent, WindowEvent::{self, KeyboardInput}}, 
+    event_loop::{ControlFlow, EventLoop, EventLoopProxy}, 
+    keyboard::{PhysicalKey, NamedKey, KeyCode}, 
+    platform::run_on_demand::EventLoopExtRunOnDemand
 };
 
 use crate::utils::*;
@@ -23,7 +24,7 @@ use window::{Window, WindowSpec, WindowManager};
 
 thread_local!(
     // the event loop can only be run from the main thread
-    static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event());
+    static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
     static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with(|event_loop|
         event_loop.borrow().create_proxy()
     ));
@@ -68,12 +69,14 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let mut cadence = Cadence::default();
 
     EVENT_LOOP.with(|event_loop| {
-        event_loop.borrow_mut().run_return(|event, event_loop, control_flow| {
+        event_loop.borrow_mut().run_on_demand(|event, event_loop| {
             runloop(|| {
                 match event {
                     Event::NewEvents(..) => {
                         // trigger a Render if the cadence is active, otherwise handle UI events in MainEventsCleared
-                        *control_flow = cadence.on_next_frame(|| add_event(CanvasEvent::Render) );
+                        event_loop.set_control_flow(
+                            cadence.on_next_frame(|| add_event(CanvasEvent::Render) )
+                        );
                     }
 
                     Event::UserEvent(canvas_event) => {
@@ -85,7 +88,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 windows.remove_by_token(&token);
                             }
                             CanvasEvent::Quit => {
-                                *control_flow = ControlFlow::Exit;
+                                event_loop.exit();
                             }
                             CanvasEvent::Render => {
                                 // relay UI-driven state changes to js and render the next frame in the (active) cadence
@@ -113,9 +116,23 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                             WindowEvent::Destroyed | WindowEvent::CloseRequested => {
                                 windows.remove(&window_id);
                             }
-                            WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), state: ElementState::Released,.. }, .. } => {
+                            WindowEvent::KeyboardInput {
+                                event:
+                                    KeyEvent {
+                                        physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                        state: ElementState::Pressed,
+                                        repeat: false,
+                                        ..
+                                    },
+                                ..
+                            } => {
                                 windows.set_fullscreen_state(&window_id, false);
                             }
+
+                            WindowEvent::RedrawRequested => {
+                                windows.send_event(&window_id, event);
+                            }
+                
                             WindowEvent::Resized(_) => {
                                 windows.send_event(&window_id, event); // update the window
                             }
@@ -123,7 +140,7 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                         }
                     }
 
-                    Event::MainEventsCleared => {
+                    Event::AboutToWait => {
                         // on initial pass, do a roundtrip to sync up the Window object's state attrs:
                         // send just the initial window positions then read back all state
                         cadence.on_startup(||{
@@ -139,24 +156,21 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
                                 |spec, page| windows.update_window(spec, page)
                             ).ok();
                         }
-                    }
 
-                    Event::RedrawRequested(window_id) => {
-                        windows.send_event(&window_id, event);
-                    }
-
-                    Event::RedrawEventsCleared => {
-                        *control_flow = match (windows.len(), cadence.active()) {
-                            (0, _) => ControlFlow::Exit,
-                            (_, false) => ControlFlow::Wait,
-                            _ => ControlFlow::Poll
-                        }
+                        // quit after the last window is closed
+                        event_loop.set_control_flow(
+                            match (windows.len(), cadence.active()) {
+                                (0, _) => {event_loop.exit(); ControlFlow::Wait},
+                                (_, false) => ControlFlow::Wait,
+                                _ => ControlFlow::Poll
+                            }
+                        );
                     }
 
                     _ => {}
                 }
             });
-        });
+        }).expect("Failed to initialize window system");
     });
 
     Ok(cx.undefined())

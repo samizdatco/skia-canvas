@@ -3,7 +3,7 @@
 
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
-use foreign_types::{ForeignType, ForeignTypeRef};
+use foreign_types_shared::{ForeignType, ForeignTypeRef};
 use cocoa::{appkit::NSView, base::id as cocoa_id};
 use core_graphics_types::geometry::CGSize;
 use metal::{CommandQueue, Device, MTLPixelFormat, MetalLayer};
@@ -18,7 +18,8 @@ pub use objc::rc::autoreleasepool;
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize},
     platform::macos::WindowExtMacOS,
-    window::{Window, WindowBuilder},
+    window::Window,
+    raw_window_handle::HasWindowHandle,
 };
 
 thread_local!(static MTL_CONTEXT: RefCell<Option<MetalEngine>> = const { RefCell::new(None) } );
@@ -95,6 +96,11 @@ unsafe impl Send for MetalRenderer {}
 impl MetalRenderer {
     pub fn for_window(window: &Window) -> Self {
         let device = Device::system_default().expect("no device found");
+        
+        let raw_window_handle = window
+            .window_handle()
+            .expect("Failed to retrieve a window handle")
+            .as_raw();
 
         let layer = {
             let draw_size = window.inner_size();
@@ -105,7 +111,12 @@ impl MetalRenderer {
             layer.set_opaque(false);
 
             unsafe {
-                let view = window.ns_view() as cocoa_id;
+                let view = match raw_window_handle {
+                    raw_window_handle::RawWindowHandle::AppKit(appkit) => {
+                        appkit.ns_view.as_ptr()
+                    }
+                    _ => panic!("Wrong window handle type"),
+                } as cocoa_id;
                 view.setWantsLayer(YES);
                 view.setLayer(layer.as_ref() as *const _ as _);
             }

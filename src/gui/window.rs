@@ -6,9 +6,9 @@ use serde::{Serialize, Deserialize};
 use serde_json::{Map, Value};
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize, PhysicalPosition},
-    event::{Event, WindowEvent},
-    event_loop::{EventLoopWindowTarget, EventLoopProxy},
-    window::{Window as WinitWindow, WindowBuilder, WindowId, CursorIcon, Fullscreen},
+    event::{Event, WindowEvent::{self, Resized, RedrawRequested}},
+    event_loop::{ActiveEventLoop, EventLoopProxy},
+    window::{Window as WinitWindow, WindowId, CursorIcon, Fullscreen},
 };
 #[cfg(target_os = "macos" )]
 use winit::platform::macos::WindowExtMacOS;
@@ -44,15 +44,15 @@ pub enum Fit{
   None, ContainX, ContainY, Contain, Cover, Fill, ScaleDown, Resize
 }
 
+#[non_exhaustive]
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", remote = "CursorIcon" )]
 pub enum Cursor {
-    Default, Crosshair, Hand, Arrow, Move, Text, Wait, Help, Progress, NotAllowed, ContextMenu,
-    Cell, VerticalText, Alias, Copy, NoDrop, Grab, Grabbing, AllScroll, ZoomIn, ZoomOut, EResize,
-    NResize, NeResize, NwResize, SResize, SeResize, SwResize, WResize, EwResize, NsResize, NeswResize,
-    NwseResize, ColResize, RowResize
+    Alias, AllScroll, Cell, ColResize, ContextMenu, Copy, Crosshair, Default, EResize,
+    EwResize, Grab, Grabbing, Help, Move, NeResize, NeswResize, NoDrop, NotAllowed,
+    NResize, NsResize, NwResize, NwseResize, Pointer, Progress, RowResize, SeResize,
+    SResize, SwResize, Text, VerticalText, Wait, WResize, ZoomIn, ZoomOut, 
 }
-
 pub struct Window {
     pub handle: WinitWindow,
     pub proxy: EventLoopProxy<CanvasEvent>,
@@ -63,16 +63,16 @@ pub struct Window {
 }
 
 impl Window {
-    pub fn new(event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>, spec: &mut WindowSpec, page: &Page) -> Self {
+    pub fn new(event_loop:&ActiveEventLoop, proxy:EventLoopProxy<CanvasEvent>, spec: &mut WindowSpec, page: &Page) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
-        let handle = WindowBuilder::new()
+
+        let window_attributes = WinitWindow::default_attributes()
             .with_inner_size(size)
             .with_transparent(true)
             .with_title(spec.title.clone())
             .with_visible(false)
-            .with_resizable(spec.resizable)
-            .build(&event_loop)
-            .unwrap();
+            .with_resizable(spec.resizable);
+        let handle = event_loop.create_window(window_attributes).unwrap();
 
         if let (Some(left), Some(top)) = (spec.left, spec.top){
             handle.set_outer_position(LogicalPosition::new(left, top));
@@ -170,7 +170,7 @@ impl Window {
                         }
                         CanvasEvent::Cursor(icon) => {
                             if let Some(icon) = icon{
-                                self.handle.set_cursor_icon(icon);
+                                self.handle.set_cursor(icon);
                             }
                             self.handle.set_cursor_visible(icon.is_some());
                         }
@@ -181,9 +181,10 @@ impl Window {
                             self.background = color;
                         }
                         CanvasEvent::Size(size) => {
-                            let size = size.to_physical(self.handle.scale_factor());
-                            self.handle.set_inner_size(size);
-                            self.resize(size);
+                            let size:PhysicalSize<u32> = size.to_physical(self.handle.scale_factor());
+                            if let Some(to_size) = self.handle.request_inner_size(size){
+                                self.resize(to_size);
+                            }
                         }
                         CanvasEvent::Position(loc) => {
                             self.handle.set_outer_position(loc);
@@ -198,11 +199,11 @@ impl Window {
                     }
                 }
 
-                Event::WindowEvent { event:WindowEvent::Resized(size), .. } => {
+                Event::WindowEvent { event:Resized(size), .. } => {
                     self.resize(size);
                     self.handle.request_redraw();
                 }
-                Event::RedrawRequested(_) => {
+                Event::WindowEvent { event:RedrawRequested, .. } => {
                     self.redraw()
                 },
                 _ => {}
@@ -212,7 +213,7 @@ impl Window {
     }
 }
 
-struct WindowRef { tx: Sender<Event<'static, CanvasEvent>>, id: WindowId, spec: WindowSpec, sieve:Sieve }
+struct WindowRef { tx: Sender<Event<CanvasEvent>>, id: WindowId, spec: WindowSpec, sieve:Sieve }
 
 #[derive(Default)]
 pub struct WindowManager {
@@ -222,7 +223,7 @@ pub struct WindowManager {
 
 impl WindowManager {
 
-    pub fn add(&mut self, event_loop:&EventLoopWindowTarget<CanvasEvent>, proxy:EventLoopProxy<CanvasEvent>, mut spec: WindowSpec, page: Page) {
+    pub fn add(&mut self, event_loop:&ActiveEventLoop, proxy:EventLoopProxy<CanvasEvent>, mut spec: WindowSpec, page: Page) {
         let mut window = Window::new(event_loop, proxy, &mut spec, &page);
         let id = window.handle.id();
         let (tx, rx) = channel::bounded(50);
@@ -260,7 +261,7 @@ impl WindowManager {
                 let mut needs_redraw = None;
                 queue.drain(..).for_each(|event|{
                     match event {
-                        Event::RedrawRequested(_) => needs_redraw = Some(event),
+                        Event::WindowEvent { event:RedrawRequested, .. } => needs_redraw = Some(event),
                         _ => window.handle_event(event)
                     }
                 });
@@ -282,9 +283,7 @@ impl WindowManager {
 
     pub fn send_event(&self, window_id:&WindowId, event:Event<CanvasEvent>){
         if let Some(tx) = self.windows.iter().find(|win| win.id == *window_id).map(|win| &win.tx){
-            if let Some(event) = event.to_static() {
-                tx.send(event).ok();
-            }
+            tx.send(event).ok();
         }
     }
 
