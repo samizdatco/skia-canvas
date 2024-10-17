@@ -38,12 +38,19 @@ pub struct VulkanEngine {
 }
 
 impl VulkanEngine {
-    fn init() {
+    fn init(){
         VK_CONTEXT.with(|cell| {
             let mut local_ctx = cell.borrow_mut();
             if local_ctx.is_none() {
-                if let Ok(ctx) = VulkanEngine::new() {
-                    local_ctx.replace(ctx);
+                match VulkanEngine::new(){
+                    Ok(ctx) => {
+                        local_ctx.replace(ctx);
+                    },
+                    Err(msg) => {
+                        VK_STATUS.with(|status|
+                            status.borrow_mut().replace(msg)
+                        );
+                    }
                 }
             }
         })
@@ -57,7 +64,7 @@ impl VulkanEngine {
     }
 
     fn new() -> Result<Self, String> {
-        let library = VulkanLibrary::new().unwrap();
+        let library = VulkanLibrary::new().or(Err("Vulkan: not installed"))?;
 
         let instance = Instance::new(
             Arc::clone(&library),
@@ -66,11 +73,11 @@ impl VulkanEngine {
                 ..Default::default()
             },
         )
-        .expect("Vulkan: Could not create instance");
+        .or(Err("Vulkan: Could not create instance"))?;
     
         let (physical_device, queue_family_index) = instance
             .enumerate_physical_devices()
-            .unwrap()
+            .or(Err("Vulkan: No physical devices found"))?
             // No need for swapchain extension support.
             .filter_map(|p| {
                 p.queue_family_properties()
@@ -86,13 +93,14 @@ impl VulkanEngine {
                 PhysicalDeviceType::Other => 4,
                 _ => 5,
             })
-            .expect("Vulkan: No suitable physical device found");
+            .ok_or("Vulkan: No suitable physical device found")?;
     
-        println!(
-            "Vulkan: Using device {} (type: {:?}) on {:?}",
-            physical_device.properties().device_name,
-            physical_device.properties().device_type,
-            std::thread::current().id()
+        VK_STATUS.with(|status|
+            status.borrow_mut().replace(format!(
+                "Vulkan on {} ({:?})",
+                physical_device.properties().device_name,
+                physical_device.properties().device_type,
+            ))
         );
     
         let (device, mut queues) = Device::new(
@@ -105,13 +113,13 @@ impl VulkanEngine {
                 ..Default::default()
             },
         )
-        .expect("Vulkan: Failed to create device");
+        .or(Err("Vulkan: Failed to create device"))?;
         
-        let queue = queues.next().expect("Vulkan: Failed to create queue");
+        let queue = queues.next().ok_or("Vulkan: Failed to create queue")?;
 
         let context = {
             let get_proc = |of| unsafe {
-                let proc = match of {
+                match of {
                     GetProcOf::Instance(instance, name) => {
                         let vk_instance = ash::vk::Instance::from_raw(instance as _);
                         library.get_instance_proc_addr(vk_instance, name)
@@ -121,15 +129,12 @@ impl VulkanEngine {
                         let vk_device = ash::vk::Device::from_raw(device as _);
                         get_device_proc_addr(vk_device, name)
                     }
-                };
-
-                match proc {
-                    Some(f) => f as _,
-                    None => {
-                        println!("Vulkan: failed to resolve {}", of.name().to_str().unwrap());
-                        ptr::null() as _
-                    }
                 }
+                .map(|f| f as _ )
+                .unwrap_or_else(||{
+                    println!("Vulkan: failed to resolve {}", of.name().to_str().unwrap());
+                    ptr::null()
+                })                
             };
             let backend_context = unsafe {
                 BackendContext::new(
@@ -166,6 +171,11 @@ impl VulkanEngine {
                 None,
             )
         })
+    }
+
+    pub fn status() -> Option<String>{
+        Self::init();
+        VK_STATUS.with(|err_cell| err_cell.borrow().clone())
     }
 }
 

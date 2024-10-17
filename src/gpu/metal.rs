@@ -75,6 +75,11 @@ impl MetalEngine {
             )
         })
     }
+
+    pub fn status() -> Option<String>{
+        Self::init();
+        None
+    }
 }
 
 
