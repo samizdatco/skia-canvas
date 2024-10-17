@@ -15,7 +15,7 @@ lto = "fat"
 
 [features]
 metal = ["skia-safe/metal", "dep:metal", "dep:core-graphics-types", "dep:foreign-types", "dep:cocoa", "dep:objc"]
-vulkan = ["skia-safe/vulkan", "dep:skulpin-renderer", "dep:ash"]
+vulkan = ["skia-safe/vulkan", "dep:skulpin-renderer", "dep:ash", "dep:vulkano" ]
 window = ["dep:winit"]
 
 [dependencies]
@@ -29,7 +29,8 @@ serde = { version = "1.0", features = ["derive"] }
 skia-safe = { version = "0.78.2", features = ["textlayout"] }
 
 # vulkan
-ash = { version = "0.37", optional = true }
+ash = { version = "0.38", optional = true }
+vulkano =  { git = "https://github.com/vulkano-rs/vulkano.git", rev="8c08a85", optional = true }
 skulpin-renderer = { version = "0.14.2", path = "vendor/skulpin-renderer", optional = true }
 
 # metal
