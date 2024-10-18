@@ -32,10 +32,10 @@ In particular, Skia Canvas:
 
 If you’re running on a supported platform, installation should be as simple as:
 ```console
-$ npm install skia-canvas
+npm install @mpaperno/skia-canvas
 ```
 
-This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases).
+This will download a pre-compiled library from the project’s most recent [release](https://github.com/mpaperno/skia-canvas/releases).
 
 ### Platform Support
 

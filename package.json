@@ -1,6 +1,6 @@
 {
   "name": "@mpaperno/skia-canvas",
-  "version": "1.1.1-mp",
+  "version": "1.1.2-mp",
   "description": "A Canvas Graphics API for Node based on Skia",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "contributors": [
@@ -45,7 +45,8 @@
     "tmp": "^0.2.1"
   },
   "files": [
-    "lib"
+    "lib/*.*",
+    "CHANGELOG.md"
   ],
   "binary": {
     "module_name": "index",

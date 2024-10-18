@@ -2,6 +2,25 @@
 
 <!-- ## 🥚 ⟩ [Unreleased] -->
 
+## 📦 ⟩ [v1.1.2-mp] ⟩ Oct 13, 2024
+### Fixes
+- Fixed exception in `canvas::draw_path()` when trying to draw a path with an invalid transform which cannot be inverted (fixes https://github.com/samizdatco/skia-canvas/issues/149). ([4c4ad8b1])
+- Fixed `this` scope in `Image` `onload` and `onerror` callbacks  (the callbacks are now bound to the `Image` instance). ([81fd8f1f])
+
+### Other
+- Updated node module dependencies; removed `aws-sdk` ans `nodemon` from dev dependencies.
+- Removed napi version from file name of published binaries.
+- Fixed version string in pre-gyp remote path (fixes [mp-#1]).
+- Now published on npmjs.org as [@mpaperno/skia-canvas][npmpackage]
+
+[v1.1.2-mp]: https://github.com/mpaperno/skia-canvas/compare/v1.1.1-mp...v1.1.2-mp
+[4c4ad8b1]: https://github.com/mpaperno/skia-canvas/commit/4c4ad8b185ba0eace20bc88729c56fd4e6598220
+[81fd8f1f]: https://github.com/mpaperno/skia-canvas/commit/81fd8f1fe85f4c3bb6a65d8643423fef5730dc69
+[mp-#1]: https://github.com/mpaperno/skia-canvas/issues/1
+
+[npmpackage]: https://www.npmjs.com/package/@mpaperno/skia-canvas
+
+
 ## 📦 ⟩ [v1.1.1-mp] ⟩ Sep 25, 2023
 ### Fixes
 - Fixed issue in `Path2D::add_ellipse()` (basis for context and path `ellipse()` and `arc()` JS API) where trying to draw a complete circle from certain angle combinations produced nothing (eg. -90° to 270° clockwise). ([bb99a3ad])
@@ -47,7 +66,7 @@ NOTE: no Window support in these builds
 [README]: https://github.com/mpaperno/skia-canvas/blob/mp/main/README.md
 
 
-## 📦 ⟩ [v1.0.3] ⟩ Aug 16, 2023
+## 📦 ⟩ [v1.0.3-mp] ⟩ Aug 16, 2023
 
 ### BREAKING Change
 - GPU rendering is now disabled by default due to [issues][issue_126] with thread management and the fact that it [doesn't seem to actually help][issue_127] with anything. ([522388c3])
@@ -61,7 +80,7 @@ NOTE: no Window support in these builds
 [522388c3]: https://github.com/mpaperno/skia-canvas/commit/522388c35999e0a96c7c056dacf64573301fc569
 
 
-## 📦 ⟩ [v1.0.2] ⟩ Aug 16, 2023
+## 📦 ⟩ [v1.0.2-mp] ⟩ Aug 16, 2023
 
 ### Bugfixes
 - Fixes a [memory leak][issue_145] when GPU rendering is enabled with Vulkan drivers and async export methods were used. Workaround involves only checking if a Vulkan surface is available once at startup, instead of each time a canvas is created or `gpu` option is set. ([b11ff4d2])

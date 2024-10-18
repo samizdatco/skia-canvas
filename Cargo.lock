@@ -1449,7 +1449,7 @@ dependencies = [
 
 [[package]]
 name = "skia-canvas"
-version = "1.1.1-mp"
+version = "1.1.2-mp"
 dependencies = [
  "ash 0.37.0+1.3.209",
  "cocoa",
