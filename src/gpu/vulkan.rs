@@ -25,8 +25,10 @@ use winit::{
     window::Window,
 };
 
-thread_local!(static VK_CONTEXT: RefCell<Option<VulkanEngine>> = const { RefCell::new(None) } );
-thread_local!(static VK_STATUS: RefCell<Option<String>> = const { RefCell::new(None) } );
+thread_local!(
+    static VK_CONTEXT: RefCell<Option<VulkanEngine>> = const { RefCell::new(None) };
+    static VK_STATUS: RefCell<Option<String>> = const { RefCell::new(None) };
+);
 
 pub struct VulkanEngine {
     context: DirectContext,
@@ -47,9 +49,7 @@ impl VulkanEngine {
                         local_ctx.replace(ctx);
                     },
                     Err(msg) => {
-                        VK_STATUS.with(|status|
-                            status.borrow_mut().replace(msg)
-                        );
+                        Self::set_status(msg);
                     }
                 }
             }
@@ -95,12 +95,11 @@ impl VulkanEngine {
             })
             .ok_or("Vulkan: No suitable physical device found")?;
     
-        VK_STATUS.with(|status|
-            status.borrow_mut().replace(format!(
+        Self::set_status(format!(
                 "Vulkan on {} ({:?})",
                 physical_device.properties().device_name,
                 physical_device.properties().device_type,
-            ))
+            )
         );
     
         let (device, mut queues) = Device::new(
@@ -172,9 +171,13 @@ impl VulkanEngine {
             )
         })
     }
+    
+    
+    pub fn set_status(msg:String) {
+        VK_STATUS.with(|status| status.borrow_mut().replace(msg) );
+    }
 
     pub fn status() -> Option<String>{
-        Self::init();
         VK_STATUS.with(|err_cell| err_cell.borrow().clone())
     }
 }
