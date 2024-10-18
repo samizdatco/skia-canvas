@@ -1,14 +1,10 @@
 use skia_safe::{Matrix, Color};
 use serde::Serialize;
 use serde_json::json;
-use std::{
-    collections::{HashMap, HashSet},
-    time::{Duration, Instant},
-};
+use std::collections::HashSet;
 use winit::{
   dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize}, 
   event::{ElementState, Ime, KeyEvent, Modifiers, MouseButton, MouseScrollDelta, WindowEvent}, 
-  event_loop::ControlFlow, 
   keyboard::{ModifiersState, KeyCode, PhysicalKey::Code},
   platform::scancode::PhysicalKeyExtScancode, 
   window::{CursorIcon, WindowId}
@@ -249,68 +245,6 @@ impl Sieve{
 
   pub fn is_empty(&self) -> bool {
     self.queue.is_empty()
-  }
-}
-
-pub struct Cadence{
-  rate: u64,
-  last: Instant,
-  wakeup: Duration,
-  render: Duration,
-  begun: bool,
-}
-
-impl Default for Cadence {
-  fn default() -> Self {
-    Self{
-      rate: 0,
-      last: Instant::now(),
-      render: Duration::new(0, 0),
-      wakeup: Duration::new(0, 0),
-      begun: false,
-    }
-  }
-}
-
-impl Cadence{
-  pub fn at_startup(&mut self) -> bool{
-    if self.begun{ false }
-    else{ 
-      self.begun = true;
-      true // only return true on first call
-    }
-  }
-
-  pub fn set_frame_rate(&mut self, rate:u64){
-    if rate == self.rate{ return }
-
-    let frame_time = 1_000_000_000/rate.max(1);
-    let watch_interval = 1_000_000.max(frame_time/10);
-    self.render = Duration::from_nanos(frame_time);
-    self.wakeup = Duration::from_nanos(frame_time - watch_interval);
-    self.rate = rate;
-  }
-
-  pub fn on_next_frame<F:Fn()>(&mut self, draw:F) -> ControlFlow{
-    if !self.active(){
-      return ControlFlow::Wait;
-    }
-
-    if self.last.elapsed() >= self.render{
-      while self.last < Instant::now() - self.render{
-        self.last += self.render
-      }
-      draw();
-    }
-
-    match self.last.elapsed() < self.wakeup {
-      true => ControlFlow::WaitUntil(self.last + self.wakeup),
-      false => ControlFlow::Poll,
-    }
-  }
-
-  pub fn active(&self) -> bool{
-    self.rate > 0
   }
 }
 

@@ -4,26 +4,27 @@
 #![allow(dead_code)]
 use neon::prelude::*;
 use std::iter::zip;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::cell::RefCell;
 use winit::{
-    application::ApplicationHandler,
-    event::{ElementState, Event, KeyEvent, StartCause, WindowEvent::{self, KeyboardInput}}, 
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}, 
-    keyboard::{PhysicalKey, NamedKey, KeyCode}, 
+    event_loop::{ControlFlow, EventLoop, EventLoopProxy}, 
     platform::run_on_demand::EventLoopExtRunOnDemand,
-    window::WindowId
 };
 
 use crate::utils::*;
-use crate::gpu::runloop;
-use crate::context::{BoxedContext2D, page::Page};
+use crate::context::BoxedContext2D;
+
+pub mod app;
+use app::App;
 
 pub mod event;
-use event::{Cadence, CanvasEvent};
+use event::CanvasEvent;
 
 pub mod window;
-use window::{Window, WindowSpec, WindowManager};
+use window::WindowSpec;
+
+pub mod window_mgr;
+use window_mgr::WindowManager;
 
 thread_local!(
     // the event loop can only be run from the main thread
@@ -33,135 +34,11 @@ thread_local!(
     ));
 );
 
-trait Roundtrip: FnMut(Value, &mut WindowManager) -> NeonResult<()>{}
-impl<T:FnMut(Value, &mut WindowManager) -> NeonResult<()>> Roundtrip for T {}
-
-struct App<F:Roundtrip>{
-    windows: WindowManager,
-    cadence: Cadence,
-    callback: F
-}
-
-impl<F:Roundtrip> App<F>{
-    fn with_callback(callback:F) -> Self{
-        let windows = WindowManager::default();
-        let cadence = Cadence::default();
-        Self{windows, cadence, callback}
-    }
-
-    fn initial_sync(&mut self){
-        let payload = self.windows.get_geometry();
-        let _ = (self.callback)(payload, &mut self.windows);
-    }
-
-    fn roundtrip(&mut self){
-        let payload = self.windows.get_ui_changes();
-        let _ = (self.callback)(payload, &mut self.windows);
-    }
-}
-
-impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
-    fn resumed(&mut self, event_loop:&ActiveEventLoop){
-
-    }
-
-    fn new_events(&mut self, event_loop:&ActiveEventLoop, cause:StartCause) { 
-        // trigger a Render if the cadence is active, otherwise handle UI events in MainEventsCleared
-        event_loop.set_control_flow(
-            self.cadence.on_next_frame(|| add_event(CanvasEvent::Render) )
-        );
-    }
-
-    fn window_event( &mut self, event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
-        // route UI events to the relevant window
-        self.windows.capture_ui_event(&window_id, &event);
-
-        // handle window lifecycle events
-        match event {
-            WindowEvent::Destroyed | WindowEvent::CloseRequested => {
-                self.windows.remove(&window_id);
-            }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                        state: ElementState::Pressed,
-                        repeat: false,
-                        ..
-                    },
-                ..
-            } => {
-                self.windows.set_fullscreen_state(&window_id, false);
-            }
-
-            WindowEvent::RedrawRequested => {
-                self.windows.send_event(&window_id, CanvasEvent::RedrawRequested);
-            }
-
-            WindowEvent::Resized(size) => {
-                self.windows.send_event(&window_id, CanvasEvent::WindowResized(size));
-            }
-            _ => {}
-        }
-    }
-
-    fn user_event(&mut self, event_loop:&ActiveEventLoop, event:CanvasEvent) { 
-        match event{
-            CanvasEvent::Open(spec, page) => {
-                self.windows.add(event_loop, new_proxy(), spec, page);
-            }
-            CanvasEvent::Close(token) => {
-                self.windows.remove_by_token(&token);
-            }
-            CanvasEvent::Quit => {
-                event_loop.exit();
-            }
-            CanvasEvent::Render => {
-                // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                self.roundtrip();
-            }
-            CanvasEvent::Transform(window_id, matrix) => {
-                self.windows.use_ui_transform(&window_id, &matrix);
-            },
-            CanvasEvent::InFullscreen(window_id, is_fullscreen) => {
-                self.windows.use_fullscreen_state(&window_id, is_fullscreen);
-            }
-            CanvasEvent::FrameRate(fps) => {
-                self.cadence.set_frame_rate(fps)
-            }
-            _ => {}
-        }
-    }
-
-    fn about_to_wait(&mut self, event_loop:&ActiveEventLoop) { 
-        // on initial pass, do a roundtrip to sync up the Window object's state attrs:
-        // send just the initial window positions then read back all state
-        if self.cadence.at_startup(){
-            self.initial_sync();
-        }
-        
-        // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
-        // a Render event, so only do a roundtrip if there are new UI events to be relayed
-        if !self.cadence.active() && self.windows.has_ui_changes() {
-            self.roundtrip();
-        }
-
-        // quit after the last window is closed
-        match (self.windows.len(), self.cadence.active()) {
-            (0, _) => event_loop.exit(),
-            (_, false) => event_loop.set_control_flow(ControlFlow::Wait),
-            _ => event_loop.set_control_flow(ControlFlow::Poll)
-        };
-    }
-
-}
-
-
-fn new_proxy() -> EventLoopProxy<CanvasEvent>{
+pub(crate) fn new_proxy() -> EventLoopProxy<CanvasEvent>{
     PROXY.with(|cell| cell.borrow().clone() )
 }
 
-fn add_event(event: CanvasEvent){
+pub(crate) fn add_event(event: CanvasEvent){
     PROXY.with(|cell| cell.borrow().send_event(event).ok() );
 }
 
