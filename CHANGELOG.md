@@ -1,6 +1,16 @@
 # Changelog
 
-<!-- ## 🥚 ⟩ [Unreleased] -->
+## 🥚 ⟩ [Unreleased]
+
+### Bugfixes
+- Initializing a GPU-renderer using Vulkan now uses the `vulkano` crate and makes better selections among devices present (previously it was just using the first result, which is not always optimal).
+
+### Misc. Improvements
+- Upgraded Skia to milestone 129
+
+### Maintenance
+- Updated `winit` and added [skulpin-renderer](https://github.com/samizdatco/skia-canvas/tree/master/vendor/skulpin-renderer) to the repo's `vendor` directory so it can be kept up to date with the current versions of skia and winit.
+
 
 ## 📦 ⟩ [v1.0.2] ⟩ Aug 21, 2024
 

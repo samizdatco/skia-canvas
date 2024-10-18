@@ -6,7 +6,7 @@ use std::{
     time::{Duration, Instant},
 };
 use winit::{
-  dpi::{LogicalPosition, LogicalSize, PhysicalPosition}, 
+  dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize}, 
   event::{ElementState, Ime, KeyEvent, Modifiers, MouseButton, MouseScrollDelta, WindowEvent}, 
   event_loop::ControlFlow, 
   keyboard::{ModifiersState, KeyCode, PhysicalKey::Code},
@@ -45,6 +45,10 @@ pub enum CanvasEvent{
   Fit(Fit),
   Position(LogicalPosition<i32>),
   Size(LogicalSize<u32>),
+
+  // encapsulated WindowEvents
+  WindowResized(PhysicalSize<u32>),
+  RedrawRequested,
 }
 
 #[derive(Debug, Serialize)]
@@ -269,10 +273,12 @@ impl Default for Cadence {
 }
 
 impl Cadence{
-  pub fn on_startup<F:FnOnce()>(&mut self, init:F){
-    if self.begun{ return }
-    self.begun = true;
-    init();
+  pub fn at_startup(&mut self) -> bool{
+    if self.begun{ false }
+    else{ 
+      self.begun = true;
+      true // only return true on first call
+    }
   }
 
   pub fn set_frame_rate(&mut self, rate:u64){

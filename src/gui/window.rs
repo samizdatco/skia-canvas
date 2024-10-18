@@ -150,62 +150,57 @@ impl Window {
         })
     }
 
-    pub fn handle_event(&mut self, event:Event<CanvasEvent>){
+    pub fn handle_event(&mut self, event:CanvasEvent){
         runloop(|| {
             match event {
-                Event::UserEvent(canvas_event) => {
-                    match canvas_event{
-                        CanvasEvent::Page(page) => {
-                            self.page = page;
-                            self.handle.request_redraw();
-                        }
-                        CanvasEvent::Visible(flag) => {
-                            self.handle.set_visible(flag);
-                        }
-                        CanvasEvent::Resizable(flag) => {
-                            self.handle.set_resizable(flag);
-                        }
-                        CanvasEvent::Title(title) => {
-                            self.handle.set_title(&title);
-                        }
-                        CanvasEvent::Cursor(icon) => {
-                            if let Some(icon) = icon{
-                                self.handle.set_cursor(icon);
-                            }
-                            self.handle.set_cursor_visible(icon.is_some());
-                        }
-                        CanvasEvent::Fit(mode) => {
-                            self.fit = mode;
-                        }
-                        CanvasEvent::Background(color) => {
-                            self.background = color;
-                        }
-                        CanvasEvent::Size(size) => {
-                            let size:PhysicalSize<u32> = size.to_physical(self.handle.scale_factor());
-                            if let Some(to_size) = self.handle.request_inner_size(size){
-                                self.resize(to_size);
-                            }
-                        }
-                        CanvasEvent::Position(loc) => {
-                            self.handle.set_outer_position(loc);
-                        }
-                        CanvasEvent::Fullscreen(to_fullscreen) => {
-                            match to_fullscreen{
-                                true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
-                                false => self.handle.set_fullscreen( None )
-                            }
-                        }
-                        _ => { }
-                    }
-                }
-
-                Event::WindowEvent { event:Resized(size), .. } => {
-                    self.resize(size);
+                CanvasEvent::Page(page) => {
+                    self.page = page;
                     self.handle.request_redraw();
                 }
-                Event::WindowEvent { event:RedrawRequested, .. } => {
+                CanvasEvent::Visible(flag) => {
+                    self.handle.set_visible(flag);
+                }
+                CanvasEvent::Resizable(flag) => {
+                    self.handle.set_resizable(flag);
+                }
+                CanvasEvent::Title(title) => {
+                    self.handle.set_title(&title);
+                }
+                CanvasEvent::Cursor(icon) => {
+                    if let Some(icon) = icon{
+                        self.handle.set_cursor(icon);
+                    }
+                    self.handle.set_cursor_visible(icon.is_some());
+                }
+                CanvasEvent::Fit(mode) => {
+                    self.fit = mode;
+                }
+                CanvasEvent::Background(color) => {
+                    self.background = color;
+                }
+                CanvasEvent::Size(size) => {
+                    let size:PhysicalSize<u32> = size.to_physical(self.handle.scale_factor());
+                    if let Some(to_size) = self.handle.request_inner_size(size){
+                        self.resize(to_size);
+                    }
+                }
+                CanvasEvent::Position(loc) => {
+                    self.handle.set_outer_position(loc);
+                }
+                CanvasEvent::Fullscreen(to_fullscreen) => {
+                    match to_fullscreen{
+                        true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
+                        false => self.handle.set_fullscreen( None )
+                    }
+                }
+                CanvasEvent::WindowResized(size) => {
+                    self.resize(size);
+                    // self.handle.request_redraw();
+                }
+                CanvasEvent::RedrawRequested => {
                     self.redraw()
-                },
+                }
+
                 _ => {}
             }
         })
@@ -213,7 +208,7 @@ impl Window {
     }
 }
 
-struct WindowRef { tx: Sender<Event<CanvasEvent>>, id: WindowId, spec: WindowSpec, sieve:Sieve }
+struct WindowRef { tx: Sender<CanvasEvent>, id: WindowId, spec: WindowSpec, sieve:Sieve }
 
 #[derive(Default)]
 pub struct WindowManager {
@@ -261,11 +256,12 @@ impl WindowManager {
                 let mut needs_redraw = None;
                 queue.drain(..).for_each(|event|{
                     match event {
-                        Event::WindowEvent { event:RedrawRequested, .. } => needs_redraw = Some(event),
+                        CanvasEvent::RedrawRequested => needs_redraw = Some(event),
                         _ => window.handle_event(event)
                     }
                 });
 
+                // deduplicate and defer redraw requests until all other events were handled
                 if let Some(event) = needs_redraw {
                     window.handle_event(event)
                 }
@@ -281,7 +277,7 @@ impl WindowManager {
         self.windows.retain(|win| win.spec.id != token);
     }
 
-    pub fn send_event(&self, window_id:&WindowId, event:Event<CanvasEvent>){
+    pub fn send_event(&self, window_id:&WindowId, event:CanvasEvent){
         if let Some(tx) = self.windows.iter().find(|win| win.id == *window_id).map(|win| &win.tx){
             tx.send(event).ok();
         }
@@ -337,7 +333,7 @@ impl WindowManager {
             updates.push(CanvasEvent::Page(page));
 
             updates.drain(..).for_each(|event| {
-                win.tx.send(Event::UserEvent(event)).ok();
+                win.tx.send(event).ok();
             });
 
             win.spec = spec;
@@ -361,7 +357,7 @@ impl WindowManager {
     pub fn set_fullscreen_state(&mut self, window_id:&WindowId, is_fullscreen:bool){
         if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
             // tell the window to change state
-            win.tx.send(Event::UserEvent(CanvasEvent::Fullscreen(is_fullscreen))).ok();
+            win.tx.send(CanvasEvent::Fullscreen(is_fullscreen)).ok();
         }
         // and make sure the change is reflected in local state
         self.use_fullscreen_state(window_id, is_fullscreen);
@@ -392,12 +388,12 @@ impl WindowManager {
         json!({ "ui": ui, "state": state })
     }
 
-    pub fn get_geometry(&mut self) -> serde_json::Value {
-        let mut positions = serde_json::Map::new();
+    pub fn get_geometry(&mut self) -> Value {
+        let mut positions = Map::new();
         self.windows.iter_mut().for_each(|win|{
             positions.insert(win.spec.id.clone(), json!({"left":win.spec.left, "top":win.spec.top}));
         });
-        json!(positions)
+        json!({"geom":positions})
     }
 
     pub fn len(&self) -> usize {
