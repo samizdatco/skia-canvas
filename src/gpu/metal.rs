@@ -109,6 +109,7 @@ impl MetalRenderer {
             layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
             layer.set_presents_with_transaction(false);
             layer.set_opaque(false);
+            layer.set_framebuffer_only(false); // to enable blend modes
 
             unsafe {
                 let view = match raw_window_handle {
