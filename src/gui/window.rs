@@ -67,6 +67,7 @@ impl Window {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
 
         let window_attributes = WinitWindow::default_attributes()
+            .with_fullscreen(if spec.fullscreen{ Some(Fullscreen::Borderless(None)) }else{ None })
             .with_inner_size(size)
             .with_transparent(true)
             .with_title(spec.title.clone())
@@ -195,7 +196,6 @@ impl Window {
                 }
                 CanvasEvent::WindowResized(size) => {
                     self.resize(size);
-                    // self.handle.request_redraw();
                 }
                 CanvasEvent::RedrawRequested => {
                     self.redraw()
