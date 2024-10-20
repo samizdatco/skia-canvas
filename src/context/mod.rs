@@ -6,9 +6,10 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
 use skia_safe::{Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo, Contains,
-                Matrix, Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType, Data,
+                Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType, ColorSpace, Data,
                 PaintStyle, BlendMode, AlphaType, ClipOp, PictureRecorder, Picture, Drawable,
                 image::CachingHint, images, image_filters, dash_path_effect, path_1d_path_effect};
+use skia_safe::matrix::{ Matrix, TypeMask };
 use skia_safe::textlayout::{ParagraphStyle, TextStyle};
 use skia_safe::canvas::SrcRectConstraint::Strict;
 use skia_safe::path::FillType;
@@ -201,6 +202,19 @@ impl Context2D{
     });
   }
 
+  // DRY helper for render_to_canvas()
+  fn render_shadow<F>(&self, canvas:&SkCanvas, paint:&Paint, f:F)
+    where F:Fn(&SkCanvas, &Paint)
+  {
+    if let Some(shadow_paint) = self.paint_for_shadow(paint){
+      canvas.save();
+      canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
+      canvas.concat(&self.state.matrix);
+      f(canvas, &shadow_paint);
+      canvas.restore();
+    }
+  }
+
   pub fn render_to_canvas<F>(&self, paint:&Paint, f:F)
     where F:Fn(&SkCanvas, &Paint)
   {
@@ -216,19 +230,11 @@ impl Context2D{
         layer_recorder.begin_recording(self.bounds, None);
         if let Some(layer) = layer_recorder.recording_canvas() {
           // draw the dropshadow (if applicable)
-          if let Some(shadow_paint) = self.paint_for_shadow(&layer_paint){
-            layer.save();
-            layer.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
-            layer.concat(&self.state.matrix);
-            f(layer, &shadow_paint);
-            layer.restore();
-          }
-
+          self.render_shadow(layer, &layer_paint, &f);
           // draw normally
           layer.set_matrix(&self.state.matrix.into());
           f(layer, &layer_paint);
         }
-
 
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
@@ -247,14 +253,8 @@ impl Context2D{
       },
       _ => {
         self.with_canvas(|canvas| {
-          if let Some(shadow_paint) = self.paint_for_shadow(paint){
-            canvas.save();
-            canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
-            canvas.concat(&self.state.matrix);
-            f(canvas, &shadow_paint);
-            canvas.restore();
-          }
-
+          // draw the dropshadow (if applicable)
+          self.render_shadow(canvas, paint, &f);
           // draw with the normal paint
           f(canvas, paint);
         });
@@ -536,7 +536,7 @@ impl Context2D{
             false => {
               let mut traced_path = Path::default();
               fill_path_with_paint(path, &paint, &mut traced_path, None, None);
-              traced_path      
+              traced_path
             }
           };
           path_1d_path_effect::new(
@@ -563,15 +563,33 @@ impl Context2D{
   }
 
   pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint> {
-    let State {shadow_color, shadow_blur, shadow_offset, ..} = self.state;
+    let State {shadow_color, mut shadow_blur, shadow_offset, ..} = self.state;
     if shadow_color.a() == 0 || (shadow_blur == 0.0 && shadow_offset.is_zero()){
       return None
     }
 
-    let sigma_x = shadow_blur / (2.0 * self.state.matrix.scale_x());
-    let sigma_y = shadow_blur / (2.0 * self.state.matrix.scale_y());
+    // Per spec, sigma is exactly half the blur radius:
+    // https://www.w3.org/TR/css-backgrounds-3/#shadow-blur
+    shadow_blur *= 0.5;
+    let mut sigma = Point::new(shadow_blur, shadow_blur);
+    // Apply scaling from the current transform matrix to blur radius, if there is any of either.
+    if self.state.matrix.get_type().contains(TypeMask::SCALE) && !almost_zero(shadow_blur) {
+      // Decompose the matrix to just the scaling factors (matrix.scale_x/y() methods just return M11/M22 values)
+      if let Some(scale) = self.state.matrix.decompose_scale(None) {
+        if almost_zero(scale.width) {
+          sigma.x = 0.0;
+        } else {
+          sigma.x /= scale.width as f32;
+        }
+        if almost_zero(scale.height) {
+          sigma.y = 0.0;
+        } else {
+          sigma.y /= scale.height as f32;
+        }
+      }
+    }
     let mut paint = base_paint.clone();
-    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma_x, sigma_y), shadow_color, None, None, None));
+    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma.x, sigma.y), shadow_color, ColorSpace::new_srgb(), None, None));
     Some(paint)
   }
 
