@@ -12,12 +12,14 @@ const BLACK = [0,0,0,255],
       MAGIC = {
         jpg: Buffer.from([0xFF, 0xD8, 0xFF]),
         png: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+        webp: Buffer.from([0x52, 0x49, 0x46, 0x46]),
         pdf: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d]),
         svg: Buffer.from(`<?xml version`, 'utf-8')
       },
       MIME = {
         png: "image/png",
         jpg: "image/jpeg",
+        webp: "image/webp",
         pdf: "application/pdf",
         svg: "image/svg+xml"
       };
@@ -177,6 +179,21 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.png
+      for (let path of findTmp(`*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+
+    test("WEBPs", async ()=>{
+      await Promise.all([
+        canvas.saveAs(`${TMP}/output1.webp`),
+        canvas.saveAs(`${TMP}/output2.WEBP`),
+        canvas.saveAs(`${TMP}/output3`, {format:'webp'}),
+        canvas.saveAs(`${TMP}/output4.svg`, {format:'webp'}),
+      ])
+
+      let magic = MAGIC.webp
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
@@ -347,6 +364,21 @@ describe("Canvas", ()=>{
       canvas.saveAsSync(`${TMP}/output4.svg`, {format:'png'})
 
       let magic = MAGIC.png
+      for (let path of findTmp(`*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+
+    test("WEBPs", async ()=>{
+      await Promise.all([
+        canvas.saveAsSync(`${TMP}/output1.webp`),
+        canvas.saveAsSync(`${TMP}/output2.WEBP`),
+        canvas.saveAsSync(`${TMP}/output3`, {format:'webp'}),
+        canvas.saveAsSync(`${TMP}/output4.svg`, {format:'webp'}),
+      ])
+
+      let magic = MAGIC.webp
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)

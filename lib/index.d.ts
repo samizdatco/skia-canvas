@@ -23,7 +23,7 @@ export class Image extends globalThis.Image {
 // Canvas
 //
 
-export type ExportFormat = "png" | "jpg" | "jpeg" | "pdf" | "svg";
+export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "pdf" | "svg";
 
 export interface RenderOptions {
   /** Page to export: Defaults to 1 (i.e., first page) */
@@ -79,6 +79,7 @@ export class Canvas {
   get svg(): Promise<Buffer>
   get jpg(): Promise<Buffer>
   get png(): Promise<Buffer>
+  get webp(): Promise<Buffer>
 }
 
 //

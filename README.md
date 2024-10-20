@@ -206,7 +206,7 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 | Image Dimensions             | Rendering Contexts            | Output                                           |
 | --                           | --                            | --                                               |
 | [**width**][canvas_width]    | [**gpu**][canvas_gpu] ⚡      | ~~[**async**][canvas_async]~~  ⚡                    |
-| [**height**][canvas_height]  | [**pages**][canvas_pages] ⚡  | [**pdf**, **png**, **svg**, **jpg**][shorthands] ⚡ |
+| [**height**][canvas_height]  | [**pages**][canvas_pages] ⚡  | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] ⚡ |
 |                              | [getContext()][getContext]    | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
 |                              | [newPage()][newPage] ⚡       | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡                        |
 |                              |                               | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] ⚡ |
@@ -222,7 +222,7 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 [newPage]: #newpagewidth-height
 [toDataURL_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
 [toDataURL_ext]: #todataurlformat-page-matte-density-quality-outline
-[shorthands]: #pdf-svg-jpg-and-png
+[shorthands]: #pdf-svg-jpg-webp-and-png
 
 #### Creating new `Canvas` objects
 
@@ -239,7 +239,7 @@ When the canvas renders images and writes them to disk, it does so in a backgrou
   - [`saveAs()`][saveAs]
   - [`toBuffer()`][toBuffer]
   - [`toDataURL()`][toDataURL_ext]
-  - [`.pdf`, `.svg`, `.jpg`, and `.png`][shorthands]
+  - [`.pdf`, `.svg`, `.jpg`, `.webp`, and `.png`][shorthands]
 
 
 In cases where this is not the desired behavior, you can use the synchronous equivalents for the primary export functions. They accept identical arguments to their async versions but block execution and return their values synchronously rather than wrapped in Promises. Also note that the [shorthand properties][shorthands] do not have synchronous versions:
@@ -277,7 +277,7 @@ The `.gpu` attribute allows you to control whether rendering occurs on the graph
 
 The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the `newPage()` method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
 
-#### `.pdf`, `.svg`, `.jpg`, and `.png`
+#### `.pdf`, `.svg`, `.jpg`, `.webp`, and `.png`
 
 These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
 
