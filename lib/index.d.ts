@@ -1,11 +1,9 @@
 /// <reference lib="dom"/>
 /// <reference types="node" />
 
-export class DOMMatrix extends globalThis.DOMMatrix {}
 export class DOMPoint extends globalThis.DOMPoint {}
 export class DOMRect extends globalThis.DOMRect {}
 export class CanvasGradient extends globalThis.CanvasGradient {}
-export class CanvasPattern extends globalThis.CanvasPattern {}
 export class CanvasTexture {}
 
 //
@@ -17,6 +15,19 @@ export class ImageData extends globalThis.ImageData {}
 export class Image extends globalThis.Image {
   get src(): string
   set src(src: string | Buffer)
+}
+
+//
+// DOMMatrix
+//
+
+type FixedLenArray<T, L extends number> = T[] & { length: L };
+type MatrixParameter = [DOMMatrix] | [{ a: number, b: number, c: number, d: number, e: number, f: number }] | [FixedLenArray<number, 6>] | [FixedLenArray<number, 16>]
+type MatrixArgument = MatrixParameter | FixedLenArray<number, 6> | FixedLenArray<number, 16>
+
+export class DOMMatrix extends globalThis.DOMMatrix {
+  constructor(...matrix: MatrixArgument)
+  clone(): DOMMatrix
 }
 
 //
@@ -83,6 +94,14 @@ export class Canvas {
 }
 
 //
+// CanvasPattern
+//
+
+export class CanvasPattern extends globalThis.CanvasPattern {
+  setTransform(...matrix: MatrixArgument): void;
+}
+
+//
 // Context
 //
 
@@ -140,9 +159,9 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   lineDashFit: "move" | "turn" | "follow";
 
   get currentTransform(): DOMMatrix
-  set currentTransform(matrix: DOMMatrix)
+  set currentTransform(matrix: MatrixParameter)
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
-  transform(...args: [matrix: DOMMatrix] | [a: number, b: number, c: number, d: number, e: number, f: number]): void;
+  transform(...matrix: MatrixArgument): void;
 
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
   roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[]): void
@@ -199,7 +218,7 @@ export class Path2D extends globalThis.Path2D {
   points(step?: number): readonly [x: number, y: number][]
   round(radius: number): Path2D
   simplify(rule?: "nonzero" | "evenodd"): Path2D
-  transform(...args: [matrix: DOMMatrix] | [a: number, b: number, c: number, d: number, e: number, f: number]): Path2D;
+  transform(...matrix: MatrixArgument): Path2D;
   trim(start: number, end: number, inverted?: boolean): Path2D;
   trim(start: number, inverted?: boolean): Path2D;
 
