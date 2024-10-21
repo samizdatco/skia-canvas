@@ -142,7 +142,7 @@ impl VulkanEngine {
                     device.handle().as_raw() as _,
                     (
                         queue.handle().as_raw() as _,
-                        queue.queue_index() as usize
+                        queue.queue_family_index() as usize
                     ),
                     &get_proc,
                 )
