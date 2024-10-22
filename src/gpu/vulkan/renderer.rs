@@ -1,40 +1,42 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
-use std::{sync::{Arc, Mutex}, cell::RefCell, ptr};
 use ash::vk::Handle;
+use std::{
+    cell::RefCell,
+    ptr,
+    sync::{Arc, Mutex},
+};
 use vulkano::{
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue,
         QueueCreateInfo, QueueFlags,
     },
-    image::{
-        view::ImageView, ImageUsage,
-    },
+    image::{view::ImageView, ImageUsage},
+    instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass},
     swapchain::{
-        acquire_next_image, PresentMode, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo
+        acquire_next_image, PresentMode, Surface, Swapchain, SwapchainAcquireFuture,
+        SwapchainCreateInfo, SwapchainPresentInfo,
     },
     sync::{self, GpuFuture},
-    instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
-    VulkanLibrary, Validated, VulkanError, VulkanObject,
+    Validated, VulkanError, VulkanLibrary, VulkanObject,
 };
 
 use skia_safe::{
-    gpu::{self, backend_render_targets, surfaces, direct_contexts, vk},
-    ColorType
+    gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
+    ColorType,
 };
 
 #[cfg(feature = "window")]
 use winit::{
-    dpi::{PhysicalSize, LogicalSize},
-    event_loop::ActiveEventLoop, 
-    window::Window
+    dpi::{LogicalSize, PhysicalSize},
+    event_loop::ActiveEventLoop,
+    window::Window,
 };
 
 thread_local!(
     static VK_SHARED_QUEUE: RefCell<Option<Arc<Queue>>> = const { RefCell::new(None) };
 );
-
 
 pub struct VulkanRenderer {
     queue: Arc<Queue>,
@@ -50,20 +52,18 @@ unsafe impl Send for VulkanRenderer {}
 
 #[cfg(feature = "window")]
 impl VulkanRenderer {
-    pub fn for_window(event_loop:&ActiveEventLoop, window:Arc<Window>) -> Self{
+    pub fn for_window(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
         VK_SHARED_QUEUE.with(|cell| {
             // lazily set up a shared instance, device, and queue to use for all subsequent renderers
             let mut shared_queue = cell.borrow_mut();
-            let queue = shared_queue.get_or_insert_with(||
-                build_queue(event_loop, window.clone())
-            );
+            let queue = shared_queue.get_or_insert_with(|| build_queue(event_loop, window.clone()));
 
             // Extract references to key structs from the queue
             let library = queue.device().instance().library();
             let instance = queue.device().instance();
             let device = queue.device();
             let queue = queue.clone();
-                    
+
             // Before we can render to a window, we must first create a `vulkano::swapchain::Surface`
             // object from it, which represents the drawable surface of a window. For that we must wrap
             // the `winit::window::Window` in an `Arc`.
@@ -113,7 +113,7 @@ impl VulkanRenderer {
                         image_extent: window_size.into(),
 
                         image_usage: ImageUsage::COLOR_ATTACHMENT,
-                        
+
                         image_format,
 
                         // The present_mode affects what is commonly known as "vertical sync" or "vsync" for short.
@@ -124,7 +124,7 @@ impl VulkanRenderer {
                         //
                         // Only `Fifo` is guaranteed to be supported on every device. For the others, you must call
                         // [`surface_present_modes`] to see if they are supported.
-                        present_mode: PresentMode::Fifo,                    
+                        present_mode: PresentMode::Fifo,
 
                         // The alpha mode indicates how the alpha value of the final image will behave.
                         // For example, you can choose whether the window will be
@@ -160,7 +160,7 @@ impl VulkanRenderer {
                         // msaa-renderpass.rs.
                         samples: 1,
                         // `load_op: DontCare` means that the initial contents of the attachment haven't been
-                        // 'cleared' ahead of time (i.e., the pixels haven't all been set to a single color). 
+                        // 'cleared' ahead of time (i.e., the pixels haven't all been set to a single color).
                         // This is fine since we'll be filling the entire framebuffer with skia's output
                         load_op: DontCare,
                         // `store_op: Store` means that we ask the GPU to store the output of the draw
@@ -193,7 +193,7 @@ impl VulkanRenderer {
             // Rendering to an image of that swapchain will not produce any error, but may or may not
             // work. To continue rendering, we need to recreate the swapchain by creating a new
             // swapchain. Here, we remember that we need to do this for the next loop iteration.
-            // 
+            //
             // Since we haven't allocated framebuffers yet, we'll start in an invalid state to flag that
             // they need to be recreated before we render.
             let swapchain_is_valid = false;
@@ -206,10 +206,10 @@ impl VulkanRenderer {
             // avoid that, we store the submission of the previous frame here.
             let last_render = Some(sync::now(device.clone()).boxed());
 
-            // Next we need to connect Skia's gpu backend to the device & queue we've set up. 
+            // Next we need to connect Skia's gpu backend to the device & queue we've set up.
             let skia_ctx = unsafe {
                 // In order to access the vulkan api, we need to give skia some lookup routines
-                // to find the expected function pointers for our configured instance & device. 
+                // to find the expected function pointers for our configured instance & device.
                 let get_proc = |gpo| {
                     let get_device_proc_addr = instance.fns().v1_0.get_device_proc_addr;
 
@@ -223,27 +223,30 @@ impl VulkanRenderer {
                             get_device_proc_addr(vk_device, name)
                         }
                     }
-                    .map(|f| f as _ )
-                    .unwrap_or_else(||{
+                    .map(|f| f as _)
+                    .unwrap_or_else(|| {
                         println!("Vulkan: failed to resolve {}", gpo.name().to_str().unwrap());
                         ptr::null()
-                    })                
+                    })
                 };
-                
+
                 // We then pass skia_safe references to the whole shebang, resulting in a DirectContext
                 // from which we'll be able to get a canvas reference that draws directly to framebuffers
-                // on the swapchain. 
+                // on the swapchain.
                 let direct_context = direct_contexts::make_vulkan(
                     &vk::BackendContext::new(
                         instance.handle().as_raw() as _,
                         device.physical_device().handle().as_raw() as _,
                         device.handle().as_raw() as _,
-                        ( queue.handle().as_raw() as _, 
-                        queue.queue_family_index() as usize ),
+                        (
+                            queue.handle().as_raw() as _,
+                            queue.queue_family_index() as usize,
+                        ),
                         &get_proc,
-                    ), 
-                    None
-                ).unwrap();
+                    ),
+                    None,
+                )
+                .unwrap();
 
                 Arc::new(Mutex::new(direct_context))
             };
@@ -264,17 +267,16 @@ impl VulkanRenderer {
         self.invalidate_swapchain();
     }
 
-    fn invalidate_swapchain(&mut self){
+    fn invalidate_swapchain(&mut self) {
         // Typically called when the window size changes and we need to recreate framebufffers
         self.swapchain_is_valid = false;
     }
 
-    fn prepare_swapchain(&mut self, window:&Window){
+    fn prepare_swapchain(&mut self, window: &Window) {
         // Whenever the window resizes we need to recreate everything dependent on the
         // window size. In this example that includes the swapchain & the framebuffers
-        let window_size:PhysicalSize<u32> = window.inner_size();
-        if window_size.width>0 && window_size.height > 0 && !self.swapchain_is_valid{
-
+        let window_size: PhysicalSize<u32> = window.inner_size();
+        if window_size.width > 0 && window_size.height > 0 && !self.swapchain_is_valid {
             // Use the new dimensions of the window.
             let (new_swapchain, new_images) = self
                 .swapchain
@@ -292,7 +294,7 @@ impl VulkanRenderer {
                 .iter()
                 .map(|image| {
                     let view = ImageView::new_default(image.clone()).unwrap();
-        
+
                     Framebuffer::new(
                         self.render_pass.clone(),
                         FramebufferCreateInfo {
@@ -308,22 +310,18 @@ impl VulkanRenderer {
         }
     }
 
-    fn get_next_frame(&mut self) -> Option<(u32, SwapchainAcquireFuture)>{
+    fn get_next_frame(&mut self) -> Option<(u32, SwapchainAcquireFuture)> {
         // prepare to render by identifying the next framebuffer to draw to and acquiring the
         // GpuFuture that we'll be replacing `last_render` with once we submit the frame
-        let (image_index, suboptimal, acquire_future) = match acquire_next_image(
-            self.swapchain.clone(),
-            None,
-        )
-        .map_err(Validated::unwrap)
-        {
-            Ok(r) => r,
-            Err(VulkanError::OutOfDate) => {
-                self.swapchain_is_valid = false;
-                return None;
-            }
-            Err(e) => panic!("failed to acquire next image: {e}"),
-        };
+        let (image_index, suboptimal, acquire_future) =
+            match acquire_next_image(self.swapchain.clone(), None).map_err(Validated::unwrap) {
+                Ok(r) => r,
+                Err(VulkanError::OutOfDate) => {
+                    self.swapchain_is_valid = false;
+                    return None;
+                }
+                Err(e) => panic!("failed to acquire next image: {e}"),
+            };
 
         // `acquire_next_image` can be successful, but suboptimal. This means that the
         // swapchain image will still work, but it may not display correctly. With some
@@ -333,9 +331,9 @@ impl VulkanRenderer {
             self.swapchain_is_valid = false;
         }
 
-        if self.swapchain_is_valid{
+        if self.swapchain_is_valid {
             Some((image_index, acquire_future))
-        }else{
+        } else {
             None
         }
     }
@@ -348,26 +346,26 @@ impl VulkanRenderer {
         self.prepare_swapchain(window);
 
         // find the next framebuffer to render into and acquire a new GpuFuture to block on
-        let next_frame = self.get_next_frame().or_else(||{
+        let next_frame = self.get_next_frame().or_else(|| {
             // if suboptimal or out-of-date, recreate the swapchain if it just became invalid
             self.prepare_swapchain(window);
             self.get_next_frame()
         });
-        
-        if let Some((image_index, acquire_future)) = next_frame{
+
+        if let Some((image_index, acquire_future)) = next_frame {
             // pull the appropriate framebuffer from the swapchain and attach a skia Surface to it
             let framebuffer = self.framebuffers[image_index as usize].clone();
             let mut surface = surface_for_framebuffer(self.skia_ctx.clone(), framebuffer.clone());
-            
-            // use the display's DPI to convert the window size to logical coords and pre-scale the 
+
+            // use the display's DPI to convert the window size to logical coords and pre-scale the
             // canvas's matrix to match
-            let extent:PhysicalSize<u32> = window.inner_size();
-            let size:LogicalSize<f32> = extent.to_logical(window.scale_factor());
+            let extent: PhysicalSize<u32> = window.inner_size();
+            let size: LogicalSize<f32> = extent.to_logical(window.scale_factor());
             let scale = (
                 (f64::from(extent.width) / size.width as f64) as f32,
                 (f64::from(extent.height) / size.height as f64) as f32,
             );
-            
+
             let canvas = surface.canvas();
             canvas.reset_matrix();
             canvas.scale(scale);
@@ -376,10 +374,11 @@ impl VulkanRenderer {
             f(canvas, size);
 
             // flush the canvas's contents to the framebuffer
-            self.skia_ctx.clone().lock().unwrap().flush_and_submit();    
-            
+            self.skia_ctx.clone().lock().unwrap().flush_and_submit();
+
             // send the framebuffer to the gpu and display it on screen
-            self.last_render = self.last_render
+            self.last_render = self
+                .last_render
                 .take()
                 .unwrap()
                 .join(acquire_future)
@@ -396,17 +395,21 @@ impl VulkanRenderer {
                     // will keep accumulating and you will eventually reach an out of memory error.
                     // Calling this function polls various fences in order to determine what the GPU
                     // has already processed, and frees the resources that are no longer needed.
-                    f.cleanup_finished(); 
+                    f.cleanup_finished();
                     f.boxed()
-                }).ok();            
+                })
+                .ok();
         }
-        
+
         Ok(())
     }
 }
 
-// Create a skia `Surface` (and its associated `.canvas()`) whose render target is the specified `Framebuffer`. 
-fn surface_for_framebuffer(skia_ctx:Arc<Mutex<gpu::DirectContext>>, framebuffer:Arc<Framebuffer>) -> skia_safe::Surface{
+// Create a skia `Surface` (and its associated `.canvas()`) whose render target is the specified `Framebuffer`.
+fn surface_for_framebuffer(
+    skia_ctx: Arc<Mutex<gpu::DirectContext>>,
+    framebuffer: Arc<Framebuffer>,
+) -> skia_safe::Surface {
     let [width, height] = framebuffer.extent();
     let image_access = &framebuffer.attachments()[0];
     let image_object = image_access.image().handle().as_raw();
@@ -414,9 +417,10 @@ fn surface_for_framebuffer(skia_ctx:Arc<Mutex<gpu::DirectContext>>, framebuffer:
     let format = image_access.format();
 
     let (vk_format, color_type) = match format {
-        vulkano::format::Format::B8G8R8A8_UNORM => {
-            (skia_safe::gpu::vk::Format::B8G8R8A8_UNORM, ColorType::BGRA8888)
-        }
+        vulkano::format::Format::B8G8R8A8_UNORM => (
+            skia_safe::gpu::vk::Format::B8G8R8A8_UNORM,
+            ColorType::BGRA8888,
+        ),
         _ => panic!("unsupported color format {:?}", format),
     };
 
@@ -447,12 +451,12 @@ fn surface_for_framebuffer(skia_ctx:Arc<Mutex<gpu::DirectContext>>, framebuffer:
         gpu::SurfaceOrigin::TopLeft,
         color_type,
         None,
-        None
-    ).unwrap()    
+        None,
+    )
+    .unwrap()
 }
 
-
-fn build_queue(event_loop: &ActiveEventLoop, window:Arc<Window>) -> Arc<Queue>{
+fn build_queue(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Arc<Queue> {
     let library = VulkanLibrary::new().unwrap();
 
     // The first step of any Vulkan program is to create an instance.
@@ -486,7 +490,7 @@ fn build_queue(event_loop: &ActiveEventLoop, window:Arc<Window>) -> Arc<Queue>{
 
     // In order to select the proper queue family we need a reference to the window's surface
     // so we can check whether the queue supports it. Note that in a future vulkano release
-    // this requirement will go away once it can check for `presentation_support` from the 
+    // this requirement will go away once it can check for `presentation_support` from the
     // event_loop's display (see commented usage below…)
     let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
 
@@ -525,7 +529,8 @@ fn build_queue(event_loop: &ActiveEventLoop, window:Arc<Window>) -> Arc<Queue>{
                     // that queues in this queue family are capable of presenting images to the
                     // surface.
                     q.queue_flags.intersects(QueueFlags::GRAPHICS)
-                        && p.surface_support(i as u32, &surface).unwrap_or(false) // v0.34
+                        && p.surface_support(i as u32, &surface).unwrap_or(false)
+                    // v0.34
                     //  && p.presentation_support(_i as u32, event_loop).unwrap() // unreleased
                 })
                 // The code here searches for the first queue family that is suitable. If none
@@ -590,5 +595,5 @@ fn build_queue(event_loop: &ActiveEventLoop, window:Arc<Window>) -> Arc<Queue>{
     // Since we can request multiple queues, the `queues` variable is in fact an iterator. We
     // only use one queue in this example, so we just retrieve the first and only element of
     // the iterator.
-    queues.next().unwrap()                    
+    queues.next().unwrap()
 }
