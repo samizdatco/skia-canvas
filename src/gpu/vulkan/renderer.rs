@@ -331,11 +331,7 @@ impl VulkanRenderer {
             self.swapchain_is_valid = false;
         }
 
-        if self.swapchain_is_valid {
-            Some((image_index, acquire_future))
-        } else {
-            None
-        }
+        Some((image_index, acquire_future))
     }
 
     pub fn draw<F: FnOnce(&skia_safe::Canvas, LogicalSize<f32>)>(
