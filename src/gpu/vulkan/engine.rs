@@ -108,7 +108,7 @@ impl VulkanEngine {
         )
         .or(Err("Vulkan: Failed to create device"))?;
 
-        let queue = queues.next().ok_or("Vulkan: Failed to create queue")?;
+        let queue = queues.next().ok_or("Vulkan: Failed to create graphics queue")?;
 
         let context = {
             let get_proc = |of| unsafe {
