@@ -132,9 +132,15 @@ impl VulkanRenderer {
                         composite_alpha: surface_capabilities
                             .supported_composite_alpha
                             .into_iter()
-                            .next()
-                            .unwrap(),
-
+                            .min_by_key(|mode| {
+                                // prefer transparency (TODO: this should be dependent on window background…)
+                                match mode {
+                                    CompositeAlpha::PostMultiplied => 1,
+                                    CompositeAlpha::PreMultiplied => 2,
+                                    CompositeAlpha::Opaque => 3,
+                                    _ => 3,
+                                }
+                            }).unwrap(),                
                         ..Default::default()
                     },
                 )
