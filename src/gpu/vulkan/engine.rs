@@ -2,14 +2,8 @@
 // #![allow(unused_imports)]
 use std::ptr;
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use skia_safe::{ImageInfo, ISize, Surface, ColorSpace};
-use skia_safe::gpu::{direct_contexts, surfaces, DirectContext, Budgeted, SurfaceOrigin};
-use skia_safe::gpu::vk::{BackendContext, GetProcOf};
-
-use skulpin_renderer::{CoordinateSystem, Renderer, RendererBuilder};
-use skulpin_renderer::rafx::api::RafxExtents2D;
 use vulkano::{
     VulkanLibrary, VulkanObject, Handle,
     device::{
@@ -19,11 +13,9 @@ use vulkano::{
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
 };
 
-#[cfg(feature = "window")]
-use winit::{
-    dpi::{LogicalSize, PhysicalSize},
-    window::Window,
-};
+use skia_safe::{ImageInfo, ISize, Surface, ColorSpace};
+use skia_safe::gpu::{direct_contexts, surfaces, DirectContext, Budgeted, SurfaceOrigin};
+use skia_safe::gpu::vk::{BackendContext, GetProcOf};
 
 thread_local!(
     static VK_CONTEXT: RefCell<Option<VulkanEngine>> = const { RefCell::new(None) };
@@ -179,55 +171,5 @@ impl VulkanEngine {
 
     pub fn status() -> Option<String>{
         VK_STATUS.with(|err_cell| err_cell.borrow().clone())
-    }
-}
-
-
-pub struct VulkanRenderer {
-    skulpin: Arc<Mutex<Renderer>>,
-}
-
-unsafe impl Send for VulkanRenderer {}
-
-#[cfg(feature = "window")]
-impl VulkanRenderer {
-    pub fn for_window(window: &Window) -> Self {
-        let window_size = window.inner_size();
-        let window_extents = RafxExtents2D {
-            width: window_size.width,
-            height: window_size.height,
-        };
-
-        let skulpin = RendererBuilder::new()
-            .coordinate_system(CoordinateSystem::Logical)
-            .build(&window, window_extents)
-            .unwrap();
-        let skulpin = Arc::new(Mutex::new(skulpin));
-        VulkanRenderer { skulpin }
-    }
-
-    pub fn resize(&self, _size: PhysicalSize<u32>) {
-
-    }
-
-    pub fn draw<F: FnOnce(&skia_safe::Canvas, LogicalSize<f32>)>(
-        &mut self,
-        window: &Window,
-        f: F,
-    ) -> Result<(), String> {
-        let size = window.inner_size();
-        let window_extents = RafxExtents2D {
-            width: size.width,
-            height: size.height,
-        };
-
-        self.skulpin.lock().unwrap().draw(
-            window_extents,
-            window.scale_factor(),
-            |canvas, coords| {
-                let size = coords.window_logical_size();
-                f(canvas, LogicalSize::new(size.width as f32, size.height as f32))
-            }
-        ).map_err(|e| format!("Rendering error {:?}", e))
     }
 }

@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use skia_safe::{Matrix, Color, Paint};
 use serde::{Serialize, Deserialize};
 use winit::{
@@ -49,7 +50,7 @@ pub enum Cursor {
     SResize, SwResize, Text, VerticalText, Wait, WResize, ZoomIn, ZoomOut, 
 }
 pub struct Window {
-    pub handle: WinitWindow,
+    pub handle: Arc<WinitWindow>,
     pub proxy: EventLoopProxy<CanvasEvent>,
     pub renderer: Renderer,
     pub fit: Fit,
@@ -68,13 +69,13 @@ impl Window {
             .with_title(spec.title.clone())
             .with_visible(false)
             .with_resizable(spec.resizable);
-        let handle = event_loop.create_window(window_attributes).unwrap();
+        let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         if let (Some(left), Some(top)) = (spec.left, spec.top){
             handle.set_outer_position(LogicalPosition::new(left, top));
         }
 
-        let renderer = Renderer::for_window(&handle);
+        let renderer = Renderer::for_window(&event_loop, handle.clone());
         let background = match css_to_color(&spec.background){
             Some(color) => color,
             None => {
@@ -86,7 +87,7 @@ impl Window {
         Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, background }
     }
 
-    pub fn resize(&self, size: PhysicalSize<u32>){
+    pub fn resize(&mut self, size: PhysicalSize<u32>){
         if let Some(monitor) = self.handle.current_monitor(){
             self.renderer.resize(size);
 

@@ -20,6 +20,7 @@ use winit::{
     platform::macos::WindowExtMacOS,
     window::Window,
     raw_window_handle::HasWindowHandle,
+    event_loop::ActiveEventLoop,
 };
 
 thread_local!(static MTL_CONTEXT: RefCell<Option<MetalEngine>> = const { RefCell::new(None) } );
@@ -94,7 +95,7 @@ unsafe impl Send for MetalRenderer {}
 
 #[cfg(feature = "window")]
 impl MetalRenderer {
-    pub fn for_window(window: &Window) -> Self {
+    pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
         let device = Device::system_default().expect("no device found");
         
         let raw_window_handle = window
