@@ -19,7 +19,7 @@ impl<T:FnMut(Value, &mut WindowManager) -> NeonResult<()>> Roundtrip for T {}
 pub struct App<F:Roundtrip>{
     windows: WindowManager,
     cadence: Cadence,
-    callback: F
+    callback: F,
 }
 
 impl<F:Roundtrip> App<F>{
@@ -46,10 +46,11 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
     }
 
     fn new_events(&mut self, event_loop:&ActiveEventLoop, cause:StartCause) { 
-        // trigger a Render if the cadence is active, otherwise handle UI events in MainEventsCleared
-        event_loop.set_control_flow(
-            self.cadence.on_next_frame(|| add_event(CanvasEvent::Render) )
-        );
+        if cause == StartCause::Init{
+            // on initial pass, do a roundtrip to sync up the Window object's state attrs:
+            // send just the initial window positions then read back all state
+            self.initial_sync();
+        }
     }
 
     fn window_event( &mut self, event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
@@ -59,7 +60,11 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
         // handle window lifecycle events
         match event {
             WindowEvent::Destroyed | WindowEvent::CloseRequested => {
-                self.windows.remove(&window_id);
+                self.windows.remove(&window_id);                
+                if self.windows.is_empty() {
+                    // quit after the last window is closed
+                    event_loop.exit(); 
+                }
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -114,24 +119,19 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
     }
 
     fn about_to_wait(&mut self, event_loop:&ActiveEventLoop) { 
-        // on initial pass, do a roundtrip to sync up the Window object's state attrs:
-        // send just the initial window positions then read back all state
-        if self.cadence.at_startup(){
-            self.initial_sync();
-        }
-        
         // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
         // a Render event, so only do a roundtrip if there are new UI events to be relayed
         if !self.cadence.active() && self.windows.has_ui_changes() {
             self.roundtrip();
         }
 
-        // quit after the last window is closed
-        match (self.windows.len(), self.cadence.active()) {
-            (0, _) => event_loop.exit(),
-            (_, false) => event_loop.set_control_flow(ControlFlow::Wait),
-            _ => event_loop.set_control_flow(ControlFlow::Poll)
-        };
+        // delegate timing to the cadence if active, otherwise wait for ui events
+        event_loop.set_control_flow( 
+            match self.cadence.active(){
+                true => self.cadence.on_next_frame(|| add_event(CanvasEvent::Render) ),
+                false => ControlFlow::Wait
+            }
+        );
     }
 
 }
@@ -140,8 +140,7 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
 struct Cadence{
     rate: u64,
     last: Instant,
-    wakeup: Duration,
-    render: Duration,
+    interval: Duration,
     begun: bool,
 }
 
@@ -150,8 +149,7 @@ impl Default for Cadence {
         Self{
             rate: 0,
             last: Instant::now(),
-            render: Duration::new(0, 0),
-            wakeup: Duration::new(0, 0),
+            interval: Duration::new(0, 0),
             begun: false,
         }
     }
@@ -168,29 +166,23 @@ impl Cadence{
 
     fn set_frame_rate(&mut self, rate:u64){
         if rate == self.rate{ return }
-
         let frame_time = 1_000_000_000/rate.max(1);
-        let watch_interval = 1_000_000.max(frame_time/10);
-        self.render = Duration::from_nanos(frame_time);
-        self.wakeup = Duration::from_nanos(frame_time - watch_interval);
+        self.interval = Duration::from_nanos(frame_time);
         self.rate = rate;
     }
 
     fn on_next_frame<F:Fn()>(&mut self, draw:F) -> ControlFlow{
-        if !self.active(){
-            return ControlFlow::Wait;
-        }
-
-        if self.last.elapsed() >= self.render{
-            while self.last < Instant::now() - self.render{
-                self.last += self.render
-            }
-            draw();
-        }
-
-        match self.last.elapsed() < self.wakeup {
-            true => ControlFlow::WaitUntil(self.last + self.wakeup),
-            false => ControlFlow::Poll,
+        match self.active() {
+            true => {
+                if self.last.elapsed() >= self.interval{
+                    while self.last < Instant::now() - self.interval{
+                        self.last += self.interval
+                    }
+                    draw();
+                }        
+                ControlFlow::WaitUntil(self.last + self.interval)
+            },
+            false => ControlFlow::Wait,
         }
     }
 

@@ -205,6 +205,10 @@ impl WindowManager {
     pub fn len(&self) -> usize {
         self.windows.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.windows.len() == 0
+    }
 }
 
 
