@@ -33,7 +33,7 @@ use winit::{
 };
 
 thread_local!(
-    static BACKENDS: RefCell<Option<HashMap<WindowId, SkiaBackend>>> = const { RefCell::new(None) };
+    static BACKEND: RefCell<Option<SkiaBackend>> = const { RefCell::new(None) };
 );
 
 pub struct VulkanRenderer {
@@ -264,10 +264,9 @@ impl VulkanRenderer {
         self.prepare_swapchain(window);
         
         if let Some((image_index, acquire_future)) = self.get_next_frame() {
-            BACKENDS.with(|cell| {
+            BACKEND.with(|cell| {
                 let mut cell = cell.borrow_mut();
-                let dict = cell.get_or_insert_with(||{ HashMap::new() });
-                let backend = dict.entry(window.id()).or_insert_with(|| SkiaBackend::for_renderer(self));
+                let backend = cell.get_or_insert_with(||{ SkiaBackend::for_renderer(self) });
 
                 // pull the appropriate framebuffer and create a skia Surface that renders to it
                 let framebuffer = self.framebuffers[image_index as usize].clone();
@@ -293,11 +292,7 @@ impl VulkanRenderer {
 
 impl Drop for VulkanRenderer {
     fn drop(&mut self) {
-        BACKENDS.with(|cell| {
-            if let Some(dict) = cell.borrow_mut().as_mut(){
-                dict.remove(&self.id);
-            }
-        });
+        BACKEND.with(|cell| *cell.borrow_mut() = None );
     }
 }
 
