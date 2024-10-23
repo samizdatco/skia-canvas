@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use winit::{
   dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize}, 
   event::{ElementState, Ime, KeyEvent, Modifiers, MouseButton, MouseScrollDelta, WindowEvent}, 
-  keyboard::{ModifiersState, KeyCode, PhysicalKey::Code},
+  keyboard::{ModifiersState, KeyCode, KeyLocation, PhysicalKey::Code, Key::{Character, Named}},
   platform::scancode::PhysicalKeyExtScancode, 
   window::{CursorIcon, WindowId}
 };
@@ -53,7 +53,7 @@ pub enum UiEvent{
   #[allow(non_snake_case)]
   Wheel{deltaX:f32, deltaY:f32},
   Move{left:f32, top:f32},
-  Keyboard{event:String, key:KeyCode, code:u32, repeat:bool},
+  Keyboard{event:String, key:String, code:KeyCode, location:u32, repeat:bool},
   Input(String),
   Mouse(String),
   Focus(bool),
@@ -163,7 +163,7 @@ impl Sieve{
       }
 
       WindowEvent::KeyboardInput { event: KeyEvent {
-          physical_key:Code(key_code), state, repeat, ..
+          physical_key:Code(key_code), logical_key, state, repeat, location, ..
       }, .. } => {
 
         let event_type = match state {
@@ -171,14 +171,26 @@ impl Sieve{
           ElementState::Released => "keyup",
         }.to_string();
 
-        if event_type == "keyup" || !repeat {
-          self.queue.push(UiEvent::Keyboard{
-            event: event_type,
-            key: key_code.clone(),
-            code: key_code.to_scancode().unwrap_or(0),
-            repeat: *repeat
-          });
-        }
+        let key_text = match logical_key{
+          Named(n) => serde_json::from_value(json!(n)).unwrap(),
+          Character(c) => c.to_string(),
+          _ => String::new()
+        };
+
+        let key_location = match location{
+          KeyLocation::Standard => 0,
+          KeyLocation::Left => 1,
+          KeyLocation::Right => 2,
+          KeyLocation::Numpad => 3,
+        };
+
+        self.queue.push(UiEvent::Keyboard{
+          event: event_type,
+          key: key_text,
+          code: key_code.clone(),
+          location: key_location,
+          repeat: *repeat
+        });
       }
 
       _ => {}
