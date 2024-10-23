@@ -33,7 +33,7 @@ use winit::{
 };
 
 thread_local!(
-    static SHARED_QUEUE: RefCell<Option<Arc<Queue>>> = const { RefCell::new(None) };
+    static INSTANCE: RefCell<Option<Arc<Instance>>> = const { RefCell::new(None) };
     static BACKENDS: RefCell<Option<HashMap<WindowId, SkiaBackend>>> = const { RefCell::new(None) };
 );
 
@@ -50,19 +50,86 @@ pub struct VulkanRenderer {
 #[cfg(feature = "window")]
 impl VulkanRenderer {
     pub fn for_window(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
-        SHARED_QUEUE.with(|cell| {
-            // lazily set up a shared instance, device, and queue to use for all subsequent renderers
-            let mut shared_queue = cell.borrow_mut();
-            let queue = shared_queue.get_or_insert_with(|| 
-                build_queue(event_loop, window.clone())
+        INSTANCE.with(|cell| {
+            let mut shared_instance = cell.borrow_mut();
+            let instance = shared_instance.get_or_insert_with(|| {
+                let library = VulkanLibrary::new().unwrap();
+                let required_extensions = Surface::required_extensions(event_loop);
+    
+                Instance::new(
+                    library,
+                    InstanceCreateInfo {
+                        flags: InstanceCreateFlags::ENUMERATE_PORTABILITY, // support MoltenVK
+                        enabled_extensions: required_extensions,
+                        ..Default::default()
+                    },
+                )
+                .expect(&format!("Vulkan: could not create instance supporting: {:?}", required_extensions))    
+            });
+    
+            let device_extensions = DeviceExtensions {
+                khr_swapchain: true, // we need a swapchain to manage repainting the window
+                ..DeviceExtensions::empty()
+            };
+        
+            let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
+        
+            // Collect the list of available devices & queues then select ‘best’ one for our needs
+            let (physical_device, queue_family_index) = instance
+                .enumerate_physical_devices()
+                .unwrap()
+                .filter(|p| {
+                    // omit devices that don't support our swapchain requirement
+                    p.supported_extensions().contains(&device_extensions)
+                })
+                .filter_map(|p| {
+                    // for each device, find a graphics queue family that can handle our surface type
+                    // and filter out any devices that don't have one
+                    p.queue_family_properties()
+                        .iter()
+                        .enumerate()
+                        .position(|(i, q)| {
+                            q.queue_flags.intersects(QueueFlags::GRAPHICS)
+                                && p.surface_support(i as u32, &surface).unwrap_or(false)
+                            //  && p.presentation_support(_i as u32, event_loop).unwrap() // unreleased
+                        })
+                        .map(|i| (p, i as u32))
+                })
+                .min_by_key(|(p, _)| {
+                    // Sort the list of acceptible devices/queues to try to find the fastest
+                    match p.properties().device_type {
+                        PhysicalDeviceType::DiscreteGpu => 0,
+                        PhysicalDeviceType::IntegratedGpu => 1,
+                        PhysicalDeviceType::VirtualGpu => 2,
+                        PhysicalDeviceType::Cpu => 3,
+                        PhysicalDeviceType::Other => 4,
+                        _ => 5,
+                    }
+                })
+                .expect("Vulkan: no suitable physical device found");
+        
+            // Print out the device we selected
+            println!(
+                "Using device: {} (type: {:?})",
+                physical_device.properties().device_name,
+                physical_device.properties().device_type,
             );
-
-            // Extract references to key structs from the queue
-            let instance = queue.device().instance();
-            let device = queue.device();
-            let physical_device = device.physical_device();
-            let queue = queue.clone();
-            let id = window.id();
+        
+            // Use the physical device we selected to initialize a device with a single queue
+            let (device, mut queues) = Device::new(
+                physical_device.clone(),
+                DeviceCreateInfo {
+                    enabled_extensions: device_extensions,
+                    queue_create_infos: vec![QueueCreateInfo {
+                        queue_family_index,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            )
+            .expect("Vulkan: device initialization failed");
+        
+            let queue = queues.next().unwrap();
 
             // Create a swapchain to manage frame buffers and vsync
             let (swapchain, _images) = {
@@ -125,7 +192,7 @@ impl VulkanRenderer {
             let swapchain_is_valid = false;
 
             Self {
-                id,
+                id:window.id(),
                 queue,
                 swapchain,
                 swapchain_is_valid,
@@ -226,7 +293,7 @@ impl VulkanRenderer {
                 f(canvas, LogicalSize::from_physical(size, dpr));
                 
                 // display the result
-                backend.flush_framebuffer(&self, image_index, acquire_future);
+                backend.flush_framebuffer(self, image_index, acquire_future);
             }
         });    
 
@@ -317,7 +384,7 @@ impl SkiaBackend{
                 skia_safe::gpu::vk::Format::B8G8R8A8_UNORM,
                 ColorType::BGRA8888,
             ),
-            _ => panic!("unsupported color format {:?}", format),
+            _ => panic!("Vulkan: unsupported color format {:?}", format),
         };
     
         let image_info = &unsafe {
@@ -351,12 +418,15 @@ impl SkiaBackend{
         .unwrap()
     }
 
-    fn flush_framebuffer(&mut self, renderer:&VulkanRenderer, image_index:u32, acquire_future:SwapchainAcquireFuture){
+    fn flush_framebuffer(&mut self, renderer:&mut VulkanRenderer, image_index:u32, acquire_future:SwapchainAcquireFuture){
+        // reclaim leftover resources from the last frame
+        self.last_render.as_mut().unwrap().cleanup_finished();
+
         // flush the canvas's contents to the framebuffer
         self.skia_ctx.flush_and_submit();
 
         // send the framebuffer to the gpu and display it on screen
-        self.last_render = self
+        let future = self
             .last_render
             .take()
             .unwrap()
@@ -368,91 +438,21 @@ impl SkiaBackend{
                     image_index,
                 ),
             )
-            .then_signal_fence_and_flush()
-            .map(|mut f| {
-                // Release resources from previous renders
-                f.cleanup_finished();
-                f.boxed()
-            })
-            .ok();        
-    }
-}
+            .then_signal_fence_and_flush();
 
-fn build_queue(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Arc<Queue> {
-    let library = VulkanLibrary::new().unwrap();
-    let required_extensions = Surface::required_extensions(event_loop);
-    let instance = Instance::new(
-        library,
-        InstanceCreateInfo {
-            flags: InstanceCreateFlags::ENUMERATE_PORTABILITY, // support MoltenVK
-            enabled_extensions: required_extensions,
-            ..Default::default()
-        },
-    )
-    .unwrap();
-
-    let device_extensions = DeviceExtensions {
-        khr_swapchain: true, // we need a swapchain to manage repainting the window
-        ..DeviceExtensions::empty()
-    };
-
-    let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
-
-    // Collect the list of available devices & queues then select ‘best’ one for our needs
-    let (physical_device, queue_family_index) = instance
-        .enumerate_physical_devices()
-        .unwrap()
-        .filter(|p| {
-            // omit devices that don't support our swapchain requirement
-            p.supported_extensions().contains(&device_extensions)
-        })
-        .filter_map(|p| {
-            // for each device, find a graphics queue family that can handle our surface type
-            // and filter out any devices that don't have one
-            p.queue_family_properties()
-                .iter()
-                .enumerate()
-                .position(|(i, q)| {
-                    q.queue_flags.intersects(QueueFlags::GRAPHICS)
-                        && p.surface_support(i as u32, &surface).unwrap_or(false)
-                    // v0.34
-                    //  && p.presentation_support(_i as u32, event_loop).unwrap() // unreleased
-                })
-                .map(|i| (p, i as u32))
-        })
-        .min_by_key(|(p, _)| {
-            // Sort the list of acceptible devices/queues to try to find the fastest
-            match p.properties().device_type {
-                PhysicalDeviceType::DiscreteGpu => 0,
-                PhysicalDeviceType::IntegratedGpu => 1,
-                PhysicalDeviceType::VirtualGpu => 2,
-                PhysicalDeviceType::Cpu => 3,
-                PhysicalDeviceType::Other => 4,
-                _ => 5,
+        match future.map_err(Validated::unwrap) {
+            Ok(future) => {
+                self.last_render = Some(future.boxed());
             }
-        })
-        .expect("Vulkan: no suitable physical device found");
+            Err(VulkanError::OutOfDate) => {
+                let device = renderer.queue.device();
+                self.last_render = Some(sync::now(device.clone()).boxed());
+                renderer.swapchain_is_valid = false;
+            }
+            Err(e) => {
+                panic!("Vulkan: swapchain flush failed: {e}");
+            }
+        };
 
-    // Print out the device we selected
-    println!(
-        "Using device: {} (type: {:?})",
-        physical_device.properties().device_name,
-        physical_device.properties().device_type,
-    );
-
-    // Use the physical device we selected to initialize a device with a single queue
-    let (_, mut queues) = Device::new(
-        physical_device,
-        DeviceCreateInfo {
-            enabled_extensions: device_extensions,
-            queue_create_infos: vec![QueueCreateInfo {
-                queue_family_index,
-                ..Default::default()
-            }],
-            ..Default::default()
-        },
-    )
-    .expect("Vulkan: device initialization failed");
-
-    queues.next().unwrap()
+    }
 }
