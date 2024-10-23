@@ -33,10 +33,8 @@ use winit::{
 };
 
 thread_local!(
-    static INSTANCE: RefCell<Option<Arc<Instance>>> = const { RefCell::new(None) };
     static BACKENDS: RefCell<Option<HashMap<WindowId, SkiaBackend>>> = const { RefCell::new(None) };
 );
-
 
 pub struct VulkanRenderer {
     id: WindowId,
@@ -50,156 +48,155 @@ pub struct VulkanRenderer {
 #[cfg(feature = "window")]
 impl VulkanRenderer {
     pub fn for_window(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
-        INSTANCE.with(|cell| {
-            let mut shared_instance = cell.borrow_mut();
-            let instance = shared_instance.get_or_insert_with(|| {
-                let library = VulkanLibrary::new().unwrap();
-                let required_extensions = Surface::required_extensions(event_loop);
-    
-                Instance::new(
-                    library,
-                    InstanceCreateInfo {
-                        flags: InstanceCreateFlags::ENUMERATE_PORTABILITY, // support MoltenVK
-                        enabled_extensions: required_extensions,
-                        ..Default::default()
-                    },
-                )
-                .expect(&format!("Vulkan: could not create instance supporting: {:?}", required_extensions))    
-            });
-    
-            let device_extensions = DeviceExtensions {
-                khr_swapchain: true, // we need a swapchain to manage repainting the window
-                ..DeviceExtensions::empty()
-            };
-        
-            let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
-        
-            // Collect the list of available devices & queues then select ‘best’ one for our needs
-            let (physical_device, queue_family_index) = instance
-                .enumerate_physical_devices()
-                .unwrap()
-                .filter(|p| {
-                    // omit devices that don't support our swapchain requirement
-                    p.supported_extensions().contains(&device_extensions)
-                })
-                .filter_map(|p| {
-                    // for each device, find a graphics queue family that can handle our surface type
-                    // and filter out any devices that don't have one
-                    p.queue_family_properties()
-                        .iter()
-                        .enumerate()
-                        .position(|(i, q)| {
-                            q.queue_flags.intersects(QueueFlags::GRAPHICS)
-                                && p.surface_support(i as u32, &surface).unwrap_or(false)
-                            //  && p.presentation_support(_i as u32, event_loop).unwrap() // unreleased
-                        })
-                        .map(|i| (p, i as u32))
-                })
-                .min_by_key(|(p, _)| {
-                    // Sort the list of acceptible devices/queues to try to find the fastest
-                    match p.properties().device_type {
-                        PhysicalDeviceType::DiscreteGpu => 0,
-                        PhysicalDeviceType::IntegratedGpu => 1,
-                        PhysicalDeviceType::VirtualGpu => 2,
-                        PhysicalDeviceType::Cpu => 3,
-                        PhysicalDeviceType::Other => 4,
-                        _ => 5,
-                    }
-                })
-                .expect("Vulkan: no suitable physical device found");
-        
-            // Print out the device we selected
-            println!(
-                "Using device: {} (type: {:?})",
-                physical_device.properties().device_name,
-                physical_device.properties().device_type,
-            );
-        
-            // Use the physical device we selected to initialize a device with a single queue
-            let (device, mut queues) = Device::new(
-                physical_device.clone(),
-                DeviceCreateInfo {
-                    enabled_extensions: device_extensions,
-                    queue_create_infos: vec![QueueCreateInfo {
-                        queue_family_index,
-                        ..Default::default()
-                    }],
+        let instance = {
+            let library = VulkanLibrary::new().unwrap();
+            let required_extensions = Surface::required_extensions(event_loop);
+
+            Instance::new(
+                library,
+                InstanceCreateInfo {
+                    flags: InstanceCreateFlags::ENUMERATE_PORTABILITY, // support MoltenVK
+                    enabled_extensions: required_extensions,
                     ..Default::default()
                 },
             )
-            .expect("Vulkan: device initialization failed");
-        
-            let queue = queues.next().unwrap();
+            .expect(&format!("Vulkan: could not create instance supporting: {:?}", required_extensions))    
+        };
 
-            // Create a swapchain to manage frame buffers and vsync
-            let (swapchain, _images) = {
-                // inspect the window to determine the type of framebuffer needed
-                let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
-                let surface_capabilities = physical_device
-                    .surface_capabilities(&surface, Default::default())
-                    .unwrap();
-                let (image_format, _) = physical_device
-                    .surface_formats(&surface, Default::default())
-                    .unwrap()[0];
+        let device_extensions = DeviceExtensions {
+            khr_swapchain: true, // we need a swapchain to manage repainting the window
+            ..DeviceExtensions::empty()
+        };
+    
+        let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
+    
+        // Collect the list of available devices & queues then select ‘best’ one for our needs
+        let (physical_device, queue_family_index) = instance
+            .enumerate_physical_devices()
+            .unwrap()
+            .filter(|p| {
+                // omit devices that don't support our swapchain requirement
+                p.supported_extensions().contains(&device_extensions)
+            })
+            .filter_map(|p| {
+                // for each device, find a graphics queue family that can handle our surface type
+                // and filter out any devices that don't have one
+                p.queue_family_properties()
+                    .iter()
+                    .enumerate()
+                    .position(|(i, q)| {
+                        q.queue_flags.intersects(QueueFlags::GRAPHICS)
+                            && p.surface_support(i as u32, &surface).unwrap_or(false)
+                        //  && p.presentation_support(_i as u32, event_loop).unwrap() // unreleased
+                    })
+                    .map(|i| (p, i as u32))
+            })
+            .min_by_key(|(p, _)| {
+                // Sort the list of acceptible devices/queues to try to find the fastest
+                match p.properties().device_type {
+                    PhysicalDeviceType::DiscreteGpu => 0,
+                    PhysicalDeviceType::IntegratedGpu => 1,
+                    PhysicalDeviceType::VirtualGpu => 2,
+                    PhysicalDeviceType::Cpu => 3,
+                    PhysicalDeviceType::Other => 4,
+                    _ => 5,
+                }
+            })
+            .expect("Vulkan: no suitable physical device found");
+    
+        // Print out the device we selected
+        println!(
+            "Using device: {} (type: {:?})",
+            physical_device.properties().device_name,
+            physical_device.properties().device_type,
+        );
+    
+        // Use the physical device we selected to initialize a device with a single queue
+        let (device, mut queues) = Device::new(
+            physical_device.clone(),
+            DeviceCreateInfo {
+                enabled_extensions: device_extensions,
+                queue_create_infos: vec![QueueCreateInfo {
+                    queue_family_index,
+                    ..Default::default()
+                }],
+                ..Default::default()
+            },
+        )
+        .expect("Vulkan: device initialization failed");
+    
+        let queue = queues.next().unwrap();
 
-                Swapchain::new(
-                    device.clone(),
-                    surface,
-                    SwapchainCreateInfo {
-                        image_format,
-                        image_extent: window.inner_size().into(),
-                        image_usage: ImageUsage::COLOR_ATTACHMENT,
-                        composite_alpha: surface_capabilities
-                            .supported_composite_alpha
-                            .into_iter()
-                            .min_by_key(|mode| {
-                                // prefer transparency (TODO: this should be dependent on window background…)
-                                match mode {
-                                    CompositeAlpha::PostMultiplied => 1,
-                                    CompositeAlpha::PreMultiplied => 2,
-                                    CompositeAlpha::Opaque => 3,
-                                    _ => 3,
-                                }
-                            })
-                            .unwrap(),
-                        ..Default::default()
-                    },
-                )
-                .unwrap()
-            };
+        // Create a swapchain to manage frame buffers and vsync
+        let (swapchain, _images) = {
+            // inspect the window to determine the type of framebuffer needed
+            let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
+            let surface_capabilities = physical_device
+                .surface_capabilities(&surface, Default::default())
+                .unwrap();
+            let (image_format, _) = physical_device
+                .surface_formats(&surface, Default::default())
+                .unwrap()[0];
 
-            // Define the layout of the framebuffers and their role in the graphics pipeline
-            let render_pass = vulkano::single_pass_renderpass!(
+            Swapchain::new(
                 device.clone(),
-                attachments: {
-                    canvas_img: {
-                        format: swapchain.image_format(),
-                        samples: 1, // no need for MSAA since we're rendering 1:1
-                        load_op: Clear, // don't clear framebuffers ahead of time
-                        store_op: DontCare, // we don't need the bitmap back after display
-                    },
-                },
-                pass: {
-                    // the only attachment will be the bitmap rendered by skia
-                    color: [canvas_img],
-                    depth_stencil: {},
+                surface,
+                SwapchainCreateInfo {
+                    image_format,
+                    image_extent: window.inner_size().into(),
+                    image_usage: ImageUsage::COLOR_ATTACHMENT,
+                    min_image_count: surface_capabilities.min_image_count.max(2),
+                    composite_alpha: surface_capabilities
+                        .supported_composite_alpha
+                        .into_iter()
+                        .min_by_key(|mode| {
+                            // prefer transparency (TODO: this should be dependent on window background…)
+                            match mode {
+                                CompositeAlpha::PostMultiplied => 1,
+                                CompositeAlpha::PreMultiplied => 2,
+                                CompositeAlpha::Opaque => 3,
+                                _ => 3,
+                            }
+                        })
+                        .unwrap(),
+                    ..Default::default()
                 },
             )
-            .unwrap();
+            .unwrap()
+        };
 
-            // Start with no framebuffers and flag that they need to be allocated before rendering
-            let framebuffers = vec![];
-            let swapchain_is_valid = false;
+        // Define the layout of the framebuffers and their role in the graphics pipeline
+        let render_pass = vulkano::single_pass_renderpass!(
+            device.clone(),
+            attachments: {
+                canvas_img: {
+                    format: swapchain.image_format(),
+                    samples: 1, // no need for MSAA since we're rendering 1:1
+                    load_op: DontCare, // don't clear framebuffers ahead of time
+                    store_op: DontCare, // we don't need the bitmap back after display
+                },
+            },
+            pass: {
+                // the only attachment will be the bitmap rendered by skia
+                color: [canvas_img],
+                depth_stencil: {},
+            },
+        )
+        .unwrap();
 
-            Self {
-                id:window.id(),
-                queue,
-                swapchain,
-                swapchain_is_valid,
-                render_pass,
-                framebuffers,
-            }
-        })
+        // Start with no framebuffers and flag that they need to be allocated before rendering
+        let framebuffers = vec![];
+        let swapchain_is_valid = false;
+
+        Self {
+            id:window.id(),
+            queue,
+            swapchain,
+            swapchain_is_valid,
+            render_pass,
+            framebuffers,
+        }
+
     }
 
     pub fn resize(&mut self, _size: PhysicalSize<u32>) {
@@ -263,21 +260,15 @@ impl VulkanRenderer {
         window: &Window,
         f: F,
     ) -> Result<(), String> {
+        // make sure the framebuffers match the current window size
         self.prepare_swapchain(window);
+        
+        if let Some((image_index, acquire_future)) = self.get_next_frame() {
+            BACKENDS.with(|cell| {
+                let mut cell = cell.borrow_mut();
+                let dict = cell.get_or_insert_with(||{ HashMap::new() });
+                let backend = dict.entry(window.id()).or_insert_with(|| SkiaBackend::for_renderer(self));
 
-        // find the next framebuffer to render into and acquire a new GpuFuture to block on
-        let next_frame = self.get_next_frame().or_else(|| {
-            // if suboptimal or out-of-date, recreate the swapchain since it just became invalid
-            self.prepare_swapchain(window);
-            self.get_next_frame()
-        });
-
-        BACKENDS.with(|cell| {
-            let mut cell = cell.borrow_mut();
-            let dict = cell.get_or_insert_with(||{ HashMap::new() });
-            let backend = dict.entry(window.id()).or_insert_with(|| SkiaBackend::for_renderer(self));
-
-            if let Some((image_index, acquire_future)) = next_frame {
                 // pull the appropriate framebuffer and create a skia Surface that renders to it
                 let framebuffer = self.framebuffers[image_index as usize].clone();
                 let mut surface = backend.surface_for_framebuffer(framebuffer.clone());
@@ -294,9 +285,8 @@ impl VulkanRenderer {
                 
                 // display the result
                 backend.flush_framebuffer(self, image_index, acquire_future);
-            }
-        });    
-
+            });    
+        }
         Ok(())
     }
 }
