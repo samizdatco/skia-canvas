@@ -23,65 +23,88 @@ use winit::{
     event_loop::ActiveEventLoop,
 };
 
-thread_local!(static MTL_CONTEXT: RefCell<Option<MetalEngine>> = const { RefCell::new(None) } );
+thread_local!(
+    static MTL_CONTEXT: RefCell<Option<MetalEngine>> = const { RefCell::new(None) };
+    static MTL_STATUS: RefCell<Value> = const { RefCell::new(Value::Null) };
+);
 
 pub struct MetalEngine {
     context: DirectContext,
 }
 
 impl MetalEngine {
-    fn init() {
-        MTL_CONTEXT.with(|cell| {
-            let mut local_ctx = cell.borrow_mut();
+    pub fn supported() -> bool {
+        MTL_CONTEXT.with_borrow_mut(|local_ctx| {
             if local_ctx.is_none(){
-                if let Some(ctx) = MetalEngine::new() {
-                    local_ctx.replace(ctx);
-                }
+                *local_ctx = {
+                    let (device, direct_context) = Device::system_default().map(|device| {
+                        let command_queue = device.new_command_queue();
+                        let backend_context = unsafe {
+                            mtl::BackendContext::new(
+                                device.as_ptr() as mtl::Handle,
+                                command_queue.as_ptr() as mtl::Handle,
+                            )
+                        };
+                        let direct_context = direct_contexts::make_metal(&backend_context, None)
+                            .map(|context| MetalEngine{context});
+                        (Some(device), direct_context)
+                    }).unwrap_or((None, None));
+
+                    Self::set_status(match device {
+                        Some(device) => json!({
+                            "renderer": "GPU",
+                            "api": "Metal",
+                            "device": format!("{} GPU ({})", match device.location(){
+                                MTLDeviceLocation::BuiltIn => "Integrated GPU",
+                                MTLDeviceLocation::Slot => "Discrete GPU",
+                                MTLDeviceLocation::External => "External GPU",
+                                _ => "Other"
+                            }, device.name()),
+                            "error": Value::Null,
+                        }),
+                        None => json!({
+                            "renderer": "CPU",
+                            "api": "Metal",
+                            "device": "CPU-based renderer (Fallback)",
+                            "error": "GPU initialization failed",
+
+                        })
+                    });
+
+                    direct_context
+                };
+            }
+
+            local_ctx.is_some()
+        })
+    }
+
+    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
+        MTL_CONTEXT.with_borrow(|local_ctx| {
+            match local_ctx.is_some() || MetalEngine::supported(){
+                true => surfaces::render_target(
+                    &mut local_ctx.as_ref()?.context.clone(),
+                    Budgeted::Yes,
+                    image_info,
+                    Some(4),
+                    SurfaceOrigin::BottomLeft,
+                    None,
+                    true,
+                    None
+                ),
+                false => None
             }
         })
     }
 
-    pub fn supported() -> bool {
-        Self::init();
-        MTL_CONTEXT.with(|cell| cell.borrow().is_some() )
+    pub fn set_status(msg: Value) {
+        MTL_STATUS.with_borrow_mut(|status| *status = msg);
     }
 
-    pub fn new() -> Option<Self> {
-      let device = Device::system_default()?;
-      let command_queue = device.new_command_queue();
-      let backend_context = unsafe {
-          mtl::BackendContext::new(
-              device.as_ptr() as mtl::Handle,
-              command_queue.as_ptr() as mtl::Handle,
-          )
-      };
-      direct_contexts::make_metal(&backend_context, None)
-        .map(|context| MetalEngine{context})
+    pub fn status() -> Value {
+        MTL_STATUS.with_borrow(|err_cell| err_cell.clone() )
     }
 
-    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
-        Self::init();
-        MTL_CONTEXT.with(|cell| {
-            let local_ctx = cell.borrow();
-            let mut context = local_ctx.as_ref().unwrap().context.clone();
-
-            surfaces::render_target(
-                &mut context,
-                Budgeted::Yes,
-                image_info,
-                Some(4),
-                SurfaceOrigin::BottomLeft,
-                None,
-                true,
-                None
-            )
-        })
-    }
-
-    pub fn status() -> Option<String>{
-        Self::init();
-        None
-    }
 }
 
 
