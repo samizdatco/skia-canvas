@@ -143,7 +143,7 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
 
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
-  roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[])
+  roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[]): void
   // getContextAttributes(): CanvasRenderingContext2DSettings;
 
   fillText(text: string, x: number, y:number, maxWidth?: number): void
@@ -183,7 +183,7 @@ export class Path2D extends globalThis.Path2D {
     weight: number
   ): void
 
-  roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[])
+  roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[]): void
 
   complement(otherPath: Path2D): Path2D
   difference(otherPath: Path2D): Path2D
