@@ -61,11 +61,18 @@ pub struct Window {
 impl Window {
     pub fn new(event_loop:&ActiveEventLoop, proxy:EventLoopProxy<CanvasEvent>, spec: &mut WindowSpec, page: &Page) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
+        let background = match css_to_color(&spec.background){
+            Some(color) => color,
+            None => {
+                spec.background = "rgba(16,16,16,0.85)".to_string();
+                css_to_color(&spec.background).unwrap()
+            }
+        };
 
         let window_attributes = WinitWindow::default_attributes()
             .with_fullscreen(if spec.fullscreen{ Some(Fullscreen::Borderless(None)) }else{ None })
             .with_inner_size(size)
-            .with_transparent(true)
+            .with_transparent(background.a() < 255)
             .with_title(spec.title.clone())
             .with_visible(false)
             .with_resizable(spec.resizable);
@@ -76,13 +83,6 @@ impl Window {
         }
 
         let renderer = Renderer::for_window(&event_loop, handle.clone());
-        let background = match css_to_color(&spec.background){
-            Some(color) => color,
-            None => {
-                spec.background = "rgba(16,16,16,0.85)".to_string();
-                css_to_color(&spec.background).unwrap()
-            }
-        };
 
         Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, background }
     }
