@@ -1,8 +1,6 @@
-#![allow(dead_code)]
-// #![allow(unused_imports)]
-use std::cell::RefCell;
-use std::ptr;
-use std::sync::Arc;
+#![allow(unused_imports)]
+use std::{cell::RefCell, sync::Arc, ptr};
+use serde_json::{json, Value};
 
 use vulkano::{
     device::{
@@ -19,9 +17,10 @@ use skia_safe::{ColorSpace, ISize, ImageInfo, Surface};
 
 thread_local!(
     static VK_CONTEXT: RefCell<Option<VulkanEngine>> = const { RefCell::new(None) };
-    static VK_STATUS: RefCell<Option<String>> = const { RefCell::new(None) };
+    static VK_STATUS: RefCell<Value> = const { RefCell::new(Value::Null) };
 );
 
+#[allow(dead_code)]
 pub struct VulkanEngine {
     context: DirectContext,
     library: Arc<VulkanLibrary>,
@@ -33,15 +32,21 @@ pub struct VulkanEngine {
 
 impl VulkanEngine {
     fn init() {
-        VK_CONTEXT.with(|cell| {
-            let mut local_ctx = cell.borrow_mut();
+        VK_CONTEXT.with_borrow_mut(|local_ctx| {
             if local_ctx.is_none() {
                 match VulkanEngine::new() {
                     Ok(ctx) => {
                         local_ctx.replace(ctx);
                     }
                     Err(msg) => {
-                        Self::set_status(msg);
+                        Self::set_status(
+                            json!({
+                                "renderer": "CPU",
+                                "api": "Vulkan",
+                                "device": "CPU-based renderer (Fallback)",
+                                "error": msg,
+                            })
+                        );                        
                     }
                 }
             }
@@ -59,7 +64,7 @@ impl VulkanEngine {
     }
 
     fn new() -> Result<Self, String> {
-        let library = VulkanLibrary::new().or(Err("Vulkan: not installed"))?;
+        let library = VulkanLibrary::new().or(Err("Vulkan libraries not found on system"))?;
 
         let instance = Instance::new(
             Arc::clone(&library),
@@ -68,7 +73,7 @@ impl VulkanEngine {
                 ..Default::default()
             },
         )
-        .or(Err("Vulkan: Could not create instance"))?;
+        .or(Err("Could not create Vulkan instance"))?;
 
         let (physical_device, queue_family_index) = instance
             .enumerate_physical_devices()
@@ -88,14 +93,24 @@ impl VulkanEngine {
                 PhysicalDeviceType::Other => 4,
                 _ => 5,
             })
-            .ok_or("Vulkan: No suitable physical device found")?;
+            .ok_or("No suitable Vulkan physical device found")?;
 
-        Self::set_status(format!(
-            "Vulkan on {} ({:?})",
-            physical_device.properties().device_name,
-            physical_device.properties().device_type,
-        ));
+        let (mode, gpu_type) = match physical_device.properties().device_type {
+            PhysicalDeviceType::IntegratedGpu => ("GPU", Some("Integrated")),
+            PhysicalDeviceType::DiscreteGpu => ("GPU", Some("Discrete")),
+            PhysicalDeviceType::VirtualGpu => ("GPU", Some("Virtual")),
+            _ => ("CPU", None)
+        };
 
+        Self::set_status(json!({
+            "renderer": mode,
+            "device": gpu_type.map(|t| format!("{} GPU ({})", 
+                t, physical_device.properties().device_name)
+            ),
+            "api": "Vulkan",
+            "error": Value::Null,
+        }));
+   
         let (device, mut queues) = Device::new(
             physical_device.clone(),
             DeviceCreateInfo {
@@ -106,9 +121,9 @@ impl VulkanEngine {
                 ..Default::default()
             },
         )
-        .or(Err("Vulkan: Failed to create device"))?;
+        .or(Err("Failed to create Vulkan device"))?;
 
-        let queue = queues.next().ok_or("Vulkan: Failed to create graphics queue")?;
+        let queue = queues.next().ok_or("Failed to create Vulkan graphics queue")?;
 
         let context = {
             let get_proc = |of| unsafe {
@@ -125,7 +140,7 @@ impl VulkanEngine {
                 }
                 .map(|f| f as _)
                 .unwrap_or_else(|| {
-                    println!("Vulkan: failed to resolve {}", of.name().to_str().unwrap());
+                    println!("Failed to resolve Vulkan proc `{}`", of.name().to_str().unwrap());
                     ptr::null()
                 })
             };
@@ -143,7 +158,7 @@ impl VulkanEngine {
             };
             direct_contexts::make_vulkan(&backend_context, None)
         }
-        .ok_or("Vulkan: Failed to create context")?;
+        .ok_or("Failed to create Vulkan backend context")?;
 
         Ok(Self {
             context,
@@ -174,11 +189,12 @@ impl VulkanEngine {
         })
     }
 
-    pub fn set_status(msg: String) {
-        VK_STATUS.with(|status| status.borrow_mut().replace(msg));
+    pub fn set_status(msg: Value) {
+        VK_STATUS.with_borrow_mut(|status| *status = msg);
     }
 
-    pub fn status() -> Option<String> {
-        VK_STATUS.with(|err_cell| err_cell.borrow().clone())
+    pub fn status() -> Value {
+        VK_STATUS.with_borrow(|err_cell| err_cell.clone() )
     }
+
 }
