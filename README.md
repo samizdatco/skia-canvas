@@ -831,9 +831,9 @@ Its attributes and methods include:
 | Dimensions               | Content                          | Interface            | Mode                         | Methods            |
 | --                       | --                               | --                   | --                           | --                 |
 | [**left**][win_layout]   | [**background**][win_background] | [**title**][title]   | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind]  |
-| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor] | [**fullscreen**][fullscreen] | [off()][win_bind]  |
-| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]       |                              | [close()][close] |
-| [**height**][win_layout] | [**page**][win_page]             |                      |                              |    | 
+| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor] | [**resizable**][resizable]   | [off()][win_bind]  |
+| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]       | [**fullscreen**][fullscreen] | [close()][close]   |
+| [**height**][win_layout] | [**page**][win_page]             |                      |                              |                    | 
 
 [win_background]: #background
 [win_canvas]: #canvas-1
@@ -844,6 +844,7 @@ Its attributes and methods include:
 [cursor]: #cursor
 [fit]: #fit
 [visible]: #visible
+[resizable]: #resizable
 [fullscreen]: #fullscreen
 [win_bind]: #on--off--once
 [close]: #close
@@ -1053,6 +1054,9 @@ When the window is resized, it is likely that it will not perfectly match the as
 
 #### `visible`
 When set to `false`, the window will become invisible but will not be permanently ‘closed’. It can be made visible again by setting the property back to `true`.
+
+#### `resizable`
+When set to `false`, the window’s size will become fixed and the zoom button in the title bar will be disabled. It can be made user-resizable again by setting the property back to `true`. Note that if the window is set to `fullscreen` its dimensions may still change. If you want to prevent that as well be sure to set up a `keydown` event listener that calls the event’s `preventDefault` on **⌘F** and **Alt-F4** presses so the user can’t switch to fullscreen mode.
 
 #### `fullscreen`
 A boolean flag determining whether the window should expand to fill the screen.
