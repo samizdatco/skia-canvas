@@ -33,11 +33,10 @@ use winit::{
 };
 
 thread_local!(
-    static BACKEND: RefCell<Option<SkiaBackend>> = const { RefCell::new(None) };
+    static BACKEND: RefCell<Option<VulkanBackend>> = const { RefCell::new(None) };
 );
 
 pub struct VulkanRenderer {
-    id: WindowId,
     queue: Arc<Queue>,
     swapchain: Arc<Swapchain>,
     framebuffers: Vec<Arc<Framebuffer>>,
@@ -103,14 +102,7 @@ impl VulkanRenderer {
                 }
             })
             .expect("Vulkan: no suitable physical device found");
-    
-        // Print out the device we selected
-        println!(
-            "Using device: {} (type: {:?})",
-            physical_device.properties().device_name,
-            physical_device.properties().device_type,
-        );
-    
+        
         // Use the physical device we selected to initialize a device with a single queue
         let (device, mut queues) = Device::new(
             physical_device.clone(),
@@ -189,7 +181,6 @@ impl VulkanRenderer {
         let swapchain_is_valid = false;
 
         Self {
-            id:window.id(),
             queue,
             swapchain,
             swapchain_is_valid,
@@ -264,9 +255,8 @@ impl VulkanRenderer {
         self.prepare_swapchain(window);
         
         if let Some((image_index, acquire_future)) = self.get_next_frame() {
-            BACKEND.with(|cell| {
-                let mut cell = cell.borrow_mut();
-                let backend = cell.get_or_insert_with(||{ SkiaBackend::for_renderer(self) });
+            BACKEND.with_borrow_mut(|cell| {
+                let backend = cell.get_or_insert_with(||{ VulkanBackend::for_renderer(self) });
 
                 // pull the appropriate framebuffer and create a skia Surface that renders to it
                 let framebuffer = self.framebuffers[image_index as usize].clone();
@@ -292,17 +282,17 @@ impl VulkanRenderer {
 
 impl Drop for VulkanRenderer {
     fn drop(&mut self) {
-        BACKEND.with(|cell| *cell.borrow_mut() = None );
+        BACKEND.with_borrow_mut(|cell| *cell = None );
     }
 }
 
-struct SkiaBackend{
+struct VulkanBackend{
     // each renderer's non-Send references need to be lazily allocated on the window's thread
     last_render: Option<Box<dyn GpuFuture>>,
     skia_ctx: gpu::DirectContext,
 }
 
-impl SkiaBackend{
+impl VulkanBackend{
     fn for_renderer(renderer:&VulkanRenderer) -> Self{
         let queue = renderer.queue.clone();
         let device = queue.device();
