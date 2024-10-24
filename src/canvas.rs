@@ -70,7 +70,6 @@ pub fn set_async(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-
 pub fn get_engine(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let this = this.borrow();
@@ -88,6 +87,15 @@ pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   }
 
   Ok(cx.undefined())
+}
+
+pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let this = this.borrow();
+
+  let details = this.engine.status();
+
+  Ok(cx.string(details.to_string()))
 }
 
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {

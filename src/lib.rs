@@ -102,7 +102,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   cx.export_function("Canvas_get_engine", canvas::get_engine)?;
   cx.export_function("Canvas_set_engine", canvas::set_engine)?;
-
+  cx.export_function("Canvas_get_engine_status", canvas::get_engine_status)?;
+  
   cx.export_function("Canvas_get_width", canvas::get_width)?;
   cx.export_function("Canvas_set_width", canvas::set_width)?;
   cx.export_function("Canvas_get_height", canvas::get_height)?;

@@ -1,5 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 use skia_safe::{ImageInfo, Surface, surfaces};
+use serde_json::Value;
 
 #[cfg(feature = "metal")]
 mod metal;
@@ -22,7 +23,13 @@ struct Engine { }
 impl Engine {
     pub fn supported() -> bool { false }
     pub fn surface(_: &ImageInfo) -> Option<Surface> { None }
-}
+    pub fn status() -> Value { serde_json::json!({
+        "renderer": "CPU",
+        "api": Value::Null,
+        "device": "CPU-based renderer (compiled without GPU support)",
+        "error": Value::Null,
+    })}
+} 
 
 #[cfg(feature = "metal")]
 pub use crate::gpu::metal::autoreleasepool as runloop;
@@ -55,5 +62,16 @@ impl RenderingEngine{
             Self::GPU => Engine::surface(image_info),
             Self::CPU => surfaces::raster(image_info, None, None)
         }
+    }
+
+    pub fn status(&self) -> serde_json::Value {
+        let mut status = Engine::status();
+        if let Self::CPU = self{
+            if Engine::supported(){
+                status["renderer"] = Value::String("CPU".to_string());
+                status["device"] = Value::String("CPU-based renderer (GPU manually disabled)".to_string())
+            }
+        }
+        status
     }
 }
