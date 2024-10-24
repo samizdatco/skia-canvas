@@ -4,7 +4,7 @@ use serde_json::json;
 use std::collections::HashSet;
 use winit::{
   dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize}, 
-  event::{ElementState, Ime, KeyEvent, Modifiers, MouseButton, MouseScrollDelta, WindowEvent}, 
+  event::{ElementState, KeyEvent, Modifiers, MouseButton, MouseScrollDelta, WindowEvent}, 
   keyboard::{ModifiersState, KeyCode, KeyLocation, PhysicalKey::Code, Key::{Character, Named}},
   platform::scancode::PhysicalKeyExtScancode, 
   window::{CursorIcon, WindowId}
@@ -112,10 +112,6 @@ impl Sieve{
         self.key_modifiers = modifiers.state();
       }
 
-      WindowEvent::Ime(Ime::Commit(character)) => {
-        self.queue.push(UiEvent::Input(character.clone()));
-      }
-
       WindowEvent::CursorEntered{..} => {
         let mouse_event = "mouseenter".to_string();
         self.queue.push(UiEvent::Mouse(mouse_event));
@@ -186,11 +182,15 @@ impl Sieve{
 
         self.queue.push(UiEvent::Keyboard{
           event: event_type,
-          key: key_text,
+          key: key_text.clone(),
           code: key_code.clone(),
           location: key_location,
           repeat: *repeat
         });
+
+        if let Character(c) = logical_key{
+          self.queue.push(UiEvent::Input(c.to_string()))
+        }
       }
 
       _ => {}
