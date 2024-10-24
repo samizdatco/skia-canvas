@@ -291,14 +291,16 @@ type MouseEventProps = {
   shiftKey: boolean;
 };
 type KeyboardEventProps = {
-  key: string;
-  code: number;
-  repeat: boolean;
-  ctrlKey: boolean;
-  altKey: boolean;
-  metaKey: boolean;
-  shiftKey: boolean;
-};
+  key: string
+  code: string
+  location: number
+  repeat: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+}
+
 type WindowEvents = {
   mousedown: MouseEventProps;
   mouseup: MouseEventProps;
@@ -306,12 +308,8 @@ type WindowEvents = {
   keydown: KeyboardEventProps;
   keyup: KeyboardEventProps;
   input: {
-    value: string;
-    code: number;
-    ctrlKey: boolean;
-    altKey: boolean;
-    metaKey: boolean;
-    shiftKey: boolean;
+    data: string
+    inputType: 'insertText'
   };
   wheel: { deltaX: number; deltaY: number };
   fullscreen: { enabled: boolean };
