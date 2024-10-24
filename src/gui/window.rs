@@ -26,6 +26,7 @@ pub struct WindowSpec {
     pub top: Option<f32>,
     title: String,
     visible: bool,
+    resizable: bool,
     fullscreen: bool,
     background: String,
     page: u32,
@@ -69,6 +70,7 @@ impl Window {
             .with_transparent(true)
             .with_title(spec.title.clone())
             .with_visible(false)
+            .with_resizable(spec.resizable)
             .build(&event_loop)
             .unwrap();
 
@@ -159,6 +161,9 @@ impl Window {
                         }
                         CanvasEvent::Visible(flag) => {
                             self.handle.set_visible(flag);
+                        }
+                        CanvasEvent::Resizable(flag) => {
+                            self.handle.set_resizable(flag);
                         }
                         CanvasEvent::Title(title) => {
                             self.handle.set_title(&title);
@@ -310,6 +315,10 @@ impl WindowManager {
 
             if spec.visible != win.spec.visible {
                 updates.push(CanvasEvent::Visible(spec.visible));
+            }
+
+            if spec.resizable != win.spec.resizable {
+                updates.push(CanvasEvent::Resizable(spec.resizable));
             }
 
             if spec.fullscreen != win.spec.fullscreen {
