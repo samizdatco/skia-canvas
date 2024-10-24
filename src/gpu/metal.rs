@@ -81,21 +81,25 @@ impl MetalEngine {
     }
 
     pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
-        MTL_CONTEXT.with_borrow(|local_ctx| {
-            match local_ctx.is_some() || MetalEngine::supported(){
-                true => surfaces::render_target(
-                    &mut local_ctx.as_ref()?.context.clone(),
-                    Budgeted::Yes,
-                    image_info,
-                    Some(4),
-                    SurfaceOrigin::BottomLeft,
-                    None,
-                    true,
-                    None
-                ),
-                false => None
-            }
-        })
+        if MetalEngine::supported() {
+            MTL_CONTEXT.with_borrow(|local_ctx| {
+                match local_ctx.is_some(){
+                    true => surfaces::render_target(
+                        &mut local_ctx.as_ref()?.context.clone(),
+                        Budgeted::Yes,
+                        image_info,
+                        Some(4),
+                        SurfaceOrigin::BottomLeft,
+                        None,
+                        true,
+                        None
+                    ),
+                    false => None
+                }
+            })
+        }else{
+            None
+        }
     }
 
     pub fn set_status(msg: Value) {
