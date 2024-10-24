@@ -70,7 +70,6 @@ pub fn set_async(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-
 pub fn get_engine(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let this = this.borrow();
@@ -81,13 +80,22 @@ pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   if let Some(engine_name) = opt_string_arg(&mut cx, 1){
     if let Some(new_engine) = to_engine(&engine_name){
-      if new_engine.supported() {
+      if new_engine.selectable() {
         this.borrow_mut().engine = new_engine
       }
     }
   }
 
   Ok(cx.undefined())
+}
+
+pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  let this = this.borrow();
+
+  let details = this.engine.status();
+
+  Ok(cx.string(details.to_string()))
 }
 
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {

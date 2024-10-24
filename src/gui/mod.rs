@@ -2,162 +2,96 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
-use neon::prelude::*;
-use serde_json::json;
+use neon::{prelude::*, result::Throw};
+use std::iter::zip;
+use serde_json::Value;
 use std::cell::RefCell;
 use winit::{
-    event_loop::{ControlFlow, EventLoop, EventLoopProxy},
-    event::{Event, WindowEvent, KeyboardInput, VirtualKeyCode, ElementState},
-    platform::run_return::EventLoopExtRunReturn
+    event_loop::{ControlFlow, EventLoop, EventLoopProxy}, 
+    platform::run_on_demand::EventLoopExtRunOnDemand,
 };
 
 use crate::utils::*;
-use crate::gpu::runloop;
-use crate::context::{BoxedContext2D, page::Page};
+use crate::context::BoxedContext2D;
+
+pub mod app;
+use app::App;
 
 pub mod event;
-use event::{Cadence, CanvasEvent};
+use event::CanvasEvent;
 
 pub mod window;
-use window::{Window, WindowSpec, WindowManager};
+use window::WindowSpec;
+
+pub mod window_mgr;
+use window_mgr::WindowManager;
+
+use crate::gpu::RenderingEngine;
 
 thread_local!(
     // the event loop can only be run from the main thread
-    static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event());
+    static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
     static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with(|event_loop|
         event_loop.borrow().create_proxy()
     ));
 );
 
-fn new_proxy() -> EventLoopProxy<CanvasEvent>{
+pub(crate) fn new_proxy() -> EventLoopProxy<CanvasEvent>{
     PROXY.with(|cell| cell.borrow().clone() )
 }
 
-fn add_event(event: CanvasEvent){
+pub(crate) fn add_event(event: CanvasEvent){
     PROXY.with(|cell| cell.borrow().send_event(event).ok() );
 }
 
-fn roundtrip<'a, F>(cx: &'a mut FunctionContext, payload:serde_json::Value, callback:&Handle<JsFunction>, mut f:F) -> NeonResult<()>
-    where F:FnMut(WindowSpec, Page)
-{
-    let null = cx.null();
-    let events = cx.string(payload.to_string()).upcast::<JsValue>();
-
-    let response = callback.call(cx, null, vec![events]).expect("Error in Window event handler")
-        .downcast::<JsArray, _>(cx).or_throw(cx)?
-        .to_vec(cx)?;
-    let specs:Vec<WindowSpec> = serde_json::from_str(
-        &response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx)
-    ).unwrap();
-
-    response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?
-        .iter()
-        .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
-        .filter( |ctx| ctx.is_ok() )
-        .zip(specs.iter())
-        .for_each(|(ctx, spec)| {
-            f(spec.clone(), ctx.unwrap().borrow().get_page());
-        });
+fn validate_gpu(cx:&mut FunctionContext) -> Result<(), Throw>{
+    // bail out if we can't draw to the screen
+    if let Some(reason) = RenderingEngine::default().lacks_gpu_support(){
+        cx.throw_error(reason)?
+    }
     Ok(())
 }
 
 pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let callback = cx.argument::<JsFunction>(1)?;
+    
+    validate_gpu(&mut cx)?;
 
-    let mut windows = WindowManager::default();
-    let mut cadence = Cadence::default();
+    // closure for using the callback to relay events to js and receive updates in return
+    let roundtrip = |payload:Value, windows:&mut WindowManager| -> NeonResult<()>{
+        let cx = &mut cx;
+        let null = cx.null();
+        
+        // send payload to js for event dispatch and canvas drawing then read back new state & page data
+        let events = cx.string(payload.to_string()).upcast::<JsValue>();
+        let response = callback.call(cx, null, vec![events])?
+            .downcast::<JsArray, _>(cx).or_throw(cx)?
+            .to_vec(cx)?;
+
+        // unpack boxed contexts & window state objects
+        let contexts:Vec<Handle<JsValue>> = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
+        let specs:Vec<WindowSpec> = serde_json::from_str(
+            &response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx)
+        ).expect("Malformed response from window event handler");
+
+        // pass each window's new state & page data to the window manager 
+        zip(contexts, specs).for_each(|(boxed_ctx, spec)| {
+            if let Ok(ctx) = boxed_ctx.downcast::<BoxedContext2D, _>(cx){
+                windows.update_window(
+                    spec.clone(), 
+                    ctx.borrow().get_page()
+                )
+            }
+        });
+        Ok(())
+    };
 
     EVENT_LOOP.with(|event_loop| {
-        event_loop.borrow_mut().run_return(|event, event_loop, control_flow| {
-            runloop(|| {
-                match event {
-                    Event::NewEvents(..) => {
-                        // trigger a Render if the cadence is active, otherwise handle UI events in MainEventsCleared
-                        *control_flow = cadence.on_next_frame(|| add_event(CanvasEvent::Render) );
-                    }
-
-                    Event::UserEvent(canvas_event) => {
-                        match canvas_event{
-                            CanvasEvent::Open(spec, page) => {
-                                windows.add(event_loop, new_proxy(), spec, page);
-                            }
-                            CanvasEvent::Close(token) => {
-                                windows.remove_by_token(&token);
-                            }
-                            CanvasEvent::Quit => {
-                                return *control_flow = ControlFlow::Exit;
-                            }
-                            CanvasEvent::Render => {
-                                // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                                roundtrip(&mut cx, windows.get_ui_changes(), &callback,
-                                    |spec, page| windows.update_window(spec, page)
-                                ).ok();
-                            }
-                            CanvasEvent::Transform(window_id, matrix) => {
-                                windows.use_ui_transform(&window_id, &matrix);
-                            },
-                            CanvasEvent::InFullscreen(window_id, is_fullscreen) => {
-                                windows.use_fullscreen_state(&window_id, is_fullscreen);
-                            }
-                            CanvasEvent::FrameRate(fps) => {
-                                cadence.set_frame_rate(fps)
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    Event::WindowEvent { event:ref win_event, window_id } => {
-                        windows.capture_ui_event(&window_id, win_event);
-
-                        match win_event {
-                            WindowEvent::Destroyed | WindowEvent::CloseRequested => {
-                                windows.remove(&window_id);
-                            }
-                            WindowEvent::KeyboardInput { input: KeyboardInput { virtual_keycode: Some(VirtualKeyCode::Escape), state: ElementState::Released,.. }, .. } => {
-                                windows.set_fullscreen_state(&window_id, false);
-                            }
-                            WindowEvent::Resized(_) => {
-                                windows.send_event(&window_id, event); // update the window
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    Event::MainEventsCleared => {
-                        // on initial pass, do a roundtrip to sync up the Window object's state attrs:
-                        // send just the initial window positions then read back all state
-                        cadence.on_startup(||{
-                            roundtrip(&mut cx, json!({"geom":windows.get_geometry()}), &callback,
-                                |spec, page| windows.update_window(spec, page)
-                            ).ok();
-                        });
-
-                        // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
-                        // a Render event, so only do a roundtrip if there are new UI events to be relayed
-                        if !cadence.active() && windows.has_ui_changes() {
-                            roundtrip(&mut cx, windows.get_ui_changes(), &callback,
-                                |spec, page| windows.update_window(spec, page)
-                            ).ok();
-                        }
-                    }
-
-                    Event::RedrawRequested(window_id) => {
-                        windows.send_event(&window_id, event);
-                    }
-
-                    Event::RedrawEventsCleared => {
-                        *control_flow = match (windows.len(), cadence.active()) {
-                            (0, _) => ControlFlow::Exit,
-                            (_, false) => ControlFlow::Wait,
-                            _ => ControlFlow::Poll
-                        }
-                    }
-
-                    _ => {}
-                }
-            });
-        });
-    });
+        let mut app = App::with_callback(roundtrip);
+        let mut event_loop = event_loop.borrow_mut();
+        event_loop.set_control_flow(ControlFlow::Wait);
+        event_loop.run_app_on_demand(&mut app)
+    }).ok();
 
     Ok(cx.undefined())
 }
@@ -172,6 +106,9 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let win_config = string_arg(&mut cx, 0, "Window configuration")?;
     let context = cx.argument::<BoxedContext2D>(1)?;
     let spec = serde_json::from_str::<WindowSpec>(&win_config).expect("Invalid window state");
+
+    validate_gpu(&mut cx)?;
+
     add_event(CanvasEvent::Open(spec, context.borrow().get_page()));
     Ok(cx.undefined())
 }

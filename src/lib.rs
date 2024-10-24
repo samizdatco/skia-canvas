@@ -1,3 +1,4 @@
+#![allow(unused_braces)]
 #![allow(clippy::unnecessary_wraps)]
 use std::sync::{Mutex};
 use neon::prelude::*;
@@ -20,7 +21,7 @@ mod gui;
 use context::api as ctx;
 use typography::FontLibrary;
 
-pub static FONT_LIBRARY: Lazy<Mutex<FontLibrary>> = Lazy::new(|| FontLibrary::shared() );
+pub static FONT_LIBRARY: Lazy<Mutex<FontLibrary>> = Lazy::new(FontLibrary::shared);
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
@@ -101,7 +102,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   cx.export_function("Canvas_get_engine", canvas::get_engine)?;
   cx.export_function("Canvas_set_engine", canvas::set_engine)?;
-
+  cx.export_function("Canvas_get_engine_status", canvas::get_engine_status)?;
+  
   cx.export_function("Canvas_get_width", canvas::get_width)?;
   cx.export_function("Canvas_set_width", canvas::set_width)?;
   cx.export_function("Canvas_get_height", canvas::get_height)?;

@@ -2,10 +2,7 @@ use std::fs;
 use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
-use skia_safe::{Canvas as SkCanvas, Path, Matrix, Rect, ClipOp, Size, Data, Color, ColorSpace,
-                PictureRecorder, Picture, EncodedImageFormat, Image as SkImage,
-                svg::{self, canvas::Flags}, pdf, Document, ImageInfo,
-                image::BitDepth};
+use skia_safe::{image::BitDepth, images, pdf, svg::{self, canvas::Flags, Canvas}, Canvas as SkCanvas, ClipOp, Color, ColorSpace, Data, Document, EncodedImageFormat, Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, Size};
 
 use crc::{Crc, CRC_32_ISO_HDLC};
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
@@ -37,7 +34,7 @@ impl PageRecorder{
   }
 
   pub fn append<F>(&mut self, f:F)
-    where F:FnOnce(&mut SkCanvas)
+    where F:FnOnce(&SkCanvas)
   {
     if let Some(canvas) = self.current.recording_canvas() {
       f(canvas);
@@ -70,7 +67,7 @@ impl PageRecorder{
       canvas.restore_to_count(1);
       canvas.save();
       if let Some(clip) = &self.clip{
-        canvas.clip_path(&clip, ClipOp::Intersect, true /* antialias */);
+        canvas.clip_path(clip, ClipOp::Intersect, true /* antialias */);
       }
       canvas.set_matrix(&self.matrix.into());
     }
@@ -99,7 +96,7 @@ impl PageRecorder{
     if self.cache.is_none(){
       if let Some(pict) = page.get_picture(None){
         let size = page.bounds.size().to_floor();
-        self.cache = SkImage::from_picture(pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()));
+        self.cache = images::deferred_from_picture(pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()), None);
       }
     }
     self.cache.clone()
@@ -155,19 +152,27 @@ impl Page{
             .draw_picture(&picture, None, None);
           surface
             .image_snapshot()
-            .encode_to_data_with_quality(img_format, (quality*100.0) as i32)
+            .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
             .map(|data| with_dpi(data, img_format, density))
             .ok_or(format!("Could not encode as {}", format))
         }else{
           Err(format!("Could not allocate new {}×{} bitmap", img_dims.width, img_dims.height))
         }
       }else if format == "pdf"{
-        let mut document = pdf_document(quality, density).begin_page(img_dims, None);
+        let mut pdf_bytes = Vec::new();
+        let mut document = pdf_document(&mut pdf_bytes, quality, density).begin_page(img_dims, None);
         let canvas = document.canvas();
         canvas.draw_picture(&picture, None, None);
-        Ok(document.end_page().close())
+        document.end_page().close();
+        Ok(Data::new_copy(&pdf_bytes))
+        // let mut pdf = PdfDocument::new(quality, density);
+        // pdf.document.begin_page(img_dims, None);
+        // pdf.document.canvas().draw_picture(&picture, None, None);
+        // pdf.document.end_page().close();
+        // let data = Data::new_copy(&pdf.buffer);
+        // Ok(data)
       }else if format == "svg"{
-        let flags = outline.then(|| Flags::CONVERT_TEXT_TO_PATHS);
+        let flags = outline.then_some(Flags::CONVERT_TEXT_TO_PATHS);
         let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end())
@@ -177,7 +182,7 @@ impl Page{
     }
   }
 
-
+  #[allow(clippy::too_many_arguments)]
   pub fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>, engine:RenderingEngine) -> Result<(), String> {
     let path = FilePath::new(&filename);
     let data = self.encoded_as(file_format, quality, density, outline, matte, engine)?;
@@ -186,7 +191,7 @@ impl Page{
     )
   }
 
-  fn append_to(&self, doc:Document, matte:Option<Color>) -> Result<Document, String>{
+  fn append_to<'a>(&self, doc:Document<'a>, matte:Option<Color>) -> Result<Document<'a>, String>{
     if !self.bounds.is_empty(){
       let mut doc = doc.begin_page(self.bounds.size(), None);
       let canvas = doc.canvas();
@@ -224,14 +229,16 @@ impl PageSequence{
   }
 
   pub fn as_pdf(&self, quality:f32, density:f32, matte:Option<Color>) -> Result<Data, String>{
-    self.pages
+    let mut pdf_bytes = Vec::new();
+    let pdf = self.pages
       .iter()
-      .try_fold(pdf_document(quality, density), |doc, page| page.append_to(doc, matte))
-      .map(|doc| doc.close())
+      .try_fold(pdf_document(&mut pdf_bytes, quality, density), |doc, page| page.append_to(doc, matte))
+      .map(|doc| doc.close());
+    Ok(Data::new_copy(&pdf_bytes))
   }
 
   pub fn write_image(&self, pattern:&str, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
-    self.first().write(&pattern, &format, quality, density, outline, matte, self.engine)
+    self.first().write(pattern, format, quality, density, outline, matte, self.engine)
   }
 
   #[allow(clippy::too_many_arguments)]
@@ -263,6 +270,35 @@ impl PageSequence{
 
 }
 
+
+// pub struct PdfDocument<'a>{
+//   buffer: Vec<u8>,
+//   document: Document<'a>,
+// }
+
+// impl PdfDocument<'_>{
+//   fn new(quality:f32, density:f32) -> Self{
+//     let mut buffer = Vec::new();
+//     let mut meta = pdf::Metadata::default();
+//     meta.producer = "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string();
+//     meta.encoding_quality = Some((quality*100.0) as i32);
+//     meta.raster_dpi = Some(density * 72.0);
+//     let document = {
+//       pdf::new_document(&mut buffer, Some(&meta))
+//     };
+//     PdfDocument{ buffer, document }
+//   }
+
+//   fn canvas(&self) -> SkCanvas{
+//     self.document.canvas()
+//   }
+
+
+//   fn data(&self) -> Data{
+//     Data::new_copy(&self.buffer)
+//   }
+// }
+
 //
 // Helpers
 //
@@ -279,12 +315,13 @@ pub fn pages_arg(cx: &mut FunctionContext, idx: i32, canvas:&BoxedCanvas) -> Neo
   Ok(PageSequence::from(pages, engine))
 }
 
-fn pdf_document(quality:f32, density:f32) -> Document{
-  let mut meta = pdf::Metadata::default();
-  meta.producer = "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string();
-  meta.encoding_quality = Some((quality*100.0) as i32);
-  meta.raster_dpi = Some(density * 72.0);
-  pdf::new_document(Some(&meta))
+fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Document{
+  pdf::new_document(buffer, Some(&pdf::Metadata { 
+    producer: "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string(), 
+    encoding_quality: Some((quality*100.0) as i32), 
+    raster_dpi: Some(density * 72.0), 
+    ..Default::default() 
+  }))
 }
 
 fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{

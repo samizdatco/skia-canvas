@@ -289,49 +289,48 @@ type MouseEventProps = {
   altKey: boolean;
   metaKey: boolean;
   shiftKey: boolean;
-};
+}
+
 type KeyboardEventProps = {
-  key: string;
-  code: number;
-  repeat: boolean;
-  ctrlKey: boolean;
-  altKey: boolean;
-  metaKey: boolean;
-  shiftKey: boolean;
-};
+  key: string
+  code: string
+  location: number
+  repeat: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+}
+
 type WindowEvents = {
-  mousedown: MouseEventProps;
-  mouseup: MouseEventProps;
-  mousemove: MouseEventProps;
-  keydown: KeyboardEventProps;
-  keyup: KeyboardEventProps;
+  mousedown: MouseEventProps
+  mouseup: MouseEventProps
+  mousemove: MouseEventProps
+  keydown: KeyboardEventProps
+  keyup: KeyboardEventProps
   input: {
-    value: string;
-    code: number;
-    ctrlKey: boolean;
-    altKey: boolean;
-    metaKey: boolean;
-    shiftKey: boolean;
+    data: string
+    inputType: 'insertText'
   };
-  wheel: { deltaX: number; deltaY: number };
-  fullscreen: { enabled: boolean };
-  move: { left: number; top: number };
-  resize: { height: number; width: number };
-  frame: { frame: number };
-  draw: { frame: number };
-  blur: {};
-  focus: {};
-  setup: {};
-};
-type WindowEventsMap = {
+  wheel: { deltaX: number; deltaY: number }
+  fullscreen: { enabled: boolean }
+  move: { left: number; top: number }
+  resize: { height: number; width: number }
+  frame: { frame: number }
+  draw: { frame: number }
+  blur: {}
+  focus: {}
+  setup: {}
+}
+
+export class Window extends EventEmitter<{
   [EventName in keyof WindowEvents]: [
     {
       target: Window;
       type: EventName;
     } & WindowEvents[EventName]
-  ];
-};
-export class Window extends EventEmitter<WindowEventsMap>{
+  ]
+}>{
   constructor(width: number, height: number, options?: WindowOptions)
   constructor(options?: WindowOptions)
 

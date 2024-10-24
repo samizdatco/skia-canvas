@@ -19,11 +19,13 @@ pub struct Path2D{
   pub path:Path
 }
 
-impl Path2D{
-  pub fn new() -> Self{
+impl Default for Path2D {
+  fn default() -> Self {
     Self{ path:Path::new() }
   }
+}
 
+impl Path2D{
   pub fn scoot(&mut self, x: f32, y: f32){
     if self.path.is_empty(){
       self.path.move_to((x, y));
@@ -103,7 +105,7 @@ pub fn from_path(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 
 pub fn from_svg(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let svg_string = string_arg(&mut cx, 1, "svgPath")?;
-  let path = Path::from_svg(svg_string).unwrap_or_else(Path::new);
+  let path = Path::from_svg(svg_string).unwrap_or_default();
   Ok(cx.boxed(RefCell::new(Path2D{path})))
 }
 

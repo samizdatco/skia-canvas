@@ -2,7 +2,6 @@
 
 const _ = require('lodash'),
       fs = require('fs'),
-      glob = require('glob').sync,
       {Image, FontLibrary, loadImage} = require('../lib'),
       simple = require('simple-get')
 

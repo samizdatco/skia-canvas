@@ -934,8 +934,8 @@ for (var c of colors){
 
 let win = new Window({canvas, page:-2})
 win.on('keydown', e => {
-  if (e.key=='Left') win.page--
-  if (e.key=='Right') win.page++
+  if (e.key=='ArrowLeft') win.page--
+  if (e.key=='ArrowRight') win.page++
   console.log(`page ${win.page}/${canvas.pages.length}: ${canvas.width} × ${canvas.height}`)
 })
 ```

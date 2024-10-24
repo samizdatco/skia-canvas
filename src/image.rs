@@ -64,7 +64,7 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let mut this = this.borrow_mut();
 
   let buffer = cx.argument::<JsBuffer>(1)?;
-  let data = Data::new_copy(buffer.as_slice(&mut cx));
+  let data = Data::new_copy(buffer.as_slice(&cx));
 
   this.image = SkImage::from_encoded(data);
   Ok(cx.boolean(this.image.is_some()))

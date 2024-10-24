@@ -9,9 +9,8 @@ use std::ops::Range;
 use std::path::Path;
 use std::collections::HashMap;
 use neon::prelude::*;
-use neon::result::Throw;
 
-use skia_safe::{Font, FontMgr, FontMetrics, FontArguments, Typeface, Data, Paint, Point, Rect, Path as SkPath};
+use skia_safe::{Font, FontMgr, FontMetrics, FontArguments, Typeface, Paint, Point, Rect, Path as SkPath};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::{Coordinate}};
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
@@ -71,7 +70,7 @@ impl Typesetter{
 
   pub fn layout(&self, paint:&Paint) -> (Paragraph, Point) {
     let mut char_style = self.char_style.clone();
-    char_style.set_foreground_color(Some(paint.clone()));
+    char_style.set_foreground_paint(paint);
 
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
     paragraph_builder.push_style(&char_style);
@@ -424,12 +423,12 @@ impl FontLibrary{
     // merge the system fonts and our dynamically added fonts into one list of FontStyles
     let mut dynamic = TypefaceFontProvider::new();
     for (font, alias) in &self.fonts{
-      dynamic.register_typeface(font.clone(), alias.clone());
+      dynamic.register_typeface(font.clone(), alias.as_deref());
     }
     let std_mgr = FontMgr::new();
     let dyn_mgr:FontMgr = dynamic.into();
-    let mut std_set = std_mgr.match_family(&family);
-    let mut dyn_set = dyn_mgr.match_family(&family);
+    let mut std_set = std_mgr.match_family(family);
+    let mut dyn_set = dyn_mgr.match_family(family);
     let std_styles = (0..std_set.count()).map(|i| std_set.style(i));
     let dyn_styles = (0..dyn_set.count()).map(|i| dyn_set.style(i));
     let all_styles = std_styles.chain(dyn_styles);
@@ -479,7 +478,7 @@ impl FontLibrary{
 
     let mut assets = TypefaceFontProvider::new();
     for (font, alias) in &self.fonts {
-      assets.register_typeface(font.clone(), alias.as_ref());
+      assets.register_typeface(font.clone(), alias.as_deref());
     }
 
     let mut collection = FontCollection::new();
@@ -492,22 +491,23 @@ impl FontLibrary{
   pub fn update_style(&mut self, orig_style:&TextStyle, spec: &FontSpec) -> Option<TextStyle>{
     let mut style = orig_style.clone();
 
-    // don't update the style if no usable family names were specified
-    let matches = self.collection.find_typefaces(&spec.families, spec.style);
-    if matches.is_empty(){
-      return None
-    }
-
-    style.set_font_style(spec.style);
-    style.set_font_families(&spec.families);
-    style.set_font_size(spec.size);
-    style.set_height(spec.leading / spec.size);
-    style.set_height_override(true);
-    style.reset_font_features();
-    for (feat, val) in &spec.features{
-      style.add_font_feature(feat, *val);
-    }
-    Some(style)
+    // only update the style if a usable family name was specified
+    self.collection
+      .find_typefaces(&spec.families, spec.style)
+      .into_iter().nth(0)
+      .map(|typeface| {
+        style.set_typeface(typeface);
+        style.set_font_families(&spec.families);
+        style.set_font_style(spec.style);
+        style.set_font_size(spec.size);
+        style.set_height(spec.leading / spec.size);
+        style.set_height_override(true);
+        style.reset_font_features();
+        for (feat, val) in &spec.features{
+          style.add_font_feature(feat, *val);
+        }
+        style 
+      })
   }
 
   pub fn update_features(&mut self, orig_style:&TextStyle, features: &[(String, i32)]) -> TextStyle{
@@ -557,7 +557,7 @@ impl FontLibrary{
             let face = font.clone_with_arguments(&args).unwrap();
 
             let mut dynamic = TypefaceFontProvider::new();
-            dynamic.register_typeface(face, alias);
+            dynamic.register_typeface(face, alias.as_deref());
 
             let mut collection = FontCollection::new();
             collection.set_default_font_manager(FontMgr::new(), None);
@@ -615,19 +615,19 @@ pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
 
   Ok(details.upcast())
 }
-
 pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
   let alias = opt_string_arg(&mut cx, 1);
   let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
   let results = JsArray::new(&mut cx, filenames.len() as u32);
-
+  
+  let mgr = FontMgr::new();
   for (i, filename) in strings_in(&mut cx, &filenames).iter().enumerate(){
     let path = Path::new(&filename);
     let typeface = match fs::read(path){
       Err(why) => {
         return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
       },
-      Ok(bytes) => Typeface::from_data(Data::new_copy(&bytes), None)
+      Ok(bytes) => mgr.new_from_data(&bytes, None)
     };
 
     match typeface {
