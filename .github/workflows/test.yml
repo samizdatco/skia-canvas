@@ -16,10 +16,10 @@ jobs:
         os:
           - macos-latest
           - windows-latest
-          - ubuntu-18.04
+          - ubuntu-latest
         node:
-          - 10
-          - 15
+          - 16
+          - 22
 
     steps:
     - name: Checkout repository
