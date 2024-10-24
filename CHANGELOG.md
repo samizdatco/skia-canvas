@@ -15,6 +15,7 @@
 
 ### Bugfixes
 - Initializing a GPU-renderer using Vulkan now uses the [`vulkano`](https://crates.io/crates/vulkano) crate and makes better selections among devices present (previously it was just using the first result, which is not always optimal).
+- The Image.onload callback now properly sets `this` to point to the new image (contributed by [@mpaperno](https://github.com/mpaperno)).
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 129
