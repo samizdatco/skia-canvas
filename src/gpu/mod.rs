@@ -49,8 +49,9 @@ impl Default for RenderingEngine {
     }
 }
 
+#[allow(dead_code)]
 impl RenderingEngine{
-    pub fn supported(&self) -> bool {
+    pub fn selectable(&self) -> bool {
         match self {
             Self::GPU => Engine::supported(),
             Self::CPU => true
@@ -73,5 +74,18 @@ impl RenderingEngine{
             }
         }
         status
+    }
+
+    pub fn lacks_gpu_support(&self) -> Option<String> {
+        match Engine::supported(){
+            true => None,
+            false => {
+                let mut msg = vec!["No windowing support".to_string()];
+                if let Some(Value::String(error)) = Engine::status().get("error"){
+                    msg.push(error.to_string());
+                }
+                Some(msg.join(": "))
+            }
+        }   
     }
 }

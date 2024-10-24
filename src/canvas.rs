@@ -80,7 +80,7 @@ pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   if let Some(engine_name) = opt_string_arg(&mut cx, 1){
     if let Some(new_engine) = to_engine(&engine_name){
-      if new_engine.supported() {
+      if new_engine.selectable() {
         this.borrow_mut().engine = new_engine
       }
     }

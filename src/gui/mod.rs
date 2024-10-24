@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
-use neon::prelude::*;
+use neon::{prelude::*, result::Throw};
 use std::iter::zip;
 use serde_json::Value;
 use std::cell::RefCell;
@@ -26,6 +26,8 @@ use window::WindowSpec;
 pub mod window_mgr;
 use window_mgr::WindowManager;
 
+use crate::gpu::RenderingEngine;
+
 thread_local!(
     // the event loop can only be run from the main thread
     static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
@@ -42,12 +44,22 @@ pub(crate) fn add_event(event: CanvasEvent){
     PROXY.with(|cell| cell.borrow().send_event(event).ok() );
 }
 
+fn validate_gpu(cx:&mut FunctionContext) -> Result<(), Throw>{
+    // bail out if we can't draw to the screen
+    if let Some(reason) = RenderingEngine::default().lacks_gpu_support(){
+        cx.throw_error(reason)?
+    }
+    Ok(())
+}
+
 pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let callback = cx.argument::<JsFunction>(1)?;
+    
+    validate_gpu(&mut cx)?;
 
     // closure for using the callback to relay events to js and receive updates in return
     let roundtrip = |payload:Value, windows:&mut WindowManager| -> NeonResult<()>{
-        let mut cx = &mut cx;
+        let cx = &mut cx;
         let null = cx.null();
         
         // send payload to js for event dispatch and canvas drawing then read back new state & page data
@@ -94,6 +106,9 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let win_config = string_arg(&mut cx, 0, "Window configuration")?;
     let context = cx.argument::<BoxedContext2D>(1)?;
     let spec = serde_json::from_str::<WindowSpec>(&win_config).expect("Invalid window state");
+
+    validate_gpu(&mut cx)?;
+
     add_event(CanvasEvent::Open(spec, context.borrow().get_page()));
     Ok(cx.undefined())
 }

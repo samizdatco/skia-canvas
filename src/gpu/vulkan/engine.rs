@@ -20,6 +20,7 @@ thread_local!(
     static VK_STATUS: RefCell<Value> = const { RefCell::new(Value::Null) };
 );
 
+#[derive(Debug)]
 #[allow(dead_code)]
 pub struct VulkanEngine {
     context: DirectContext,
@@ -55,7 +56,7 @@ impl VulkanEngine {
 
     pub fn supported() -> bool {
         Self::init();
-        VK_CONTEXT.with(|cell| cell.borrow().is_some())
+        VK_CONTEXT.with_borrow(|cell| cell.is_some())
             && Self::surface(&ImageInfo::new_n32_premul(
                 ISize::new(100, 100),
                 Some(ColorSpace::new_srgb()),

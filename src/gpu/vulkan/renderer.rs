@@ -48,7 +48,7 @@ pub struct VulkanRenderer {
 impl VulkanRenderer {
     pub fn for_window(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
         let instance = {
-            let library = VulkanLibrary::new().unwrap();
+            let library = VulkanLibrary::new().expect("Vulkan libraries not found on system");
             let required_extensions = Surface::required_extensions(event_loop);
 
             Instance::new(
