@@ -1,22 +1,23 @@
 #![allow(unused_imports)]
-#![allow(dead_code)]
-
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
-use foreign_types_shared::{ForeignType, ForeignTypeRef};
+use std::sync::Arc;
 use cocoa::{appkit::NSView, base::id as cocoa_id};
 use core_graphics_types::geometry::CGSize;
-use metal::{CommandQueue, Device, MTLPixelFormat, MetalLayer};
+use metal::{
+    CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
+    foreign_types::{ForeignType, ForeignTypeRef}
+};
 use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
 use skia_safe::gpu::{
     mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
 use objc::runtime::YES;
 pub use objc::rc::autoreleasepool;
+use serde_json::{json, Value};
 
 #[cfg(feature = "window")]
 use winit::{
-    dpi::{LogicalSize, LogicalPosition, PhysicalSize},
+    dpi::{LogicalSize, PhysicalSize},
     platform::macos::WindowExtMacOS,
     window::Window,
     raw_window_handle::HasWindowHandle,
@@ -107,20 +108,15 @@ impl MetalEngine {
 
 }
 
-
 pub struct MetalRenderer {
-    layer: Arc<Mutex<MetalLayer>>,
-    context: Arc<Mutex<DirectContext>>,
-    queue: Arc<Mutex<CommandQueue>>,
+    layer: Arc<MetalLayer>,
+    device: Arc<Device>,
 }
 
-unsafe impl Send for MetalRenderer {}
-
-#[cfg(feature = "window")]
 impl MetalRenderer {
     pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
         let device = Device::system_default().expect("no device found");
-        
+
         let raw_window_handle = window
             .window_handle()
             .expect("Failed to retrieve a window handle")
@@ -149,79 +145,105 @@ impl MetalRenderer {
             layer
         };
 
-        let queue = device.new_command_queue();
+        Self { layer: Arc::new(layer), device: Arc::new(device) }
+    }
 
-        let backend = unsafe {
+    pub fn resize(&self, size: PhysicalSize<u32>) {
+        let cg_size = CGSize::new(size.width as f64, size.height as f64);
+        self.layer.set_drawable_size(cg_size);
+    }
+
+    pub fn draw<F>(
+        &mut self,
+        window: &Arc<Window>,
+        f: F,
+    ) -> Result<(), String> 
+        where F:FnOnce(&skia_safe::Canvas, LogicalSize<f32>)
+    {
+        let dpr = window.scale_factor();
+        let size = window.inner_size();
+        BACKEND.with_borrow_mut(|cell| {
+            let backend = cell.get_or_insert_with(|| MetalBackend::for_renderer(self));
+
+            backend.render_to_layer(&self.layer, |canvas|{
+                canvas.reset_matrix();
+                canvas.scale((dpr as f32, dpr as f32));
+                f(canvas, LogicalSize::from_physical(size, dpr));
+            })
+        })
+    }
+}
+
+impl Drop for MetalRenderer {
+    fn drop(&mut self) {
+        BACKEND.with_borrow_mut(|cell| *cell = None );
+    }
+}
+
+
+thread_local!(static BACKEND: RefCell<Option<MetalBackend>> = const { RefCell::new(None) } );
+
+pub struct MetalBackend {
+    // each renderer's non-Send references need to be lazily allocated on the window's thread
+    skia_ctx: DirectContext,
+    queue: CommandQueue,
+}
+
+#[cfg(feature = "window")]
+impl MetalBackend {
+    pub fn for_renderer(renderer:&MetalRenderer) -> Self {
+        let queue = renderer.device.new_command_queue();
+
+        let backend_ctx = unsafe {
             mtl::BackendContext::new(
-                device.as_ptr() as mtl::Handle,
+                renderer.device.as_ptr() as mtl::Handle,
                 queue.as_ptr() as mtl::Handle,
             )
         };
 
-        let context = direct_contexts::make_metal(&backend, None).unwrap();
-        MetalRenderer {
-            layer: Arc::new(Mutex::new(layer)),
-            context: Arc::new(Mutex::new(context)),
-            queue: Arc::new(Mutex::new(queue)),
-        }
+        let skia_ctx = direct_contexts::make_metal(&backend_ctx, None).unwrap();
+
+        Self { skia_ctx, queue }
     }
 
-    pub fn resize(&self, size: PhysicalSize<u32>) {
-        self.layer
-            .lock()
-            .unwrap()
-            .set_drawable_size(CGSize::new(size.width as f64, size.height as f64));
+    fn render_to_layer<F>(&mut self, layer:&MetalLayer, f:F) -> Result<(), String>
+        where F:FnOnce(&skia_safe::Canvas)
+    {
+        let drawable = layer
+            .next_drawable()            
+            .ok_or("MetalBackend: could not allocate framebuffer".to_string())?;
+
+        let drawable_size = {
+            let size = layer.drawable_size();
+            Size::new(size.width as scalar, size.height as scalar)
+        };
+        
+        let backend_render_target = unsafe {
+            let texture_info =
+                mtl::TextureInfo::new(drawable.texture().as_ptr() as mtl::Handle);
+            backend_render_targets::make_mtl(
+                (drawable_size.width as i32, drawable_size.height as i32),
+                &texture_info,
+            )
+        };
+        
+        let mut surface = surfaces::wrap_backend_render_target(
+            &mut self.skia_ctx,
+            &backend_render_target,
+            SurfaceOrigin::TopLeft,
+            ColorType::BGRA8888,
+            None,
+            None,
+        ).ok_or("MetalBackend: could not create render target")?;
+
+        f(surface.canvas());
+
+        self.skia_ctx.flush_and_submit();
+
+        let command_buffer = self.queue.new_command_buffer();
+        command_buffer.present_drawable(drawable);
+        command_buffer.commit();
+        Ok(())
     }
 
-    pub fn draw<F: FnOnce(&skia_safe::Canvas, LogicalSize<f32>)>(
-        &mut self,
-        window: &Window,
-        f: F,
-    ) -> Result<(), String> {
-        let dpr = window.scale_factor();
-        let size = window.inner_size();
-        let layer = self.layer.lock().unwrap();
-        let mut context = self.context.lock().unwrap();
-
-        if let Some(drawable) = layer.next_drawable() {
-            let drawable_size = {
-                let size = layer.drawable_size();
-                Size::new(size.width as scalar, size.height as scalar)
-            };
-            
-            let backend_render_target = unsafe {
-                let texture_info =
-                    mtl::TextureInfo::new(drawable.texture().as_ptr() as mtl::Handle);
-                backend_render_targets::make_mtl(
-                    (drawable_size.width as i32, drawable_size.height as i32),
-                    &texture_info,
-                )
-            };
-            
-            let mut surface = surfaces::wrap_backend_render_target(
-                &mut context,
-                &backend_render_target,
-                SurfaceOrigin::TopLeft,
-                ColorType::BGRA8888,
-                None,
-                None,
-            ).unwrap();
-
-            let canvas = surface.canvas();
-            canvas.reset_matrix();
-            canvas.scale((dpr as f32, dpr as f32));
-            f(canvas, LogicalSize::from_physical(size, dpr));
-            context.flush_and_submit();
-            drop(surface);
-
-            let queue = self.queue.lock().unwrap();
-            let command_buffer = queue.new_command_buffer();
-            command_buffer.present_drawable(drawable);
-            command_buffer.commit();
-            Ok(())
-        }else{
-            Err("Could not allocate frame buffer".to_string())
-        }
-
-    }
 }
