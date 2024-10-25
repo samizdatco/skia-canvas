@@ -7,19 +7,20 @@
   > It’s a fairly direct adaptation of Vulkano [sample code][vulkano_demo] for device setup with skia-specific rendering routines inspired by [@pragmatrix](https://github.com/pragmatrix)’s renderer for [emergent](pragmatrix_emergent). All of which is to say, if you understand this better than I do I'd love some suggestions for improving the rendering setup.
 
 ### New Features
-- The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by [@nornagon](https://github.com/nornagon) #163).
+- The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by [@nornagon](https://github.com/nornagon) #124).
 - The **Canvas** object has a new `engine` property which describes whether the CPU or GPU is being used, which graphics device was selected, and what (if any) error prevented it from being initialized.
 
 ### Breaking Changes
-- The KeyboardEvent object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`](key_location) field provides a numeric description of which variant of a key was pressed.
+- The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`](key_location) field provides a numeric description of which variant of a key was pressed.
 
 ### Bugfixes
 - Initializing a GPU-renderer using Vulkan now uses the [`vulkano`](https://crates.io/crates/vulkano) crate and makes better selections among devices present (previously it was just using the first result, which is not always optimal).
-- The Image.onload callback now properly sets `this` to point to the new image (contributed by [@mpaperno](https://github.com/mpaperno)).
+- The **Image**.onload callback now properly sets `this` to point to the new image (contributed by [@mpaperno](https://github.com/mpaperno) & [@ForkKILLET](https://github.com/ForkKILLET)).
+- Creating a **Window** with `fullscreen` set to `true` now takes effect immediately (previously it was failing silently)
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 129
-- Added TypeScript definitions for the Window object’s event types (contributed by [@saantonandre](https://github.com/saantonandre) #163) and the `roundRect` method (contributed by [@sandy85625](https://github.com/sandy85625) & [@santilema](https://github.com/santilema))
+- Added TypeScript definitions for the **Window** object’s event types (contributed by [@saantonandre](https://github.com/saantonandre) #163) and the `roundRect` method (contributed by [@sandy85625](https://github.com/sandy85625) & [@santilema](https://github.com/santilema))
 
 [resizable]: https://github.com/samizdatco/skia-canvas#resizable
 [key_location]: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/location
