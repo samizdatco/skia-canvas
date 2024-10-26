@@ -177,20 +177,19 @@ impl VulkanEngine {
 
     pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
         Self::init();
-        VK_CONTEXT.with(|cell| {
-            let local_ctx = cell.borrow();
-            let mut context = local_ctx.as_ref().unwrap().context.clone();
-
-            surfaces::render_target(
-                &mut context,
-                Budgeted::Yes,
-                image_info,
-                Some(4),
-                SurfaceOrigin::BottomLeft,
-                None,
-                true,
-                None,
-            )
+        VK_CONTEXT.with_borrow_mut(|cell| match cell {
+            Some(engine) => 
+                surfaces::render_target(
+                    &mut engine.context,
+                    Budgeted::Yes,
+                    image_info,
+                    Some(4),
+                    SurfaceOrigin::BottomLeft,
+                    None,
+                    true,
+                    None,
+                ),
+            _ => None
         })
     }
 
