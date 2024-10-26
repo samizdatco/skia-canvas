@@ -2,6 +2,7 @@
 
 const _ = require('lodash'),
       fs = require('fs'),
+      path = require('path'),
       {Image, FontLibrary, loadImage} = require('../lib'),
       simple = require('simple-get')
 
@@ -154,7 +155,7 @@ describe("Image", () => {
 
 
 describe("FontLibrary", ()=>{
-  const findFont = font => `${__dirname}/assets/${font}`
+  const findFont = font => path.join(__dirname, 'assets', font)
 
   test("can list families", ()=>{
     let fams = FontLibrary.families,
@@ -178,13 +179,14 @@ describe("FontLibrary", ()=>{
 
     if (fam){
       let info = FontLibrary.family(fam)
+      expect(info).toBeTruthy()
       expect(info).toHaveProperty('family')
       expect(info).toHaveProperty('weights')
-      expect(typeof info.weights[0]).toBe('number');
+      expect(info && typeof info.weights[0]).toBe('number');
       expect(info).toHaveProperty('widths')
-      expect(typeof info.widths[0]).toBe('string');
+      expect(info && typeof info.widths[0]).toBe('string');
       expect(info).toHaveProperty('styles')
-      expect(typeof info.styles[0]).toBe('string');
+      expect(info && typeof info.styles[0]).toBe('string');
     }
   })
 
@@ -195,11 +197,11 @@ describe("FontLibrary", ()=>{
 
     expect(() => FontLibrary.use(ttf)).not.toThrow()
     expect(FontLibrary.has(name)).toBe(true)
-    expect(FontLibrary.family(name).weights).toContain(400)
+    expect(_.get(FontLibrary.family(name), "weights")).toContain(400)
 
     expect(() => FontLibrary.use(alias, ttf)).not.toThrow()
     expect(FontLibrary.has(alias)).toBe(true)
-    expect(FontLibrary.family(alias).weights).toContain(400)
+    expect(_.get(FontLibrary.family(alias), "weights")).toContain(400)
 
     FontLibrary.reset()
     expect(FontLibrary.has(name)).toBe(false)
