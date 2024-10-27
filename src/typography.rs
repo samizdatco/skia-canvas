@@ -156,7 +156,7 @@ impl Typesetter{
 //
 // Font argument packing & unpacking
 //
-
+#[derive(Debug)]
 pub struct FontSpec{
   families: Vec<String>,
   size: f32,
@@ -476,13 +476,17 @@ impl FontLibrary{
     }
     self.fonts.push((font, alias));
 
+    let sys_mgr = FontMgr::new();
+    let default_fam = sys_mgr.legacy_make_typeface(None, FontStyle::default())
+      .map(|f| f.family_name());
+    
     let mut assets = TypefaceFontProvider::new();
     for (font, alias) in &self.fonts {
       assets.register_typeface(font.clone(), alias.as_deref());
     }
 
     let mut collection = FontCollection::new();
-    collection.set_default_font_manager(FontMgr::new(), None);
+    collection.set_default_font_manager(sys_mgr, default_fam.as_deref());
     collection.set_asset_font_manager(Some(assets.into()));
     self.collection = collection;
     self.collection_cache.drain();
