@@ -310,7 +310,7 @@ impl Context2D{
   pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<FillType>){
     let mut path = path.unwrap_or_else(|| {
       // the current path has already incorporated its transform state
-      let inverse = self.state.matrix.invert().unwrap();
+      let inverse = self.state.matrix.invert().unwrap_or_default();
       self.path.with_transform(&inverse)
     });
     path.set_fill_type(rule.unwrap_or(FillType::Winding));
