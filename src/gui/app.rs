@@ -79,6 +79,11 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
                 self.windows.set_fullscreen_state(&window_id, false);
             }
 
+            #[cfg(target_os = "macos")]
+            WindowEvent::Occluded(is_hidden) => {
+                self.windows.send_event(&window_id, CanvasEvent::RedrawingSuspended(is_hidden));
+            }
+
             WindowEvent::RedrawRequested => {
                 self.windows.send_event(&window_id, CanvasEvent::RedrawRequested);
             }

@@ -51,11 +51,12 @@ pub enum Cursor {
 }
 pub struct Window {
     pub handle: Arc<WinitWindow>,
-    pub proxy: EventLoopProxy<CanvasEvent>,
-    pub renderer: Renderer,
-    pub fit: Fit,
-    pub background: Color,
-    pub page: Page
+    proxy: EventLoopProxy<CanvasEvent>,
+    renderer: Renderer,
+    fit: Fit,
+    background: Color,
+    page: Page,
+    suspended: bool,
 }
 
 impl Window {
@@ -84,7 +85,7 @@ impl Window {
 
         let renderer = Renderer::for_window(&event_loop, handle.clone());
 
-        Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, background }
+        Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, suspended:false, background }
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>){
@@ -193,8 +194,16 @@ impl Window {
                 CanvasEvent::WindowResized(size) => {
                     self.resize(size);
                 }
+                CanvasEvent::RedrawingSuspended(suspended) => {
+                    self.suspended = suspended;
+                    if !suspended{
+                        self.redraw();
+                    }
+                }
                 CanvasEvent::RedrawRequested => {
-                    self.redraw()
+                    if !self.suspended{
+                        self.redraw()
+                    }
                 }
 
                 _ => {}

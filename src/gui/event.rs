@@ -45,6 +45,7 @@ pub enum CanvasEvent{
   // encapsulated WindowEvents
   WindowResized(PhysicalSize<u32>),
   RedrawRequested,
+  RedrawingSuspended(bool),
 }
 
 #[derive(Debug, Serialize)]
