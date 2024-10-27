@@ -394,11 +394,12 @@ impl VulkanBackend{
     }
 
     fn flush_framebuffer(&mut self, renderer:&mut VulkanRenderer, image_index:u32, acquire_future:SwapchainAcquireFuture){
-        // reclaim leftover resources from the last frame
-        self.last_render.as_mut().unwrap().cleanup_finished();
-
         // flush the canvas's contents to the framebuffer
         self.skia_ctx.flush_and_submit();
+        self.skia_ctx.free_gpu_resources();
+        
+        // reclaim leftover resources from the last frame
+        self.last_render.as_mut().unwrap().cleanup_finished();
 
         // send the framebuffer to the gpu and display it on screen
         let future = self

@@ -243,6 +243,7 @@ impl MetalBackend {
         f(surface.canvas());
 
         self.skia_ctx.flush_and_submit();
+        self.skia_ctx.free_gpu_resources();
 
         let command_buffer = self.queue.new_command_buffer();
         command_buffer.present_drawable(drawable);
