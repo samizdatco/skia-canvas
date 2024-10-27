@@ -3,7 +3,7 @@
 const _ = require('lodash'),
       fs = require('fs'),
       path = require('path'),
-      {Image, FontLibrary, loadImage} = require('../lib'),
+      {Canvas, Image, FontLibrary, loadImage} = require('../lib'),
       simple = require('simple-get')
 
 jest.mock('simple-get', () => {
@@ -155,7 +155,15 @@ describe("Image", () => {
 
 
 describe("FontLibrary", ()=>{
-  const findFont = font => path.join(__dirname, 'assets', font)
+  let canvas, ctx,
+      WIDTH = 512, HEIGHT = 512,
+      findFont = font => path.join(__dirname, 'assets', font),
+      pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
+
+  beforeEach(() => {
+    canvas = new Canvas(WIDTH, HEIGHT)
+    ctx = canvas.getContext("2d")
+  })
 
   test("can list families", ()=>{
     let fams = FontLibrary.families,
@@ -195,17 +203,37 @@ describe("FontLibrary", ()=>{
         name = "AmstelvarAlpha",
         alias = "PseudonymousBosch";
 
+    // with real name
     expect(() => FontLibrary.use(ttf)).not.toThrow()
     expect(FontLibrary.has(name)).toBe(true)
     expect(_.get(FontLibrary.family(name), "weights")).toContain(400)
 
+    // with alias
     expect(() => FontLibrary.use(alias, ttf)).not.toThrow()
     expect(FontLibrary.has(alias)).toBe(true)
     expect(_.get(FontLibrary.family(alias), "weights")).toContain(400)
 
+    // fonts disappear after reset
     FontLibrary.reset()
     expect(FontLibrary.has(name)).toBe(false)
     expect(FontLibrary.has(alias)).toBe(false)
   })
+
+  test("can render woff2 fonts", ()=>{
+    let woff = findFont("Monoton-Regular.woff2"),
+        name = "Monoton"
+    expect(() => FontLibrary.use(woff)).not.toThrow()
+    expect(FontLibrary.has(name)).toBe(true)
+
+    ctx.font = '256px Monoton'
+    ctx.fillText('G', 128, 256)
+
+    // look for one of the gaps between the inline strokes of the G
+    let bmp = ctx.getImageData(300, 172, 1, 1)
+    expect(Array.from(bmp.data)).toEqual([0,0,0,0])
+
+    FontLibrary.reset()
+  })
+
 })
 
