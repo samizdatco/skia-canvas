@@ -10,6 +10,7 @@
 - The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by [@nornagon](https://github.com/nornagon) #124).
 - The **Canvas** object has a new `engine` property which describes whether the CPU or GPU is being used, which graphics device was selected, and what (if any) error prevented it from being initialized.
 - **FontLibrary.**[use()][FontLibrary.use] now supports dynamically loaded [WOFF & WOFF2][woff_wiki] fonts
+- **Canvas**es can now be saved as WEBP images and **Image**s can load WEBPs as well (contributed by [@mpaperno](https://github.com/mpaperno) #177, h/t [@revam](https://github.com/revam) for the initial work on this)
 
 ### Breaking Changes
 - The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`](key_location) field provides a numeric description of which variant of a key was pressed.
@@ -20,6 +21,7 @@
 - Creating a **Window** with `fullscreen` set to `true` now takes effect immediately (previously it was failing silently)
 - Drawing paths after setting an invalid transform no longer crashes (contributed by [@mpaperno](https://github.com/mpaperno) #175)
 - Windows on macOS 14+ no longer [become unresponsive](https://github.com/gfx-rs/gfx/issues/2460) after being fully occluded by other windows
+- Ellipses with certain combinations of positive and negative start- and stop-angles now render correctly—previously they would not appear at all if the total sweep exceeded 360° (contributed by [@mpaperno](https://github.com/mpaperno) #176)
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 129
