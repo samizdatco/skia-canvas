@@ -138,6 +138,13 @@ jobs:
       with:
         toolchain: stable
 
+    # temporarily necessary while skia_bindings 0.78.2 is looking for the `pipes` module which
+    # was renamed in Python 3.13 (can hopefully be removed at the next release…)
+    - name: Downgrade Python  (depot_tools workaround)
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12' 
+
     - name: Build module
       env:
         MACOSX_DEPLOYMENT_TARGET: 10.13
