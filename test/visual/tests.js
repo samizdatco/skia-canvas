@@ -5,6 +5,8 @@ var Image
 var imageSrc
 var tests = {}
 
+const D2R = Math.PI / 180;
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = tests
   let skCanvas = require('../../lib')
@@ -237,6 +239,22 @@ tests["ellipse() 5"] = function (ctx) {
   ctx.closePath()
   ctx.fillStyle="#5a0e3e"
   ctx.fill()
+}
+
+tests["ellipse() full circle from offset angles CW"] = function (ctx) {
+  ctx.beginPath()
+  ctx.ellipse(100,100, 100, 50, 45 * D2R, -90 * D2R, 270 * D2R, false)
+  ctx.lineWidth = 5
+  ctx.strokeStyle = 'black'
+  ctx.stroke()
+}
+
+tests["ellipse() full circle from offset angles CCW"] = function (ctx) {
+  ctx.beginPath()
+  ctx.ellipse(100,100, 100, 50, 45 * D2R, -90 * D2R, 270 * D2R, true)
+  ctx.lineWidth = 5
+  ctx.strokeStyle = 'black'
+  ctx.stroke()
 }
 
 tests['bezierCurveTo()'] = function (ctx) {

@@ -4,7 +4,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 use std::cell::RefCell;
-use std::f32::consts::PI;
+use std::f32::{EPSILON, consts::PI};
 use neon::prelude::*;
 use skia_safe::{Path, Point, PathDirection::{CW, CCW}, Rect, RRect, Matrix, PathOp, StrokeRec,};
 use skia_safe::{PathEffect, trim_path_effect};
@@ -46,44 +46,46 @@ impl Path2D{
     let start_angle = new_start_angle;
     let mut end_angle = end_angle + delta;
 
-    // Based off of AdjustEndAngle in Chrome.
-    if !ccw && (end_angle - start_angle) >= tau {
-      end_angle = start_angle + tau; // Draw complete ellipse
-    } else if ccw && (start_angle - end_angle) >= tau {
-      end_angle = start_angle - tau; // Draw complete ellipse
-    } else if !ccw && start_angle > end_angle {
+    // Originally based off of AdjustEndAngle in Chrome, but does not limit to 360 degree sweep.
+    if !ccw && start_angle > end_angle {
       end_angle = start_angle + (tau - (start_angle - end_angle) % tau);
-    } else if ccw && start_angle < end_angle {
+    }
+    else if ccw && start_angle < end_angle {
       end_angle = start_angle - (tau - (end_angle - start_angle) % tau);
     }
 
-    // Based off of Chrome's implementation in
-    // https://cs.chromium.org/chromium/src/third_party/blink/renderer/platform/graphics/path.cc
-    // of note, can't use addArc or addOval because they close the arc, which
-    // the spec says not to do (unless the user explicitly calls closePath).
-    // This throws off points being in/out of the arc.
     let oval = Rect::new(x - x_radius, y - y_radius, x + x_radius, y + y_radius);
+
     let mut rotated = Matrix::new_identity();
     rotated
       .pre_translate((x, y))
       .pre_rotate(to_degrees(rotation), None)
       .pre_translate((-x, -y));
-    let unrotated = rotated.invert().unwrap();
 
-    self.path.transform(&unrotated);
-
-    // draw in 2 180 degree segments because trying to draw all 360 degrees at once
-    // draws nothing.
-    let sweep_deg = to_degrees(end_angle - start_angle);
-    let start_deg = to_degrees(start_angle);
-    if almost_equal(sweep_deg.abs(), 360.0) {
-      let half_sweep = sweep_deg/2.0;
-      self.path.arc_to(oval, start_deg, half_sweep, false);
-      self.path.arc_to(oval, start_deg + half_sweep, half_sweep, false);
-    }else{
-      self.path.arc_to(oval, start_deg, sweep_deg, false);
+    self.path.transform(&rotated.invert().unwrap());
+    {
+      // Based off of Chrome's implementation in
+      // https://cs.chromium.org/chromium/src/third_party/blink/renderer/platform/graphics/path.cc
+      // of note, can't use addArc or addOval because they close the arc, which
+      // the spec says not to do (unless the user explicitly calls closePath).
+      // This throws off points being in/out of the arc.
+  
+      // rounding degrees to 4 decimals eliminates ambiguity from f32 imprecision dealing with radians
+      let mut sweep_deg = (to_degrees(end_angle - start_angle) * 10000.0).round() / 10000.0;
+      let mut start_deg = (to_degrees(start_angle) * 10000.0).round() / 10000.0;
+  
+      // draw 360° ellipses in two 180° segments; trying to draw the full ellipse at once draws nothing.
+      if sweep_deg >= 360.0 - EPSILON  {
+        self.path.arc_to(oval, start_deg, 180.0, false);
+        self.path.arc_to(oval, start_deg + 180.0, 180.0, false);
+      }else if sweep_deg <= -360.0 + EPSILON {
+        self.path.arc_to(oval, start_deg, -180.0, false);
+        self.path.arc_to(oval, start_deg - 180.0, -180.0, false);
+      }else{
+        // Draw incomplete (< 360°) ellipses in a single arc.
+        self.path.arc_to(oval, start_deg, sweep_deg, false);
+      }
     }
-
     self.path.transform(&rotated);
   }
 }
