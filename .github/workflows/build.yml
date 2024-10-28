@@ -30,8 +30,7 @@ jobs:
     - name: Build module
       run: |
         cd skia-canvas
-        npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
+        make optimized
 
     - name: Package module
       run: |
@@ -100,8 +99,7 @@ jobs:
     - name: Build module
       run: |
         cd skia-canvas
-        npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
+        make optimized
 
     - name: Package module
       run: |
@@ -148,9 +146,7 @@ jobs:
     - name: Build module
       env:
         MACOSX_DEPLOYMENT_TARGET: 10.13
-      run: |
-        npm ci --ignore-scripts
-        npm run build -- --release --features metal,window
+      run: make optimized
 
     - name: Package module
       run: |
@@ -180,9 +176,7 @@ jobs:
         toolchain: stable
 
     - name: Build module
-      run: |
-        npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window
+      run: make optimized
 
     - name: Package module
       run: |

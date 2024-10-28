@@ -42,27 +42,10 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Build for Mac
-      if: ${{ matrix.os == 'macos-latest' }}
-      run: |
-        npm ci --ignore-scripts
-        npm run build -- --release --features metal,window
-
-    - name: Build for Linux
-      if: ${{ matrix.os == 'ubuntu-latest' }}
-      run: |
-        npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
-    
-    - name: Build for Windows
-      if: ${{ matrix.os == 'windows-latest' }}
-      shell: bash
-      run: |
-        npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window
+    - name: Build module
+      run: make optimized
 
     - name: Run tests
       run: |
         npm test --verbose
-        ls -l lib/v6/index.node
 

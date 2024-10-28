@@ -7,16 +7,31 @@ LIB := $(LIBDIR)/index.node
 GIT_TAG = $(shell git describe)
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | cut -d '=' -f 2)
 NPM_VERSION = $(shell npm view skia-canvas version)
-.PHONY: build test visual check clean distclean release run preview
+.PHONY: all build optimized test visual check clean distclean release run preview
+.DEFAULT_GOAL := build
+
+# platform-specific features to be passed to cargo
+OS=$(shell sh -c 'uname -s 2>/dev/null')
+ifeq ($(OS),Darwin)
+	FEATURES = metal,window
+else ifeq ($(OS),Linux)
+	FEATURES = vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
+else # Windows
+	FEATURES = vulkan,window
+endif
+
+$(NPM):
+	npm ci --ignore-scripts
+
+$(LIB): optimized
 
 build: $(NPM)
 	@rm -f $(LIB)
 	@npm run build
 
-$(NPM):
-	npm install
-
-$(LIB): build
+optimized: $(NPM)
+	@rm -f $(LIB)
+	@npm run build -- --release --features $(FEATURES)
 
 test: $(LIB)
 	@$(JEST) --verbose
