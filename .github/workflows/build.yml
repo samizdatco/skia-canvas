@@ -31,7 +31,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
 
     - name: Package module
       run: |
@@ -101,7 +101,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
 
     - name: Package module
       run: |

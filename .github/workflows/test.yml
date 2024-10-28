@@ -48,11 +48,21 @@ jobs:
         npm ci --ignore-scripts
         npm run build -- --release --features metal,window
 
-    - name: Build for Vulkan
-      if: ${{ matrix.os != 'macos-latest' }}
+    - name: Build for Linux
+      if: ${{ matrix.os == 'ubuntu-latest' }}
+      run: |
+        npm ci --ignore-scripts
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
+    
+    - name: Build for Windows
+      if: ${{ matrix.os == 'windows-latest' }}
+      shell: bash
       run: |
         npm ci --ignore-scripts
         npm run build -- --release --features vulkan,window
 
     - name: Run tests
-      run: npm test
+      run: |
+        npm test --verbose
+        ls -l lib/v6/index.node
+
