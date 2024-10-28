@@ -380,6 +380,23 @@ describe("Context2D", ()=>{
       expect(pixel(10, 10)).toEqual([0, 162, 213, 245])
     })
 
+    test('shadow', async() => {      
+      const sin = Math.sin(1.15*Math.PI)
+      const cos = Math.cos(1.15*Math.PI)  
+      ctx.translate(150, 150)
+      ctx.transform(cos, sin, -sin, cos, 0, 0)
+      
+      ctx.shadowColor = '#000'
+      ctx.shadowBlur = 5
+      ctx.shadowOffsetX = 10
+      ctx.shadowOffsetY = 10
+      ctx.fillStyle = '#eee'
+      ctx.fillRect(25, 25, 65, 10)
+
+      // ensure that the shadow is actually fuzzy despite the transforms
+      expect(pixel(143, 117)).not.toEqual(BLACK)
+    })
+
     test("clip()", () => {
       ctx.fillStyle = 'white'
       ctx.fillRect(0, 0, 2, 2)

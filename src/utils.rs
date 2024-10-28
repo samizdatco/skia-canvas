@@ -44,6 +44,10 @@ pub fn almost_equal(a: f32, b: f32) -> bool{
   (a-b).abs() < 0.00001
 }
 
+pub fn almost_zero(a: f32) -> bool{
+  a.abs() < 0.00001
+}
+
 pub fn to_degrees(radians: f32) -> f32{
   radians / PI * 180.0
 }
