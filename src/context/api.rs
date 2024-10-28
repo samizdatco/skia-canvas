@@ -910,12 +910,10 @@ pub fn measureText(mut cx: FunctionContext) -> JsResult<JsArray> {
 pub fn outlineText(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let text = string_arg(&mut cx, 1, "text")?;
+  let width = opt_float_arg(&mut cx, 2);
   let mut this = this.borrow_mut();
-  if let Some(path) = this.outline_text(&text){
-    Ok(cx.boxed(RefCell::new(Path2D{path})).upcast())
-  }else{
-    Ok(cx.undefined().upcast())
-  }
+  let path = this.outline_text(&text, width);
+  Ok(cx.boxed(RefCell::new(Path2D{path})).upcast())
 }
 
 // -- type properties ---------------------------------------------------------------

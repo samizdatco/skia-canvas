@@ -508,8 +508,8 @@ impl Context2D{
     Typesetter::new(&self.state, text, width).metrics()
   }
 
-  pub fn outline_text(&self, text:&str) -> Option<Path>{
-    Typesetter::new(&self.state, text, None).path()
+  pub fn outline_text(&self, text:&str, width:Option<f32>) -> Path{
+    Typesetter::new(&self.state, text, width).path()
   }
 
   pub fn color_with_alpha(&self, src:&Color) -> Color{

@@ -144,22 +144,16 @@ impl Typesetter{
     results
   }
 
-  pub fn path(&mut self) -> Option<SkPath> {
-    let families:Vec<String> = self.char_style.font_families().iter().map(|fam| fam.to_string()).collect();
-    let matches = self.typefaces.find_typefaces(&families, self.char_style.font_style());
-    if let Some(typeface) = matches.first(){
-      let font = Font::from_typeface(typeface, self.char_style.font_size());
-      let (leading, metrics) = font.metrics();
-      let (width, bounds) = font.measure_str(&self.text, None);
-      let offset = (
-        width * get_alignment_factor(&self.graf_style),
-        get_baseline_offset(&metrics, self.baseline)
-      );
+  pub fn path(&mut self) -> SkPath {
+    let (mut paragraph, mut offset) = self.layout(&Paint::default());
+    offset.y -= self.char_style.font_metrics().ascent + paragraph.alphabetic_baseline();
 
-      Some(SkPath::from_str(&self.text, offset, &font))
-    }else{
-      None
-    }
+    let mut path = SkPath::new();
+    for idx in 0..paragraph.line_number(){
+      let (skipped, line) = paragraph.get_path_at(idx);
+      path.add_path(&line, offset, None);  
+    };
+    path
   }
 }
 
