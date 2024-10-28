@@ -202,22 +202,19 @@ impl Context2D{
     });
   }
 
-  // DRY helper for render_to_canvas()
-  fn render_shadow<F>(&self, canvas:&SkCanvas, paint:&Paint, f:F)
-    where F:Fn(&SkCanvas, &Paint)
-  {
-    if let Some(shadow_paint) = self.paint_for_shadow(paint){
-      canvas.save();
-      canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
-      canvas.concat(&self.state.matrix);
-      f(canvas, &shadow_paint);
-      canvas.restore();
-    }
-  }
-
   pub fn render_to_canvas<F>(&self, paint:&Paint, f:F)
     where F:Fn(&SkCanvas, &Paint)
   {
+    let render_shadow = |canvas:&SkCanvas, paint:&Paint|{
+      if let Some(shadow_paint) = self.paint_for_shadow(paint){
+        canvas.save();
+        canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
+        canvas.concat(&self.state.matrix);
+        f(canvas, &shadow_paint);
+        canvas.restore();
+      }  
+    };
+
     match self.state.global_composite_operation{
       BlendMode::SrcIn | BlendMode::SrcOut |
       BlendMode::DstIn | BlendMode::DstOut |
@@ -230,7 +227,7 @@ impl Context2D{
         layer_recorder.begin_recording(self.bounds, None);
         if let Some(layer) = layer_recorder.recording_canvas() {
           // draw the dropshadow (if applicable)
-          self.render_shadow(layer, &layer_paint, &f);
+          render_shadow(layer, &layer_paint);
           // draw normally
           layer.set_matrix(&self.state.matrix.into());
           f(layer, &layer_paint);
@@ -254,7 +251,7 @@ impl Context2D{
       _ => {
         self.with_canvas(|canvas| {
           // draw the dropshadow (if applicable)
-          self.render_shadow(canvas, paint, &f);
+          render_shadow(canvas, paint);
           // draw with the normal paint
           f(canvas, paint);
         });
