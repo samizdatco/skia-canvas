@@ -9,6 +9,7 @@
 ### New Features
 - The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by [@nornagon](https://github.com/nornagon) #124).
 - The **Canvas** object has a new `engine` property which describes whether the CPU or GPU is being used, which graphics device was selected, and what (if any) error prevented it from being initialized.
+- **FontLibrary.**[use()][FontLibrary.use] now supports dynamically loaded [WOFF & WOFF2][woff_wiki] fonts
 
 ### Breaking Changes
 - The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`](key_location) field provides a numeric description of which variant of a key was pressed.
@@ -17,6 +18,8 @@
 - Initializing a GPU-renderer using Vulkan now uses the [`vulkano`](https://crates.io/crates/vulkano) crate and makes better selections among devices present (previously it was just using the first result, which is not always optimal).
 - The **Image**.onload callback now properly sets `this` to point to the new image (contributed by [@mpaperno](https://github.com/mpaperno) & [@ForkKILLET](https://github.com/ForkKILLET)).
 - Creating a **Window** with `fullscreen` set to `true` now takes effect immediately (previously it was failing silently)
+- Drawing paths after setting an invalid transform no longer crashes (contributed by [@mpaperno](https://github.com/mpaperno) #175)
+- Windows on macOS 14+ no longer [become unresponsive](https://github.com/gfx-rs/gfx/issues/2460) after being fully occluded by other windows
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 129
@@ -26,6 +29,7 @@
 [key_location]: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/location
 [vulkano_demo]: https://github.com/vulkano-rs/vulkano/blob/master/examples/triangle/main.rs
 [pragmatrix_emergent]: https://github.com/pragmatrix/emergent/blob/master/src/skia_renderer.rs
+[woff_wiki]: https://en.wikipedia.org/wiki/Web_Open_Font_Format
 
 ## 📦 ⟩ [v1.0.2] ⟩ Aug 21, 2024
 
