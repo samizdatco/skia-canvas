@@ -2155,6 +2155,16 @@ tests['drawImage(img) grayscale JPEG'] = function (ctx, done) {
   img.src = imageSrc('pentagon-grayscale.jpg')
 }
 
+tests['drawImage(img) webp'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, 200, 200)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('rose.webp')
+}
+
 // tests['drawImage(img) svg'] = function (ctx, done) {
 //   var img = new Image()
 //   img.onload = function () {

@@ -31,7 +31,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
 
     - name: Package module
       run: |
@@ -101,7 +101,7 @@ jobs:
       run: |
         cd skia-canvas
         npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype
+        npm run build -- --release --features vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
 
     - name: Package module
       run: |
@@ -137,6 +137,13 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
+
+    # temporarily necessary while skia_bindings 0.78.2 is looking for the `pipes` module which
+    # was renamed in Python 3.13 (can hopefully be removed at the next release…)
+    - name: Downgrade Python  (depot_tools workaround)
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12' 
 
     - name: Build module
       env:
