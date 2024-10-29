@@ -2112,7 +2112,27 @@ tests['drawImage(img) webp'] = function (ctx, done) {
 tests['drawImage(img,x,y)'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
-    ctx.drawImage(img, 5, 25)
+    ctx.drawImage(img, 25, 25)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('state.png')
+}
+
+tests['drawImage(img,x,y) with Image(w,h)'] = function (ctx, done) {
+  var img = new Image(50,75)
+  img.onload = function () {
+    ctx.drawImage(this, 25, 25)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('state.png')
+}
+
+tests['drawImage(img,x,y,img.w,img.h) with Image(w,h)'] = function (ctx, done) {
+  var img = new Image(50,75)
+  img.onload = function () {
+    ctx.drawImage(this, 25, 25, this.width, this.height)
     done(null)
   }
   img.onerror = done

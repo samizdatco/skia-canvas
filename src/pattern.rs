@@ -63,7 +63,7 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 
   if let Some(repeat) = to_repeat_mode(&repetition){
     let src = src.borrow();
-    let dims = src.size();
+    let dims = Size::from_isize(src.image_size());
     let stamp = Stamp{
       image:src.image.clone(),
       pict:None,
