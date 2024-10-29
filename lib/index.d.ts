@@ -22,10 +22,10 @@ export class Image extends globalThis.Image {
 //
 
 type FixedLenArray<T, L extends number> = T[] & { length: L };
-type MatrixParameter = DOMMatrix | { a: number, b: number, c: number, d: number, e: number, f: number } | FixedLenArray<number, 6> | FixedLenArray<number, 16>
+type Matrix = DOMMatrix | { a: number, b: number, c: number, d: number, e: number, f: number } | FixedLenArray<number, 6> | FixedLenArray<number, 16>
 
 export class DOMMatrix extends globalThis.DOMMatrix {
-  constructor(init?: string | MatrixParameter)
+  constructor(init?: string | Matrix)
 }
 
 //
@@ -96,7 +96,8 @@ export class Canvas {
 //
 
 export class CanvasPattern{
-  setTransform(transform: MatrixParameter): void;
+  setTransform(transform: Matrix): void;
+  setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
 }
 
 //
@@ -158,14 +159,14 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   lineDashMarker: Path2D | null;
   lineDashFit: "move" | "turn" | "follow";
 
+  setTransform(transform?: Matrix): void
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
-  setTransform(transform?: MatrixParameter): void
 
+  transform(transform: Matrix): void
   transform(a: number, b: number, c: number, d: number, e: number, f: number): void
-  transform(transform: MatrixParameter): void
 
   get currentTransform(): DOMMatrix
-  set currentTransform(matrix: MatrixParameter)
+  set currentTransform(matrix: Matrix)
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
 
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
