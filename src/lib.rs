@@ -32,6 +32,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Image_get_src", image::get_src)?;
   cx.export_function("Image_set_src", image::set_src)?;
   cx.export_function("Image_set_data", image::set_data)?;
+  cx.export_function("Image_load_svg", image::load_svg)?;
   cx.export_function("Image_get_width", image::get_width)?;
   cx.export_function("Image_get_height", image::get_height)?;
   cx.export_function("Image_get_complete", image::get_complete)?;
@@ -103,7 +104,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Canvas_get_engine", canvas::get_engine)?;
   cx.export_function("Canvas_set_engine", canvas::set_engine)?;
   cx.export_function("Canvas_get_engine_status", canvas::get_engine_status)?;
-  
+
   cx.export_function("Canvas_get_width", canvas::get_width)?;
   cx.export_function("Canvas_set_width", canvas::set_width)?;
   cx.export_function("Canvas_get_height", canvas::get_height)?;

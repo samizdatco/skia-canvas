@@ -6,9 +6,8 @@
 use std::f32::consts::PI;
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
-use skia_safe::{Point, Rect, RRect, Matrix, Path, PathDirection::{CW, CCW}, PaintStyle};
-use skia_safe::path::AddPathMode::Append;
-use skia_safe::path::AddPathMode::Extend;
+use skia_safe::{Matrix, PaintStyle, Picture, Point, RRect, Rect, Size};
+use skia_safe::path::{AddPathMode::{Append,Extend}, Direction::{CCW, CW}, Path};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
@@ -701,7 +700,7 @@ pub fn set_miterLimit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 // Imagery
 //
 
-fn _layout_rects(width:f32, height:f32, nums:&[f32]) -> Option<(Rect, Rect)> {
+fn _layout_rects(width:f32, height:f32, nums:&[f32]) -> Result<(Rect, Rect), String> {
   let (src, dst) = match nums.len() {
     2 => ( Rect::from_xywh(0.0, 0.0, width, height),
            Rect::from_xywh(nums[0], nums[1], width, height) ),
@@ -709,72 +708,102 @@ fn _layout_rects(width:f32, height:f32, nums:&[f32]) -> Option<(Rect, Rect)> {
            Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
     8 => ( Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]),
            Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
-    _ => return None
+    _ => return Err(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
   };
-  Some((src, dst))
+  Ok((src, dst))
+}
+
+fn _draw_picture(cx: &mut FunctionContext, picture: &Option<Picture>, size: &Size, size_to_canvas: bool) -> Result<(), String> {
+  let this = cx.argument::<BoxedContext2D>(0).unwrap();
+  let mut this = this.borrow_mut();
+
+  let argc = cx.len() as usize;
+  let nums = float_args(cx, 2..argc).unwrap_or_default();
+
+  match _layout_rects(size.width, size.height, &nums){
+    Ok((mut src, mut dst)) => {
+      // If `Image.adjust_size_to_canvas` flag is set (for SVG images with no intrinsic size),
+      // and no size is specified by the user, then we need to scale the image to canvas size.
+      // This preserves compatibility with how Chromium browsers behave.
+      if size_to_canvas && nums.len() != 4 {
+        let canvas_size = this.bounds.size();
+        if nums.len() == 2 {
+          // if the user doesn't specify a size, scale the destination image to canvas size
+          let factor = (canvas_size.width / size.width, canvas_size.height / size.height);
+          (dst, _) = Matrix::scale(factor).map_rect(dst);
+        }
+        else {
+          // if clipping out part of the source, scale it in proportion to canvas size
+          let factor = (size.width / canvas_size.width, size.height / canvas_size.height);
+          (src, _) = Matrix::scale(factor).map_rect(src);
+        }
+      }
+      this.draw_picture(&picture, &src, &dst);
+      Ok(())
+    },
+    Err(err) => Err(err)
+  }
 }
 
 pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
   let source = cx.argument::<JsValue>(1)?;
-  let image = {
-    if let Ok(obj) = source.downcast::<BoxedImage, _>(&mut cx){
-      (obj.borrow().image).clone()
-    }else if let Ok(obj) = source.downcast::<BoxedContext2D, _>(&mut cx){
-      obj.borrow().get_image()
-    }else{
-      return Ok(cx.undefined())
-    }
+
+  // Do we want to keep drawing canvas as raster image?
+  if source.is_a::<BoxedContext2D, _>(&mut cx) {
+    return drawCanvas(cx)
+  }
+
+  let image = match source.downcast::<BoxedImage, _>(&mut cx) {
+    Ok(obj) => obj,
+    Err(err) => return cx.throw_error(format!("Cannot convert argument to image type, got error: {}", err))
   };
 
-  let dims = image.as_ref().map(|img|
-    (img.width(), img.height())
-  );
+  let image = &image.borrow();
+  let mut size = Size::from_isize(image.image_size());
 
-  let (width, height) = match dims{
-    Some((w,h)) => (w as f32, h as f32),
-    None => return cx.throw_error("Cannot draw incomplete image (has it finished loading?)")
-  };
+  if size.is_empty() {
+    return cx.throw_error("Cannot draw incomplete image (has it finished loading?)")
+  }
+
+  if image.picture.is_some() {
+    match _draw_picture(&mut cx, &image.picture, &size, image.adjust_size_to_canvas) {
+      Ok(()) => return Ok(cx.undefined()),
+      Err(err) => return cx.throw_error(err)
+    };
+  }
+
+  let image = &image.image;
+  let this = cx.argument::<BoxedContext2D>(0)?;
 
   let argc = cx.len() as usize;
   let nums = float_args(&mut cx, 2..argc)?;
-  match _layout_rects(width, height, &nums){
-    Some((src, dst)) => {
+  match _layout_rects(size.width, size.height, &nums){
+    Ok((src, dst)) => {
       // shrink src to lie within the image bounds and adjust dst proportionately
-      let (src, dst) = fit_bounds(width, height, src, dst);
+      let (src, dst) = fit_bounds(size.width, size.height, src, dst);
 
       let mut this = this.borrow_mut();
       this.draw_image(&image, &src, &dst);
       Ok(cx.undefined())
     },
-    None => cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
+    Err(err) => cx.throw_error(err)
   }
 }
 
 pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
-  let context = cx.argument::<BoxedContext2D>(1)?;
 
-  let (width, height) = {
-    let bounds = context.borrow().bounds;
-    (bounds.width(), bounds.height())
+  let (pict, size) = {
+    let context = cx.argument::<BoxedContext2D>(1)?;
+    let mut ctx = context.borrow_mut();
+    (ctx.get_picture(), ctx.bounds.size())
   };
-
-  let argc = cx.len() as usize;
-  let nums = float_args(&mut cx, 2..argc)?;
-  match _layout_rects(width, height, &nums){
-    Some((src, dst)) => {
-      let pict = {
-        let mut ctx = context.borrow_mut();
-        ctx.get_picture()
-      };
-
-      let mut this = this.borrow_mut();
-      this.draw_picture(&pict, &src, &dst);
-      Ok(cx.undefined())
-    },
-    None => cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
+  if pict.is_some() {
+    match _draw_picture(&mut cx, &pict, &size, false) {
+      Ok(()) => return Ok(cx.undefined()),
+      Err(err) => return cx.throw_error(err)
+    };
   }
+  cx.throw_error("Cannot draw null canvas.")
 }
 
 pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
