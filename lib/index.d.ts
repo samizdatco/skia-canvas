@@ -221,7 +221,8 @@ export class Path2D extends globalThis.Path2D {
   points(step?: number): readonly [x: number, y: number][]
   round(radius: number): Path2D
   simplify(rule?: "nonzero" | "evenodd"): Path2D
-  transform(transform: MatrixParameter): Path2D;
+  transform(transform: Matrix): Path2D;
+  transform(a: number, b: number, c: number, d: number, e: number, f: number): Path2D;
   trim(start: number, end: number, inverted?: boolean): Path2D;
   trim(start: number, inverted?: boolean): Path2D;
 
