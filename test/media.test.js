@@ -64,6 +64,13 @@ describe("Image", () => {
       img.src = URL
     })
 
+    test("set size vs natural size", () => {
+      img = new Image(50,50)
+      expect(img).toMatchObject({complete:false, width:50, height:50, naturalWidth:0, naturalHeight:0})
+      img.src = DATA_URI
+      expect(img).toMatchObject({complete:true, width:50, height:50, naturalWidth:125, naturalHeight:125})
+    })
+
     test("loadImage call", async () => {
       expect(img).toMatchObject(FRESH)
 
