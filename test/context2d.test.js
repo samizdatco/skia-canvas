@@ -819,6 +819,40 @@ describe("Context2D", ()=>{
       ctx.fillRect(WIDTH/2, HEIGHT/2, 3, 3)
       expect(pixel(WIDTH/2 + 1, HEIGHT/2 + 1)).toEqual(BLACK)
     })
+
+    describe("transform()", ()=>{
+      const a=0.1, b=0, c=0, d=0.3, e=0, f=0
+  
+      test('with args list', () => {
+        ctx.transform(a, b, c, d, e, f)
+        let matrix = ctx.currentTransform
+        _.each({a, b, c, d, e, f}, (val, term) =>
+          expect(matrix[term]).toBeCloseTo(val)
+        )
+      })
+  
+      test('with DOMMatrix', () => {
+        ctx.transform(new DOMMatrix().scale(0.1, 0.3));
+        let matrix = ctx.currentTransform
+        _.each({a, b, c, d, e, f}, (val, term) =>
+          expect(matrix[term]).toBeCloseTo(val)
+        )
+      })
+  
+      test('with matrix-like object', () => {
+        ctx.transform({a, b, c, d, e, f});
+        let matrix = ctx.currentTransform
+        _.each({a, b, c, d, e, f}, (val, term) =>
+          expect(matrix[term]).toBeCloseTo(val)
+        )
+      })
+  
+      test('with invalid args (error)', () => {
+        expect( () => ctx.transform(0, 0, 0)).toThrow("Invalid transform matrix")
+      })
+  
+    })
+  
   })
 
 
@@ -1014,36 +1048,4 @@ describe("Context2D", ()=>{
   })
 
 
-  describe("transform()", ()=>{
-    const a=0.1, b=0, c=0, d=0.3, e=0, f=0
-
-    test('set with args list', () => {
-      ctx.transform(a, b, c, d, e, f)
-      let matrix = ctx.currentTransform
-      _.each({a, b, c, d, e, f}, (val, term) =>
-        expect(matrix[term]).toBeCloseTo(val)
-      )
-    })
-
-    test('set with DOMMatrix', () => {
-      ctx.transform(new DOMMatrix().scale(0.1, 0.3));
-      let matrix = ctx.currentTransform
-      _.each({a, b, c, d, e, f}, (val, term) =>
-        expect(matrix[term]).toBeCloseTo(val)
-      )
-    })
-
-    test('set with matrix-like object', () => {
-      ctx.transform({a, b, c, d, e, f});
-      let matrix = ctx.currentTransform
-      _.each({a, b, c, d, e, f}, (val, term) =>
-        expect(matrix[term]).toBeCloseTo(val)
-      )
-    })
-
-    test('set with invalid args (error)', () => {
-      expect( () => ctx.transform(0, 0, 0)).toThrow("Invalid transform matrix")
-    })
-
-  })
 })
