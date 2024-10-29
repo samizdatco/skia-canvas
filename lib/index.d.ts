@@ -26,7 +26,6 @@ type MatrixParameter = DOMMatrix | { a: number, b: number, c: number, d: number,
 
 export class DOMMatrix extends globalThis.DOMMatrix {
   constructor(init?: string | MatrixParameter)
-  clone(): DOMMatrix
 }
 
 //
