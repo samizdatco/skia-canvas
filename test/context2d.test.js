@@ -309,6 +309,10 @@ describe("Context2D", ()=>{
         [1, .5, .25, .125, 0.0625].forEach(mag => {
           mat = new DOMMatrix().scale(mag);
           pat.setTransform(mat);
+          // make sure the alternative matrix syntaxes also work
+          expect(() => {pat.setTransform(mag, 0, 0, mag, 0, 0)}).not.toThrow()
+          expect(() => {pat.setTransform([mag, 0, 0, mag, 0, 0])}).not.toThrow()
+          expect(() => {pat.setTransform({a:mag, b:0, c:0, d:mag, e:0, f:0})}).not.toThrow()
           ctx.fillRect(0,0, w*mag, h*mag);
           isCheckerboard(ctx, w*mag, h*mag);
         })
