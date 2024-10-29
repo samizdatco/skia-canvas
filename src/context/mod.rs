@@ -404,7 +404,6 @@ impl Context2D{
 
   pub fn draw_picture(&mut self, picture:&Option<Picture>, src_rect:&Rect, dst_rect:&Rect){
     let paint = self.paint_for_image();
-    let size = ISize::new(dst_rect.width() as i32, dst_rect.height() as i32);
     let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
     let mut matrix = Matrix::new_identity();
     matrix.pre_scale( (mag.x, mag.y), None )
@@ -418,7 +417,10 @@ impl Context2D{
           (Some(BlendMode::SrcOver), 255, None) => None,
           _ => Some(paint)
         };
-        canvas.draw_picture(picture, Some(&matrix), paint);
+        canvas.save();
+        canvas.clip_rect(dst_rect, ClipOp::Intersect, true);
+        canvas.draw_picture(&picture, Some(&matrix), paint);
+        canvas.restore();
       });
     }
   }
