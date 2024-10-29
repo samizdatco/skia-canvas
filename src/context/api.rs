@@ -96,9 +96,7 @@ pub fn transform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
 
   if let Some(matrix) = opt_matrix_arg(&mut cx, 1) {
-    if !matrix.is_identity() {
-      this.with_matrix(|ctm| ctm.pre_concat(&matrix) );
-    }
+    this.with_matrix(|ctm| ctm.pre_concat(&matrix) );
   }
   Ok(cx.undefined())
 }
