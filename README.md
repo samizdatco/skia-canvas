@@ -495,7 +495,7 @@ The results below show the image generated when the `createProjection()` call is
 ![Paths and text with a perspective transform](/test/assets/path/projection@2x.png)
 
 
-#### `transform(DOMMatrix | a, b, c, d, e, f)`
+#### `transform(matrix)` or `transform(a, b, c, d, e, f)`
 
 This performs exactly the same function as the [standard][transform()], but can accept a [DOMMatrix][DOMMatrix] instance as the first argument instead of using individual matrix terms.
 
