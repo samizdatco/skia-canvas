@@ -22,11 +22,10 @@ export class Image extends globalThis.Image {
 //
 
 type FixedLenArray<T, L extends number> = T[] & { length: L };
-type MatrixParameter = [DOMMatrix] | [{ a: number, b: number, c: number, d: number, e: number, f: number }] | [FixedLenArray<number, 6>] | [FixedLenArray<number, 16>]
-type MatrixArgument = MatrixParameter | FixedLenArray<number, 6> | FixedLenArray<number, 16>
+type MatrixParameter = DOMMatrix | { a: number, b: number, c: number, d: number, e: number, f: number } | FixedLenArray<number, 6> | FixedLenArray<number, 16>
 
 export class DOMMatrix extends globalThis.DOMMatrix {
-  constructor(...matrix: MatrixArgument)
+  constructor(init?: string | MatrixParameter)
   clone(): DOMMatrix
 }
 
@@ -97,8 +96,8 @@ export class Canvas {
 // CanvasPattern
 //
 
-export class CanvasPattern extends globalThis.CanvasPattern {
-  setTransform(...matrix: MatrixArgument): void;
+export class CanvasPattern{
+  setTransform(transform: MatrixParameter): void;
 }
 
 //
@@ -150,6 +149,8 @@ type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:num
 
 type CornerRadius = number | DOMPoint
 
+interface CanvasTransform extends Omit<globalThis.CanvasTransform, "transform" | "setTransform">{}
+
 export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform, CanvasUserInterface {
   readonly canvas: Canvas;
   fontVariant: string;
@@ -158,17 +159,20 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   lineDashMarker: Path2D | null;
   lineDashFit: "move" | "turn" | "follow";
 
+  setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
+  setTransform(transform?: MatrixParameter): void
+
+  transform(a: number, b: number, c: number, d: number, e: number, f: number): void
+  transform(transform: MatrixParameter): void
+
   get currentTransform(): DOMMatrix
   set currentTransform(matrix: MatrixParameter)
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
-  transform(...matrix: MatrixArgument): void;
 
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
   roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[]): void
   // getContextAttributes(): CanvasRenderingContext2DSettings;
 
-  fillText(text: string, x: number, y:number, maxWidth?: number): void
-  strokeText(text: string, x: number, y:number, maxWidth?: number): void
   measureText(text: string, maxWidth?: number): TextMetrics
   outlineText(text: string, maxWidth?: number): Path2D
 
@@ -218,7 +222,7 @@ export class Path2D extends globalThis.Path2D {
   points(step?: number): readonly [x: number, y: number][]
   round(radius: number): Path2D
   simplify(rule?: "nonzero" | "evenodd"): Path2D
-  transform(...matrix: MatrixArgument): Path2D;
+  transform(transform: MatrixParameter): Path2D;
   trim(start: number, end: number, inverted?: boolean): Path2D;
   trim(start: number, inverted?: boolean): Path2D;
 
