@@ -497,8 +497,7 @@ The results below show the image generated when the `createProjection()` call is
 
 #### `transform(matrix)` or `transform(a, b, c, d, e, f)`
 
-This performs exactly the same function as the [standard][transform()], but can accept a [DOMMatrix][DOMMatrix] instance as the first argument instead of using individual matrix terms.
-
+This performs exactly the same function as the [standard][transform()], but can accept a [DOMMatrix][DOMMatrix] instance or [CSS transform][css_transform] string (e.g, `"rotate(20deg) scale(10%)"`) as the first argument instead of using individual matrix terms.
 
 #### `createTexture(spacing, {path, line, color, angle, offset=0})`
 
@@ -790,7 +789,7 @@ let uncrossed = cross.simplify()
 
 #### `transform(matrix)` or `transform(a, b, c, d, e, f)`
 
-Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix’s terms can be passed individually as 6 numbers or as a [DOMMatrix][DOMMatrix] object. The original path remains unmodified.
+Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix can be passed as a [DOMMatrix][DOMMatrix] object, a [CSS transform][css_transform] string (e.g, `"rotate(20deg)"`), or as 6 individual numbers. The original path remains unmodified.
 
 #### `trim(start, end, inverted)`
 
@@ -1291,6 +1290,7 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [createTexture()]: #createtexturespacing-path-line-color-angle-offset0
 [createProjection()]: #createprojectionquad-basis
 [transform]: #transformdommatrix--a-b-c-d-e-f
+[css_transform]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform
 [lineDashMarker]: #linedashmarker
 [lineDashFit]: #linedashfit
 
