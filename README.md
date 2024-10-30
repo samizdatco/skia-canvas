@@ -334,18 +334,18 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 
 Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
-| Canvas State                                  | Drawing                                           | Pattern & Color                                   | Line Style                                   | Transform                                        | Bezier Paths                             | Typography                                                       | Images                                             | Compositing Effects                                      |
-|-----------------------------------------------|---------------------------------------------------|---------------------------------------------------|----------------------------------------------|--------------------------------------------------|------------------------------------------|------------------------------------------------------------------|----------------------------------------------------|----------------------------------------------------------|
-| [**canvas**][canvas_attr] ⧸[⚡](#canvas) | [clearRect()][clearRect()]                        | [**fillStyle**][fillStyle]                        | [**lineCap**][lineCap]                       | [**currentTransform**][currentTransform]         | [moveTo()][moveTo()]                     | [**direction**][direction]                                       | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**filter**][filter]                                     |
-| [beginPath()][beginPath()]                    | [fillRect()][fillRect()]                          | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [createProjection() ⚡][createProjection()] | [lineTo()][lineTo()]                     | [**font**][font] ⧸[⚡](#font)                               | [**imageSmoothingQuality**][imageSmoothingQuality] | [**globalAlpha**][globalAlpha]                           |
-| [closePath()][closePath()]                    | [strokeRect()][strokeRect()]                      | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [getTransform()][getTransform()]                 | [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createImageData()][createImageData()]             | [**globalCompositeOperation**][globalCompositeOperation] |
-| [isPointInPath()][isPointInPath()]            | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]         | [setTransform()][setTransform()]                 | [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                       | [getImageData()][getImageData()]                   | [**shadowBlur**][shadowBlur]                             |
-| [isPointInStroke()][isPointInStroke()]        | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]                     | [resetTransform()][resetTransform()]             | [conicCurveTo() ⚡][conicCurveTo]   | [**textBaseline**][textBaseline]                                 | [putImageData()][putImageData()]                   | [**shadowColor**][shadowColor]                           |
-| [save()][save()]                              | [fill()][fill()]                                  | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]                   | [transform()][transform()]                       | [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [drawCanvas() ⚡](#drawcanvascanvas-x-y-)     | [**shadowOffsetX**][shadowOffsetX]                       |
-| [restore()][restore()]                        | [stroke()][stroke()]                              | [createTexture() ⚡][createTexture()]        | [**miterLimit**][miterLimit]                 | [translate()][translate()]                       | [arc()][arc()]                           | [**textWrap** ⚡](#textwrap)                                | [drawImage()][drawImage()]                         | [**shadowOffsetY**][shadowOffsetY]                       |
-| [reset()][reset()]                            |                                                   |                                                   | [getLineDash()][getLineDash()]               | [rotate()][rotate()]                             | [ellipse()][ellipse()]                   | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) |                                                    |                                                          |
-| [clip()][clip()]                              |                                                   |                                                   | [setLineDash()][setLineDash()]               | [scale()][scale()]                               | [rect()][rect()]                         | [outlineText() ⚡][outlineText()]                           |                                                    |                                                          |
-|                                               |                                                   |                                                   |                                              |                                                  | [roundRect()][roundRect()]               |                                                                  |                                                    |
+| Canvas State                                  | Drawing                                     | Pattern & Color                                   | Line Style                             | Transform                                        | Bezier Paths                             | Typography                                                 | Images                                             | Compositing Effects                                      |
+|-----------------------------------------------|---------------------------------------------|---------------------------------------------------|----------------------------------------|--------------------------------------------------|------------------------------------------|------------------------------------------------------------|----------------------------------------------------|----------------------------------------------------------|
+| [**canvas**][canvas_attr] ⧸[⚡](#canvas)       | [clearRect()][clearRect()]                  | [**fillStyle**][fillStyle]                        | [**lineCap**][lineCap]                 | [**currentTransform**][currentTransform]         | [moveTo()][moveTo()]                     | [**direction**][direction]                                 | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**filter**][filter]                                     |
+| [beginPath()][beginPath()]                    | [fillRect()][fillRect()]                    | [**strokeStyle**][strokeStyle]                    | [**lineDashFit** ⚡][lineDashFit]       | [createProjection() ⚡][createProjection()]       | [lineTo()][lineTo()]                     | [**font**][font] ⧸[⚡](#font)                               | [**imageSmoothingQuality**][imageSmoothingQuality] | [**globalAlpha**][globalAlpha]                           |
+| [closePath()][closePath()]                    | [strokeRect()][strokeRect()]                | [createConicGradient()][createConicGradient()]    | [**lineDashMarker** ⚡][lineDashMarker] | [getTransform()][getTransform()]                 | [arcTo()][arcTo()]                       | [**fontVariant** ⚡](#fontvariant)                          | [createImageData()][createImageData()]             | [**globalCompositeOperation**][globalCompositeOperation] |
+| [isPointInPath()][isPointInPath()]            | [fillText()][fillText()] ⧸[⚡][drawText]     | [createLinearGradient()][createLinearGradient()]  | [**lineDashOffset**][lineDashOffset]   | [setTransform()][setTransform()]⧸[⚡][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**textAlign**][textAlign]                                 | [getImageData()][getImageData()]                   | [**shadowBlur**][shadowBlur]                             |
+| [isPointInStroke()][isPointInStroke()]        | [strokeText()][strokeText()] ⧸[⚡][drawText] | [createRadialGradient()][createRadialGradient()]  | [**lineJoin**][lineJoin]               | [resetTransform()][resetTransform()]             | [conicCurveTo() ⚡][conicCurveTo]         | [**textBaseline**][textBaseline]                           | [putImageData()][putImageData()]                   | [**shadowColor**][shadowColor]                           |
+| [save()][save()]                              | [fill()][fill()]                            | [createPattern()][createPattern()]                | [**lineWidth**][lineWidth]             | [transform()][transform()] ⧸[⚡][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**textTracking** ⚡](#texttracking)                        | [drawCanvas() ⚡](#drawcanvascanvas-x-y-)           | [**shadowOffsetX**][shadowOffsetX]                       |
+| [restore()][restore()]                        | [stroke()][stroke()]                        | [createTexture() ⚡][createTexture()]              | [**miterLimit**][miterLimit]           | [translate()][translate()]                       | [arc()][arc()]                           | [**textWrap** ⚡](#textwrap)                                | [drawImage()][drawImage()]                         | [**shadowOffsetY**][shadowOffsetY]                       |
+| [reset()][reset()]                            |                                             |                                                   | [getLineDash()][getLineDash()]         | [rotate()][rotate()]                             | [ellipse()][ellipse()]                   | [measureText()][measureText()] ⧸[⚡](#measuretextstr-width) |                                                    |                                                          |
+| [clip()][clip()]                              |                                             |                                                   | [setLineDash()][setLineDash()]         | [scale()][scale()]                               | [rect()][rect()]                         | [outlineText() ⚡][outlineText()]                           |                                                    |                                                          |
+|                                               |                                             |                                                   |                                        |                                                  | [roundRect()][roundRect()]               |                                                            |                                                    |                                                          |
 
 ##### PROPERTIES
 
@@ -495,6 +495,24 @@ The results below show the image generated when the `createProjection()` call is
 ![Paths and text with a perspective transform](/test/assets/path/projection@2x.png)
 
 
+#### `transform(...matrix)` & `setTransform(...matrix)`
+
+These behave just like the standard [transform][transform()] and [setTransform][setTransform()] methods, but can accept their matrix argument in a variety of forms:
+- a [DOMMatrix][DOMMatrix] object
+- a [CSS transform][css_transform] string (supporting all [transform functions][css_transform_fns] except `perspective`)
+- a matrix-like object with numeric attributes named `a`, `b`, `c`, `d`, `e`, & `f`
+- a 6-element array of numbers
+- 6 individual numeric arguments
+
+For example all of these invocations result in setting the context to the same transform state:
+
+```js
+ctx.setTransform(new DOMMatrix().scale(2, .5).rotate(180).translate(10, 10)) // DOMMatrix
+ctx.setTransform('scale(2, 50%) rotate(180deg) translate(10, 10)') // CSS transform
+ctx.setTransform({a:-2, b:0, c:0, d:-0.5, e:-20, f:-40}) // matrix-like object
+ctx.setTransform([-2, 0, 0, -0.5, -20, -40]) // array
+ctx.setTransform(-2, 0, 0, -0.5, -20, -40) // numeric arguments
+```
 #### `createTexture(spacing, {path, line, color, angle, offset=0})`
 
 The `createTexture()` method returns a `CanvasTexture` object that can be assigned to the context’s `strokeStyle` or `fillStyle` property. Similar to a `CanvasPattern`, a `CanvasTexture` defines a repeating pattern that will be drawn instead of a flat color, but textures define their content using *vectors* rather than bitmaps.
@@ -783,9 +801,9 @@ let uncrossed = cross.simplify()
 ```
 ![different combinations](/test/assets/path/effect-simplify@2x.png)
 
-#### `transform(matrix)` or `transform(a, b, c, d, e, f)`
+#### `transform(...matrix)`
 
-Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix’s terms can be passed individually as 6 numbers or as a [DOMMatrix][DOMMatrix] object. The original path remains unmodified.
+Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix can be passed as a [DOMMatrix][DOMMatrix] object, a [CSS transform][css_transform] string (e.g, `"rotate(20deg)"`), or 6 individual numbers (see the Context's [setTransform()][transforms] documentation for details). The original path remains unmodified.
 
 #### `trim(start, end, inverted)`
 
@@ -1285,6 +1303,9 @@ Many thanks to the [`node-canvas`](https://github.com/Automattic/node-canvas) de
 [outlineText()]: #outlinetextstr
 [createTexture()]: #createtexturespacing-path-line-color-angle-offset0
 [createProjection()]: #createprojectionquad-basis
+[transforms]: #transformmatrix--settransformmatrix
+[css_transform]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform
+[css_transform_fns]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform-function
 [lineDashMarker]: #linedashmarker
 [lineDashFit]: #linedashfit
 

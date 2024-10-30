@@ -4,6 +4,7 @@ var DOMMatrix
 var Image
 var imageSrc
 var tests = {}
+var isWeb = false;
 
 const D2R = Math.PI / 180;
 
@@ -19,6 +20,7 @@ if (typeof module !== 'undefined' && module.exports) {
   Image = window.Image
   DOMMatrix = window.DOMMatrix
   imageSrc = function (filename) { return filename }
+  isWeb = true;
 }
 
 tests['clearRect()'] = function (ctx) {
@@ -299,6 +301,18 @@ function drawPinwheel(ctx, {scl = .5, offset = 0, len = 100, cb = null} = {}) {
 
 tests['transform()'] = function (ctx) {
   drawPinwheel(ctx)
+}
+
+/** @param {skCanvas.CanvasRenderingContext2D} ctx */
+tests['transform() with DOMMatrix'] = function (ctx) {
+  let cb = isWeb ? null : (a,b,c,d) => ctx.transform(new DOMMatrix(a, b, c, d, 0, 0))
+  drawPinwheel(ctx, { scl: .5, offset: 0, len:100, cb})
+}
+
+/** @param {skCanvas.CanvasRenderingContext2D} ctx */
+tests['transform() with matrix-like object'] = function (ctx) {
+  let cb = isWeb ? null : (a,b,c,d) => ctx.transform({a: a, b: b, c: c, d: d, e: 0, f: 0})
+  drawPinwheel(ctx, { scl: .5, offset: 0, len:100, cb})
 }
 
 tests['rotate()'] = function (ctx) {
