@@ -8,6 +8,7 @@
 - **FontLibrary.**[use()][FontLibrary.use] now supports dynamically loaded [WOFF & WOFF2][woff_wiki] fonts
 - **Canvas**es can now be saved as WEBP images and **Image**s can load WEBPs as well (contributed by [@mpaperno](https://github.com/mpaperno) #177, h/t [@revam](https://github.com/revam) for the initial work on this)
 - The `outlineText()` method now takes an optional `width` argument and supports all the context's typographic settings (e.g., `.font`, `.fontVariant`, `.textWrap`, `.textTracking`, etc.)
+- The `.transform` and `.setTransform` methods on **Context**, **Path2D**, and **CanvasPattern** objects can now take their arguments in additional formats. They can now be passed a [**DOMMatrix**][DOMMatrix] object or a string with a list of transformation operations compatible with the [CSS `transform`][css_transform] property. The **DOMMatrix** constructor also supports these strings as well as plain, matrix-like objects with numeric attributes named `a`, `b`, `c`, `d`, `e`, & `f` (contributed by [@mpaperno](https://github.com/mpaperno) #178).
 
 ### Breaking Changes
 - The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`](key_location) field provides a numeric description of which variant of a key was pressed.
@@ -31,6 +32,8 @@
 [vulkano_demo]: https://github.com/vulkano-rs/vulkano/blob/master/examples/triangle/main.rs
 [pragmatrix_emergent]: https://github.com/pragmatrix/emergent/blob/master/src/skia_renderer.rs
 [woff_wiki]: https://en.wikipedia.org/wiki/Web_Open_Font_Format
+[css_transform]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform
+[DOMMatrix]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrix
 
 ## 📦 ⟩ [v1.0.2] ⟩ Aug 21, 2024
 
