@@ -882,8 +882,10 @@ describe("Context2D", ()=>{
         }
       
         for (const input in transforms){
-          let matrix = new DOMMatrix(input)
+          let matrix = new DOMMatrix(input),
+              roundtrip = new DOMMatrix(matrix.toString())
           expect(matrix.toString()).toEqual(transforms[input])
+          expect(roundtrip.toString()).toEqual(transforms[input])
         }
 
         // check that the context can also take a string
