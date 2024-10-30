@@ -20,6 +20,7 @@
 - Drawing paths after setting an invalid transform no longer crashes (contributed by [@mpaperno](https://github.com/mpaperno) #175)
 - Windows with `.on("draw")` handlers no longer [become unresponsive](https://github.com/gfx-rs/gfx/issues/2460) on macOS 14+ after being fully occluded by other windows
 - Ellipses with certain combinations of positive and negative start- and stop-angles now render correctly—previously they would not appear at all if the total sweep exceeded 360° (contributed by [@mpaperno](https://github.com/mpaperno) #176)
+- The `drawCanvas()` method now clips to the specified crop size (contributed by [@mpaperno](https://github.com/mpaperno) #179)
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 129
