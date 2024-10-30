@@ -896,6 +896,7 @@ describe("Context2D", ()=>{
 
       test('rejects invalid args', () => {
         expect( () => ctx.transform(0, 0, 0)).toThrow("Invalid transform matrix")
+        expect( () => ctx.transform("nonesuch")).toThrow("Invalid transform matrix")
       })
   
     })
