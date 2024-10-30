@@ -723,18 +723,18 @@ fn _draw_picture(cx: &mut FunctionContext, picture: &Option<Picture>, size: &Siz
   match _layout_rects(size.width, size.height, &nums){
     Ok((mut src, mut dst)) => {
       // If `Image.adjust_size_to_canvas` flag is set (for SVG images with no intrinsic size),
-      // and no size is specified by the user, then we need to scale the image to canvas size.
-      // This preserves compatibility with how Chromium browsers behave.
+      // and no size is specified by the user, then we need to scale the image to canvas'
+      // smallest dimension. This preserves compatibility with how Chromium browsers behave.
       if size_to_canvas && nums.len() != 4 {
-        let canvas_size = this.bounds.size();
+        let min_size = f32::min(this.bounds.size().width, this.bounds.size().height);
         if nums.len() == 2 {
           // if the user doesn't specify a size, scale the destination image to canvas size
-          let factor = (canvas_size.width / size.width, canvas_size.height / size.height);
+          let factor = (min_size / size.width, min_size / size.height);
           (dst, _) = Matrix::scale(factor).map_rect(dst);
         }
         else {
           // if clipping out part of the source, scale it in proportion to canvas size
-          let factor = (size.width / canvas_size.width, size.height / canvas_size.height);
+          let factor = (size.width / min_size, size.height / min_size);
           (src, _) = Matrix::scale(factor).map_rect(src);
         }
       }

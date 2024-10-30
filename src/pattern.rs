@@ -67,11 +67,12 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
     let mut matrix = Matrix::new_identity();
 
     if src.adjust_size_to_canvas && !dims.is_empty() {
-      // If this flag is set (for SVG images with no intrinsic size) then we need to scale the image to canvas size.
-      // This preserves compatibility with how Chromium browsers behave. Handling of this in FF is wonky.
+      // If this flag is set (for SVG images with no intrinsic size) then we need to scale the image to
+      // the canvas' smallest dimension. This preserves compatibility with how Chromium browsers behave.
       let ctx = cx.argument::<BoxedContext2D>(2)?;
       let bounds = ctx.borrow().bounds.size();
-      let factor = (bounds.width / dims.width, bounds.height / dims.height);
+      let min_size = f32::min(bounds.width, bounds.height);
+      let factor = (min_size / dims.width, min_size / dims.height);
       matrix.set_scale(factor, None);
     }
 
