@@ -2,6 +2,7 @@
 
 var DOMMatrix
 var Image
+var Canvas
 var imageSrc
 var tests = {}
 var isWeb = false;
@@ -13,6 +14,7 @@ if (typeof module !== 'undefined' && module.exports) {
   let skCanvas = require('../../lib')
   Image = skCanvas.Image
   DOMMatrix = skCanvas.DOMMatrix
+  Canvas = skCanvas.Canvas
   imageSrc = function (filename) { return require('path').join(__dirname, '../assets', filename) }
 } else {
   // @ts-expect-error We are creating a tests propery
@@ -2165,6 +2167,21 @@ tests['drawImage(img,sx,sy,sw,sh,x,y,w,h)'] = function (ctx, done) {
     done(null)
   }
   img.onerror = done
+  img.src = imageSrc('state.png')
+}
+
+tests['drawCanvas(img,sx,sy,sw,sh,x,y,w,h)'] = function (ctx, done) {
+  if (!Canvas) {
+    return tests['drawImage(img,sx,sy,sw,sh,x,y,w,h)'](ctx, done)
+  }
+  var img = new Image()
+  img.onload = function () {
+    const srcCtx = new Canvas(200,200).getContext('2d');
+    srcCtx.drawImage(img, 0, 0);
+    ctx.drawCanvas(srcCtx.canvas, 13, 13, 45, 45, 25, 25, img.width / 2, img.height / 2)
+    done(null)
+  }
+  img.onerror = (e) => { console.log(e); done(e); }
   img.src = imageSrc('state.png')
 }
 

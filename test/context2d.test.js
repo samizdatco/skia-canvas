@@ -384,12 +384,12 @@ describe("Context2D", ()=>{
       expect(pixel(10, 10)).toEqual([0, 162, 213, 245])
     })
 
-    test('shadow', async() => {      
+    test('shadow', async() => {
       const sin = Math.sin(1.15*Math.PI)
-      const cos = Math.cos(1.15*Math.PI)  
+      const cos = Math.cos(1.15*Math.PI)
       ctx.translate(150, 150)
       ctx.transform(cos, sin, -sin, cos, 0, 0)
-      
+
       ctx.shadowColor = '#000'
       ctx.shadowBlur = 5
       ctx.shadowOffsetX = 10
@@ -796,6 +796,13 @@ describe("Context2D", ()=>{
       expect(pixel(WIDTH*.25, HEIGHT/2)).toEqual(GREEN)
       expect(pixel(WIDTH*.75, HEIGHT/2)).toEqual(GREEN)
       expect(pixel(WIDTH/2, HEIGHT/2)).toEqual(CLEAR)
+
+      ctx.clearRect(0,0,WIDTH,HEIGHT)
+      ctx.drawCanvas(srcCanvas, 1,1,2,2, 0,0,2,2)
+      expect(pixel(0, 0)).toEqual(CLEAR)
+      expect(pixel(0, 1)).toEqual(GREEN)
+      expect(pixel(1, 0)).toEqual(GREEN)
+      expect(pixel(1, 1)).toEqual(GREEN)
 
       let image = await loadAsset('checkers.png')
       expect( () => ctx.drawCanvas(image, 0, 0) ).not.toThrow()
