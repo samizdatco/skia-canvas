@@ -33,7 +33,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Image_set_src", image::set_src)?;
   cx.export_function("Image_set_data", image::set_data)?;
   cx.export_function("Image_get_width", image::get_width)?;
+  cx.export_function("Image_set_width", image::set_width)?;
   cx.export_function("Image_get_height", image::get_height)?;
+  cx.export_function("Image_set_height", image::set_height)?;
+  cx.export_function("Image_get_naturalWidth", image::get_natural_width)?;
+  cx.export_function("Image_get_naturalHeight", image::get_natural_height)?;
   cx.export_function("Image_get_complete", image::get_complete)?;
 
   // -- Path2D ------------------------------------------------------------------------------------

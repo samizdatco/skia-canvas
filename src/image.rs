@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
-use skia_safe::{Image as SkImage, ImageInfo, Size, ColorType, AlphaType, Data};
+use skia_safe::{Image as SkImage, ImageInfo, ISize, ColorType, AlphaType, Data};
 
 use crate::utils::*;
 
@@ -14,7 +14,9 @@ impl Finalize for Image {}
 
 pub struct Image{
   src:String,
-  pub image:Option<SkImage>
+  width:Option<i32>,
+  height:Option<i32>,
+  pub image:Option<SkImage>,
 }
 
 impl Image{
@@ -23,15 +25,22 @@ impl Image{
     ImageInfo::new(dims, ColorType::RGBA8888, AlphaType::Unpremul, None)
   }
 
-  pub fn size(&self) -> Size{
+  pub fn image_size(&self) -> ISize {
     if let Some(img) = &self.image {
-      let width = &img.width();
-      let height = &img.height();
-      Size::new(*width as f32, *height as f32)
-    }else{
-      Size::new(0.0, 0.0)
+      img.dimensions()
+    } else {
+      ISize::new_empty()
     }
   }
+
+  pub fn size(&self) -> ISize {
+    let actual_size = self.image_size();
+    ISize{
+      width: self.width.unwrap_or(actual_size.width),
+      height: self.height.unwrap_or(actual_size.height),
+    }
+  }
+
 }
 
 //
@@ -39,14 +48,15 @@ impl Image{
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
-  let this = RefCell::new(Image{ src:"".to_string(), image:None });
+  let this = RefCell::new(Image{
+    image:None, width:None, height:None, src:"".to_string() 
+  });
   Ok(cx.boxed(this))
 }
 
 pub fn get_src(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-
   Ok(cx.string(&this.src))
 }
 
@@ -73,21 +83,41 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
+  Ok(cx.number(this.size().width).upcast())
+}
 
-  match &this.image {
-    Some(image) => Ok(cx.number(image.width() as f64).upcast()),
-    None => Ok(cx.undefined().upcast())
-  }
+pub fn set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedImage>(0)?;
+  let mut this = this.borrow_mut();
+  let num = float_arg_or(&mut cx, 1, 0.0);
+  this.width = Some(num.max(0.0) as i32);
+  Ok(cx.undefined())
 }
 
 pub fn get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
+  Ok(cx.number(this.size().height).upcast())
+}
 
-  match &this.image {
-    Some(image) => Ok(cx.number(image.height() as f64).upcast()),
-    None => Ok(cx.undefined().upcast())
-  }
+pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedImage>(0)?;
+  let mut this = this.borrow_mut();
+  let num = float_arg_or(&mut cx, 1, 0.0);
+  this.height = Some(num.max(0.0) as i32);
+  Ok(cx.undefined())
+}
+
+pub fn get_natural_width(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let this = cx.argument::<BoxedImage>(0)?;
+  let this = this.borrow();
+  Ok(cx.number(this.image_size().width).upcast())
+}
+
+pub fn get_natural_height(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let this = cx.argument::<BoxedImage>(0)?;
+  let this = this.borrow();
+  Ok(cx.number(this.image_size().height).upcast())
 }
 
 pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
