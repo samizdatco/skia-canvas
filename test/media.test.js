@@ -39,7 +39,7 @@ describe("Image", () => {
 
   beforeEach(() => img = new Image() )
 
-  describe("can be initialized from", () => {
+  describe("can initialize bitmaps from", () => {
     test("buffer", () => {
       expect(img).toMatchObject(FRESH)
       img.src = BUFFER
@@ -68,34 +68,6 @@ describe("Image", () => {
       img.src = URL
     })
 
-    test("set size vs natural size", () => {
-      img = new Image(50,50)
-      expect(img).toMatchObject({complete:false, width:50, height:50, naturalWidth:0, naturalHeight:0})
-      img.src = DATA_URI
-      expect(img).toMatchObject({complete:true, width:50, height:50, naturalWidth:125, naturalHeight:125})
-
-      const svgImage = new Image({ type: 'svg' })
-      expect(svgImage).toMatchObject(FRESH)
-      svgImage.src = SVG_BUFFER
-      expect(svgImage).toMatchObject(PARSED)
-    })
-
-    test("SVG data uri", () => {
-      expect(img).toMatchObject(FRESH)
-      img.src = SVG_DATA_URI
-      expect(img).toMatchObject(PARSED)
-    })
-
-    test("SVG http", done => {
-      expect(img).toMatchObject(FRESH)
-      img.onload = loaded => {
-        expect(loaded).toBe(img)
-        expect(img).toMatchObject(PARSED)
-        done()
-      }
-      img.src = SVG_URL
-    })
-
     test("loadImage call", async () => {
       expect(img).toMatchObject(FRESH)
 
@@ -115,6 +87,36 @@ describe("Image", () => {
       expect(img).toMatchObject(PARSED)
 
       expect(async () => { await loadImage('http://nonesuch') }).rejects.toEqual("HTTP_ERROR_404")
+    })
+  })
+
+  describe("can initialize SVGs from", () => {
+    test("buffer", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = SVG_BUFFER
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("data uri", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = SVG_DATA_URI
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("local file", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = SVG_PATH
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("http url", done => {
+      expect(img).toMatchObject(FRESH)
+      img.onload = loaded => {
+        expect(loaded).toBe(img)
+        expect(img).toMatchObject(PARSED)
+        done()
+      }
+      img.src = SVG_URL
     })
   })
 
@@ -207,6 +209,11 @@ describe("Image", () => {
       img.src = FORMAT + '.webp'
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("SVG", () => {
+      img.src = FORMAT + '.svg'
       expect(img).toMatchObject(PARSED)
     })
   })
