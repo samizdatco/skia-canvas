@@ -14,7 +14,8 @@ impl Finalize for Image {}
 
 pub struct Image{
   src:String,
-  size:ISize,
+  width:Option<i32>,
+  height:Option<i32>,
   pub image:Option<SkImage>,
 }
 
@@ -33,15 +34,11 @@ impl Image{
   }
 
   pub fn size(&self) -> ISize {
-    let mut size = self.size.clone();
-    let img_size = self.image_size();
-    if size.width < 0 {
-      size.width = img_size.width;
+    let actual_size = self.image_size();
+    ISize{
+      width: self.width.unwrap_or(actual_size.width),
+      height: self.height.unwrap_or(actual_size.height),
     }
-    if size.height < 0 {
-      size.height = img_size.height;
-    }
-    size
   }
 
 }
@@ -52,9 +49,7 @@ impl Image{
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
   let this = RefCell::new(Image{
-    src:"".to_string(),
-    size:ISize::new(-1,-1),
-    image:None,
+    image:None, width:None, height:None, src:"".to_string() 
   });
   Ok(cx.boxed(this))
 }
@@ -62,7 +57,6 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
 pub fn get_src(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-
   Ok(cx.string(&this.src))
 }
 
