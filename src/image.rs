@@ -79,58 +79,54 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
 
   this.image = SkImage::from_encoded(&data);
   if this.image.is_none(){
-    // Parse & load the SVG data.
-    let dom = svg::Dom::from_bytes(&data, FontMgr::default());
-    if !dom.is_ok() {
-      return cx.throw_type_error("Error loading SVG data.")
+    // Try parsing the data as SVG and create a picture if it is valid
+    if let Ok(mut dom) = svg::Dom::from_bytes(&data, FontMgr::default()){
+      // Get the intrinsic size of the `svg` root element as specified in the width/height attributes, if any.
+      // So far skia-safe doesn't provide direct access to the needed methods, so we have to go direct to the source.
+      let i_size = unsafe { *dom.inner().containerSize() };  // skia_bindings::SkSize
+      // let i_size = dom.inner().fContainerSize;  // "safe" but this is using a private member of the C++ class (somehow... skia-"safe" :-P )
+      // TODO: Switch to these once available in skia-safe 0.79+
+      // let mut root = dom.root();
+      // let i_size = root.intrinsic_size();
+
+      // Set a flag to indicate that the image doesn't have its own intrinsic size.
+      // This may be used at drawing time if user doesn't specify a size in `drawImage()`,
+      // in which case the the canvas' size will be used as the image size.
+      // This is a "complication" to match Chrome's behavior... one could argue that it should
+      // just be drawn at the default size (set below). Which is what FF does (though that has its own anomalies).
+      let mut bounds = Rect::from_wh(i_size.fWidth, i_size.fHeight);
+      this.adjust_size_to_canvas = bounds.is_empty();
+
+      // Check if width/height are valid attribute values in the root `<svg>` element.
+      // If w/h aren't specified in an SVG (which is not uncommon), both Chrome and FF will:
+      //  - If only one dimension is missing then use the same size for both;
+      //  - If both are missing then assign a default of 150 (which seems arbitrary but I guess as good as any);
+      // `Dom::containerSize()` will return zero for both width and height if _either_ attribute is missing from `<svg>`.
+      // This seems a bit suspicious (as in may change in future?), so in the interest of paranoia let's check them individually.
+      // TODO: See if we can get actual width/height attribute values from DOM with skia-safe 0.79+
+      if bounds.right <= 0.0 {
+        bounds.right = match bounds.bottom > 0.0 {
+          true  => bounds.bottom,
+          false => 150.0f32
+        };
+      }
+      if bounds.bottom <= 0.0 {
+        bounds.bottom = bounds.right;
+      }
+
+      // If there is no intrinsic size to the SVG then
+      // this will update it with our defaults, otherwise this is a no-op.
+      dom.set_container_size(bounds.size());
+
+      // Save the image as a Picture so it can be scaled properly later.
+      let mut compositor = PictureRecorder::new();
+      compositor.begin_recording(bounds, None);
+      if let Some(canvas) = compositor.recording_canvas() {
+        dom.render(canvas);
+      }
+      
+      this.picture = compositor.finish_recording_as_picture(Some(&bounds));
     }
-    let mut dom = dom.unwrap();
-
-    // Get the intrinsic size of the `svg` root element as specified in the width/height attributes, if any.
-    // So far skia-safe doesn't provide direct access to the needed methods, so we have to go direct to the source.
-    let i_size = unsafe { *dom.inner().containerSize() };  // skia_bindings::SkSize
-    // let i_size = dom.inner().fContainerSize;  // "safe" but this is using a private member of the C++ class (somehow... skia-"safe" :-P )
-    // TODO: Switch to these once available in skia-safe 0.79+
-    // let mut root = dom.root();
-    // let i_size = root.intrinsic_size();
-
-    let mut bounds = Rect::from_wh(i_size.fWidth, i_size.fHeight);
-
-    // Set a flag to indicate that the image doesn't have its own intrinsic size.
-    // This may be used at drawing time if user doesn't specify a size in `drawImage()`,
-    // in which case the the canvas' size will be used as the image size.
-    // This is a "complication" to match Chrome's behavior... one could argue that it should
-    // just be drawn at the default size (set below). Which is what FF does (though that has its own anomalies).
-    this.adjust_size_to_canvas = bounds.is_empty();
-
-    // Check if width/height are valid attribute values in the root `<svg>` element.
-    // If w/h aren't specified in an SVG (which is not uncommon), both Chrome and FF will:
-    //  - If only one dimension is missing then use the same size for both;
-    //  - If both are missing then assign a default of 150 (which seems arbitrary but I guess as good as any);
-    // `Dom::containerSize()` will return zero for both width and height if _either_ attribute is missing from `<svg>`.
-    // This seems a bit suspicious (as in may change in future?), so in the interest of paranoia let's check them individually.
-    // TODO: See if we can get actual width/height attribute values from DOM with skia-safe 0.79+
-    if bounds.right <= 0.0 {
-      bounds.right = match bounds.bottom > 0.0 {
-        true  => bounds.bottom,
-        false => 150.0f32
-      };
-    }
-    if bounds.bottom <= 0.0 {
-      bounds.bottom = bounds.right;
-    }
-
-    // If there is no intrinsic size to the SVG then
-    // this will update it with our defaults, otherwise this is a no-op.
-    dom.set_container_size(bounds.size());
-
-    // Save the image as a Picture so it can be scaled properly later.
-    let mut compositor = PictureRecorder::new();
-    compositor.begin_recording(bounds, None);
-    if let Some(canvas) = compositor.recording_canvas() {
-      dom.render(canvas);
-    }
-    this.picture = compositor.finish_recording_as_picture(Some(&bounds));
   }
 
   Ok(cx.boolean(this.image.is_some() || this.picture.is_some()))
