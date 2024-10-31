@@ -146,7 +146,7 @@ describe("Image", () => {
     })
 
     test(".decode promise", async () => {
-      expect(()=> img.decode() ).rejects.toEqual(new Error('Missing Source URL'))
+      expect(()=> img.decode() ).rejects.toEqual(new Error('Image source not set'))
 
       img.src = URL
       let decoded = await img.decode()
