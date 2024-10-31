@@ -11,17 +11,8 @@ export class CanvasTexture {}
 //
 
 
-/** Options for `loadImage` and `Image()` constructor. */
-export interface ImageOptions {
-  /** Image width */
-  width?: number
-  /** Image height */
-  height?: number
-}
-
 export class Image {
   constructor(width?: number, height?: number)
-  constructor(options: ImageOptions)
   get src(): string
   set src(src: string | Buffer)
   get width(): number
@@ -32,9 +23,11 @@ export class Image {
   get naturalHeight(): number
   onload: ((this: Image, image: Image) => any) | null;
   onerror: ((this: Image, error: Error) => any) | null;
+  complete: boolean
+  decode(): Promise<Image>
 }
 
-export function loadImage(src: string | Buffer, options?: ImageOptions): Promise<Image>
+export function loadImage(src: string | Buffer, width?: number, height?: number): Promise<Image>
 
 export class ImageData extends globalThis.ImageData {}
 
