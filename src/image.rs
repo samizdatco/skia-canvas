@@ -89,9 +89,8 @@ pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedImage>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(num) = opt_float_arg(&mut cx, 1){
-    this.size.width = i32::max(0, num as i32);
-  }
+  let num = float_arg_or(&mut cx, 1, 0.0);
+  this.width = Some(num.max(0.0) as i32);
   Ok(cx.undefined())
 }
 
@@ -104,9 +103,8 @@ pub fn get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedImage>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(num) = opt_float_arg(&mut cx, 1){
-    this.size.height = i32::max(0, num as i32);
-  }
+  let num = float_arg_or(&mut cx, 1, 0.0);
+  this.height = Some(num.max(0.0) as i32);
   Ok(cx.undefined())
 }
 
