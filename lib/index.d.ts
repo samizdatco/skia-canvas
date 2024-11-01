@@ -12,9 +12,16 @@ export class CanvasTexture {}
 
 export function loadImage(src: string | Buffer): Promise<Image>
 export class ImageData extends globalThis.ImageData {}
-export class Image extends globalThis.Image {
+export class Image {
+  constructor(width?: number, height?: number)
   get src(): string
   set src(src: string | Buffer)
+  get width(): number
+  get height(): number
+  onload: ((this: Image, image: Image) => any) | null;
+  onerror: ((this: Image, error: Error) => any) | null;
+  complete: boolean
+  decode(): Promise<Image>
 }
 
 //
