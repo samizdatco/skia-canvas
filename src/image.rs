@@ -5,40 +5,109 @@
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{
-  Image as SkImage, ImageInfo, ISize, ColorType, AlphaType, Data,
+  Image as SkImage, ImageInfo, ISize, ColorType, AlphaType, Data, Size,
   FontMgr, Picture, PictureRecorder, Rect, image::images, svg,
   wrapper::PointerWrapper // for SVG Dom access, temporary until next skia-safe update
 };
 use crate::utils::*;
+use crate::context::Context2D;
 
 pub type BoxedImage = JsBox<RefCell<Image>>;
 impl Finalize for Image {}
 
-pub struct Image{
-  src:String,
-  pub adjust_size_to_canvas:bool,
-  pub image:Option<SkImage>,
-  pub picture:Option<Picture>
+pub enum Content{
+  Bitmap(SkImage),
+  Vector(Picture),
+  Loading
 }
 
-impl Image{
-  pub fn info(width:f32, height:f32) -> ImageInfo {
-    let dims = (width as i32, height as i32);
-    ImageInfo::new(dims, ColorType::RGBA8888, AlphaType::Unpremul, None)
+impl Default for Content{
+  fn default() -> Self {
+      Content::Loading
+  }
+}
+
+impl Clone for Content{
+  fn clone(&self) -> Self {
+      match self{
+        Content::Bitmap(img) => Content::Bitmap(img.clone()),
+        Content::Vector(pict) => Content::Vector(pict.clone()),
+        _ => Content::default()
+      }
+  }
+}
+
+impl Content{
+  pub fn from_context(ctx:&mut Context2D, use_vector:bool) -> Self{
+    match use_vector{
+      true => ctx.get_picture().map(|p| Content::Vector(p)),
+      false => ctx.get_image().map(|i| Content::Bitmap(i)),
+    }.unwrap_or_default()
   }
 
-  pub fn image_size(&self) -> ISize {
-    if let Some(img) = &self.image {
-      img.dimensions()
-    } else if let Some(pict) = &self.picture {
-      pict.cull_rect().size().to_ceil()
-    } else {
-      ISize::new_empty()
+  pub fn size(&self) -> Size {
+    match &self {
+      Content::Bitmap(img) => img.dimensions().into(),
+      Content::Vector(pict) => pict.cull_rect().size().to_ceil().into(), // really cull_rect?
+      _ => Size::new_empty()
     }
   }
 
-  pub fn size(&self) -> ISize {
-    self.image_size()
+  pub fn is_drawable(&self) -> bool {
+    match &self{
+      Content::Loading => false,
+      _ => true
+    }
+  }
+
+  pub fn snap_rects_to_bounds(&self, mut src: Rect, mut dst: Rect) -> (Rect, Rect) {
+    // Handle 'overdraw' of the src image where the crop coordinates are outside of its bounds
+    // Snap the src rect to its actual bounds and shift/pad the dst rect to account for the
+    // whitespace included in the crop.
+    let scale_x = dst.width() / src.width();
+    let scale_y = dst.height() / src.height();
+    let size = self.size();
+
+    if src.left < 0.0 {
+      dst.left += -src.left * scale_x;
+      src.left = 0.0;
+    }
+
+    if src.top < 0.0 {
+      dst.top += -src.top * scale_y;
+      src.top = 0.0;
+    }
+
+    if src.right > size.width{
+      dst.right -= (src.right - size.width) * scale_x;
+      src.right = size.width;
+    }
+
+    if src.bottom > size.height{
+      dst.bottom -= (src.bottom - size.height) * scale_y;
+      src.bottom = size.height;
+    }
+
+    (src, dst)
+  }
+}
+
+
+pub struct Image{
+  src:String,
+  width:Option<f32>,
+  height:Option<f32>,
+  pub autosized:bool,
+  pub content: Content,
+}
+
+impl Image{
+  pub fn size(&self) -> Size {
+    let actual_size = self.content.size();
+    Size{
+      width: self.width.unwrap_or(actual_size.width),
+      height: self.height.unwrap_or(actual_size.height),
+    }
   }
 }
 
@@ -48,7 +117,7 @@ impl Image{
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
   let this = RefCell::new(Image{
-    image:None, picture:None, adjust_size_to_canvas:false, src:"".to_string()
+    content:Content::Loading, width:None, height:None, autosized:false, src:"".to_string() 
   });
   Ok(cx.boxed(this))
 }
@@ -77,60 +146,54 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let data = Data::new_copy(buffer.as_slice(&cx));
 
   // First try decoding the data as a bitmap
-  this.image = images::deferred_from_encoded_data(&data, None);
-
   // If it's not recognized, try parsing as SVG and create a picture if it is valid
-  if this.image.is_none(){
-    if let Ok(mut dom) = svg::Dom::from_bytes(&data, FontMgr::default()){
-      // Get the intrinsic size of the `svg` root element as specified in the width/height attributes, if any.
-      // So far skia-safe doesn't provide direct access to the needed methods, so we have to go direct to the source.
-      let i_size = unsafe { *dom.inner().containerSize() };  // skia_bindings::SkSize
-      // let i_size = dom.inner().fContainerSize;  // "safe" but this is using a private member of the C++ class (somehow... skia-"safe" :-P )
-      // TODO: Switch to these once available in skia-safe 0.79+
-      // let mut root = dom.root();
-      // let i_size = root.intrinsic_size();
+  if let Some(image) = images::deferred_from_encoded_data(&data, None){
+    this.content = Content::Bitmap(image);
+  }else if let Ok(mut dom) = svg::Dom::from_bytes(&data, FontMgr::default()){
+    // Get the intrinsic size of the `svg` root element as specified in the width/height attributes, if any.
+    // So far skia-safe doesn't provide direct access to the needed methods, so we have to go direct to the source.
+    let i_size = unsafe { *dom.inner().containerSize() };  // skia_bindings::SkSize
+    // let i_size = dom.inner().fContainerSize;  // "safe" but this is using a private member of the C++ class (somehow... skia-"safe" :-P )
+    // TODO: Switch to these once available in skia-safe 0.79+
+    // let mut root = dom.root();
+    // let i_size = root.intrinsic_size();
 
-      // Set a flag to indicate that the image doesn't have its own intrinsic size.
-      // This may be used at drawing time if user doesn't specify a size in `drawImage()`,
-      // in which case the the canvas' size will be used as the image size.
-      // This is a "complication" to match Chrome's behavior... one could argue that it should
-      // just be drawn at the default size (set below). Which is what FF does (though that has its own anomalies).
-      let mut bounds = Rect::from_wh(i_size.fWidth, i_size.fHeight);
-      this.adjust_size_to_canvas = bounds.is_empty();
+    // Set a flag to indicate that the image doesn't have its own intrinsic size.
+    // This may be used at drawing time if user doesn't specify a size in `drawImage()`,
+    // in which case the the canvas' size will be used as the image size.
+    // This is a "complication" to match Chrome's behavior... one could argue that it should
+    // just be drawn at the default size (set below). Which is what FF does (though that has its own anomalies).
+    let mut bounds = Rect::from_wh(i_size.fWidth, i_size.fHeight);
+    this.autosized = bounds.is_empty();
 
-      // Check if width/height are valid attribute values in the root `<svg>` element.
-      // If w/h aren't specified in an SVG (which is not uncommon), both Chrome and FF will:
-      //  - If only one dimension is missing then use the same size for both;
-      //  - If both are missing then assign a default of 150 (which seems arbitrary but I guess as good as any);
-      // `Dom::containerSize()` will return zero for both width and height if _either_ attribute is missing from `<svg>`.
-      // This seems a bit suspicious (as in may change in future?), so in the interest of paranoia let's check them individually.
-      // TODO: See if we can get actual width/height attribute values from DOM with skia-safe 0.79+
-      if bounds.right <= 0.0 {
-        bounds.right = match bounds.bottom > 0.0 {
-          true  => bounds.bottom,
-          false => 150.0f32
-        };
-      }
-      if bounds.bottom <= 0.0 {
-        bounds.bottom = bounds.right;
-      }
+    // Check if width/height are valid attribute values in the root `<svg>` element.
+    // If w/h aren't specified in an SVG (which is not uncommon), both Chrome and FF will:
+    //  - If only one dimension is missing then use the same size for both;
+    //  - If both are missing then assign a default of 150 (which seems arbitrary but I guess as good as any);
+    // `Dom::containerSize()` will return zero for both width and height if _either_ attribute is missing from `<svg>`.
+    // This seems a bit suspicious (as in may change in future?), so in the interest of paranoia let's check them individually.
+    // TODO: See if we can get actual width/height attribute values from DOM with skia-safe 0.79+
+    (bounds.right, bounds.bottom) = match (bounds.width(), bounds.height()){
+      (0.0, 0.0) => (150.0, 150.0),
+      (width, 0.0) => (width, width),
+      (0.0, height) => (height, height),
+      (width, height) => (width, height)
+    };
+    dom.set_container_size(bounds.size());
 
-      // If there is no intrinsic size to the SVG then
-      // this will update it with our defaults, otherwise this is a no-op.
-      dom.set_container_size(bounds.size());
+    // Save the image as a Picture so it can be scaled properly later.
+    let mut compositor = PictureRecorder::new();
+    compositor.begin_recording(bounds, None);
+    if let Some(canvas) = compositor.recording_canvas() {
+      dom.render(canvas);
+    }
 
-      // Save the image as a Picture so it can be scaled properly later.
-      let mut compositor = PictureRecorder::new();
-      compositor.begin_recording(bounds, None);
-      if let Some(canvas) = compositor.recording_canvas() {
-        dom.render(canvas);
-      }
-      
-      this.picture = compositor.finish_recording_as_picture(Some(&bounds));
+    if let Some(picture) = compositor.finish_recording_as_picture(Some(&bounds)){
+      this.content = Content::Vector(picture);
     }
   }
 
-  Ok(cx.boolean(this.image.is_some() || this.picture.is_some()))
+  Ok(cx.boolean(this.content.is_drawable()))
 }
 
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
@@ -148,5 +211,5 @@ pub fn get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-  Ok(cx.boolean(this.image.is_some() || this.picture.is_some()))
+  Ok(cx.boolean(this.content.is_drawable()))
 }

@@ -10,7 +10,7 @@ use skia_safe::{Shader, TileMode, TileMode::{Decal, Repeat}, SamplingOptions, Si
                 Image as SkImage, Picture, Matrix, FilterMode};
 
 use crate::utils::*;
-use crate::image::BoxedImage;
+use crate::image::{BoxedImage, Content};
 use crate::context::BoxedContext2D;
 use crate::filter::ImageFilter;
 
@@ -19,8 +19,7 @@ impl Finalize for CanvasPattern {}
 
 
 pub struct Stamp{
-  image:Option<SkImage>,
-  pict:Option<Picture>,
+  content: Content,
   dims:Size,
   repeat:(TileMode, TileMode),
   matrix:Matrix
@@ -36,15 +35,16 @@ impl CanvasPattern{
     let stamp = Arc::clone(&self.stamp);
     let stamp = stamp.lock().unwrap();
 
-    if let Some(image) = &stamp.image{
-      image.to_shader(stamp.repeat, image_filter.sampling(), None).map(|shader|
-        shader.with_local_matrix(&stamp.matrix)
-      )
-    }else if let Some(pict) = &stamp.pict{
-      let shader = pict.to_shader(stamp.repeat, FilterMode::Linear, None, None);
-      Some(shader.with_local_matrix(&stamp.matrix))
-    }else{
-      None
+    match &stamp.content{
+      Content::Bitmap(image) =>
+        image.to_shader(stamp.repeat, image_filter.sampling(), None).map(|shader|
+          shader.with_local_matrix(&stamp.matrix)
+        ),
+      Content::Vector(pict) => {
+        let shader = pict.to_shader(stamp.repeat, FilterMode::Linear, None, None);
+        Some(shader.with_local_matrix(&stamp.matrix))
+      },
+      _ => None
     }
   }
 }
@@ -65,10 +65,10 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 
   if let Some(repeat) = to_repeat_mode(&repetition){
     let src = src.borrow();
-    let dims:Size = src.image_size().into();
+    let dims:Size = src.content.size().into();
     let mut matrix = Matrix::new_identity();
 
-    if src.adjust_size_to_canvas && !dims.is_empty() {
+    if src.autosized && !dims.is_empty() {
       // If this flag is set (for SVG images with no intrinsic size) then we need to scale the image to
       // the canvas' smallest dimension. This preserves compatibility with how Chromium browsers behave.
       let min_size = f32::min(canvas_width, canvas_height);
@@ -76,14 +76,10 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
       matrix.set_scale(factor, None);
     }
 
-    let stamp = Stamp{
-      image:src.image.clone(),
-      pict:src.picture.clone(),
-      dims,
-      repeat,
-      matrix
-    };
-    let stamp = Arc::new(Mutex::new(stamp));
+    let content = src.content.clone();
+    let stamp = Arc::new(Mutex::new(Stamp{
+      content, dims, repeat, matrix
+    }));
     Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
   }else{
     cx.throw_error("Unknown pattern repeat style")
@@ -101,10 +97,12 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   if let Some(repeat) = to_repeat_mode(&repetition){
     let mut ctx = src.borrow_mut();
 
+    let content = ctx.get_picture()
+      .map(|picture| Content::Vector(picture))
+      .unwrap_or_default();
     let dims = ctx.bounds.size();
     let stamp = Stamp{
-      image:None,
-      pict:ctx.get_picture(),
+      content,
       dims,
       repeat,
       matrix:Matrix::new_identity()
@@ -133,6 +131,10 @@ pub fn repr(mut cx: FunctionContext) -> JsResult<JsString> {
 
   let stamp = Arc::clone(&this.stamp);
   let stamp = stamp.lock().unwrap();
-  let style = if stamp.image.is_some(){ "Bitmap" }else{ "Canvas" };
+  let style = match stamp.content{
+    Content::Bitmap(..) => "Bitmap",
+    _ => "Canvas"
+  };
+  
   Ok(cx.string(format!("{} {}×{}", style, stamp.dims.width, stamp.dims.height)))
 }

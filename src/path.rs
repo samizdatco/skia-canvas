@@ -49,8 +49,7 @@ impl Path2D{
     // Originally based off of AdjustEndAngle in Chrome, but does not limit to 360 degree sweep.
     if !ccw && start_angle > end_angle {
       end_angle = start_angle + (tau - (start_angle - end_angle) % tau);
-    }
-    else if ccw && start_angle < end_angle {
+    }else if ccw && start_angle < end_angle {
       end_angle = start_angle - (tau - (end_angle - start_angle) % tau);
     }
 
