@@ -4,13 +4,12 @@
 #![allow(dead_code)]
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
-use skia_safe::{Image as SkImage, ImageInfo, Size, ISize, ColorType, AlphaType, Data,
-                FontMgr, Picture, PictureRecorder, Rect};
-use skia_safe::svg;
-use skia_safe::wrapper::PointerWrapper;  // for SVG Dom access, temporary until next skia-safe update
-
+use skia_safe::{
+  Image as SkImage, ImageInfo, ISize, ColorType, AlphaType, Data,
+  FontMgr, Picture, PictureRecorder, Rect, image::images, svg,
+  wrapper::PointerWrapper // for SVG Dom access, temporary until next skia-safe update
+};
 use crate::utils::*;
-
 
 pub type BoxedImage = JsBox<RefCell<Image>>;
 impl Finalize for Image {}
@@ -77,9 +76,11 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let buffer = cx.argument::<JsBuffer>(1)?;
   let data = Data::new_copy(buffer.as_slice(&cx));
 
-  this.image = SkImage::from_encoded(&data);
+  // First try decoding the data as a bitmap
+  this.image = images::deferred_from_encoded_data(&data, None);
+
+  // If it's not recognized, try parsing as SVG and create a picture if it is valid
   if this.image.is_none(){
-    // Try parsing the data as SVG and create a picture if it is valid
     if let Ok(mut dom) = svg::Dom::from_bytes(&data, FontMgr::default()){
       // Get the intrinsic size of the `svg` root element as specified in the width/height attributes, if any.
       // So far skia-safe doesn't provide direct access to the needed methods, so we have to go direct to the source.
