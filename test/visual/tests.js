@@ -2112,7 +2112,7 @@ tests['drawImage(img) webp'] = function (ctx, done) {
 tests['drawImage(img,x,y)'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
-    ctx.drawImage(img, 5, 25)
+    ctx.drawImage(img, 25, 25)
     done(null)
   }
   img.onerror = done
