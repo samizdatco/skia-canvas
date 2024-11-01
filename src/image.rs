@@ -188,19 +188,13 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-  Ok(match this.autosized{
-    true => cx.undefined().upcast(),
-    false => cx.number(this.content.size().width).upcast(),
-  })
+  Ok(cx.number(this.content.size().width).upcast())
 }
 
 pub fn get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-  Ok(match this.autosized{
-    true => cx.undefined().upcast(),
-    false => cx.number(this.content.size().height).upcast(),
-  })
+  Ok(cx.number(this.content.size().height).upcast())
 }
 
 pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
