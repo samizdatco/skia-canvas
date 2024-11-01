@@ -27,7 +27,7 @@ describe("Image", () => {
       URL = `https://${PATH}`,
       BUFFER = fs.readFileSync(PATH),
       DATA_URI = `data:image/png;base64,${BUFFER.toString('base64')}`,
-      FRESH = {complete:false, width:undefined, height:undefined},
+      FRESH = {complete:false, width:0, height:0},
       LOADED = {complete:true, width:125, height:125},
       FORMAT = 'test/assets/image/format',
       PARSED = {complete:true, width:60, height:60},
@@ -126,33 +126,52 @@ describe("Image", () => {
   })
 
   describe("can decode format", () => {
+    const asDataURI = path => {
+      let ext = path.split('.').at(-1),
+          mime = `image/${ext.replace('jpg', 'jpeg')}`,
+          content = fs.readFileSync(path).toString('base64')
+      return `data:${mime};base64,${content}`
+    }
+
     test("PNG", () => {
       img.src = FORMAT + '.png'
+      expect(img).toMatchObject(PARSED)
+      img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
     test("JPEG", () => {
       img.src = FORMAT + '.jpg'
       expect(img).toMatchObject(PARSED)
+      img.src = asDataURI(img.src)
+      expect(img).toMatchObject(PARSED)
     })
 
     test("GIF", () => {
       img.src = FORMAT + '.gif'
+      expect(img).toMatchObject(PARSED)
+      img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
     test("BMP", () => {
       img.src = FORMAT + '.bmp'
       expect(img).toMatchObject(PARSED)
+      img.src = asDataURI(img.src)
+      expect(img).toMatchObject(PARSED)
     })
 
     test("ICO", () => {
       img.src = FORMAT + '.ico'
       expect(img).toMatchObject(PARSED)
+      img.src = asDataURI(img.src)
+      expect(img).toMatchObject(PARSED)
     })
 
     test("WEBP", () => {
       img.src = FORMAT + '.webp'
+      expect(img).toMatchObject(PARSED)
+      img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
   })
