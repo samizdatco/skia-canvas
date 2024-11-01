@@ -2177,6 +2177,17 @@ tests['drawImage(img,sx,sy,sw,sh,x,y,w,h)'] = function (ctx, done) {
   img.src = imageSrc('state.png')
 }
 
+tests['drawImage(img,sx,sy,sw,sh,x,y,w,h) with Image(w,h)'] = function (ctx, done) {
+  var img = new Image(300, 300)
+  img.onload = function () {
+    ctx.drawImage(img, 13, 13, 45, 45, 25, 25, img.width / 2, img.height / 2)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('state.png')
+}
+
+
 tests['drawCanvas(img,sx,sy,sw,sh,x,y,w,h)'] = function (ctx, done) {
   if (!Canvas) {
     return tests['drawImage(img,sx,sy,sw,sh,x,y,w,h)'](ctx, done)
@@ -2232,9 +2243,9 @@ const SVG_IMG = `
 
 const SVG_TXT = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <path d="M30,1h40l29,29v40l-29,29h-40l-29-29v-40z" stroke="#000" fill="none"/>
-  <path d="M31,3h38l28,28v38l-28,28h-38l-28-28v-38z" fill="#a23"/>
-  <text x="50" y="68" font-family="Consolas, Menlo, monospace" font-size="48" fill="#FFF" text-anchor="middle"><![CDATA[410]]></text>
+  <path d="M0,50l50,-50l50,50l-50,50l-50-50" stroke="#000" fill="none"/>
+  <path d="M2,50l48,-48l48,48l-48,48l-48-48" fill="#a23"/>
+  <text x="50" y="64" font-family="serif" font-size="48" fill="#FFF" text-anchor="middle"><![CDATA[§]]></text>
 </svg>`;
 
 function addSvgSize(src, w, h) {
@@ -2252,7 +2263,7 @@ tests['drawImage() SVG with offset'] = function (ctx, done) {
 }
 
 tests['drawImage() SVG from Image(w,h)'] = function (ctx, done) {
-  var img = new Image(200,  200)
+  var img = new Image(200, 200)
   img.onload = function () {
     ctx.drawImage(img, 0, 0)
     done(null)
