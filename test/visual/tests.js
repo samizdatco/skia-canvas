@@ -2177,17 +2177,6 @@ tests['drawImage(img,sx,sy,sw,sh,x,y,w,h)'] = function (ctx, done) {
   img.src = imageSrc('state.png')
 }
 
-tests['drawImage(img,sx,sy,sw,sh,x,y,w,h) with Image(w,h)'] = function (ctx, done) {
-  var img = new Image(300, 300)
-  img.onload = function () {
-    ctx.drawImage(img, 13, 13, 45, 45, 25, 25, img.width / 2, img.height / 2)
-    done(null)
-  }
-  img.onerror = done
-  img.src = imageSrc('state.png')
-}
-
-
 tests['drawCanvas(img,sx,sy,sw,sh,x,y,w,h)'] = function (ctx, done) {
   if (!Canvas) {
     return tests['drawImage(img,sx,sy,sw,sh,x,y,w,h)'](ctx, done)
@@ -2262,26 +2251,6 @@ tests['drawImage() SVG with offset'] = function (ctx, done) {
   img.src = imageSrc('tree.svg')
 }
 
-tests['drawImage() SVG from Image(w,h)'] = function (ctx, done) {
-  var img = new Image(200, 200)
-  img.onload = function () {
-    ctx.drawImage(img, 0, 0)
-    done(null)
-  }
-  img.onerror = done
-  img.src = imageSrc('tree.svg')
-}
-
-tests['drawImage(img,x,y,img.w,img.h) SVG with scaling from Image(w,h)'] = function (ctx, done) {
-  var img = new Image(1000, 1000);
-  img.onload = function () {
-    ctx.drawImage(this, -350, -350 , this.width, this.height)
-    done(null)
-  }
-  img.onerror = done
-  img.src = imageSrc('tree.svg')
-}
-
 tests['drawImage() SVG natural size with scaling from drawImage'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
@@ -2303,7 +2272,7 @@ tests['drawImage() SVG natural size with scaling from ctx'] = function (ctx, don
   img.src = imageSrc('tree.svg')
 }
 
-tests['SVG no natural size from Image() w/ drawImage(img,0,0)'] = function (ctx, done) {
+tests['SVG no natural size drawImage(img,0,0)'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.drawImage(img, 0, 0)
@@ -2313,28 +2282,8 @@ tests['SVG no natural size from Image() w/ drawImage(img,0,0)'] = function (ctx,
   img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`;
 }
 
-tests['SVG no natural size from Image() w/ drawImage(img,0,0,img.w,img.h)'] = function (ctx, done) {
+tests['SVG no natural size drawImage(img,0,0,img.w,img.h)'] = function (ctx, done) {
   var img = new Image()
-  img.onload = function () {
-    ctx.drawImage(img, 0, 0, this.width, this.height)
-    done(null)
-  }
-  img.onerror = done
-  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`;
-}
-
-tests['SVG no natural size from Image(w,h) w/ drawImage(img,0,0)'] = function (ctx, done) {
-  var img = new Image(100, 100)
-  img.onload = function () {
-    ctx.drawImage(img, 0, 0)
-    done(null)
-  }
-  img.onerror = done
-  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`;
-}
-
-tests['SVG no natural size from Image(w,h) w/ drawImage(img,0,0,img.w,img.h)'] = function (ctx, done) {
-  var img = new Image(100, 100)
   img.onload = function () {
     ctx.drawImage(img, 0, 0, this.width, this.height)
     done(null)
