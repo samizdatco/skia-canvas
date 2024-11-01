@@ -95,21 +95,10 @@ impl Content{
 
 pub struct Image{
   src:String,
-  width:Option<f32>,
-  height:Option<f32>,
   pub autosized:bool,
   pub content: Content,
 }
 
-impl Image{
-  pub fn size(&self) -> Size {
-    let actual_size = self.content.size();
-    Size{
-      width: self.width.unwrap_or(actual_size.width),
-      height: self.height.unwrap_or(actual_size.height),
-    }
-  }
-}
 
 //
 // -- Javascript Methods --------------------------------------------------------------------------
@@ -117,7 +106,7 @@ impl Image{
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
   let this = RefCell::new(Image{
-    content:Content::Loading, width:None, height:None, autosized:false, src:"".to_string() 
+    content:Content::Loading, autosized:false, src:"".to_string() 
   });
   Ok(cx.boxed(this))
 }
@@ -199,13 +188,19 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-  Ok(cx.number(this.size().width).upcast())
+  Ok(match this.autosized{
+    true => cx.undefined().upcast(),
+    false => cx.number(this.content.size().width).upcast(),
+  })
 }
 
 pub fn get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-  Ok(cx.number(this.size().height).upcast())
+  Ok(match this.autosized{
+    true => cx.undefined().upcast(),
+    false => cx.number(this.content.size().height).upcast(),
+  })
 }
 
 pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
