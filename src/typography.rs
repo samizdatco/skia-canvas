@@ -452,6 +452,37 @@ impl FontLibrary{
     self.collection.as_ref().unwrap().clone()
   }
 
+  pub fn font_mgr(&mut self) -> FontMgr {
+    // builds a single font manager with access to both system and user-loaded fonts (for use w/ SVG images)
+    let sys_mgr = self.mgr.clone();
+    let mut union_mgr = TypefaceFontProvider::new();
+
+    // add a sensible fallback as the first font so the default isn't just whatever is alphabetically first
+    self.font_collection()
+      .find_typefaces(&["system-ui", "sans-serif", "serif"], FontStyle::normal())
+      .into_iter().nth(0)
+      .map(|fallback| {
+        union_mgr.register_typeface(fallback, None);
+      });
+
+    // add all system fonts
+    for i in 0..sys_mgr.count_families() {
+      let mut style_set = sys_mgr.new_style_set(i);
+      for style_index in 0..style_set.count() {
+        if let Some(typeface) = style_set.new_typeface(style_index){
+          union_mgr.register_typeface(typeface, None);
+        }
+      }
+    }
+
+    // add generic mappings & user-loaded fonts
+    for (font, alias) in &self.generics{
+      union_mgr.register_typeface(font.clone(), alias.as_deref());
+    }
+    for (font, alias) in &self.fonts{
+      union_mgr.register_typeface(font.clone(), alias.as_deref());
+    }
+    union_mgr.into()
   }
 
   fn families(&self) -> Vec<String>{

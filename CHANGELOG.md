@@ -3,9 +3,10 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### New Features
-- Added initial SVG rendering support. **Image**s can now load SVG files and can be drawn in a resolution-independent manner via [`drawImage()`][mdn_drawImage] (thanks go to @mpaperno #180). Some caveats & quirks to be aware of include:
-  - **Image**s loaded from SVG files that don't have a `width` and `height` set on their root `<svg>` element will report a `width` and `height` of `150`. When drawn, these size-less Images will be scaled to fit within the **Canvas**'s current bounds (using an approach akin to CSS's `object-fit: contain`). When using the 8-argument version of the `drawImage` call, the first 4 ‘crop’ arguments will correspond to this scaled-to-fit size, not the **Image**'s reported `width` & `height`.
-  - SVGs can make use of fonts installed on the system, but cannot currently make use of dynamically-loaded fonts that have been added via **FontLibrary.**[use()][FontLibrary.use]. Adding support for this is on the agenda for a future release.
+- Added initial SVG rendering support. **Image**s can now load SVG files and can be drawn in a resolution-independent manner via [`drawImage()`][mdn_drawImage] (thanks go to @mpaperno #180). Note that **Image**s loaded from SVG files that don't have a `width` and `height` set on their root `<svg>` element still have some quirks as of this release:
+  - The **Image** object's `width` and `height` will both (misleadingly) report to be `150`.
+  - When passed to `drawImage()` without size arguments, the SVG be scaled to a size that fits within the **Canvas**'s current bounds (using an approach akin to CSS's `object-fit: contain`).
+  - When using the 8-argument version of `drawImage()`, the ‘crop’ arguments (`sx`, `sy`, `sWidth`, & `sHeight`) will correspond to this scaled-to-fit size, *not* the **Image**'s reported `width` & `height`.
 - The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by @nornagon #124).
 - The **Canvas** object has a new `engine` property which describes whether the CPU or GPU is being used, which graphics device was selected, and what (if any) error prevented it from being initialized.
 - **FontLibrary.**[use()][FontLibrary.use] now supports dynamically loaded [WOFF & WOFF2][woff_wiki] fonts

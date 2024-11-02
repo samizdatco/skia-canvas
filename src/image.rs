@@ -11,6 +11,7 @@ use skia_safe::{
 };
 use crate::utils::*;
 use crate::context::Context2D;
+use crate::FONT_LIBRARY;
 
 pub type BoxedImage = JsBox<RefCell<Image>>;
 impl Finalize for Image {}
@@ -138,7 +139,7 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   // If it's not recognized, try parsing as SVG and create a picture if it is valid
   if let Some(image) = images::deferred_from_encoded_data(&data, None){
     this.content = Content::Bitmap(image);
-  }else if let Ok(mut dom) = svg::Dom::from_bytes(&data, FontMgr::default()){
+  }else if let Ok(mut dom) = svg::Dom::from_bytes(&data, FONT_LIBRARY.lock().unwrap().font_mgr()){
     // Get the intrinsic size of the `svg` root element as specified in the width/height attributes, if any.
     // So far skia-safe doesn't provide direct access to the needed methods, so we have to go direct to the source.
     let i_size = unsafe { *dom.inner().containerSize() };  // skia_bindings::SkSize
