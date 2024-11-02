@@ -1,21 +1,16 @@
-#![allow(unused_variables)]
-#![allow(unused_mut)]
-#![allow(dead_code)]
-#![allow(unused_imports)]
 #![allow(non_snake_case)]
 use std::f32::consts::PI;
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
-use skia_safe::{Point, Rect, RRect, Matrix, Path, PathDirection::{CW, CCW}, PaintStyle};
-use skia_safe::path::AddPathMode::Append;
-use skia_safe::path::AddPathMode::Extend;
+use skia_safe::{Matrix, PaintStyle, Picture, Point, RRect, Rect, Size, ImageInfo, ColorType, AlphaType};
+use skia_safe::path::{AddPathMode::{Append,Extend}, Direction::{CCW, CW}, Path};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
 use super::{Context2D, BoxedContext2D, Dye};
 use crate::canvas::{Canvas, BoxedCanvas};
 use crate::path::{Path2D, BoxedPath2D};
-use crate::image::{Image, BoxedImage};
+use crate::image::{Image, BoxedImage, Content};
 use crate::filter::Filter;
 use crate::typography::*;
 use crate::utils::*;
@@ -701,79 +696,100 @@ pub fn set_miterLimit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 // Imagery
 //
 
-fn _layout_rects(width:f32, height:f32, nums:&[f32]) -> Option<(Rect, Rect)> {
+fn _layout_rects(intrinsic:Size, nums:&[f32]) -> Result<(Rect, Rect), String> {
   let (src, dst) = match nums.len() {
-    2 => ( Rect::from_xywh(0.0, 0.0, width, height),
-           Rect::from_xywh(nums[0], nums[1], width, height) ),
-    4 => ( Rect::from_xywh(0.0, 0.0, width, height),
-           Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
+    2 => ( Rect::from_xywh(0.0, 0.0, intrinsic.width, intrinsic.height),
+            Rect::from_xywh(nums[0], nums[1], intrinsic.width, intrinsic.height) ),
+    4 => ( Rect::from_xywh(0.0, 0.0, intrinsic.width, intrinsic.height),
+            Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
     8 => ( Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]),
-           Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
-    _ => return None
+            Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
+    _ => return Err(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
   };
-  Some((src, dst))
+
+  match intrinsic.is_empty(){
+    true => Err(format!("Cannot draw dimensionless image ({}×{})", intrinsic.width, intrinsic.height)),
+    false => Ok((src, dst))
+  }
 }
 
 pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
+  let argc = cx.len() as usize;
   let source = cx.argument::<JsValue>(1)?;
-  let image = {
-    if let Ok(obj) = source.downcast::<BoxedImage, _>(&mut cx){
-      (obj.borrow().image).clone()
-    }else if let Ok(obj) = source.downcast::<BoxedContext2D, _>(&mut cx){
-      obj.borrow().get_image()
+  let nums = float_args(&mut cx, 2..argc)?;
+
+  let content = {
+    if let Ok(img) = source.downcast::<BoxedImage, _>(&mut cx){
+      img.borrow().content.clone()
+    }else if let Ok(ctx) = source.downcast::<BoxedContext2D, _>(&mut cx){
+      Content::from_context(&mut ctx.borrow_mut(), false)
     }else{
-      return Ok(cx.undefined())
+      Content::default()
     }
   };
 
-  let dims = image.as_ref().map(|img|
-    (img.width(), img.height())
-  );
+  if let Content::Bitmap(img) = &content {
+    let bounds_size = content.size();
+    let (mut src, mut dst) = _layout_rects(bounds_size, &nums)
+      .or_else(|err| cx.throw_error(err))?;
 
-  let (width, height) = match dims{
-    Some((w,h)) => (w as f32, h as f32),
-    None => return cx.throw_error("Cannot draw incomplete image (has it finished loading?)")
-  };
+    content.snap_rects_to_bounds(src, dst);
+    let mut this = this.borrow_mut();
+    this.draw_image(&img, &src, &dst);
+  } else if let Content::Vector(pict) = &content {
+    let image = source.downcast::<BoxedImage, _>(&mut cx).unwrap();
+    let fit_to_canvas = image.borrow().autosized;
+    let pict_size = content.size();
 
-  let argc = cx.len() as usize;
-  let nums = float_args(&mut cx, 2..argc)?;
-  match _layout_rects(width, height, &nums){
-    Some((src, dst)) => {
-      // shrink src to lie within the image bounds and adjust dst proportionately
-      let (src, dst) = fit_bounds(width, height, src, dst);
+    let (mut src, mut dst) = _layout_rects(pict_size, &nums)
+      .or_else(|err| cx.throw_error(err))?;
 
-      let mut this = this.borrow_mut();
-      this.draw_image(&image, &src, &dst);
-      Ok(cx.undefined())
-    },
-    None => cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
+    // for SVG images with no intrinsic size, use the canvas size as a default scale
+    if fit_to_canvas && nums.len() != 4 {
+      let canvas_size = this.borrow().bounds.size();
+      let canvas_min = canvas_size.width.min(canvas_size.height);
+      let pict_min = pict_size.width.min(pict_size.height);
+
+      if nums.len() == 2 {
+        // if the user doesn't specify a size, proportionally scale to fit within canvas
+        let factor = canvas_min / pict_min;
+        dst = Rect::from_point_and_size((dst.x(), dst.y()), dst.size() * factor);
+      } else if nums.len() == 8 {
+        // if clipping out part of the source, map the crop coordinates as if the image is canvas-sized
+        let factor = (pict_size.width / canvas_min, pict_size.height / canvas_min);
+        (src, _) = Matrix::scale(factor).map_rect(src);
+      }
+    }
+
+    content.snap_rects_to_bounds(src, dst);
+    let mut this = this.borrow_mut();
+    this.draw_picture(&pict, &src, &dst);
   }
+
+  Ok(cx.undefined())
 }
 
 pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let argc = cx.len() as usize;
   let this = cx.argument::<BoxedContext2D>(0)?;
   let context = cx.argument::<BoxedContext2D>(1)?;
-
-  let (width, height) = {
-    let bounds = context.borrow().bounds;
-    (bounds.width(), bounds.height())
-  };
-
-  let argc = cx.len() as usize;
   let nums = float_args(&mut cx, 2..argc)?;
-  match _layout_rects(width, height, &nums){
-    Some((src, dst)) => {
-      let pict = {
-        let mut ctx = context.borrow_mut();
-        ctx.get_picture()
-      };
 
-      let mut this = this.borrow_mut();
-      this.draw_picture(&pict, &src, &dst);
-      Ok(cx.undefined())
-    },
-    None => cx.throw_error(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
+  let content = Content::from_context(&mut context.borrow_mut(), true);
+
+  if let Content::Vector(pict) = &content{
+    _layout_rects(content.size(), &nums)
+      .map(|(mut src, mut dst)|{
+        let (src, dst) = content.snap_rects_to_bounds(src, dst);
+        let mut this = this.borrow_mut();
+        this.draw_picture(&pict, &src, &dst);
+        cx.undefined()
+      }).or_else(|err|
+        cx.throw_error(err)
+      )
+  }else{
+    cx.throw_error("Canvas's PictureRecorder failed to generate an image")
   }
 }
 
@@ -817,7 +833,13 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   )};
 
   let buffer: Handle<JsBuffer> = img_data.get(&mut cx, "data")?;
-  let info = Image::info(width, height);
+  let info = ImageInfo::new(
+    (width as i32, height as i32),
+    ColorType::RGBA8888,
+    AlphaType::Unpremul,
+    None
+  );
+
   this.blit_pixels(buffer.as_slice(&cx), &info, &src, &dst);
   Ok(cx.undefined())
 }

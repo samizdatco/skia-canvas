@@ -3,11 +3,14 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### New Features
+- Added initial SVG rendering support. **Image**s can now load SVG files and can be drawn in a resolution-independent manner via [`drawImage()`][mdn_drawImage]. Caveats & quirks include:
+  - **Image**s loaded from SVG files that don't have a `width` and `height` set on their root `<svg>` element will report a `width` and `height` of `150`. When drawn, these size-less Images will be scaled to fit within the **Canvas**'s current bounds (using an approach akin to CSS's `object-fit: contain`). When using the 8-argument version of the `drawImage` call, the first 4 ‘crop’ arguments will correspond to this scaled-to-fit size, not the **Image**'s reported `width` & `height`.
+  - SVGs can make use of fonts installed on the system, but cannot currently make use of dynamically-loaded fonts that have been added via **FontLibrary.**[use()][FontLibrary.use]. Adding support for this is on the agenda for a future release.
 - The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by [@nornagon](https://github.com/nornagon) #124).
 - The **Canvas** object has a new `engine` property which describes whether the CPU or GPU is being used, which graphics device was selected, and what (if any) error prevented it from being initialized.
 - **FontLibrary.**[use()][FontLibrary.use] now supports dynamically loaded [WOFF & WOFF2][woff_wiki] fonts
-- **Canvas**es can now be saved as WEBP images and **Image**s can load WEBPs as well (contributed by [@mpaperno](https://github.com/mpaperno) #177, h/t [@revam](https://github.com/revam) for the initial work on this)
-- The `outlineText()` method now takes an optional `width` argument and supports all the context's typographic settings (e.g., `.font`, `.fontVariant`, `.textWrap`, `.textTracking`, etc.)
+- **Canvas**.[saveAs()][Canvas.saveAs] can now generate WEBP images and **Image**s can load WEBP files as well (contributed by [@mpaperno](https://github.com/mpaperno) #177, h/t [@revam](https://github.com/revam) for the initial work on this)
+- The [`outlineText()`][outline_text] method now takes an optional `width` argument and supports all the context's typographic settings (e.g., `.font`, `.fontVariant`, `.textWrap`, `.textTracking`, etc.)
 - The `.transform` and `.setTransform` methods on **Context**, **Path2D**, and **CanvasPattern** objects can now take their arguments in additional formats. They can now be passed a [**DOMMatrix**][DOMMatrix] object or a string with a list of transformation operations compatible with the [CSS `transform`][css_transform] property. The **DOMMatrix** constructor also supports these strings as well as plain, matrix-like objects with numeric attributes named `a`, `b`, `c`, `d`, `e`, & `f` (contributed by [@mpaperno](https://github.com/mpaperno) #178).
 
 ### Breaking Changes
@@ -35,7 +38,8 @@
 [woff_wiki]: https://en.wikipedia.org/wiki/Web_Open_Font_Format
 [css_transform]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform
 [DOMMatrix]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrix
-
+[FontLibrary.use]: https://github.com/samizdatco/skia-canvas#usefamilyname-fontpaths
+[Canvas.saveAs]: https://github.com/samizdatco/skia-canvas#saveasfilename-page-format-matte-density1-quality092-outlinefalse
 ## 📦 ⟩ [v1.0.2] ⟩ Aug 21, 2024
 
 ### Maintenance

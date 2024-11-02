@@ -31,11 +31,15 @@ describe("Image", () => {
       LOADED = {complete:true, width:125, height:125},
       FORMAT = 'test/assets/image/format',
       PARSED = {complete:true, width:60, height:60},
+      SVG_PATH = `${FORMAT}.svg`,
+      SVG_URL = `https://${SVG_PATH}`,
+      SVG_BUFFER = fs.readFileSync(SVG_PATH),
+      SVG_DATA_URI = `data:image/svg;base64,${SVG_BUFFER.toString('base64')}`,
       img
 
   beforeEach(() => img = new Image() )
 
-  describe("can be initialized from", () => {
+  describe("can initialize bitmaps from", () => {
     test("buffer", () => {
       expect(img).toMatchObject(FRESH)
       img.src = BUFFER
@@ -79,7 +83,40 @@ describe("Image", () => {
       img = await loadImage(PATH)
       expect(img).toMatchObject(LOADED)
 
+      img = await loadImage(SVG_PATH)
+      expect(img).toMatchObject(PARSED)
+
       expect(async () => { await loadImage('http://nonesuch') }).rejects.toEqual("HTTP_ERROR_404")
+    })
+  })
+
+  describe("can initialize SVGs from", () => {
+    test("buffer", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = SVG_BUFFER
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("data uri", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = SVG_DATA_URI
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("local file", () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = SVG_PATH
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("http url", done => {
+      expect(img).toMatchObject(FRESH)
+      img.onload = loaded => {
+        expect(loaded).toBe(img)
+        expect(img).toMatchObject(PARSED)
+        done()
+      }
+      img.src = SVG_URL
     })
   })
 
@@ -109,7 +146,7 @@ describe("Image", () => {
     })
 
     test(".decode promise", async () => {
-      expect(()=> img.decode() ).rejects.toEqual(new Error('Missing Source URL'))
+      expect(()=> img.decode() ).rejects.toEqual(new Error('Image source not set'))
 
       img.src = URL
       let decoded = await img.decode()
@@ -172,6 +209,11 @@ describe("Image", () => {
       img.src = FORMAT + '.webp'
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("SVG", () => {
+      img.src = FORMAT + '.svg'
       expect(img).toMatchObject(PARSED)
     })
   })

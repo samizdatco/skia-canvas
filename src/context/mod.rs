@@ -402,37 +402,33 @@ impl Context2D{
     }
   }
 
-  pub fn draw_picture(&mut self, picture:&Option<Picture>, src_rect:&Rect, dst_rect:&Rect){
+  pub fn draw_picture(&mut self, picture:&Picture, src_rect:&Rect, dst_rect:&Rect){
     let paint = self.paint_for_image();
     let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
     let mut matrix = Matrix::new_identity();
     matrix.pre_scale( (mag.x, mag.y), None )
-    .pre_translate((dst_rect.x()/mag.x - src_rect.x(), dst_rect.y()/mag.y - src_rect.y()));
+      .pre_translate((dst_rect.x()/mag.x - src_rect.x(), dst_rect.y()/mag.y - src_rect.y()));
 
-    if let Some(picture) = picture{
-      self.render_to_canvas(&paint, |canvas, paint| {
-        // only use paint if we need it for alpha, blend, shadow, or effect since otherwise
-        // the SVG exporter will omit the picture altogether
-        let paint = match (paint.as_blend_mode(), paint.alpha(), paint.image_filter()) {
-          (Some(BlendMode::SrcOver), 255, None) => None,
-          _ => Some(paint)
-        };
-        canvas.save();
-        canvas.clip_rect(dst_rect, ClipOp::Intersect, true);
-        canvas.draw_picture(&picture, Some(&matrix), paint);
-        canvas.restore();
-      });
-    }
+    self.render_to_canvas(&paint, |canvas, paint| {
+      // only use paint if we need it for alpha, blend, shadow, or effect since otherwise
+      // the SVG exporter will omit the picture altogether
+      let paint = match (paint.as_blend_mode(), paint.alpha(), paint.image_filter()) {
+        (Some(BlendMode::SrcOver), 255, None) => None,
+        _ => Some(paint)
+      };
+      canvas.save();
+      canvas.clip_rect(dst_rect, ClipOp::Intersect, true);
+      canvas.draw_picture(&picture, Some(&matrix), paint);
+      canvas.restore();
+    });
   }
 
-  pub fn draw_image(&mut self, img:&Option<Image>, src_rect:&Rect, dst_rect:&Rect){
+  pub fn draw_image(&mut self, image:&Image, src_rect:&Rect, dst_rect:&Rect){
     let paint = self.paint_for_image();
-    if let Some(image) = &img {
-      self.render_to_canvas(&paint, |canvas, paint| {
-        let sampling = self.state.image_filter.sampling();
-        canvas.draw_image_rect_with_sampling_options(image, Some((src_rect, Strict)), dst_rect, sampling, paint);
-      });
-    }
+    self.render_to_canvas(&paint, |canvas, paint| {
+      let sampling = self.state.image_filter.sampling();
+      canvas.draw_image_rect_with_sampling_options(image, Some((src_rect, Strict)), dst_rect, sampling, paint);
+    });
   }
 
   pub fn get_page(&self) -> Page {

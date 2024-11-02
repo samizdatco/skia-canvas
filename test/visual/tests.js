@@ -2027,7 +2027,11 @@ tests['font state'] = function (ctx) {
   ctx.fillText('Boom again!', 50, 140)
 }
 
-tests['drawImage(img,0,0)'] = function (ctx, done) {
+//
+// Images
+//
+
+tests['drawImage(img) PNG'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.drawImage(img, 0, 0)
@@ -2037,7 +2041,7 @@ tests['drawImage(img,0,0)'] = function (ctx, done) {
   img.src = imageSrc('state.png')
 }
 
-tests['drawImage(img) jpeg'] = function (ctx, done) {
+tests['drawImage(img) JPEG'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.drawImage(img, 0, 0, 100, 100)
@@ -2068,7 +2072,7 @@ tests['drawImage(img) grayscale JPEG'] = function (ctx, done) {
   img.src = imageSrc('pentagon-grayscale.jpg')
 }
 
-tests['drawImage(img) webp'] = function (ctx, done) {
+tests['drawImage(img) WEBP'] = function (ctx, done) {
   var img = new Image()
   img.onload = function () {
     ctx.drawImage(img, 0, 0, 200, 200)
@@ -2078,36 +2082,39 @@ tests['drawImage(img) webp'] = function (ctx, done) {
   img.src = imageSrc('rose.webp')
 }
 
-// tests['drawImage(img) svg'] = function (ctx, done) {
-//   var img = new Image()
-//   img.onload = function () {
-//     ctx.drawImage(img, 0, 0, 100, 100)
-//     done(null)
-//   }
-//   img.onerror = done
-//   img.src = imageSrc('tree.svg')
-// }
+tests['drawImage() SVG'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('tree.svg')
+}
 
-// tests['drawImage(img) svg with scaling from drawImage'] = function (ctx, done) {
-//   var img = new Image()
-//   img.onload = function () {
-//     ctx.drawImage(img, -800, -800, 1000, 1000)
-//     done(null)
-//   }
-//   img.onerror = done
-//   img.src = imageSrc('tree.svg')
-// }
+tests['drawImage() SVG gradients/alpha'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('grapes.svg')
+}
 
-// tests['drawImage(img) svg with scaling from ctx'] = function (ctx, done) {
-//   var img = new Image()
-//   img.onload = function () {
-//     ctx.scale(100, 100)
-//     ctx.drawImage(img, -8, -8, 10, 10)
-//     done(null)
-//   }
-//   img.onerror = done
-//   img.src = imageSrc('tree.svg')
-// }
+tests['drawImage() SVG from URL w/ patterns/effects'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height)
+    done(null)
+  }
+  img.onerror = done
+  img.src = 'https://dev.w3.org/SVG/tools/svgweb/samples/svg-files/rg1024_metal_effect.svg'
+}
+
+//
+// drawImage() variations
+//
 
 tests['drawImage(img,x,y)'] = function (ctx, done) {
   var img = new Image()
@@ -2211,6 +2218,276 @@ tests['drawImage(img,0,0) clip'] = function (ctx, done) {
   img.onerror = done
   img.src = imageSrc('state.png')
 }
+
+//
+// SVG sizing, scaling and transform
+//
+
+const SVG_IMG = `
+<svg id='svg1' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'>
+  <circle r="32" cx="35" cy="65" fill="#F00" opacity="0.5"/>
+  <circle r="32" cx="65" cy="65" fill="#0F0" opacity="0.5"/>
+  <circle r="32" cx="50" cy="35" fill="#00F" opacity="0.5"/>
+</svg>`;
+
+const SVG_TXT = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <path d="M0,50l50,-50l50,50l-50,50l-50-50" stroke="#000" fill="none"/>
+  <path d="M2,50l48,-48l48,48l-48,48l-48-48" fill="#a23"/>
+  <text x="50" y="64" font-family="serif" font-size="48" fill="#FFF" text-anchor="middle"><![CDATA[§]]></text>
+</svg>`;
+
+function addSvgSize(src, w, h) {
+  return src.replace(/>$/m, ` width="${w}" height="${h}">`)
+}
+
+tests['drawImage() SVG with offset'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 25, 25)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('tree.svg')
+}
+
+tests['drawImage() SVG natural size with scaling from drawImage'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, -350, -350, 1000, 1000)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('tree.svg')
+}
+
+tests['drawImage() SVG natural size with scaling from ctx'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.scale(10, 10)
+    ctx.drawImage(img, -35, -35)
+    done(null)
+  }
+  img.onerror = (e) => { console.log(e); done(e); }
+  img.src = imageSrc('tree.svg')
+}
+
+tests['SVG no natural size drawImage(img,0,0)'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0)
+    done(null)
+  }
+  img.onerror = done
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`;
+}
+
+tests['SVG no natural size drawImage(img,0,0,img.w,img.h)'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, this.width, this.height)
+    done(null)
+  }
+  img.onerror = done
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`;
+}
+
+tests['drawImage() SVG from string'] = function (ctx, done) {
+  var img = new Image(ctx.canvas.width, ctx.canvas.height)
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0 , this.width, this.height)
+    done(null)
+  }
+  img.onerror = done
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`
+}
+
+tests['drawImage() SVG from base64'] = function (ctx, done) {
+  var img = new Image(200,  200)
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, this.width, this.height)
+    done(null)
+  }
+  img.onerror = done
+  img.src = `data:image/svg+xml;base64,${btoa(SVG_IMG)}`;
+}
+
+tests['drawImage() SVG from remote URL'] = function (ctx, done) {
+  var img = new Image(200,  200)
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, this.width, this.height)
+    done(null)
+  }
+  img.onerror = done
+  img.src = 'https://dev.w3.org/SVG/tools/svgweb/samples/svg-files/alphachannel.svg'
+}
+
+tests['drawImage() SVG with font'] = function (ctx, done) {
+  // if (FontLibrary) {
+  //   FontLibrary.use(imageSrc("Monoton-Regular.woff2"))
+  //   console.log(FontLibrary.has("Monoton"))
+  // }
+  var img = new Image(200,  200)
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, this.width, this.height)
+    done(null)
+  }
+  img.onerror = done
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_TXT)}`
+}
+
+tests['SVG no natural size drawImage(img,sx,sy,sw,sh,x,y,w,h)'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, img.width / 2, img.height / 2, 0, 0, img.width / 2, img.height / 2)
+    done(null)
+  }
+  img.onerror = done
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_TXT)}`
+}
+
+tests['SVG with natural size drawImage(img,sx,sy,sw,sh,x,y,w,h)'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, img.width / 2, img.height / 2, 0, 0, img.width / 2, img.height / 2)
+    done(null)
+  }
+  img.onerror = done
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(addSvgSize(SVG_TXT, 200, 200))}`
+}
+
+tests['SVG with natural size drawImage(img,sx,sy,sw,sh,x,y,w,h) with scaling'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, img.width / 2, img.height / 2, 0, 0, 190, 190)
+    done(null)
+  }
+  img.onerror = done
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(addSvgSize(SVG_TXT, 50, 50))}`
+}
+
+tests['createPattern() from SVG with natural size'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    var pattern = ctx.createPattern(img, 'repeat')
+    ctx.scale(0.1, 0.1)
+    ctx.fillStyle = pattern
+    ctx.fillRect(100, 100, 800, 800)
+    ctx.strokeStyle = pattern
+    ctx.lineWidth = 200
+    ctx.strokeRect(1100, 1100, 800, 800)
+    done()
+  }
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(addSvgSize(SVG_IMG, 200, 200))}`
+}
+
+tests['createPattern() from SVG no natural size'] = function (ctx, done) {
+  var img = new Image()
+  img.onload = function () {
+    var pattern = ctx.createPattern(img, 'repeat')
+    ctx.scale(0.1, 0.1)
+    ctx.fillStyle = pattern
+    ctx.fillRect(100, 100, 800, 800)
+    ctx.strokeStyle = pattern
+    ctx.lineWidth = 200
+    ctx.strokeRect(1100, 1100, 800, 800)
+    done()
+  }
+  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`
+}
+
+tests['SVG shadow & filters'] = function (ctx, done) {
+  var img = new Image(/* 200,  200 */)
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0 , 200, 200)
+    done(null)
+  }
+  ctx.shadowBlur = 5
+  ctx.shadowOffsetX = 5
+  ctx.shadowOffsetY = 7
+  ctx.shadowColor = 'black'
+
+  ctx.filter = "blur(1px) hue-rotate(90deg) saturate(4893%)"
+
+  img.onerror = done
+  img.src = imageSrc('grapes.svg')
+}
+
+tests['SVG globalCompositeOperator SVG under'] = function (ctx, done) {
+  var img1 = new Image()
+  var img2 = new Image()
+  img1.onload = function () {
+    img2.onload = function () {
+      ctx.globalAlpha = 0.7
+      ctx.drawImage(img1, 0, 0, ctx.canvas.width, ctx.canvas.height)
+      ctx.globalCompositeOperation = 'difference'
+      ctx.translate(100, 100)
+      ctx.rotate(.25*Math.PI)
+      ctx.translate(-50, -75)
+      ctx.scale(.8, .8)
+      ctx.drawImage(img2, 50, 50)
+      done()
+    }
+    img2.src = imageSrc('blend-fg.png')
+  }
+  img1.src = imageSrc('grapes.svg')
+}
+
+tests['SVG globalCompositeOperator SCG over'] = function (ctx, done) {
+  var img1 = new Image()
+  var img2 = new Image()
+  img1.onload = function () {
+    img2.onload = function () {
+      ctx.globalAlpha = 0.7
+      ctx.translate(100, 100)
+      ctx.rotate(.25*Math.PI)
+      ctx.translate(-50, -75)
+      ctx.scale(.8, .8)
+      ctx.drawImage(img1, 50, 50)
+      ctx.globalCompositeOperation = 'difference'
+      ctx.resetTransform()
+      ctx.drawImage(img2, 0, 0, ctx.canvas.width, ctx.canvas.height)
+      done()
+    }
+    img2.src = imageSrc('grapes.svg')
+  }
+  img1.src = imageSrc('blend-fg.png')
+}
+
+tests['SVG globalCompositeOperator xor'] = function (ctx, done) {
+  var img1 = new Image()
+  var img2 = new Image()
+  img1.onload = function () {
+    img2.onload = function () {
+      ctx.globalAlpha = 0.7
+      ctx.drawImage(img1, 0, 0, ctx.canvas.width, ctx.canvas.height)
+      ctx.globalCompositeOperation = 'xor'
+      ctx.drawImage(img2, 50, 50)
+      done()
+    }
+    img2.src = imageSrc('blend-fg.png')
+  }
+  img1.src = imageSrc('grapes.svg')
+}
+
+tests['SVG globalAlpha + clip'] = function (ctx, done) {
+  ctx.arc(100, 100, 75, 0, Math.PI * 2, false)
+  ctx.stroke()
+  ctx.clip()
+  var img = new Image()
+  ctx.fillRect(50, 50, 30, 30)
+  ctx.globalAlpha = 0.5
+  img.onload = function () {
+    ctx.drawImage(img, 0, 0, ctx.canvas.width, ctx.canvas.height)
+    done(null)
+  }
+  img.onerror = done
+  img.src = imageSrc('grapes.svg')
+}
+
+//
+// ImageData
+//
 
 tests['putImageData()'] = function (ctx) {
   for (var i = 0; i < 6; i++) {
