@@ -16,6 +16,18 @@ use crate::FONT_LIBRARY;
 pub type BoxedImage = JsBox<RefCell<Image>>;
 impl Finalize for Image {}
 
+pub struct Image{
+  src:String,
+  pub autosized:bool,
+  pub content: Content,
+}
+
+impl Default for Image{
+  fn default() -> Self {
+    Image{ content:Content::Loading, autosized:false, src:"".to_string() }
+  }
+}
+
 pub enum Content{
   Bitmap(SkImage),
   Vector(Picture),
@@ -93,22 +105,12 @@ impl Content{
   }
 }
 
-
-pub struct Image{
-  src:String,
-  pub autosized:bool,
-  pub content: Content,
-}
-
-
 //
 // -- Javascript Methods --------------------------------------------------------------------------
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedImage> {
-  let this = RefCell::new(Image{
-    content:Content::Loading, autosized:false, src:"".to_string() 
-  });
+  let this = RefCell::new(Image::default());
   Ok(cx.boxed(this))
 }
 
