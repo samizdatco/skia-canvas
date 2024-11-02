@@ -1015,6 +1015,48 @@ pub fn set_direction(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+pub fn get_letterSpacing(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  Ok(cx.string(this.state.letter_spacing.to_string()))
+}
+
+pub fn set_letterSpacing(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let raw_size = float_arg_or(&mut cx, 1, f32::NAN);
+  let unit = string_arg(&mut cx, 2, "unit")?;
+  let px_size = float_arg_or(&mut cx, 3, f32::NAN);
+
+  let mut this = this.borrow_mut();
+  if let Some(spacing) = Spacing::parse(raw_size, unit, px_size){
+    let em_size = this.state.char_style.font_size();
+    this.state.char_style.set_letter_spacing(spacing.in_px(em_size));
+    this.state.letter_spacing = spacing;
+  }
+  Ok(cx.undefined())
+}
+
+pub fn get_wordSpacing(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  Ok(cx.string(this.state.word_spacing.to_string()))
+}
+
+pub fn set_wordSpacing(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let raw_size = float_arg_or(&mut cx, 1, f32::NAN);
+  let unit = string_arg(&mut cx, 2, "unit")?;
+  let px_size = float_arg_or(&mut cx, 3, f32::NAN);
+
+  let mut this = this.borrow_mut();
+  if let Some(spacing) = Spacing::parse(raw_size, unit, px_size){
+    let em_size = this.state.char_style.font_size();
+    this.state.char_style.set_word_spacing(spacing.in_px(em_size));
+    this.state.word_spacing = spacing;
+  }
+  Ok(cx.undefined())
+}
+
 // -- non-standard typography extensions --------------------------------------------
 
 pub fn get_fontVariant(mut cx: FunctionContext) -> JsResult<JsString> {

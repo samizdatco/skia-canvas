@@ -228,7 +228,7 @@ pub fn opt_float_arg(cx: &mut FunctionContext, idx: usize) -> Option<f32>{
   None
 }
 
-pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default:f64) -> f32{
+pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default:f32) -> f32{
   match opt_float_arg(cx, idx){
     Some(v) => v,
     None => default as f32

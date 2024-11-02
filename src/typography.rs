@@ -386,6 +386,44 @@ impl CollectionKey{
   }
 }
 
+#[derive(Clone)]
+pub struct Spacing{
+  raw_size: f32,
+  unit: String,
+  px_size: f32,
+}
+
+impl Default for Spacing{
+  fn default() -> Self {
+      Self{raw_size:0.0, unit:"px".to_string(), px_size:0.0}
+  }
+}
+
+impl Spacing{
+  pub fn parse(raw_size:f32, unit:String, px_size:f32) -> Option<Self>{
+    let main_size = match unit.as_str(){
+      "em" | "rem" => raw_size,
+      _ => px_size
+    };
+
+    match main_size.is_nan(){
+      false => Some(Self{raw_size, unit, px_size}),
+      true => None
+    }
+  }
+
+  pub fn in_px(&self, em_size:f32) -> f32{
+    match self.unit.as_str(){
+      "em" | "rem" => self.raw_size * em_size,
+      _ => self.px_size
+    }
+  }
+
+  pub fn to_string(&self) -> String{
+    format!("{}{}", self.raw_size, self.unit)
+  }
+}
+
 //
 // Font collection management
 //

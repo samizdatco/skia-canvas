@@ -74,6 +74,8 @@ pub struct State{
   graf_style: ParagraphStyle,
   text_baseline: Baseline,
   text_tracking: i32,
+  letter_spacing: Spacing,
+  word_spacing: Spacing,
   text_wrap: bool,
 }
 
@@ -120,6 +122,8 @@ impl Default for State {
       graf_style,
       text_baseline: Baseline::Alphabetic,
       text_tracking: 0,
+      letter_spacing: Spacing::default(),
+      word_spacing: Spacing::default(),
       text_wrap: false
     }
   }
@@ -477,7 +481,9 @@ impl Context2D{
 
   pub fn set_font(&mut self, spec: FontSpec){
     let mut library = FONT_LIBRARY.lock().unwrap();
-    if let Some(new_style) = library.update_style(&self.state.char_style, &spec){
+    if let Some(mut new_style) = library.update_style(&self.state.char_style, &spec){
+      new_style.set_word_spacing(self.state.word_spacing.in_px(new_style.font_size()));
+      new_style.set_letter_spacing(self.state.letter_spacing.in_px(new_style.font_size()));
       self.state.font = spec.canonical;
       self.state.font_variant = spec.variant.to_string();
       self.state.char_style = new_style;
