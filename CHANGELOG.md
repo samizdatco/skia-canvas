@@ -3,31 +3,31 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### New Features
-- Added initial SVG rendering support. **Image**s can now load SVG files and can be drawn in a resolution-independent manner via [`drawImage()`][mdn_drawImage]. Caveats & quirks include:
+- Added initial SVG rendering support. **Image**s can now load SVG files and can be drawn in a resolution-independent manner via [`drawImage()`][mdn_drawImage] (thanks go to @mpaperno #180). Some caveats & quirks to be aware of include:
   - **Image**s loaded from SVG files that don't have a `width` and `height` set on their root `<svg>` element will report a `width` and `height` of `150`. When drawn, these size-less Images will be scaled to fit within the **Canvas**'s current bounds (using an approach akin to CSS's `object-fit: contain`). When using the 8-argument version of the `drawImage` call, the first 4 ‘crop’ arguments will correspond to this scaled-to-fit size, not the **Image**'s reported `width` & `height`.
   - SVGs can make use of fonts installed on the system, but cannot currently make use of dynamically-loaded fonts that have been added via **FontLibrary.**[use()][FontLibrary.use]. Adding support for this is on the agenda for a future release.
-- The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by [@nornagon](https://github.com/nornagon) #124).
+- The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by @nornagon #124).
 - The **Canvas** object has a new `engine` property which describes whether the CPU or GPU is being used, which graphics device was selected, and what (if any) error prevented it from being initialized.
 - **FontLibrary.**[use()][FontLibrary.use] now supports dynamically loaded [WOFF & WOFF2][woff_wiki] fonts
-- **Canvas**.[saveAs()][Canvas.saveAs] can now generate WEBP images and **Image**s can load WEBP files as well (contributed by [@mpaperno](https://github.com/mpaperno) #177, h/t [@revam](https://github.com/revam) for the initial work on this)
+- **Canvas**.[saveAs()][Canvas.saveAs] can now generate WEBP images and **Image**s can load WEBP files as well (contributed by @mpaperno #177, h/t @revam for the initial work on this)
 - The [`outlineText()`][outline_text] method now takes an optional `width` argument and supports all the context's typographic settings (e.g., `.font`, `.fontVariant`, `.textWrap`, `.textTracking`, etc.)
-- The `.transform` and `.setTransform` methods on **Context**, **Path2D**, and **CanvasPattern** objects can now take their arguments in additional formats. They can now be passed a [**DOMMatrix**][DOMMatrix] object or a string with a list of transformation operations compatible with the [CSS `transform`][css_transform] property. The **DOMMatrix** constructor also supports these strings as well as plain, matrix-like objects with numeric attributes named `a`, `b`, `c`, `d`, `e`, & `f` (contributed by [@mpaperno](https://github.com/mpaperno) #178).
+- The `.transform` and `.setTransform` methods on **Context**, **Path2D**, and **CanvasPattern** objects can now take their arguments in additional formats. They can now be passed a [**DOMMatrix**][DOMMatrix] object or a string with a list of transformation operations compatible with the [CSS `transform`][css_transform] property. The **DOMMatrix** constructor also supports these strings as well as plain, matrix-like objects with numeric attributes named `a`, `b`, `c`, `d`, `e`, & `f` (contributed by @mpaperno #178).
 
 ### Breaking Changes
 - The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`](key_location) field provides a numeric description of which variant of a key was pressed.
 
 ### Bugfixes
 - Initializing a GPU-renderer using Vulkan now uses the [`vulkano`](https://crates.io/crates/vulkano) crate and makes better selections among devices present (previously it was just using the first result, which is not always optimal).
-- The **Image**.onload callback now properly sets `this` to point to the new image (contributed by [@mpaperno](https://github.com/mpaperno) & [@ForkKILLET](https://github.com/ForkKILLET)).
+- The **Image**.onload callback now properly sets `this` to point to the new image (contributed by @mpaperno & @ForkKILLET).
 - Creating a **Window** with `fullscreen` set to `true` now takes effect immediately (previously it was failing silently)
-- Drawing paths after setting an invalid transform no longer crashes (contributed by [@mpaperno](https://github.com/mpaperno) #175)
+- Drawing paths after setting an invalid transform no longer crashes (contributed by @mpaperno #175)
 - Windows with `.on("draw")` handlers no longer [become unresponsive](https://github.com/gfx-rs/gfx/issues/2460) on macOS 14+ after being fully occluded by other windows
-- Ellipses with certain combinations of positive and negative start- and stop-angles now render correctly—previously they would not appear at all if the total sweep exceeded 360° (contributed by [@mpaperno](https://github.com/mpaperno) #176)
-- The `drawCanvas()` method now clips to the specified crop size (contributed by [@mpaperno](https://github.com/mpaperno) #179)
+- Ellipses with certain combinations of positive and negative start- and stop-angles now render correctly—previously they would not appear at all if the total sweep exceeded 360° (contributed by @mpaperno #176)
+- The `drawCanvas()` method now clips to the specified crop size (contributed by @mpaperno #179)
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 129
-- Added TypeScript definitions for the **Window** object’s event types (contributed by [@saantonandre](https://github.com/saantonandre) #163) and the `roundRect` method (contributed by [@sandy85625](https://github.com/sandy85625) & [@santilema](https://github.com/santilema))
+- Added TypeScript definitions for the **Window** object’s event types (contributed by @saantonandre #163) and the `roundRect` method (contributed by @sandy85625 & @santilema)
 - Updated `winit` and replaced the end-of-life’d [skulpin](https://github.com/aclysma/skulpin)-based Vulkan renderer with a new implementation using Vulkano for window-drawing on Windows and Linux. 
   > It’s a fairly direct adaptation of Vulkano [sample code][vulkano_demo] for device setup with skia-specific rendering routines inspired by [@pragmatrix](https://github.com/pragmatrix)’s renderer for [emergent](pragmatrix_emergent). All of which is to say, if you understand this better than I do I'd love some suggestions for improving the rendering setup.
 
@@ -40,6 +40,7 @@
 [DOMMatrix]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrix
 [FontLibrary.use]: https://github.com/samizdatco/skia-canvas#usefamilyname-fontpaths
 [Canvas.saveAs]: https://github.com/samizdatco/skia-canvas#saveasfilename-page-format-matte-density1-quality092-outlinefalse
+
 ## 📦 ⟩ [v1.0.2] ⟩ Aug 21, 2024
 
 ### Maintenance
