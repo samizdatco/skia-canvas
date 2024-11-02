@@ -203,17 +203,16 @@ In addition, the module contains:
 The Canvas object is a stand-in for the HTML `<canvas>` element. It defines image dimensions and provides a [rendering context](#canvasrenderingcontext2d) to draw to it. Once you’re ready to save or display what you’ve drawn, the canvas can [save][saveAs] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toDataURL_ext] to process manually.
 
 
-| Image Dimensions             | Rendering Contexts            | Output                                           |
-| --                           | --                            | --                                               |
-| [**width**][canvas_width]    | [**gpu**][canvas_gpu] ⚡      | ~~[**async**][canvas_async]~~  ⚡                    |
-| [**height**][canvas_height]  | [**pages**][canvas_pages] ⚡  | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] ⚡ |
-|                              | [getContext()][getContext]    | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                            |
-|                              | [newPage()][newPage] ⚡       | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡                        |
-|                              |                               | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] ⚡ |
+| Image Dimensions             | Rendering Contexts           | Output                                                             |
+| --                           | --                           | --                                                                 |
+| [**width**][canvas_width]    | [**gpu**][canvas_gpu] ⚡      | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] ⚡       |
+| [**height**][canvas_height]  | [**pages**][canvas_pages] ⚡  | [saveAs()][saveAs] / [saveAsSync()][saveAs] ⚡                      |
+|                              | [getContext()][getContext]   | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] ⚡              |
+|                              | [newPage()][newPage] ⚡       | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] ⚡  |
+|                              |                              |                                                                    |
 
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
-[canvas_async]: #async
 [canvas_gpu]: #gpu
 [canvas_pages]: #pages
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
@@ -264,10 +263,6 @@ function synchronous(){
 ```
 
 ##### PROPERTIES
-
-#### ~~`.async`~~
-
-**The async property has been deprecated** and will be removed in a future release. Use the [`saveAsSync()`][saveAs], [`toBufferSync()`][toBuffer], and [`toDataURLSync()`][toDataURL_ext] methods if the default, asynchronous versions aren't to your liking.
 
 #### `.gpu`
 
