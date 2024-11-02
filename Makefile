@@ -23,7 +23,7 @@ endif
 $(NPM):
 	npm ci --ignore-scripts
 
-$(LIB): optimized
+$(LIB): build
 
 build: $(NPM)
 	@rm -f $(LIB)
@@ -85,5 +85,4 @@ run: build
 	@node check.js
 
 preview: run
-	@open -a Preview.app out.png
-	@open -a "Visual Studio Code"
+	less out.png
