@@ -10,7 +10,7 @@ use std::path::Path;
 use std::collections::HashMap;
 use neon::prelude::*;
 
-use skia_safe::{Font, FontMgr, FontMetrics, FontArguments, Typeface, Paint, Point, Rect, Path as SkPath};
+use skia_safe::{Font, FontMgr, FontStyleSet, FontMetrics, FontArguments, Typeface, Paint, Point, Rect, Path as SkPath};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
@@ -393,7 +393,8 @@ impl CollectionKey{
 pub struct FontLibrary{
   pub mgr: FontMgr,
   pub fonts: Vec<(Typeface, Option<String>)>,
-  pub collection: FontCollection,
+  pub generics: Vec<(Typeface, Option<String>)>,
+  pub collection: Option<FontCollection>,
   collection_cache: HashMap<CollectionKey, FontCollection>,
 }
 
@@ -403,12 +404,54 @@ unsafe impl Send for FontLibrary {
 
 impl FontLibrary{
   pub fn shared() -> Mutex<Self>{
-    let fonts = vec![];
-    let collection_cache = HashMap::new();
-    let mut collection = FontCollection::new();
-    let mgr = FontMgr::default();
-    collection.set_default_font_manager(mgr.clone(), None);
-    Mutex::new(FontLibrary{ mgr, collection, collection_cache, fonts })
+    Mutex::new(
+      FontLibrary{
+        mgr:FontMgr::default(), collection:None, collection_cache:HashMap::new(), fonts:vec![], generics:vec![]
+      }
+    )
+  }
+
+  fn font_collection(&mut self) -> FontCollection{
+    // lazily initialize font collection on first actual use
+    if self.collection.is_none(){
+      // set up generic font family mappings
+      if self.generics.is_empty(){
+        let mut generics = vec![];
+        let mut font_stacks = HashMap::new();
+        font_stacks.insert("serif", vec!["Times", "Nimbus Roman", "Times New Roman", "Tinos", "Noto Serif", "Liberation Serif", "DejaVu Serif", "Source Serif Pro"]);
+        font_stacks.insert("sans-serif", vec!["Avenir Next", "Avenir", "Helvetica Neue", "Helvetica", "Arial Nova", "Arial", "Inter", "Arimo", "Roboto", "Noto Sans", "Liberation Sans", "DejaVu Sans", "Nimbus Sans", "Clear Sans", "Lato", "Cantarell", "Arimo", "Ubuntu"]);
+        font_stacks.insert("monospace", vec!["Cascadia Code", "Source Code Pro", "Menlo", "Consolas", "Monaco", "Liberation Mono", "Ubuntu Mono", "Roboto Mono", "Lucida Console", "Monaco", "Courier New", "Courier"]);
+        font_stacks.insert("system-ui", vec!["Helvetica Neue", "Ubuntu", "Segoe UI", "Fira Sans", "Roboto", "DroidSans", "Tahoma"]);
+        // see also: https://modernfontstacks.com | https://systemfontstack.com | https://www.ctrl.blog/entry/font-stack-text.html
+
+        // Set up mappings for generic font names based on the first match found on the system
+        for (generic_name, families) in font_stacks.into_iter() {
+          let best_match = families.iter().find_map(|fam| {
+            let mut style_set = self.mgr.match_family(fam);
+            match style_set.count() > 0{
+              true => Some(style_set),
+              false => None
+            }
+          });
+
+          let alias = Some(generic_name.to_string());
+          if let Some(mut style_set) = best_match{
+            for style_index in 0..style_set.count() {
+              if let Some(font) = style_set.new_typeface(style_index){
+                generics.push((font, alias.clone()));
+              }
+            }
+          }
+        }
+        self.generics = generics;
+      }
+
+      self.rebuild_collection(); // assigns to self.collection
+    };
+
+    self.collection.as_ref().unwrap().clone()
+  }
+
   }
 
   fn families(&self) -> Vec<String>{
@@ -479,21 +522,31 @@ impl FontLibrary{
     ){
       self.fonts.remove(idx);
     }
+
+    // add the new typeface/alias and recreate the FontCollection to include it
     self.fonts.push((font, alias));
+    self.rebuild_collection();
+  }
 
-    let sys_mgr = self.mgr.clone();
-    let default_fam = sys_mgr.legacy_make_typeface(None, FontStyle::default())
-      .map(|f| f.family_name());
-
+  fn rebuild_collection(&mut self){
     let mut assets = TypefaceFontProvider::new();
+    for (font, alias) in &self.generics {
+      assets.register_typeface(font.clone(), alias.as_deref());
+    }
     for (font, alias) in &self.fonts {
       assets.register_typeface(font.clone(), alias.as_deref());
     }
 
+    let mut style_set = assets.match_family("system-ui");
+    let default_fam = match style_set.count() > 1{
+      true => style_set.match_style(FontStyle::default()),
+      false => self.mgr.legacy_make_typeface(None, FontStyle::default())
+    }.map(|f| f.family_name());
+
     let mut collection = FontCollection::new();
-    collection.set_default_font_manager(sys_mgr, default_fam.as_deref());
+    collection.set_default_font_manager(self.mgr.clone(), default_fam.as_deref());
     collection.set_asset_font_manager(Some(assets.into()));
-    self.collection = collection;
+    self.collection = Some(collection);
     self.collection_cache.drain();
   }
 
@@ -501,7 +554,7 @@ impl FontLibrary{
     let mut style = orig_style.clone();
 
     // only update the style if a usable family name was specified
-    self.collection
+    self.font_collection()
       .find_typefaces(&spec.families, spec.style)
       .into_iter().nth(0)
       .map(|typeface| {
@@ -515,7 +568,7 @@ impl FontLibrary{
         for (feat, val) in &spec.features{
           style.add_font_feature(feat, *val);
         }
-        style 
+        style
       })
   }
 
@@ -530,7 +583,7 @@ impl FontLibrary{
   pub fn collect_fonts(&mut self, style: &TextStyle) -> FontCollection {
     let families = style.font_families();
     let families:Vec<&str> = families.iter().collect();
-    let matches = self.collection.find_typefaces(&families, style.font_style());
+    let matches = self.font_collection().find_typefaces(&families, style.font_style());
 
     // if the matched typeface is a variable font, create an instance that matches
     // the current weight settings and return early with a new FontCollection that
@@ -579,7 +632,7 @@ impl FontLibrary{
     }
 
     // if the matched font wasn't variable, then just return the standard collection
-    self.collection.clone()
+    self.font_collection()
   }
 
 }
@@ -685,10 +738,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut library = FONT_LIBRARY.lock().unwrap();
   library.fonts.clear();
-
-  let mut collection = FontCollection::new();
-  collection.set_default_font_manager(library.mgr.clone(), None);
-  library.collection = collection;
+  library.collection = None;
   library.collection_cache.drain();
 
   Ok(cx.undefined())

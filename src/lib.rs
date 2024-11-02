@@ -1,6 +1,6 @@
 #![allow(unused_braces)]
 #![allow(clippy::unnecessary_wraps)]
-use std::sync::{Mutex};
+use std::sync::Mutex;
 use neon::prelude::*;
 use once_cell::sync::Lazy;
 
