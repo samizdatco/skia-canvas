@@ -73,7 +73,6 @@ pub struct State{
   char_style: TextStyle,
   graf_style: ParagraphStyle,
   text_baseline: Baseline,
-  text_tracking: i32,
   letter_spacing: Spacing,
   word_spacing: Spacing,
   text_wrap: bool,
@@ -121,7 +120,6 @@ impl Default for State {
       char_style,
       graf_style,
       text_baseline: Baseline::Alphabetic,
-      text_tracking: 0,
       letter_spacing: Spacing::default(),
       word_spacing: Spacing::default(),
       text_wrap: false

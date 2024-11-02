@@ -1077,23 +1077,6 @@ pub fn set_fontVariant(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn get_textTracking(mut cx: FunctionContext) -> JsResult<JsNumber> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-  Ok(cx.number(this.state.text_tracking))
-}
-
-pub fn set_textTracking(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-  let tracking = float_arg(&mut cx, 1, "tracking")?;
-
-  let em = this.state.char_style.font_size();
-  this.state.text_tracking = tracking as i32;
-  this.state.char_style.set_letter_spacing(tracking as f32 / 1000.0 * em);
-  Ok(cx.undefined())
-}
-
 pub fn get_textWrap(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
