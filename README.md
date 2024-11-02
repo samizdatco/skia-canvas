@@ -352,11 +352,9 @@ By default any [`line-height`][lineHeight] value included in a font specificatio
 
 The context’s [`.font`][font] property follows the CSS 2.1 standard and allows the selection of only a single font-variant type: `normal` vs `small-caps`. The full range of CSS 3 [font-variant][font-variant] values can be used if assigned to the context’s `.fontVariant` property (presuming the currently selected font supports them). Note that setting `.font` will also update the current `.fontVariant` value, so be sure to set the variant *after* selecting a typeface.
 
-#### `.textTracking`
+#### ~~`.textTracking`~~
 
-To loosen or tighten letter-spacing, set the `.textTracking` property to an integer representing the amount of space to add/remove in terms of 1/1000’s of an ‘em’ (a.k.a. the current font size). Positive numbers will space out the text (e.g., `100` is a good value for setting all-caps) while negative values will pull the letters closer together (this is only rarely a good idea).
-
-The tracking value defaults to `0` and settings will persist across changes to the `.font` property.
+**The textTracking property has been removed** and replaced with the now-standard [`letterSpacing`][letterSpacing] property.
 
 #### `.textWrap`
 
