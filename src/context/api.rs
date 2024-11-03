@@ -952,6 +952,21 @@ pub fn set_font(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+pub fn get_fontStretch(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  Ok(cx.string(from_width(this.state.font_width)))
+}
+
+pub fn set_fontStretch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  if let Some(stretch) = opt_string_arg(&mut cx, 1){
+    let mut this = this.borrow_mut();
+    this.set_font_width(to_width(&stretch));
+  }
+  Ok(cx.undefined())
+}
+
 pub fn get_textAlign(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();

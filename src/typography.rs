@@ -160,15 +160,27 @@ impl Typesetter{
 //
 // Font argument packing & unpacking
 //
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FontSpec{
   families: Vec<String>,
   size: f32,
   leading: f32,
-  style: FontStyle,
+  weight: Weight,
+  pub width: Width,
+  slant: Slant,
   features: Vec<(String, i32)>,
   pub variant: String,
   pub canonical: String
+}
+
+impl FontSpec{
+  pub fn with_width(&self, width:Width) -> Self{
+    Self{width, ..self.clone()}
+  }
+
+  pub fn style(&self) -> FontStyle{
+    FontStyle::new(self.weight, self.width, self.slant)
+  }
 }
 
 pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<Option<FontSpec>> {
@@ -189,8 +201,7 @@ pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<Option<FontSpe
   let feat_obj:Handle<JsObject> = font_desc.get(cx, "features")?;
   let features = font_features(cx, &feat_obj)?;
 
-  let style = FontStyle::new(weight, width, slant);
-  Ok(Some(FontSpec{ families, size, leading, style, features, variant, canonical}))
+  Ok(Some(FontSpec{ families, size, leading, weight, slant, width, features, variant, canonical}))
 }
 
 pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
@@ -624,12 +635,12 @@ impl FontLibrary{
 
     // only update the style if a usable family name was specified
     self.font_collection()
-      .find_typefaces(&spec.families, spec.style)
+      .find_typefaces(&spec.families, spec.style())
       .into_iter().nth(0)
       .map(|typeface| {
         style.set_typeface(typeface);
         style.set_font_families(&spec.families);
-        style.set_font_style(spec.style);
+        style.set_font_style(spec.style());
         style.set_font_size(spec.size);
         style.set_height(spec.leading / spec.size);
         style.set_height_override(true);
@@ -646,6 +657,13 @@ impl FontLibrary{
     for (feat, val) in features{
       style.add_font_feature(feat, *val);
     }
+    style
+  }
+
+  pub fn update_width(&mut self, orig_style:&TextStyle, width:Width) -> TextStyle{
+    let mut style = orig_style.clone();
+    let fs = style.font_style();
+    style.set_font_style({FontStyle::new(fs.weight(), width, fs.slant())});
     style
   }
 
