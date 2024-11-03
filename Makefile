@@ -84,4 +84,4 @@ run: $(LIB)
 	@node check.js
 
 preview: run
-	less out.png
+	@less out.png || true
