@@ -285,6 +285,15 @@ tests['quadraticCurveTo()'] = function (ctx) {
   ctx.stroke()
 }
 
+/**
+  @param {skCanvas.CanvasRenderingContext2D} ctx
+  @param {{
+    scl?: number
+    offset?: number
+    len?: number
+    cb?: ((a:number,b:number,c:number,d:number) => void) | null
+  }} options
+*/
 function drawPinwheel(ctx, {scl = .5, offset = 0, len = 100, cb = null} = {}) {
   ctx.translate(100, 100)
   ctx.scale(scl, scl)
@@ -1539,6 +1548,17 @@ tests['known bug #416'] = function (ctx, done) {
   img1.src = imageSrc('blend-bg.png')
 }
 
+/**
+  @param {CanvasRenderingContext2D} ctx
+  @param {{
+    color?: string
+    offset?: [number,number]
+    blur?: number
+    color2?: string | null
+    stroke?: boolean
+    rectCb?: ((a:number,b:number,c:number,d:number) => void) | null
+  }} options
+*/
 function drawShadowPattern(ctx, { color = '#c00', offset = [0,0], blur = 5, color2 = null, stroke = false, rectCb =null } = { }) {
 
   const rectFn = stroke ? 'strokeRect' : 'fillRect'
