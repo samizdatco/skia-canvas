@@ -1378,6 +1378,54 @@ tests['font style variant weight size family'] = function (ctx) {
   ctx.fillText('normal normal normal 16px', 100, 100)
 }
 
+tests['generic font family monospace'] = function (ctx) {
+  ctx.strokeStyle = '#666'
+  ctx.strokeRect(0, 0, 200, 200)
+  ctx.lineTo(0, 100)
+  ctx.lineTo(200, 100)
+  ctx.stroke()
+
+  ctx.font = '22px monospace, "Times New Roman", "Times", serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('monospace iWlx', 100, 100)
+}
+
+tests['generic font family fallback serif'] = function (ctx) {
+  ctx.strokeStyle = '#666'
+  ctx.strokeRect(0, 0, 200, 200)
+  ctx.lineTo(0, 100)
+  ctx.lineTo(200, 100)
+  ctx.stroke()
+
+  ctx.font = '24px None_suchFont, serif, Arial, monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText('serif fallback', 100, 100)
+}
+
+tests['generic font family fallback sans-serif'] = function (ctx) {
+  ctx.strokeStyle = '#666'
+  ctx.strokeRect(0, 0, 200, 200)
+  ctx.lineTo(0, 100)
+  ctx.lineTo(200, 100)
+  ctx.stroke()
+
+  ctx.font = '24px None_suchFont, sans-serif, "Times New Roman", "Times", monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText('sans-serif fallback', 100, 100)
+}
+
+tests['generic font family fallback system-ui'] = function (ctx) {
+  ctx.strokeStyle = '#666'
+  ctx.strokeRect(0, 0, 200, 200)
+  ctx.lineTo(0, 100)
+  ctx.lineTo(200, 100)
+  ctx.stroke()
+
+  ctx.font = '24px None_suchFont, system-ui, "Times New Roman", "Times", serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('system-ui fallback', 100, 100)
+}
+
 // From https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation
 const gco = [
   'source-over', 'source-in', 'source-out', 'source-atop',
