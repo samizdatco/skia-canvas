@@ -1038,9 +1038,15 @@ pub fn get_letterSpacing(mut cx: FunctionContext) -> JsResult<JsString> {
 
 pub fn set_letterSpacing(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let raw_size = float_arg_or(&mut cx, 1, f32::NAN);
-  let unit = string_arg(&mut cx, 2, "unit")?;
-  let px_size = float_arg_or(&mut cx, 3, f32::NAN);
+
+  if cx.argument::<JsValue>(1)?.is_a::<JsNull, _>(&mut cx){
+    return Ok(cx.undefined());
+  }
+
+  let spacing = cx.argument::<JsObject>(1)?;
+  let raw_size = float_for_key(&mut cx, &spacing, "size")?;
+  let unit = string_for_key(&mut cx, &spacing, "unit")?;
+  let px_size = float_for_key(&mut cx, &spacing, "px")?;
 
   let mut this = this.borrow_mut();
   if let Some(spacing) = Spacing::parse(raw_size, unit, px_size){
