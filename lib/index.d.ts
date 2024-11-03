@@ -212,9 +212,17 @@ interface CanvasTransform extends Omit<globalThis.CanvasTransform, "transform" |
 
 interface CanvasTextDrawingStyles extends Omit<globalThis.CanvasTextDrawingStyles, "fontKerning" | "fontVariantCaps" | "textRendering">{}
 
+type FontVariantSetting = "normal" |
+/* alternates */ "historical-forms" |
+/* caps */ "small-caps" | "all-small-caps" | "petite-caps" | "all-petite-caps" | "unicase" | "titling-caps" |
+/* numeric */ "lining-nums" | "oldstyle-nums" | "proportional-nums" | "tabular-nums" | "diagonal-fractions" | "stacked-fractions" | "ordinal" | "slashed-zero" |
+/* ligatures */ "common-ligatures" | "no-common-ligatures" | "discretionary-ligatures" | "no-discretionary-ligatures" | "historical-ligatures" | "no-historical-ligatures" | "contextual" | "no-contextual" |
+/* east-asian */ "jis78" | "jis83" | "jis90" | "jis04" | "simplified" | "traditional" | "full-width" | "proportional-width" | "ruby" |
+/* position */ "super" | "sub";
+
 export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform, CanvasUserInterface {
   readonly canvas: Canvas;
-  fontVariant: string;
+  fontVariant: FontVariantSetting;
   textWrap: boolean;
   lineDashMarker: Path2D | null;
   lineDashFit: "move" | "turn" | "follow";
