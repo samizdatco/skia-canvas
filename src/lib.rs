@@ -12,6 +12,7 @@ mod filter;
 mod gradient;
 mod pattern;
 mod texture;
+mod font_library;
 mod typography;
 mod utils;
 mod gpu;
@@ -19,7 +20,7 @@ mod gpu;
 mod gui;
 
 use context::api as ctx;
-use typography::FontLibrary;
+use font_library::FontLibrary;
 
 pub static FONT_LIBRARY: Lazy<Mutex<FontLibrary>> = Lazy::new(FontLibrary::shared);
 
@@ -90,11 +91,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   // -- FontLibrary -------------------------------------------------------------------------------
 
-  cx.export_function("FontLibrary_get_families", typography::get_families)?;
-  cx.export_function("FontLibrary_has", typography::has)?;
-  cx.export_function("FontLibrary_family", typography::family)?;
-  cx.export_function("FontLibrary_addFamily", typography::addFamily)?;
-  cx.export_function("FontLibrary_reset", typography::reset)?;
+  cx.export_function("FontLibrary_get_families", font_library::get_families)?;
+  cx.export_function("FontLibrary_has", font_library::has)?;
+  cx.export_function("FontLibrary_family", font_library::family)?;
+  cx.export_function("FontLibrary_addFamily", font_library::addFamily)?;
+  cx.export_function("FontLibrary_reset", font_library::reset)?;
 
   // -- Canvas ------------------------------------------------------------------------------------
 
