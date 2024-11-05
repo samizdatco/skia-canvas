@@ -593,6 +593,9 @@ impl FontLibrary{
   }
 
   fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
+    // make sure the collection & generics have been initialized before starting
+    self.font_collection();
+
     // replace any previously added font with the same metadata/alias
     if let Some(idx) = self.fonts.iter().position(|(old_font, old_alias)|
       match alias.is_some(){
