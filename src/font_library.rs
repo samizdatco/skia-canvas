@@ -19,7 +19,7 @@ use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
 
 use crate::FONT_LIBRARY;
 use crate::utils::*;
-use crate::typography::*;
+use crate::typography::{FontSpec, from_width, from_slant, typeface_wght_range, typeface_details};
 
 #[cfg(target_os = "windows")]
 use allsorts::{

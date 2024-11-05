@@ -23,7 +23,7 @@ pub mod page;
 
 use crate::FONT_LIBRARY;
 use crate::utils::*;
-use crate::typography::*;
+use crate::typography::{Typesetter, FontSpec, Baseline, Spacing, DecorationStyle};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
