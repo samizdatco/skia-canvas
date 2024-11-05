@@ -10,7 +10,7 @@ use std::path::Path;
 use std::collections::HashMap;
 use neon::prelude::*;
 
-use skia_safe::{Font, FontMgr, FontStyleSet, FontMetrics, FontArguments, Typeface, Paint, Point, Rect, Path as SkPath};
+use skia_safe::{Font, FontMgr, FontStyleSet, FontMetrics, FontArguments, Typeface, Paint, Point, Rect, Path as SkPath, Color};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
@@ -82,6 +82,9 @@ impl Typesetter{
     let mut char_style = self.char_style.clone();
     char_style.set_foreground_paint(paint);
 
+
+    // TODO: replace currentColor in text-decoration with paint's color
+
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
     paragraph_builder.push_style(&char_style);
     paragraph_builder.add_text(&self.text);
@@ -151,7 +154,7 @@ impl Typesetter{
     let mut path = SkPath::new();
     for idx in 0..paragraph.line_number(){
       let (skipped, line) = paragraph.get_path_at(idx);
-      path.add_path(&line, offset, None);  
+      path.add_path(&line, offset, None);
     };
     path
   }
@@ -397,7 +400,86 @@ impl CollectionKey{
   }
 }
 
-#[derive(Clone)]
+use skia_safe::textlayout::{Decoration, TextDecoration, TextDecorationMode, TextDecorationStyle};
+#[derive(Clone, Debug)]
+pub struct DecorationStyle{
+  pub css: String,
+  pub decoration: Decoration,
+  pub size: Option<Spacing>,
+  pub color: Option<Color>,
+}
+
+
+impl Default for DecorationStyle{
+  fn default() -> Self {
+    Self{decoration:Decoration::default(), size:None, color:None, css:"none".to_string()}
+  }
+}
+
+impl DecorationStyle{
+  pub fn for_style(&self, style:&TextStyle) -> Decoration{
+    // convert `size` into a multiple of the current font's default thickness
+    let em_size = style.font_size();
+    let thickness = style.font_metrics()
+      .underline_thickness()
+      .unwrap_or(1.0);
+    let thickness_multiplier = self.size.clone()
+      .map(|size| size.in_px(em_size) / thickness)
+      .unwrap_or(1.0);
+    let color = self.color.unwrap_or(style.color());
+    // dbg!(color);
+    let color = style.color();
+    Decoration{thickness_multiplier, color, ..self.decoration}
+  }
+}
+
+pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<DecorationStyle>> {
+  if let Some(deco) = opt_object_arg(cx, idx){
+    let css = string_for_key(cx, &deco, "str")?;
+
+    let line = string_for_key(cx, &deco, "line")?;
+    let ty = match line.as_str(){
+      "underline" => TextDecoration::UNDERLINE,
+      "overline" => TextDecoration::OVERLINE,
+      "line-through" => TextDecoration::LINE_THROUGH,
+      "none" | _ => return Ok(Some(DecorationStyle::default()))
+    };
+
+    let line_style = string_for_key(cx, &deco, "style")?;
+    let style = match line_style.as_str(){
+      "wavy" => TextDecorationStyle::Wavy,
+      "dotted" => TextDecorationStyle::Dotted,
+      "dashed" => TextDecorationStyle::Dashed,
+      "double" => TextDecorationStyle::Double,
+      "solid" | _ => TextDecorationStyle::Solid,
+    };
+
+    let color = match string_for_key(cx, &deco, "color")?.as_str(){
+      "currentColor" => None,
+      color_str => css_to_color(&color_str),
+    };
+
+    let inherit = string_for_key(cx, &deco, "inherit")?;
+    let size = match inherit.as_str(){
+      "from-font" => None,
+      _ => {
+        let thickness = object_for_key(cx, &deco, "thickness")?;
+        let raw_size = float_for_key(cx, &thickness, "size")?;
+        let unit = string_for_key(cx, &thickness, "unit")?;
+        let px_size = float_for_key(cx, &thickness, "px")?;    
+        Spacing::parse(raw_size, unit, px_size)
+      }
+    };
+
+    let decoration = Decoration{ ty, style, ..Decoration::default() };
+    Ok(Some(DecorationStyle{ decoration, size, color, css} ))
+  }else{
+    Ok(None)
+  }
+}
+
+
+#[derive(Clone, Debug)]
 pub struct Spacing{
   raw_size: f32,
   unit: String,
@@ -667,6 +749,15 @@ impl FontLibrary{
     let mut style = orig_style.clone();
     let fs = style.font_style();
     style.set_font_style({FontStyle::new(fs.weight(), width, fs.slant())});
+    style
+  }
+
+  pub fn update_decoration(&mut self, orig_style:&TextStyle, deco_style:DecorationStyle) -> TextStyle{
+    let mut style = orig_style.clone();
+    let em = style.font_size();
+    let thickness = style.font_metrics().underline_thickness();
+    let decoration = deco_style.for_style(&style);
+    style.set_decoration(&decoration);
     style
   }
 

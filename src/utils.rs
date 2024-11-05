@@ -80,6 +80,29 @@ pub fn check_argc(cx: &mut FunctionContext, argc:i32) -> NeonResult<()>{
 // }
 
 //
+// plain objects
+//
+
+pub fn opt_object_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize) -> Option<Handle<'a, JsObject>>{
+  match cx.argument_opt(idx as i32) {
+    Some(arg) => match arg.downcast::<JsObject, _>(cx) {
+      Ok(obj) => Some(obj),
+      Err(_e) => None
+    },
+    None => None
+  }
+}
+
+pub fn object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsObject>, attr:&str) -> NeonResult<Handle<'a, JsObject>>{
+  let key = cx.string(attr);
+  let val:Handle<JsValue> = obj.get(cx, key)?;
+  match val.downcast::<JsObject, _>(cx){
+    Ok(obj) => Ok(obj),
+    Err(_e) => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
+  }
+}
+
+//
 // strings
 //
 

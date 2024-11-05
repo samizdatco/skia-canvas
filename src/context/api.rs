@@ -1112,6 +1112,24 @@ pub fn set_textWrap(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+pub fn get_textDecoration(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  Ok(cx.string(this.state.text_decoration.css.clone()))
+}
+
+pub fn set_textDecoration(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  if let Ok(arg) = decoration_arg(&mut cx, 1){
+    if let Some(deco_style) = arg{
+      let mut this = this.borrow_mut();
+      this.set_text_decoration(deco_style);
+    }
+  }
+  
+  Ok(cx.undefined())
+}
+
 //
 // Effects
 //

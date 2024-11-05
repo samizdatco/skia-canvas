@@ -79,6 +79,7 @@ pub struct State{
   text_baseline: Baseline,
   letter_spacing: Spacing,
   word_spacing: Spacing,
+  text_decoration: DecorationStyle,
   text_wrap: bool,
 }
 
@@ -127,6 +128,7 @@ impl Default for State {
       text_baseline: Baseline::Alphabetic,
       letter_spacing: Spacing::default(),
       word_spacing: Spacing::default(),
+      text_decoration: DecorationStyle::default(),
       text_wrap: false
     }
   }
@@ -487,6 +489,7 @@ impl Context2D{
     if let Some(mut new_style) = library.update_style(&self.state.char_style, &spec){
       new_style.set_word_spacing(self.state.word_spacing.in_px(new_style.font_size()));
       new_style.set_letter_spacing(self.state.letter_spacing.in_px(new_style.font_size()));
+      new_style.set_decoration(&self.state.text_decoration.for_style(&new_style));
       self.state.font = spec.canonical;
       self.state.font_variant = spec.variant.to_string();
       self.state.font_width = spec.width;
@@ -505,6 +508,13 @@ impl Context2D{
     let mut library = FONT_LIBRARY.lock().unwrap();
     let new_style = library.update_width(&self.state.char_style, width);
     self.state.font_width = width;
+    self.state.char_style = new_style;
+  }
+
+  pub fn set_text_decoration(&mut self, deco_style:DecorationStyle){
+    let mut library = FONT_LIBRARY.lock().unwrap();
+    let new_style = library.update_decoration(&self.state.char_style, deco_style.clone());
+    self.state.text_decoration = deco_style;
     self.state.char_style = new_style;
   }
 
