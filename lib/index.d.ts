@@ -120,11 +120,6 @@ export class Canvas {
   constructor(width?: number, height?: number)
   static contexts: WeakMap<Canvas, readonly CanvasRenderingContext2D[]>
 
-  /**
-   * @deprecated Use the saveAsSync, toBufferSync, and toDataURLSync methods
-   * instead of setting the async property to false
-   */
-  async: boolean
   width: number
   height: number
 
