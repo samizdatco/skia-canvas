@@ -247,7 +247,10 @@
       function localRendering (name, callback) {
         var canvas = create('canvas', { width: opt.width, height: opt.height, title: name })
         var tests = window.tests
-        var ctx = canvas.getContext('2d', { alpha: true, willReadFrequently: true })
+        var ctx = canvas.getContext('2d', {
+          alpha: true,
+          willReadFrequently: typeof opt.gpu == 'boolean' ? !opt.gpu : undefined
+        })
         ctx.imageSmoothingEnabled = true;
         var initialFillStyle = ctx.fillStyle
         ctx.fillStyle = opt.cc
