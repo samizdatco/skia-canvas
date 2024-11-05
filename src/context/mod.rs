@@ -14,7 +14,7 @@ use skia_safe::{
   textlayout::{ParagraphStyle, TextStyle},
   canvas::SrcRectConstraint::Strict,
   path_utils::fill_path_with_paint,
-  font_style::Width,
+  font_style::{FontStyle, Weight, Width, Slant},
   path::FillType,
 };
 
@@ -135,10 +135,16 @@ impl Default for State {
 }
 
 impl State{
-  pub fn typography(&self) -> (TextStyle, ParagraphStyle, Baseline, bool) {
+  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, Baseline, bool) {
     (
-      self.char_style.clone(),
+      {
+        let mut style = self.char_style.clone();
+        style.set_word_spacing(self.word_spacing.in_px(style.font_size()));
+        style.set_letter_spacing(self.letter_spacing.in_px(style.font_size()));
+        style
+      },
       self.graf_style.clone(),
+      self.text_decoration.clone(),
       self.text_baseline,
       self.text_wrap
     )
@@ -221,7 +227,7 @@ impl Context2D{
         canvas.concat(&self.state.matrix);
         f(canvas, &shadow_paint);
         canvas.restore();
-      }  
+      }
     };
 
     match self.state.global_composite_operation{
@@ -487,9 +493,6 @@ impl Context2D{
   pub fn set_font(&mut self, mut spec: FontSpec){
     let mut library = FONT_LIBRARY.lock().unwrap();
     if let Some(mut new_style) = library.update_style(&self.state.char_style, &spec){
-      new_style.set_word_spacing(self.state.word_spacing.in_px(new_style.font_size()));
-      new_style.set_letter_spacing(self.state.letter_spacing.in_px(new_style.font_size()));
-      new_style.set_decoration(&self.state.text_decoration.for_style(&new_style));
       self.state.font = spec.canonical;
       self.state.font_variant = spec.variant.to_string();
       self.state.font_width = spec.width;
@@ -498,24 +501,17 @@ impl Context2D{
   }
 
   pub fn set_font_variant(&mut self, variant:&str, features:&[(String, i32)]){
-    let mut library = FONT_LIBRARY.lock().unwrap();
-    let new_style = library.update_features(&self.state.char_style, features);
+    for (feat, val) in features{
+      self.state.char_style.add_font_feature(feat, *val);
+    }
     self.state.font_variant = variant.to_string();
-    self.state.char_style = new_style;
   }
 
   pub fn set_font_width(&mut self, width:Width){
-    let mut library = FONT_LIBRARY.lock().unwrap();
-    let new_style = library.update_width(&self.state.char_style, width);
+    let style = self.state.char_style.font_style();
+    let font_style =  FontStyle::new(style.weight(), width, style.slant());
+    self.state.char_style.set_font_style(font_style);
     self.state.font_width = width;
-    self.state.char_style = new_style;
-  }
-
-  pub fn set_text_decoration(&mut self, deco_style:DecorationStyle){
-    let mut library = FONT_LIBRARY.lock().unwrap();
-    let new_style = library.update_decoration(&self.state.char_style, deco_style.clone());
-    self.state.text_decoration = deco_style;
-    self.state.char_style = new_style;
   }
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, style:PaintStyle){

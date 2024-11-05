@@ -93,13 +93,14 @@ pub fn opt_object_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize) -> Option<Han
   }
 }
 
-pub fn object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsObject>, attr:&str) -> NeonResult<Handle<'a, JsObject>>{
+
+
+pub fn opt_object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsObject>, attr:&str) -> Option<Handle<'a, JsObject>>{
   let key = cx.string(attr);
-  let val:Handle<JsValue> = obj.get(cx, key)?;
-  match val.downcast::<JsObject, _>(cx){
-    Ok(obj) => Ok(obj),
-    Err(_e) => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
+  if let Some(val) = obj.get::<JsValue, _, _>(cx, key).ok(){
+    return val.downcast::<JsObject, _>(cx).ok()
   }
+  None
 }
 
 //

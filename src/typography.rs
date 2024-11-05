@@ -3,19 +3,16 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(non_snake_case)]
-use std::sync::Mutex;
-use std::fs;
 use std::ops::Range;
-use std::path::Path;
-use std::collections::HashMap;
 use neon::prelude::*;
 
-use skia_safe::{Font, FontMgr, FontStyleSet, FontMetrics, FontArguments, Typeface, Paint, Point, Rect, Path as SkPath, Color};
+use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, Color};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
-use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
-use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
-                            TextDirection, ParagraphStyle, Paragraph, ParagraphBuilder};
-
+use skia_safe::textlayout::{
+    FontCollection, TextStyle, TextAlign, TextDirection,
+    Decoration, TextDecoration, TextDecorationMode, TextDecorationStyle,
+    ParagraphStyle, Paragraph, ParagraphBuilder,
+};
 use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::context::State;
@@ -33,12 +30,13 @@ pub struct Typesetter{
   typefaces: FontCollection,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
+  text_decoration: DecorationStyle,
 }
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
     let mut library = FONT_LIBRARY.lock().unwrap();
-    let (char_style, mut graf_style, baseline, wrap) = state.typography();
+    let (char_style, mut graf_style, text_decoration, baseline, wrap) = state.typography();
     let typefaces = library.collect_fonts(&char_style);
     let width = width.unwrap_or(GALLEY);
     let text = match wrap{
@@ -65,15 +63,15 @@ impl Typesetter{
       graf_style.set_strut_style(strut_style);
     }
 
-    Typesetter{text, width, baseline, typefaces, char_style, graf_style}
+    Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration}
   }
 
   pub fn layout(&self, paint:&Paint) -> (Paragraph, Point) {
     let mut char_style = self.char_style.clone();
     char_style.set_foreground_paint(paint);
-
-
-    // TODO: replace currentColor in text-decoration with paint's color
+    char_style.set_decoration(
+      &self.text_decoration.for_layout(&char_style, paint.color())
+    );
 
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
     paragraph_builder.push_style(&char_style);
@@ -377,7 +375,6 @@ pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f32 {
   }
 }
 
-use skia_safe::textlayout::{Decoration, TextDecoration, TextDecorationMode, TextDecorationStyle};
 #[derive(Clone, Debug)]
 pub struct DecorationStyle{
   pub css: String,
@@ -394,7 +391,7 @@ impl Default for DecorationStyle{
 }
 
 impl DecorationStyle{
-  pub fn for_style(&self, style:&TextStyle) -> Decoration{
+  pub fn for_layout(&self, style:&TextStyle, text_color:Color) -> Decoration{
     // convert `size` into a multiple of the current font's default thickness
     let em_size = style.font_size();
     let thickness = style.font_metrics()
@@ -403,9 +400,7 @@ impl DecorationStyle{
     let thickness_multiplier = self.size.clone()
       .map(|size| size.in_px(em_size) / thickness)
       .unwrap_or(1.0);
-    let color = self.color.unwrap_or(style.color());
-    // dbg!(color);
-    let color = style.color();
+    let color = self.color.unwrap_or(text_color);
     Decoration{thickness_multiplier, color, ..self.decoration}
   }
 }
@@ -439,16 +434,20 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
     let inherit = string_for_key(cx, &deco, "inherit")?;
     let size = match inherit.as_str(){
       "from-font" => None,
-      _ => {
-        let thickness = object_for_key(cx, &deco, "thickness")?;
-        let raw_size = float_for_key(cx, &thickness, "size")?;
-        let unit = string_for_key(cx, &thickness, "unit")?;
-        let px_size = float_for_key(cx, &thickness, "px")?;
-        Spacing::parse(raw_size, unit, px_size)
-      }
+      _ => match opt_object_for_key(cx, &deco, "thickness"){
+          Some(thickness) => {
+            let raw_size = float_for_key(cx, &thickness, "size")?;
+            let unit = string_for_key(cx, &thickness, "unit")?;
+            let px_size = float_for_key(cx, &thickness, "px")?;
+            Spacing::parse(raw_size, unit, px_size)
+          }
+          _ => None
+        }
     };
 
-    let decoration = Decoration{ ty, style, ..Decoration::default() };
+    let mode = TextDecorationMode::Through;
+
+    let decoration = Decoration{ ty, style, mode, ..Decoration::default() };
     Ok(Some(DecorationStyle{ decoration, size, color, css} ))
   }else{
     Ok(None)

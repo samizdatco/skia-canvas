@@ -12,8 +12,8 @@ use std::path::Path;
 use std::collections::HashMap;
 use neon::prelude::*;
 
-use skia_safe::{Font, FontMgr, FontStyleSet, FontMetrics, FontArguments, Typeface, Paint, Point, Rect, Path as SkPath, Color};
-use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
+use skia_safe::{FontMgr, FontArguments, Typeface};
+use skia_safe::font_style::{FontStyle, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
 
@@ -257,30 +257,6 @@ pub struct FontLibrary{
           }
           style
         })
-    }
-
-    pub fn update_features(&mut self, orig_style:&TextStyle, features: &[(String, i32)]) -> TextStyle{
-      let mut style = orig_style.clone();
-      for (feat, val) in features{
-        style.add_font_feature(feat, *val);
-      }
-      style
-    }
-
-    pub fn update_width(&mut self, orig_style:&TextStyle, width:Width) -> TextStyle{
-      let mut style = orig_style.clone();
-      let fs = style.font_style();
-      style.set_font_style({FontStyle::new(fs.weight(), width, fs.slant())});
-      style
-    }
-
-    pub fn update_decoration(&mut self, orig_style:&TextStyle, deco_style:DecorationStyle) -> TextStyle{
-      let mut style = orig_style.clone();
-      let em = style.font_size();
-      let thickness = style.font_metrics().underline_thickness();
-      let decoration = deco_style.for_style(&style);
-      style.set_decoration(&decoration);
-      style
     }
 
     pub fn collect_fonts(&mut self, style: &TextStyle) -> FontCollection {
