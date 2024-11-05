@@ -283,7 +283,18 @@
           })
           outCtx.putImageData(output, 0, 0)
         }
-        catch { }
+        catch {
+          // draw an X if the differencing fails (so it doesn't look like a 100% successful comparison)
+          outCtx.fillStyle = '#F00'
+          outCtx.fillRect(0, 0, imgCanvas.width, imgCanvas.height)
+          outCtx.strokeStyle = 'white'
+          outCtx.lineWidth = 3
+          outCtx.moveTo(0,0)
+          outCtx.lineTo(imgCanvas.width, imgCanvas.height)
+          outCtx.moveTo(0,imgCanvas.height)
+          outCtx.lineTo(imgCanvas.width, 0)
+          outCtx.stroke()
+        }
         return outputCanvas
       }
 
