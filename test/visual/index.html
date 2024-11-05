@@ -358,7 +358,8 @@
           let alpha = Math.min(Math.max(Math.round((parseInt(a, 16)) / 255 * 100) / 100, 0), 1);
           form.alpha.value = Number.isFinite(alpha) ? alpha : 1
         }
-        form.bc.value = opt.bc
+        if (opt.bc)
+          form.bc.value = opt.bc
         form.bc_default.checked = form.bc.disabled = opt.bc_default
       }
 
