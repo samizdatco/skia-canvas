@@ -19,7 +19,7 @@ In particular, Skia Canvas:
 
   - is fast and compact since rendering takes place on the GPU and all the heavy lifting is done by native code written in Rust and C++
   - can render to [windows][window] using an OS-native graphics pipeline and provides a browser-like [UI event][win_bind] framework
-  - generates output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
+  - generates images in both raster (JPEG, PNG, & WEBP) and vector (PDF & SVG) formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
@@ -40,11 +40,11 @@ In particular, Skia Canvas:
 ### Generating image files
 
 ```js
-const {Canvas} = require('skia-canvas')
+import {Canvas} from 'skia-canvas'
 
 let canvas = new Canvas(400, 400),
-    {width, height} = canvas,
-    ctx = canvas.getContext("2d");
+    ctx = canvas.getContext("2d"),
+    {width, height} = canvas;
 
 let sweep = ctx.createConicGradient(Math.PI * 1.2, width/2, height/2)
 sweep.addColorStop(0, "red")
@@ -74,10 +74,11 @@ canvas.saveAsSync("rainbox.pdf")
 ### Multi-page sequences
 
 ```js
-const {Canvas} = require('skia-canvas')
+import {Canvas} from 'skia-canvas'
 
 let canvas = new Canvas(400, 400),
-    {width, height} = canvas;
+    ctx = canvas.getContext("2d"),
+    {width, height} = canvas
 
 for (const color of ['orange', 'yellow', 'green', 'skyblue', 'purple']){
   ctx = canvas.newPage()
@@ -96,13 +97,12 @@ async function render(){
   await canvas.saveAs("page-{2}.png")
 }
 render()
-
 ```
 
 ### Rendering to a window
 
 ```js
-const {Window} = require('skia-canvas')
+import {Window} from 'skia-canvas'
 
 let win = new Window(300, 300)
 win.title = "Canvas Window"

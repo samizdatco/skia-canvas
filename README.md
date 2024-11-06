@@ -105,14 +105,14 @@ Start by installing:
 
 ## Example Usage
 
-#### Generating image files
+### Generating image files
 
 ```js
-const {Canvas} = require('skia-canvas')
+import {Canvas} from 'skia-canvas'
 
 let canvas = new Canvas(400, 400),
-    {width, height} = canvas,
-    ctx = canvas.getContext("2d");
+    ctx = canvas.getContext("2d"),
+    {width, height} = canvas;
 
 let sweep = ctx.createConicGradient(Math.PI * 1.2, width/2, height/2)
 sweep.addColorStop(0, "red")
@@ -139,13 +139,14 @@ render()
 canvas.saveAsSync("rainbox.pdf")
 ```
 
-#### Multi-page sequences
+### Multi-page sequences
 
 ```js
-const {Canvas} = require('skia-canvas')
+import {Canvas} from 'skia-canvas'
 
 let canvas = new Canvas(400, 400),
-    {width, height} = canvas;
+    ctx = canvas.getContext("2d"),
+    {width, height} = canvas
 
 for (const color of ['orange', 'yellow', 'green', 'skyblue', 'purple']){
   ctx = canvas.newPage()
@@ -164,13 +165,12 @@ async function render(){
   await canvas.saveAs("page-{2}.png")
 }
 render()
-
 ```
 
-#### Rendering to a window
+### Rendering to a window
 
 ```js
-const {Window} = require('skia-canvas')
+import {Window} from 'skia-canvas'
 
 let win = new Window(300, 300)
 win.title = "Canvas Window"
@@ -187,6 +187,7 @@ win.on("draw", e => {
   ctx.fill()
 })
 ```
+
 [bool-ops]: https://skia-canvas.org/api/path2d#complement-difference-intersect-union-and-xor
 [c2d_font]: https://skia-canvas.org/api/context#font
 [c2d_measuretext]: https://skia-canvas.org/api/context#measuretext
