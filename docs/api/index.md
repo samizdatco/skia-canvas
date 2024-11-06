@@ -4,7 +4,7 @@ id: api-intro
 # API Documentation
 
 :::info[Note]
-Documentation for the key classes and their attributes are listed below—properties are printed in **bold** and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a 🧪 symbol, linking to further details below. Links to documentation to the web standards Skia Canvas emulates are marked with a 📖.
+Documentation for the key classes and their attributes are listed below—properties are printed in **bold** and methods have parentheses attached to the name. The instances where Skia Canvas’s behavior goes beyond the standard are marked by a 🧪 symbol, linking to further details below. Links to documentation for the web standards Skia Canvas emulates are marked with a 📖.
 :::
 
 The library exports a number of classes emulating familiar browser objects including:

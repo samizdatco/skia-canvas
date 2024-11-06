@@ -1,7 +1,6 @@
 ---
 title: "About"
 hide_title: true
-sidebar_class_name: landing
 sidebar_position: -1
 ---
 
