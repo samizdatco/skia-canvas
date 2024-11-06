@@ -12,10 +12,13 @@
     "url": "https://github.com/samizdatco/skia-canvas/issues"
   },
   "homepage": "https://github.com/samizdatco/skia-canvas#readme",
-  "main": "lib",
   "browser": {
     "lib": "./lib/browser.js",
     "path": "path-browserify"
+  },
+  "exports": {
+    "import": "./lib/esm.mjs",
+    "require": "./lib"
   },
   "scripts": {
     "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
