@@ -47,7 +47,7 @@ pub enum Cursor {
     Alias, AllScroll, Cell, ColResize, ContextMenu, Copy, Crosshair, Default, EResize,
     EwResize, Grab, Grabbing, Help, Move, NeResize, NeswResize, NoDrop, NotAllowed,
     NResize, NsResize, NwResize, NwseResize, Pointer, Progress, RowResize, SeResize,
-    SResize, SwResize, Text, VerticalText, Wait, WResize, ZoomIn, ZoomOut, 
+    SResize, SwResize, Text, VerticalText, Wait, WResize, ZoomIn, ZoomOut,
 }
 pub struct Window {
     pub handle: Arc<WinitWindow>,
@@ -91,11 +91,22 @@ impl Window {
     pub fn resize(&mut self, size: PhysicalSize<u32>){
         if let Some(monitor) = self.handle.current_monitor(){
             self.renderer.resize(size);
+            self.reposition_ime(size);
 
             let id = self.handle.id();
             self.proxy.send_event(CanvasEvent::Transform(id, self.fitting_matrix().invert() )).ok();
             self.proxy.send_event(CanvasEvent::InFullscreen(id, monitor.size() == size )).ok();
         }
+    }
+
+    pub fn reposition_ime(&mut self, size:PhysicalSize<u32>){
+        // place the input region in the bottom left corner so the UI doesn't cover the window
+        let dpr = self.handle.scale_factor();
+        let window_height = size.to_logical::<u32>(dpr).height;
+        self.handle.set_ime_allowed(true);
+        self.handle.set_ime_cursor_area(
+            LogicalPosition::new(15, window_height-20), LogicalSize::new(100, 15)
+        );
     }
 
     pub fn fitting_matrix(&self) -> Matrix {
@@ -139,7 +150,7 @@ impl Window {
             let paint = Paint::default();
             let matrix = self.fitting_matrix();
             let (clip, _) = matrix.map_rect(self.page.bounds);
-            
+
             self.renderer.draw(&self.handle, |canvas, _size| {
                 canvas.clear(self.background);
                 canvas.clip_rect(clip, None, Some(true));

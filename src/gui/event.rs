@@ -3,10 +3,10 @@ use serde::Serialize;
 use serde_json::json;
 use std::collections::HashSet;
 use winit::{
-  dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize}, 
-  event::{ElementState, KeyEvent, Modifiers, MouseButton, MouseScrollDelta, WindowEvent}, 
-  keyboard::{ModifiersState, KeyCode, KeyLocation, PhysicalKey::Code, Key::{Character, Named}},
-  platform::scancode::PhysicalKeyExtScancode, 
+  dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
+  event::{ElementState, KeyEvent, Ime, Modifiers, MouseButton, MouseScrollDelta, WindowEvent},
+  keyboard::{ModifiersState, KeyCode, KeyLocation, NamedKey, PhysicalKey::Code, Key::{Character, Named}},
+  platform::scancode::PhysicalKeyExtScancode,
   window::{CursorIcon, WindowId}
 };
 
@@ -55,7 +55,8 @@ pub enum UiEvent{
   Wheel{deltaX:f32, deltaY:f32},
   Move{left:f32, top:f32},
   Keyboard{event:String, key:String, code:KeyCode, location:u32, repeat:bool},
-  Input(String),
+  Composition{event:String, data:String},
+  Input(Option<String>),
   Mouse(String),
   Focus(bool),
   Resize(LogicalSize<u32>),
@@ -71,6 +72,8 @@ pub struct Sieve{
   mouse_point: PhysicalPosition::<f64>,
   mouse_button: Option<u16>,
   mouse_transform: Matrix,
+  compose_begun: bool,
+  compose_ongoing: bool,
 }
 
 impl Sieve{
@@ -82,6 +85,8 @@ impl Sieve{
       mouse_point: PhysicalPosition::default(),
       mouse_button: None,
       mouse_transform: Matrix::new_identity(),
+      compose_begun: false,
+      compose_ongoing: false,
     }
   }
 
@@ -163,6 +168,9 @@ impl Sieve{
           physical_key:Code(key_code), logical_key, state, repeat, location, ..
       }, .. } => {
 
+        //
+        // `keyup`/`keydown` events
+        //
         let event_type = match state {
           ElementState::Pressed => "keydown",
           ElementState::Released => "keyup",
@@ -189,9 +197,63 @@ impl Sieve{
           repeat: *repeat
         });
 
-        if let Character(c) = logical_key{
-          self.queue.push(UiEvent::Input(c.to_string()))
+
+        //
+        // `input` events
+        //
+        if self.compose_ongoing{
+          // don't emit the un-composed keystroke if it's part of an IME composition
+          self.compose_ongoing = match state{
+            ElementState::Released => false,
+            _ => true,
+          };
+        }else{
+          match state{
+            // ignore keyups, just report presses & repeats
+            ElementState::Pressed => {
+              // in addition to printable characters, report space & delete as input
+              let key_char = match &logical_key{
+                Character(c) => Some(c.to_string()),
+                Named(NamedKey::Space) => Some(" ".to_string()),
+                Named(NamedKey::Backspace | NamedKey::Delete) => Some("".to_string()),
+                _ => None
+              };
+
+              if let Some(string) = key_char{
+                self.queue.push(UiEvent::Input(match !string.is_empty(){
+                  true => Some(string),
+                  false => None,
+                }));
+              };
+            },
+            _ => {},
+          }
         }
+      }
+
+      WindowEvent::Ime( event, ..) => {
+        match &event {
+          Ime::Preedit(string, Some(range)) => {
+            if !self.compose_begun{
+              self.queue.push(UiEvent::Composition{
+                event:"compositionstart".to_string(), data:"".to_string()
+              });
+              self.compose_begun = true; // flag: don't emit another `start` until this commits
+            }
+            self.queue.push(UiEvent::Composition {
+              event:"compositionupdate".to_string(), data:string.clone()
+            });
+            self.compose_ongoing = true; // flag: don't emit `input` while composing
+          },
+          Ime::Commit(string) => {
+            self.queue.push(UiEvent::Composition {
+              event:"compositionend".to_string(), data:string.clone()
+            });
+            self.queue.push(UiEvent::Input(Some(string.clone()))); // emit the composed character
+            self.compose_begun = false;
+          },
+          _ => {}
+        };
       }
 
       _ => {}
