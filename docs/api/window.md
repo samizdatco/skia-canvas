@@ -250,7 +250,7 @@ The events emitted by the `Window` object are mostly consistent with browser-bas
 | [mousedown][mousedown]       | [keydown][keydown]      |[fullscreen][fullscreen-event] 🧪  | [blur][blur]         | [setup][setup] 🧪|
 | [mouseup][mouseup]           | [keyup][keyup]          |[move][move-event] 🧪              | [focus][focus]       | [frame][frame] 🧪|
 | [mousemove][mousemove]       | [input][input]          | [resize][resize]                    |                      | [draw][draw] 🧪  |
-| [wheel][wheel]               |
+| [wheel][wheel]               | [compositionstart][compositionstart] <br/> [compositionupdate][compositionupdate] <br/> [compositionend][compositionend] |
 
 
 ### `fullscreen`
@@ -305,4 +305,7 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 [resize]: https://developer.mozilla.org/en-US/docs/Web/API/Window/resize_event
 [focus]: https://developer.mozilla.org/en-US/docs/Web/API/Window/focus_event
 [blur]: https://developer.mozilla.org/en-US/docs/Web/API/Window/blur_event
+[compositionstart]: https://developer.mozilla.org/en-US/docs/Web/API/Element/compositionstart_event
+[compositionupdate]: https://developer.mozilla.org/en-US/docs/Web/API/Element/compositionupdate_event
+[compositionend]: https://developer.mozilla.org/en-US/docs/Web/API/Element/compositionend_event
 <!-- references_end -->
