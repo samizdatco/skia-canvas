@@ -7,7 +7,7 @@
   - The **Image** object's `width` and `height` will both (misleadingly) report to be `150`.
   - When passed to `drawImage()` without size arguments, the SVG will be scaled to a size that fits within the **Canvas**'s current bounds (using an approach akin to CSS's `object-fit: contain`).
   - When using the 9-argument version of `drawImage()`, the ‘crop’ arguments (`sx`, `sy`, `sWidth`, & `sHeight`) will correspond to this scaled-to-fit size, *not* the **Image**'s reported `width` & `height`.
-- The [**Window**][window] class now has a [`resizable`](resizable) property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by @nornagon #124).
+- The [**Window**][window] class now has a [`resizable`][resizable] property which can be set to `false` to prevent the window from being manually resized or maximized (contributed by @nornagon #124).
 - The **Canvas** object has a new `engine` property which describes whether the CPU or GPU is being used, which graphics device was selected, and what (if any) error prevented it from being initialized.
 - **FontLibrary.**[use()][FontLibrary.use] now supports dynamically loaded [WOFF & WOFF2][woff_wiki] fonts
 - **Canvas**.[saveAs()][Canvas.saveAs] can now generate WEBP images and **Image**s can load WEBP files as well (contributed by @mpaperno #177, h/t @revam for the initial work on this)
@@ -19,7 +19,7 @@
 - Underlines, overlines, and strike-throughs can now be set via the **Context**'s `.textDecoration` property.
 
 ### Breaking Changes
-- The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`](key_location) field provides a numeric description of which variant of a key was pressed.
+- The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`][key_location] field provides a numeric description of which variant of a key was pressed.
 - The deprecated `.async` property has been removed. See the [v0.9.28](#--v0928--jan-12-2022) release notes for details.
 - The non-standard `.textTracking` property has been removed in favor of the new [`.letterSpacing`][letterSpacing] property
 
@@ -37,17 +37,17 @@
 - Added TypeScript definitions for the **Window** object’s event types (contributed by @saantonandre #163) and the `roundRect` method (contributed by @sandy85625 & @santilema)
 - Performance improvements to **FontLibrary**, speeding up operations like listing families and adding new typefaces.
 - Updated `winit` and replaced the end-of-life’d [skulpin](https://github.com/aclysma/skulpin)-based Vulkan renderer with a new implementation using Vulkano for window-drawing on Windows and Linux.
-  > It’s a fairly direct adaptation of Vulkano [sample code][vulkano_demo] for device setup with skia-specific rendering routines inspired by [@pragmatrix](https://github.com/pragmatrix)’s renderer for [emergent](pragmatrix_emergent). All of which is to say, if you understand this better than I do I'd love some suggestions for improving the rendering setup.
+  > It’s a fairly direct adaptation of Vulkano [sample code][vulkano_demo] for device setup with skia-specific rendering routines inspired by [@pragmatrix](https://github.com/pragmatrix)’s renderer for [emergent][pragmatrix_emergent]. All of which is to say, if you understand this better than I do I'd love some suggestions for improving the rendering setup.
 
-[resizable]: https://github.com/samizdatco/skia-canvas#resizable
+[resizable]: /docs/api/window.md#resizable
 [key_location]: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/location
 [vulkano_demo]: https://github.com/vulkano-rs/vulkano/blob/master/examples/triangle/main.rs
 [pragmatrix_emergent]: https://github.com/pragmatrix/emergent/blob/master/src/skia_renderer.rs
 [woff_wiki]: https://en.wikipedia.org/wiki/Web_Open_Font_Format
 [css_transform]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform
 [DOMMatrix]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrix
-[FontLibrary.use]: https://github.com/samizdatco/skia-canvas#usefamilyname-fontpaths
-[Canvas.saveAs]: https://github.com/samizdatco/skia-canvas#saveasfilename-page-format-matte-density1-quality092-outlinefalse
+[FontLibrary.use]: /docs/api/font-library.md#use
+[Canvas.saveAs]: /docs/api/canvas.md#saveas
 [letterSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/letterSpacing
 [wordSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/wordSpacing
 [fontStretch]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fontStretch
@@ -88,10 +88,10 @@
 - Calling `clearRect()` with dimensions that fully enclose the canvas will now discard all the vector objects that have been drawn so far (rather than simply covering them up).
 - Upgraded Skia to milestone 103
 
-[window]: https://github.com/samizdatco/skia-canvas#window
-[window_anim]: https://github.com/samizdatco/skia-canvas#events--animation
-[window_events]: https://github.com/samizdatco/skia-canvas#on--off--once
-[canvas_gpu]: https://github.com/samizdatco/skia-canvas#gpu
+[window]: /docs/api/window.md
+[window_anim]: /docs/api/window#events-for-animation
+[window_events]: /docs/api/window#on--off--once
+[canvas_gpu]: /docs/api/canvas.md#gpu
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [chrome_reset]: https://developer.chrome.com/blog/canvas2d/#context-reset
 [chrome_rrect]: https://developer.chrome.com/blog/canvas2d/#round-rect
@@ -110,17 +110,15 @@
   - applies to both the Context and Path2D versions of the drawing methods
   - a **TypeError** is thrown only if the number of arguments is too low (mirroring browser behavior)
 - [`conicCurveTo()`][conicCurveTo] now correctly reflects the canvas's transform state
-- The browser-based version of [`loadImage()`][loadImage] now returns a **Promise** that correctly resolves to an **Image** object
+- The browser-based version of [`loadImage()`][loadImage()] now returns a **Promise** that correctly resolves to an **Image** object
 - SVG exports no longer have an invisible, canvas-sized `<rect/>` as their first element
 - Fixed an incompatibility on Alpine between the version of libstdc++ present on the `node:alpine` docker images and the version used when building the precompiled binaries
 
 ### Misc. Improvements
 - Upgraded Skia to milestone 101
 
-[conicCurveTo]: https://github.com/samizdatco/skia-canvas#coniccurvetocpx-cpy-x-y-weight
-[FontLibrary.reset]: https://github.com/samizdatco/skia-canvas#reset
-[FontLibrary.use]: https://github.com/samizdatco/skia-canvas#usefamilyname-fontpaths
-[loadImage]: https://github.com/samizdatco/skia-canvas/#loadimage
+[conicCurveTo]: /docs/api/context.md#coniccurveto
+[FontLibrary.reset]: /docs/api/font-library.md#reset
 
 ## 📦 ⟩ [v0.9.29] ⟩ Feb 7, 2022
 
@@ -137,7 +135,7 @@
 ### Misc. Improvements
 - Upgraded Skia to milestone 97
 
-[drawCanvas]: https://github.com/samizdatco/skia-canvas#drawcanvascanvas-x-y-
+[drawCanvas]: /docs/api/context.md#drawcanvas
 [mdn_clip]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clip
 [mdn_clearRect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clearRect
 
@@ -145,12 +143,12 @@
 
 ### New Features
 - Added TypeScript definitions for extensions to the DOM spec (contributed by [@cprecioso](https://github.com/cprecioso))
-- Added 3D-perspective transformations via the new [createProjection()](https://github.com/samizdatco/skia-canvas#createprojectionquad-basis) context method
+- Added 3D-perspective transformations via the new [createProjection()][createProjection()] context method
 - Colors can now use the [hwb()](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/hwb()) model
 
 ### Breaking Changes
-- The **Canvas** [`.async`](https://github.com/samizdatco/skia-canvas#async) property has been **deprecated** and will be removed in a future release.
-  - The `saveAs`, `toBuffer`, and `toDataURL` methods will now be async-only (likewise the [shorthand properties](https://github.com/samizdatco/skia-canvas#pdf-svg-jpg-and-png)).
+- The **Canvas** `.async` property has been **deprecated** and will be removed in a future release.
+  - The `saveAs`, `toBuffer`, and `toDataURL` methods will now be async-only (likewise the [shorthand properties][shorthands]).
   - Use their synchronous counterparts (`saveAsSync`, `toBufferSync`, and `toDataURLSync`) if you want to block execution while exporting images.
 - The [ImageData](https://developer.mozilla.org/en-US/docs/Web/API/ImageData/ImageData) constructor now orders its arguments properly: the optional buffer/array argument now comes first
 
@@ -165,6 +163,10 @@
 ### Misc. Improvements
 - Upgraded Skia to milestone 96
 - Added workflow for creating docker build environments
+
+
+[createProjection()]: /docs/api/context.md#createprojection
+[shorthands]: /docs/api/canvas.md#pdf-png-svg-jpg--webp
 
 
 ## 📦 ⟩ [v0.9.27] ⟩ Oct 23, 2021
@@ -193,22 +195,29 @@
 ### Bugfixes
 - Improved image scaling when a larger image is being shrunk down to a smaller size via [`drawImage()`][mdn_drawImage]
 - modified [`imageSmoothingQuality`](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/imageSmoothingQuality) settings to provide a more meaningful range across `low`, `medium`, and `high`
-- [`measureText()`](https://github.com/samizdatco/skia-canvas#measuretextstr-width) now returns correct metrics regardless of current `textAlign` setting
+- [`measureText()`][measureText()] now returns correct metrics regardless of current `textAlign` setting
 - Rolled back `icudtl.dat` changes on Windows (which suppressed the misleading warning message but required running as Administrator)
 
 ### Misc. Improvements
 - Now using [Neon](https://github.com/neon-bindings/neon) v0.9 (with enhanced async event scheduling)
 
 [mdn_drawImage]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
+[measureText()]: /docs/api/context.md#measuretext
 
 ## 📦 ⟩ [v0.9.24] ⟩ Aug 18, 2021
 
 ### New Features
-- **Path2D** objects now have a read/write [`d`](https://github.com/samizdatco/skia-canvas/#d) property with an [SVG representation](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d#path_commands) of the path’s contours and an [`unwind()`](https://github.com/samizdatco/skia-canvas/#unwind) method for converting from even-odd to non-zero winding rules
-- The [`createTexture()`](https://github.com/samizdatco/skia-canvas#createtexturespacing-path-line-color-angle-offset0) context method returns **CanvasTexture** objects which can be assigned to `fillStyle` or `strokeStyle`
+- **Path2D** objects now have a read/write [`d`][p2d_d] property with an [SVG representation](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d#path_commands) of the path’s contours and an [`unwind()`][p2d_undwind] method for converting from even-odd to non-zero winding rules
+- The [`createTexture()`][createTexture()] context method returns **CanvasTexture** objects which can be assigned to `fillStyle` or `strokeStyle`
 - Textures draw either a parallel-lines pattern or one derived from the provided **Path2D** object and positioning parameters
-- The marker used when `setLineDash` is active can now be customized by assigning a **Path2D** to the context’s [`lineDashMarker`](https://github.com/samizdatco/skia-canvas#linedashmarker) property (default dashing can be restored by assigning `null`)
-- The marker’s orientation & shape relative to the path being stroked can be controlled by the [`lineDashFit`](https://github.com/samizdatco/skia-canvas#linedashfit) property which defaults to `"turn"` but can be set to `"move"` (which preserves orientation) or `"follow"` (which distorts the marker’s shape to match the contour)
+- The marker used when `setLineDash` is active can now be customized by assigning a **Path2D** to the context’s [`lineDashMarker`][lineDashMarker] property (default dashing can be restored by assigning `null`)
+- The marker’s orientation & shape relative to the path being stroked can be controlled by the [`lineDashFit`][lineDashFit] property which defaults to `"turn"` but can be set to `"move"` (which preserves orientation) or `"follow"` (which distorts the marker’s shape to match the contour)
+
+[p2d_d]: /docs/api/path2d.md#d
+[p2d_unwind]: /docs/api/path2d.md#unwind
+[createTexture()]: /docs/api/context.md#createtexture
+[lineDashMarker]: /docs/api/context.md#linedashmarker
+[lineDashFit]: /docs/api/context.md#linedashfit
 
 ### Bugfixes
 
@@ -217,15 +226,14 @@
 
 ### Misc. Improvements
 
-- The **Path2D** [`simplify()`](https://github.com/samizdatco/skia-canvas/#simplifyrulenonzero) method now takes an optional fill-rule argument
+- The **Path2D** [`simplify()`][simplify] method now takes an optional fill-rule argument
 - Added support for versions of macOS starting with 10.13 (High Sierra)
-
 
 ## 📦 ⟩ [v0.9.23] ⟩ Jul 12, 2021
 
 ### New Features
 
-- [Conic béziers][conic_bezier] can now be drawn to the context or a Path2D with the [`conicCurveTo()`][conic_curveto] method
+- [Conic béziers][conic_bezier] can now be drawn to the context or a Path2D with the [`conicCurveTo()`][conicCurveTo] method
 - Text can be converted to a Path2D using the context’s new [`outlineText()`][outline_text] method
 - Path2D objects can now report back on their internal geometry with:
     - the [`edges`][edges] property which contains an array of line-drawing commands describing the path’s individual contours
@@ -252,20 +260,20 @@
 
 [conic_bezier]: https://docs.microsoft.com/en-us/xamarin/xamarin-forms/user-interface/graphics/skiasharp/curves/beziers#the-conic-bézier-curve
 [conic_curveto]: https://github.com/samizdatco/skia-canvas#coniccurvetocpx-cpy-x-y-weight
-[outline_text]: https://github.com/samizdatco/skia-canvas#outlinetextstr
-[matte]: https://github.com/samizdatco/skia-canvas#matte
+[outline_text]: /docs/api/context.md#outlinetext
+[matte]: /docs/api/canvas#matte
 
-[edges]: https://github.com/samizdatco/skia-canvas#edges
-[contains]: https://github.com/samizdatco/skia-canvas#containsx-y
-[points]: https://github.com/samizdatco/skia-canvas#pointsstep1
-[offset]: https://github.com/samizdatco/skia-canvas#offsetdx-dy
-[transform]: https://github.com/samizdatco/skia-canvas#transformmatrix-or-transforma-b-c-d-e-f
+[edges]: /docs/api/path2d.md#edges
+[contains]: /docs/api/path2d.md#contains
+[points]: /docs/api/path2d.md#points
+[offset]: /docs/api/path2d.md#offset
+[transform]: /docs/api/context.md#transform--settransform
 
-[interpolate]: https://github.com/samizdatco/skia-canvas#interpolateotherpath-weight
-[jitter]: https://github.com/samizdatco/skia-canvas#jittersegmentlength-amount-seed0
-[round]: https://github.com/samizdatco/skia-canvas#roundradius
-[simplify]: https://github.com/samizdatco/skia-canvas#simplify
-[trim]: https://github.com/samizdatco/skia-canvas#trimstart-end-inverted
+[interpolate]: /docs/api/path2d.md#interpolate
+[jitter]: /docs/api/path2d.md#jitter
+[round]: /docs/api/path2d.md#round
+[simplify]: /docs/api/path2d.md#simplify
+[trim]: /docs/api/path2d.md#trim
 
 
 ## 📦 ⟩ [v0.9.22] ⟩ Jun 09, 2021
@@ -273,8 +281,8 @@
 ### New Features
 
 - Rasterization and file i/o are now handled asynchronously in a background thread. See the discussion of Canvas’s new [`async`](https://github.com/samizdatco/skia-canvas#async) property for details.
-- Output files can now be generated at pixel-ratios > 1 for High-DPI screens. `SaveAs` and the other canvas output functions all accept an optional [`density`](https://github.com/samizdatco/skia-canvas#density) argument which is an integer ≥1 and will upscale the image accordingly. The density can also be passed using the `filename` argument by ending the name with an ‘@’ suffix like `some-image@2x.png`.
-- SVG exports can optionally convert text to paths by setting the [`outline`](https://github.com/samizdatco/skia-canvas#outline) argument to `true`.
+- Output files can now be generated at pixel-ratios > 1 for High-DPI screens. `SaveAs` and the other canvas output functions all accept an optional [`density`][density] argument which is an integer ≥1 and will upscale the image accordingly. The density can also be passed using the `filename` argument by ending the name with an ‘@’ suffix like `some-image@2x.png`.
+- SVG exports can optionally convert text to paths by setting the [`outline`][outline] argument to `true`.
 
 ### Breaking Changes
 
@@ -286,6 +294,8 @@
 - `measureText` was reporting zero when asked to measure a string that was entirely made of whitespace. This is still the case for ‘blank‘ lines when `textWrap` is set to `true` but in the default, single-line mode the metrics will now report the width of the whitespace.
 -  Changed the way text rendering was staged so that SVG exports didn’t *entirely omit(!)* text from their output. As a result, `Context2D`s now use an external `Typesetter` struct to manage layout and rendering.
 
+[density]: /docs/api/canvas#density
+[outline]: /docs/api/canvas#outline
 
 ## 📦 ⟩ [v0.9.21] ⟩ May 22, 2021
 
@@ -293,9 +303,9 @@
   - Now runs on Windows and Apple Silicon Macs.
   - Precompiled binaries support Node 10, 12, 14+.
   - Image objects can be initialized from PNG, JPEG, GIF, BMP, or ICO data.
-  - Path2D objects can now be combined using [boolean operators](https://github.com/samizdatco/skia-canvas/#complement-difference-intersect-union-and-xor) and can measure their own [bounding boxes](https://github.com/samizdatco/skia-canvas/#bounds).
-  - Context objects now support [`createConicGradient()`](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createConicGradient).
-  - Image objects now return a promise from their [`decode()`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode) method allowing for async loading without the [`loadImage`](https://github.com/samizdatco/skia-canvas/#loadimage) helper.
+  - Path2D objects can now be combined using [boolean operators][boolean-ops] and can measure their own [bounding boxes][p2d_bounds].
+  - Context objects now support [`createConicGradient()`][createConicGradient()].
+  - Image objects now return a promise from their [`decode()`](https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement/decode) method allowing for async loading without the [`loadImage`][loadImage()] helper.
 
 ### Bugfixes
   - Calling `drawImage` with a `Canvas` object as the argument now uses a Skia `Pict` rather than a  `Drawable` as the interchange format, meaning it can actually respect the canvas's current `globalAlpha` and `globalCompositeOperation` state (fixed #6).
@@ -308,6 +318,10 @@
   - Added new test suites for `Path2D`, `Image`, and `Canvas`’s format support.
   - Created [workflows](https://github.com/samizdatco/skia-canvas/tree/master/.github/workflows) to automate precompiled binary builds, testing, and npm package updating.
 
+[boolean-ops]: /docs/api/path2d.md#complement-difference-intersect-union-and-xor
+[p2d_bounds]: /docs/api/path2d.md#bounds
+[createConicGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createConicGradient
+[loadImage()]: /docs/api/utilities.md#loadimage
 
 ## 📦 ⟩ [v0.9.20] ⟩ Mar 27, 2021
 
