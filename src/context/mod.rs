@@ -501,6 +501,7 @@ impl Context2D{
   }
 
   pub fn set_font_variant(&mut self, variant:&str, features:&[(String, i32)]){
+    self.state.char_style.reset_font_features();
     for (feat, val) in features{
       self.state.char_style.add_font_feature(feat, *val);
     }
