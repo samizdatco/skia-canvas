@@ -2350,20 +2350,11 @@ tests['SVG no natural size drawImage(img,0,0)'] = function (ctx, done) {
   img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`;
 }
 
-tests['SVG no natural size drawImage(img,0,0,img.w,img.h)'] = function (ctx, done) {
-  var img = new Image()
-  img.onload = function () {
-    ctx.drawImage(img, 0, 0, this.width, this.height)
-    done(null)
-  }
-  img.onerror = done
-  img.src = `data:image/svg+xml;utf8,${encodeURIComponent(SVG_IMG)}`;
-}
-
 tests['drawImage() SVG from string'] = function (ctx, done) {
-  var img = new Image(ctx.canvas.width, ctx.canvas.height)
+  var img = new Image(),
+      {width, height} = ctx.canvas
   img.onload = function () {
-    ctx.drawImage(img, 0, 0 , this.width, this.height)
+    ctx.drawImage(img, 0, 0, width, height)
     done(null)
   }
   img.onerror = done
@@ -2371,9 +2362,10 @@ tests['drawImage() SVG from string'] = function (ctx, done) {
 }
 
 tests['drawImage() SVG from base64'] = function (ctx, done) {
-  var img = new Image(200,  200)
+  var img = new Image(),
+      size = 200
   img.onload = function () {
-    ctx.drawImage(img, 0, 0, this.width, this.height)
+    ctx.drawImage(img, 0, 0, size, size)
     done(null)
   }
   img.onerror = done
@@ -2381,9 +2373,10 @@ tests['drawImage() SVG from base64'] = function (ctx, done) {
 }
 
 tests['drawImage() SVG from remote URL'] = function (ctx, done) {
-  var img = new Image(200,  200)
+  var img = new Image(),
+      size = 200
   img.onload = function () {
-    ctx.drawImage(img, 0, 0, this.width, this.height)
+    ctx.drawImage(img, 0, 0, size, size)
     done(null)
   }
   img.onerror = done
@@ -2395,9 +2388,10 @@ tests['drawImage() SVG with font'] = function (ctx, done) {
   //   FontLibrary.use(imageSrc("Monoton-Regular.woff2"))
   //   console.log(FontLibrary.has("Monoton"))
   // }
-  var img = new Image(200,  200)
+  var img = new Image(),
+      size = 200
   img.onload = function () {
-    ctx.drawImage(img, 0, 0, this.width, this.height)
+    ctx.drawImage(img, 0, 0, size, size)
     done(null)
   }
   img.onerror = done
@@ -2465,9 +2459,10 @@ tests['createPattern() from SVG no natural size'] = function (ctx, done) {
 }
 
 tests['SVG shadow & filters'] = function (ctx, done) {
-  var img = new Image(/* 200,  200 */)
+  var img = new Image(),
+      size = 200
   img.onload = function () {
-    ctx.drawImage(img, 0, 0 , 200, 200)
+    ctx.drawImage(img, 0, 0 , size, size)
     done(null)
   }
   ctx.shadowBlur = 5
