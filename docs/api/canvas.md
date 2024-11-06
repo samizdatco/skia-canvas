@@ -135,8 +135,8 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 [canvas_gpu]: #gpu
 [canvas_pages]: #pages
 [context]: context.md
-[newPage]: context.md#newpage
-[saveAs]: context.md#saveas
+[newPage]: #newpage
+[saveAs]: #saveas
 [shorthands]: #pdf-png-svg-jpg--webp
 [toBuffer]: #tobuffer
 [toDataURL_ext]: #todataurl

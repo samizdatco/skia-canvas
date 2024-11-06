@@ -314,7 +314,7 @@ for (let i=0; i<8000; i++){
 [fontvariant]: #fontvariant
 [lineDashFit]: #linedashfit
 [lineDashMarker]: #linedashmarker
-[newPage]: #newpage
+[newPage]: canvas.md#newpage
 [outlineText()]: #outlinetext
 [p2d_offset]: path2d.md#offset
 [p2d_transform]: path2d.md#transform

@@ -8,7 +8,6 @@ Documentation for the key classes and their attributes are listed below—proper
 :::
 
 The library exports a number of classes emulating familiar browser objects including:
-
  - [Canvas][mdn_canvas] ⧸ [extensions][canvas] 🧪
  - [CanvasGradient][CanvasGradient]
  - [CanvasPattern][CanvasPattern]
@@ -19,11 +18,10 @@ The library exports a number of classes emulating familiar browser objects inclu
  - [Path2D][p2d_mdn] ⧸ [extensions][path2d] 🧪
 
 In addition, the module contains:
-
--[FontLibrary][fontlibrary] a global object for inspecting the system’s fonts and loading additional ones
--[Window][window] a class allowing you to display your canvas interactively in an on-screen window
--[App][app] a helper class for coordinating multiple windows in a single script
--[loadImage()][loadimage] a utility function for loading `Image` objects asynchronously
+- [FontLibrary][fontlibrary] a global object for inspecting the system’s fonts and loading additional ones
+- [Window][window] a class allowing you to display your canvas interactively in an on-screen window
+- [App][app] a helper class for coordinating multiple windows in a single script
+- [loadImage()][loadimage] a utility function for loading `Image` objects asynchronously
 
 ----
 
@@ -34,7 +32,7 @@ import DocCardList from '@theme/DocCardList';
 <DocCardList />
 
 <!-- references_begin -->
-[app]: app.md#app
+[app]: app.md
 [canvas]: canvas.md
 [context]: context.md
 [fontlibrary]: font-library.md

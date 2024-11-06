@@ -89,8 +89,8 @@
 - Upgraded Skia to milestone 103
 
 [window]: /docs/api/window.md
-[window_anim]: /docs/api/window#events-for-animation
-[window_events]: /docs/api/window#on--off--once
+[window_anim]: /docs/api/window.md#events-for-animation
+[window_events]: /docs/api/window.md#on--off--once
 [canvas_gpu]: /docs/api/canvas.md#gpu
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [chrome_reset]: https://developer.chrome.com/blog/canvas2d/#context-reset
@@ -261,7 +261,7 @@
 [conic_bezier]: https://docs.microsoft.com/en-us/xamarin/xamarin-forms/user-interface/graphics/skiasharp/curves/beziers#the-conic-bézier-curve
 [conic_curveto]: https://github.com/samizdatco/skia-canvas#coniccurvetocpx-cpy-x-y-weight
 [outline_text]: /docs/api/context.md#outlinetext
-[matte]: /docs/api/canvas#matte
+[matte]: /docs/api/canvas.md#matte
 
 [edges]: /docs/api/path2d.md#edges
 [contains]: /docs/api/path2d.md#contains
@@ -294,8 +294,8 @@
 - `measureText` was reporting zero when asked to measure a string that was entirely made of whitespace. This is still the case for ‘blank‘ lines when `textWrap` is set to `true` but in the default, single-line mode the metrics will now report the width of the whitespace.
 -  Changed the way text rendering was staged so that SVG exports didn’t *entirely omit(!)* text from their output. As a result, `Context2D`s now use an external `Typesetter` struct to manage layout and rendering.
 
-[density]: /docs/api/canvas#density
-[outline]: /docs/api/canvas#outline
+[density]: /docs/api/canvas.md#density
+[outline]: /docs/api/canvas.md#outline
 
 ## 📦 ⟩ [v0.9.21] ⟩ May 22, 2021
 

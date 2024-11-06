@@ -280,7 +280,7 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 [fullscreen]: #fullscreen
 [fullscreen-event]: #fullscreen-1
 [move-event]: #move
-[newPage]: context.md#newpage
+[newPage]: canvas.md#newpage
 [resizable]: #resizable
 [setup]: #setup
 [title]: #title
