@@ -393,15 +393,15 @@ pub fn isPointInStroke(mut cx: FunctionContext) -> JsResult<JsBoolean> {
 
 fn _is_in(mut cx: FunctionContext, ink:PaintStyle) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let (mut container, shift) = match cx.argument::<JsValue>(1)?.is_a::<BoxedPath2D, _>(&mut cx){
-    true => (cx.argument::<BoxedContext2D>(1)?, 2),
-    false => (this, 1)
+  let (shift, mut target) = match cx.argument::<JsValue>(1)?.is_a::<BoxedPath2D, _>(&mut cx){
+    true => (2, cx.argument::<BoxedPath2D>(1)?.borrow_mut().path.clone()),
+    false => (1, this.borrow_mut().path.clone())
   };
+
   let x = float_arg(&mut cx, shift, "x")?;
   let y = float_arg(&mut cx, shift+1, "y")?;
   let rule = fill_rule_arg_or(&mut cx, shift+2, "nonzero")?;
 
-  let mut target = container.borrow_mut().path.clone();
   let mut this = this.borrow_mut();
   let is_in = match ink{
     Stroke => this.hit_test_path(&mut target, (x, y), None, Stroke),

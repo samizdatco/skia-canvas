@@ -3,7 +3,7 @@
 "use strict"
 
 const _ = require('lodash'),
-      {Canvas, DOMMatrix, DOMPoint, ImageData, loadImage} = require('../lib'),
+      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, loadImage} = require('../lib'),
       css = require('../lib/css');
 
 const BLACK = [0,0,0,255],
@@ -616,8 +616,9 @@ describe("Context2D", ()=>{
       let inStroke = [100, 94],
           inFill = [150, 150],
           inBoth = [100, 100];
-      ctx.lineWidth = 12
+
       ctx.rect(100,100,100,100)
+      ctx.lineWidth = 12
 
       expect(ctx.isPointInPath(...inStroke)).toBe(false)
       expect(ctx.isPointInStroke(...inStroke)).toBe(true)
@@ -627,6 +628,25 @@ describe("Context2D", ()=>{
 
       expect(ctx.isPointInPath(...inBoth)).toBe(true)
       expect(ctx.isPointInStroke(...inBoth)).toBe(true)
+    })
+
+    test("isPointInPath(Path2D)", () => {
+      let inStroke = [100, 94],
+          inFill = [150, 150],
+          inBoth = [100, 100];
+
+      let path = new Path2D()
+      path.rect(100,100,100,100)
+      ctx.lineWidth = 12
+
+      expect(ctx.isPointInPath(path, ...inStroke)).toBe(false)
+      expect(ctx.isPointInStroke(path, ...inStroke)).toBe(true)
+
+      expect(ctx.isPointInPath(path, ...inFill)).toBe(true)
+      expect(ctx.isPointInStroke(path, ...inFill)).toBe(false)
+
+      expect(ctx.isPointInPath(path, ...inBoth)).toBe(true)
+      expect(ctx.isPointInStroke(path, ...inBoth)).toBe(true)
     })
 
     test("measureText()", () => {
