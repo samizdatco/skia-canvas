@@ -147,7 +147,7 @@
 - Colors can now use the [hwb()](https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/hwb()) model
 
 ### Breaking Changes
-- The **Canvas** `.async` property has been **deprecated** and will be removed in a future release.
+- The **Canvas** [`.async`][async_depr] property has been **deprecated** and will be removed in a future release.
   - The `saveAs`, `toBuffer`, and `toDataURL` methods will now be async-only (likewise the [shorthand properties][shorthands]).
   - Use their synchronous counterparts (`saveAsSync`, `toBufferSync`, and `toDataURLSync`) if you want to block execution while exporting images.
 - The [ImageData](https://developer.mozilla.org/en-US/docs/Web/API/ImageData/ImageData) constructor now orders its arguments properly: the optional buffer/array argument now comes first
@@ -167,7 +167,7 @@
 
 [createProjection()]: /docs/api/context.md#createprojection
 [shorthands]: /docs/api/canvas.md#pdf-png-svg-jpg--webp
-
+[async_depr]: https://github.com/samizdatco/skia-canvas/tree/v0.9.28#async
 
 ## 📦 ⟩ [v0.9.27] ⟩ Oct 23, 2021
 
@@ -280,7 +280,7 @@
 
 ### New Features
 
-- Rasterization and file i/o are now handled asynchronously in a background thread. See the discussion of Canvas’s new [`async`](https://github.com/samizdatco/skia-canvas#async) property for details.
+- Rasterization and file i/o are now handled asynchronously in a background thread. See the discussion of Canvas’s new [`async`][async_orig] property for details.
 - Output files can now be generated at pixel-ratios > 1 for High-DPI screens. `SaveAs` and the other canvas output functions all accept an optional [`density`][density] argument which is an integer ≥1 and will upscale the image accordingly. The density can also be passed using the `filename` argument by ending the name with an ‘@’ suffix like `some-image@2x.png`.
 - SVG exports can optionally convert text to paths by setting the [`outline`][outline] argument to `true`.
 
@@ -296,6 +296,7 @@
 
 [density]: /docs/api/canvas.md#density
 [outline]: /docs/api/canvas.md#outline
+[async_orig]: https://github.com/samizdatco/skia-canvas/tree/v0.9.22#async
 
 ## 📦 ⟩ [v0.9.21] ⟩ May 22, 2021
 
