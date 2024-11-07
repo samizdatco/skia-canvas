@@ -55,13 +55,12 @@ impl MetalEngine {
                         Some(device) => json!({
                             "renderer": "GPU",
                             "api": "Metal",
-                            "device": format!("{} GPU ({})", match device.location(){
+                            "device": format!("{} ({})", match device.location(){
                                 MTLDeviceLocation::BuiltIn => "Integrated GPU",
                                 MTLDeviceLocation::Slot => "Discrete GPU",
                                 MTLDeviceLocation::External => "External GPU",
-                                _ => "Other"
+                                _ => "Other GPU"
                             }, device.name()),
-                            "error": Value::Null,
                         }),
                         None => json!({
                             "renderer": "CPU",

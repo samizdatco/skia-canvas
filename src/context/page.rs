@@ -305,7 +305,7 @@ impl PageSequence{
 //
 
 pub fn pages_arg(cx: &mut FunctionContext, idx: i32, canvas:&BoxedCanvas) -> NeonResult<PageSequence> {
-  let engine = canvas.borrow().engine;
+  let engine = canvas.borrow_mut().engine();
   let pages = cx.argument::<JsArray>(idx)?
       .to_vec(cx)?
       .iter()

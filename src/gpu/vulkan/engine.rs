@@ -113,7 +113,6 @@ impl VulkanEngine {
                 t, physical_device.properties().device_name)
             ),
             "api": "Vulkan",
-            "error": Value::Null,
         }));
    
         let (device, mut queues) = Device::new(

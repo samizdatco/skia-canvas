@@ -12,13 +12,19 @@ impl Finalize for Canvas {}
 pub struct Canvas{
   pub width: f32,
   pub height: f32,
-  pub engine: gpu::RenderingEngine,
+  engine: Option<gpu::RenderingEngine>,
   async_io: bool,
 }
 
 impl Canvas{
   pub fn new() -> Self{
-    Canvas{width:300.0, height:150.0, async_io:true, engine:gpu::RenderingEngine::default()}
+    Canvas{width:300.0, height:150.0, async_io:true, engine:None}
+  }
+
+  pub fn engine(&mut self) -> gpu::RenderingEngine{
+    self.engine.get_or_insert_with(||
+      gpu::RenderingEngine::default()
+    ).clone()
   }
 }
 
@@ -72,8 +78,8 @@ pub fn set_async(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn get_engine(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let this = this.borrow();
-  Ok(cx.string(from_engine(this.engine)))
+  let mut this = this.borrow_mut();
+  Ok(cx.string(from_engine(this.engine())))
 }
 
 pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -81,7 +87,7 @@ pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if let Some(engine_name) = opt_string_arg(&mut cx, 1){
     if let Some(new_engine) = to_engine(&engine_name){
       if new_engine.selectable() {
-        this.borrow_mut().engine = new_engine
+        this.borrow_mut().engine = Some(new_engine)
       }
     }
   }
@@ -91,10 +97,9 @@ pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let this = this.borrow();
+  let mut this = this.borrow_mut();
 
-  let details = this.engine.status();
-
+  let details = this.engine().status();
   Ok(cx.string(details.to_string()))
 }
 
