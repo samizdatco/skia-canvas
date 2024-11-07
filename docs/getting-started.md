@@ -1,9 +1,7 @@
 ---
 sidebar_position: 1
+title: Getting Started
 ---
-
-# Getting Started
-
 ## Installation
 
 If you’re running on a supported platform, installation should be as simple as:
@@ -65,3 +63,6 @@ Start by installing:
   5. On Linux: Fontconfig and OpenSSL
 
 [Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
+
+<!-- references_begin -->
+<!-- references_end -->

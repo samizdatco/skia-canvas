@@ -26,7 +26,7 @@ In particular, Skia Canvas:
 
   - is fast and compact since rendering takes place on the GPU and all the heavy lifting is done by native code written in Rust and C++
   - can render to [windows][window] using an OS-native graphics pipeline and provides a browser-like [UI event][win_bind] framework
-  - generates output in both raster (JPEG & PNG) and vector (PDF & SVG) image formats
+  - generates images in both raster (JPEG, PNG, & WEBP) and vector (PDF & SVG) formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
   - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
@@ -45,13 +45,13 @@ In particular, Skia Canvas:
 ## Installation
 
 If you’re running on a supported platform, installation should be as simple as:
-```console
+```bash
 npm install skia-canvas
 ```
 
 This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases).
 
-### Platform Support
+## Platform Support
 
 The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions:
   - 10.20+
@@ -67,7 +67,7 @@ Pre-compiled binaries are available for:
 Nearly everything you need is statically linked into the library. A notable exception is the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library which must be installed separately if you’re running on Linux.
 
 
-### Running in Docker
+## Running in Docker
 
 The library is compatible with Linux systems using [glibc](https://www.gnu.org/software/libc/) 2.28 or later as well as Alpine Linux (x64 & arm64) and the [musl](https://musl.libc.org) C library it favors. In both cases, Fontconfig must be installed on the system for `skia-canvas` to operate correctly.
 
@@ -90,16 +90,17 @@ FROM node:alpine
 RUN apk update && apk add fontconfig
 ```
 
-### Compiling from Source
+## Compiling from Source
 
 If prebuilt binaries aren’t available for your system you’ll need to compile the portions of this library that directly interface with Skia.
 
 Start by installing:
 
   1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using [`rustup`](https://rust-lang.github.io/rustup/)
-  2. A C compiler toolchain like LLVM/Clang or MSVC
-  3. Python 2.7 (used by Skia's [build process](https://skia.org/docs/user/build/))
-  4. On Linux: Fontconfig and OpenSSL
+  2. A C compiler toolchain (either LLVM/Clang or MSVC)
+  4. Python 3 (used by Skia's [build process](https://skia.org/docs/user/build/))
+  3. The [Ninja](https://ninja-build.org) build system
+  5. On Linux: Fontconfig and OpenSSL
 
 [Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
 
