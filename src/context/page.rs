@@ -166,12 +166,6 @@ impl Page{
         canvas.draw_picture(&picture, None, None);
         document.end_page().close();
         Ok(Data::new_copy(&pdf_bytes))
-        // let mut pdf = PdfDocument::new(quality, density);
-        // pdf.document.begin_page(img_dims, None);
-        // pdf.document.canvas().draw_picture(&picture, None, None);
-        // pdf.document.end_page().close();
-        // let data = Data::new_copy(&pdf.buffer);
-        // Ok(data)
       }else if format == "svg"{
         let flags = outline.then_some(Flags::CONVERT_TEXT_TO_PATHS);
         let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
@@ -270,35 +264,6 @@ impl PageSequence{
   }
 
 }
-
-
-// pub struct PdfDocument<'a>{
-//   buffer: Vec<u8>,
-//   document: Document<'a>,
-// }
-
-// impl PdfDocument<'_>{
-//   fn new(quality:f32, density:f32) -> Self{
-//     let mut buffer = Vec::new();
-//     let mut meta = pdf::Metadata::default();
-//     meta.producer = "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string();
-//     meta.encoding_quality = Some((quality*100.0) as i32);
-//     meta.raster_dpi = Some(density * 72.0);
-//     let document = {
-//       pdf::new_document(&mut buffer, Some(&meta))
-//     };
-//     PdfDocument{ buffer, document }
-//   }
-
-//   fn canvas(&self) -> SkCanvas{
-//     self.document.canvas()
-//   }
-
-
-//   fn data(&self) -> Data{
-//     Data::new_copy(&self.buffer)
-//   }
-// }
 
 //
 // Helpers
