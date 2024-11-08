@@ -4,6 +4,7 @@
   "description": "A GPU-accelerated Canvas Graphics API for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
+  "homepage": "https://skia-canvas.org",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/samizdatco/skia-canvas.git"
@@ -11,7 +12,6 @@
   "bugs": {
     "url": "https://github.com/samizdatco/skia-canvas/issues"
   },
-  "homepage": "https://github.com/samizdatco/skia-canvas#readme",
   "browser": {
     "lib": "./lib/browser.js",
     "path": "path-browserify"
@@ -21,7 +21,7 @@
     "require": "./lib"
   },
   "scripts": {
-    "build": "cargo-cp-artifact -nc lib/v6/index.node -- cargo build --message-format=json-render-diagnostics",
+    "build": "cargo-cp-artifact -nc lib/v8/index.node -- cargo build --message-format=json-render-diagnostics",
     "install": "node-pre-gyp install || npm run build -- --release",
     "package": "node-pre-gyp package",
     "upload": "gh release upload v$npm_package_version build/stage/v$npm_package_version/*",
@@ -50,7 +50,7 @@
   ],
   "binary": {
     "module_name": "index",
-    "module_path": "./lib/v6",
+    "module_path": "./lib/v8",
     "remote_path": "./v{version}",
     "package_name": "{platform}-{arch}-{libc}.tar.gz",
     "host": "https://github.com/samizdatco/skia-canvas/releases/download"

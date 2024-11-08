@@ -13,19 +13,19 @@ This will download a pre-compiled library from the project’s most recent [rele
 
 ## Platform Support
 
-The underlying Rust library uses [N-API](https://nodejs.org/api/n-api.html) v6 which allows it to run on Node.js versions:
-  - 10.20+
-  - 12.17+
-  - 14.0, 15.0, and later
+The underlying Rust library uses [N-API][node_napi] v8 which allows it to run on Node.js versions:
+  - v12.22+
+  - v14.17+
+  - v15.12+
+  - v16.0.0 and later
 
 Pre-compiled binaries are available for:
 
-  - Linux (x64, arm64, & armhf)
+  - Linux (x64 & arm64)
   - macOS (x64 & Apple silicon)
   - Windows (x64)
 
 Nearly everything you need is statically linked into the library. A notable exception is the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library which must be installed separately if you’re running on Linux.
-
 
 ## Running in Docker
 
@@ -65,4 +65,5 @@ Start by installing:
 [Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
 
 <!-- references_begin -->
+[node_napi]: https://nodejs.org/api/n-api.html#node-api-version-matrix
 <!-- references_end -->

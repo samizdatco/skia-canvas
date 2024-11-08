@@ -22,6 +22,7 @@
 - Go to https://skia-canvas.org for a more readable version of all the details that used to be wedged into the README file.
 
 ### Breaking Changes
+- An upgrade to [Neon][neon_rs] with [N-API v8][node_napi] raised the minimum required Node version to 12.22+, 14.17+, or 16+.
 - The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`][key_location] field provides a numeric description of which variant of a key was pressed.
 - The deprecated `.async` property has been removed. See the [v0.9.28](#--v0928--jan-12-2022) release notes for details.
 - The non-standard `.textTracking` property has been removed in favor of the new [`.letterSpacing`][letterSpacing] property
@@ -58,6 +59,8 @@
 [fontStretch]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fontStretch
 [isPointInPath()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/isPointInPath
 [isPointInStroke()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/isPointInStroke
+[node_napi]: https://nodejs.org/api/n-api.html#node-api-version-matrix
+[neon_rs]: https://neon-rs.dev
 
 ## 📦 ⟩ [v1.0.2] ⟩ Aug 21, 2024
 

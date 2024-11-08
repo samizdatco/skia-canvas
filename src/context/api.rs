@@ -921,7 +921,7 @@ pub fn measureText(mut cx: FunctionContext) -> JsResult<JsArray> {
   let width = opt_float_arg(&mut cx, 2);
   let text_metrics = this.measure_text(&text, width);
 
-  let results = JsArray::new(&mut cx, text_metrics.len() as u32);
+  let results = JsArray::new(&mut cx, text_metrics.len());
   for (i, info) in text_metrics.iter().enumerate(){
     let line = floats_to_array(&mut cx, info)?;
     results.set(&mut cx, i as u32, line)?;

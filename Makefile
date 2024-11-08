@@ -1,4 +1,4 @@
-NAPI_VERSION := 6
+NAPI_VERSION := 8
 NPM := $(CURDIR)/node_modules
 NODEMON := $(CURDIR)/node_modules/.bin/nodemon
 JEST := $(CURDIR)/node_modules/.bin/jest

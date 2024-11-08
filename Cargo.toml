@@ -19,6 +19,7 @@ vulkan = ["skia-safe/vulkan", "winit/rwh_05", "dep:ash", "dep:vulkano"]
 window = ["dep:winit"]
 
 [dependencies]
+neon = "1.0"
 crc = "^3.0"
 css-color = "^0.2"
 rayon = "^1.5"
@@ -43,8 +44,3 @@ objc = { version = "0.2.7", optional = true }
 
 # window
 winit = { version = '0.30.5', features = ["serde"], optional = true }
-
-[dependencies.neon]
-version = "0.10.1"
-default-features = false
-features = ["napi-6", "promise-api", "channel-api"]

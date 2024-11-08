@@ -360,7 +360,7 @@ pub struct FontLibrary{
   pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
     let alias = opt_string_arg(&mut cx, 1);
     let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
-    let results = JsArray::new(&mut cx, filenames.len() as u32);
+    let results = JsArray::new(&mut cx, filenames.len());
 
     for (i, filename) in strings_in(&mut cx, &filenames).iter().enumerate(){
       let path = Path::new(&filename);

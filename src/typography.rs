@@ -174,7 +174,7 @@ impl FontSpec{
   }
 }
 
-pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<Option<FontSpec>> {
+pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontSpec>> {
   let arg = cx.argument::<JsValue>(idx)?;
   if arg.is_a::<JsNull, _>(cx){ return Ok(None) }
 
