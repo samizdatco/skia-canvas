@@ -112,20 +112,24 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let outline = bool_arg(&mut cx, 5, "outline")?;
   let matte = color_arg(&mut cx, 6);
 
-  let promise = cx
-    .task(move || {
+  let channel = cx.channel();
+  let (deferred, promise) = cx.promise();
+  rayon::spawn(move || {
+    let result = {
       if file_format=="pdf" && pages.len() > 1 {
         pages.as_pdf(quality, density, matte)
       }else{
         pages.first().encoded_as(&file_format, quality, density, outline, matte, pages.engine)
       }
-    })
-    .promise(move |mut cx, result| {
+    };
+
+    deferred.settle_with(&channel, move |mut cx| {
       let data = result.or_else(|err| cx.throw_error(err))?;
       let mut buffer = cx.buffer(data.len())?;
       buffer.as_mut_slice(&mut cx).copy_from_slice(&data);
       Ok(buffer)
     });
+  });
 
   Ok(promise)
 }
@@ -169,8 +173,10 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let outline = bool_arg(&mut cx, 7, "outline")?;
   let matte = color_arg(&mut cx, 8);
 
-  let promise = cx
-    .task(move || {
+  let channel = cx.channel();
+  let (deferred, promise) = cx.promise();
+  rayon::spawn(move || {
+    let result = {
       if sequence {
         pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
       } else if file_format == "pdf" {
@@ -178,11 +184,13 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
       } else {
         pages.write_image(&name_pattern, &file_format, quality, density, outline, matte)
       }
-    })
-    .promise(move |mut cx, result| {
-      result.or_else(|err| cx.throw_error(err))?;
-      Ok(cx.undefined())
+    };
+
+    deferred.settle_with(&channel, move |mut cx| match result{
+      Err(msg) => cx.throw_error(format!("I/O Error: {}", msg)),
+      _ => Ok(cx.undefined())
     });
+  });
 
   Ok(promise)
 }
