@@ -47,6 +47,7 @@ impl VulkanEngine {
                                 "renderer": "CPU",
                                 "api": "Vulkan",
                                 "device": "CPU-based renderer (Fallback)",
+                                "driver": "N/A",
                                 "error": msg,
                             })
                         );                        
@@ -100,17 +101,22 @@ impl VulkanEngine {
             })
             .ok_or("No suitable Vulkan physical device found")?;
 
-        let (mode, gpu_type) = match physical_device.properties().device_type {
-            PhysicalDeviceType::IntegratedGpu => ("GPU", Some("Integrated")),
-            PhysicalDeviceType::DiscreteGpu => ("GPU", Some("Discrete")),
-            PhysicalDeviceType::VirtualGpu => ("GPU", Some("Virtual")),
-            _ => ("CPU", None)
+        let device_props = physical_device.properties();
+        let (mode, gpu_type) = match device_props.device_type {
+            PhysicalDeviceType::IntegratedGpu => ("GPU", Some("Integrated GPU")),
+            PhysicalDeviceType::DiscreteGpu => ("GPU", Some("Discrete GPU")),
+            PhysicalDeviceType::VirtualGpu => ("GPU", Some("Virtual GPU")),
+            _ => ("CPU", Some("Software Rasterizer"))
         };
 
         Self::set_status(json!({
             "renderer": mode,
-            "device": gpu_type.map(|t| format!("{} GPU ({})", 
-                t, physical_device.properties().device_name)
+            "device": gpu_type.map(|t| format!("{} ({})",
+                t, device_props.device_name)
+            ),
+            "driver":format!("{} ({})",
+                device_props.driver_id.map(|id| format!("{:?}", id) ).unwrap_or("Unknown Driver".to_string()),
+                device_props.driver_info.as_ref().unwrap_or(&"Unknown Version".to_string()),
             ),
             "api": "Vulkan",
         }));
