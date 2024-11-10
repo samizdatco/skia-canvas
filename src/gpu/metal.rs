@@ -37,7 +37,7 @@ impl MetalEngine {
     pub fn supported() -> bool {
         MTL_CONTEXT.with_borrow_mut(|local_ctx| {
             if local_ctx.is_none(){
-                *local_ctx = {
+                *local_ctx = autoreleasepool(||{
                     let (device, direct_context) = Device::system_default().map(|device| {
                         let command_queue = device.new_command_queue();
                         let backend_context = unsafe {
@@ -72,7 +72,7 @@ impl MetalEngine {
                     });
 
                     direct_context
-                };
+                });
             }
 
             local_ctx.is_some()

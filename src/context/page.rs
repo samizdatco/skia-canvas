@@ -9,7 +9,7 @@ const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 
 use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
-use crate::gpu::RenderingEngine;
+use crate::gpu::{RenderingEngine, runloop};
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -146,19 +146,23 @@ impl Page{
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
         let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
 
-        if let Some(mut surface) = engine.get_surface(&img_info){
-          surface
-            .canvas()
-            .set_matrix(&img_scale.into())
-            .draw_picture(&picture, None, None);
-          surface
-            .image_snapshot()
-            .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
-            .map(|data| with_dpi(data, img_format, density))
-            .ok_or(format!("Could not encode as {}", format))
-        }else{
-          Err(format!("Could not allocate new {}×{} bitmap", img_dims.width, img_dims.height))
-        }
+        runloop(||{
+          if let Some(mut surface) = engine.get_surface(&img_info){
+            surface
+              .canvas()
+              .set_matrix(&img_scale.into())
+              .draw_picture(&picture, None, None);
+            let data = surface
+              .image_snapshot()
+              .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
+              .map(|data| with_dpi(data, img_format, density));
+
+            surface.direct_context().unwrap().free_gpu_resources();
+            data.ok_or(format!("Could not encode as {}", format))
+          }else{
+            Err(format!("Could not allocate new {}×{} bitmap", img_dims.width, img_dims.height))
+          }
+        })
       }else if format == "pdf"{
         let mut pdf_bytes = Vec::new();
         let mut document = pdf_document(&mut pdf_bytes, quality, density).begin_page(img_dims, None);
