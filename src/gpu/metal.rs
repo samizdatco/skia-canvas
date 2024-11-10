@@ -1,6 +1,7 @@
+#![allow(dead_code)]
 #![allow(unused_imports)]
 use std::cell::RefCell;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use cocoa::{appkit::NSView, base::id as cocoa_id};
 use core_graphics_types::geometry::CGSize;
 use metal::{
@@ -25,97 +26,112 @@ use winit::{
 };
 
 thread_local!(
-    static MTL_CONTEXT: RefCell<Option<MetalEngine>> = const { RefCell::new(None) };
-    static MTL_STATUS: RefCell<Value> = const { RefCell::new(Value::Null) };
+    static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) };
 );
 
-pub struct MetalEngine {
-    context: DirectContext,
-}
+static MTL_STATUS: OnceLock<Value> = OnceLock::new();
+
+// 
+// Offscreen rendering
+// 
+pub struct MetalEngine {}
 
 impl MetalEngine {
     pub fn supported() -> bool {
-        MTL_CONTEXT.with_borrow_mut(|local_ctx| {
-            if local_ctx.is_none(){
-                *local_ctx = autoreleasepool(||{
-                    let (device, direct_context) = Device::system_default().map(|device| {
-                        let command_queue = device.new_command_queue();
-                        let backend_context = unsafe {
-                            mtl::BackendContext::new(
-                                device.as_ptr() as mtl::Handle,
-                                command_queue.as_ptr() as mtl::Handle,
-                            )
-                        };
-                        let direct_context = direct_contexts::make_metal(&backend_context, None)
-                            .map(|context| MetalEngine{context});
-                        (Some(device), direct_context)
-                    }).unwrap_or((None, None));
-
-                    Self::set_status(match device {
-                        Some(device) => json!({
-                            "renderer": "GPU",
-                            "api": "Metal",
-                            "device": format!("{} ({})", match device.location(){
-                                MTLDeviceLocation::BuiltIn => "Integrated GPU",
-                                MTLDeviceLocation::Slot => "Discrete GPU",
-                                MTLDeviceLocation::External => "External GPU",
-                                _ => "Other GPU"
-                            }, device.name()),
-                        }),
-                        None => json!({
-                            "renderer": "CPU",
-                            "api": "Metal",
-                            "device": "CPU-based renderer (Fallback)",
-                            "error": "GPU initialization failed",
-
-                        })
-                    });
-
-                    direct_context
-                });
-            }
-
-            local_ctx.is_some()
-        })
-    }
-
-    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
-        if MetalEngine::supported() {
-            MTL_CONTEXT.with_borrow(|local_ctx| {
-                match local_ctx.is_some(){
-                    true => surfaces::render_target(
-                        &mut local_ctx.as_ref()?.context.clone(),
-                        Budgeted::Yes,
-                        image_info,
-                        Some(4),
-                        SurfaceOrigin::BottomLeft,
-                        None,
-                        true,
-                        None
-                    ),
-                    false => None
-                }
-            })
-        }else{
-            None
-        }
-    }
-
-    pub fn set_status(msg: Value) {
-        MTL_STATUS.with_borrow_mut(|status| *status = msg);
+        Self::status()["renderer"] == "GPU"
     }
 
     pub fn status() -> Value {
-        MTL_STATUS.with_borrow(|err_cell| err_cell.clone() )
+        MTL_STATUS.get_or_init(||{
+            match MetalContext::new(){
+                Some(context) => {
+                    let device_name = format!("{} ({})", match context.device.location(){
+                        MTLDeviceLocation::BuiltIn => "Integrated GPU",
+                        MTLDeviceLocation::Slot => "Discrete GPU",
+                        MTLDeviceLocation::External => "External GPU",
+                        _ => "Other GPU"
+                    }, context.device.name());
+        
+                    json!({
+                        "renderer": "GPU",
+                        "api": "Metal",
+                        "device": device_name
+                    })        
+                }
+                None => json!({
+                    "renderer": "CPU",
+                    "api": "Metal",
+                    "device": "CPU-based renderer (Fallback)",
+                    "error": "GPU initialization failed",
+                })
+            }
+        }).clone()
     }
 
+    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
+        match MetalEngine::supported() {
+            false => None,
+            true => MTL_CONTEXT.with_borrow_mut(|local_ctx| {
+                // lazily initialize this thread's context...
+                local_ctx
+                    .take()
+                    .or_else(|| MetalContext::new() )
+                    .and_then(|ctx|{
+                        let ctx = local_ctx.insert(ctx);
+                        // ...then create the surface with it
+                        ctx.surface(image_info)
+                    })
+            })
+        }
+    }
 }
+pub struct MetalContext {
+    device: Device,
+    queue: CommandQueue,
+    context: DirectContext,
+}
+
+impl MetalContext{
+    fn new() -> Option<Self>{
+        autoreleasepool(|| {
+            Device::system_default().and_then(|device|{
+                let queue = device.new_command_queue();
+                let backend = unsafe {
+                    mtl::BackendContext::new(
+                        device.as_ptr() as mtl::Handle,
+                        queue.as_ptr() as mtl::Handle,
+                    )
+                };
+                direct_contexts::make_metal(&backend, None)
+                    .map(|context| MetalContext{device, queue, context})
+            })
+        })
+    }
+
+    fn surface(&mut self, image_info: &ImageInfo) -> Option<Surface> {
+        surfaces::render_target(
+            &mut self.context,
+            Budgeted::Yes,
+            image_info,
+            Some(4),
+            SurfaceOrigin::BottomLeft,
+            None,
+            false,
+            None
+        )
+    }
+}
+
+// 
+// Windowed rendering
+// 
 
 pub struct MetalRenderer {
     layer: Arc<MetalLayer>,
     device: Arc<Device>,
 }
 
+// The windowed renderer
 impl MetalRenderer {
     pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
         let device = Device::system_default().expect("no device found");

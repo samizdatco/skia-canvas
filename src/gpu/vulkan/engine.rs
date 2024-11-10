@@ -15,12 +15,10 @@ use skia_safe::gpu::vk::{BackendContext, GetProcOf};
 use skia_safe::gpu::{direct_contexts, surfaces, Budgeted, DirectContext, SurfaceOrigin};
 use skia_safe::{ColorSpace, ISize, ImageInfo, Surface};
 
-thread_local!(
-    static VK_CONTEXT: RefCell<Option<VulkanEngine>> = const { RefCell::new(None) };
-    static VK_STATUS: RefCell<Value> = const { RefCell::new(Value::Null) };
-);
 
-static IS_SUPPORTED: OnceLock<bool> = OnceLock::new();
+thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );
+static VK_STATUS: OnceLock<Value> = OnceLock::new();
+static VK_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -35,60 +33,97 @@ pub struct VulkanEngine {
 }
 
 impl VulkanEngine {
-    fn init() {
-        VK_CONTEXT.with_borrow_mut(|local_ctx| {
-            if local_ctx.is_none() {
-                match VulkanEngine::new() {
-                    Ok(ctx) => {
-                        local_ctx.replace(ctx);
-                    }
-                    Err(msg) => {
-                        Self::set_status(
-                            json!({
-                                "renderer": "CPU",
-                                "api": "Vulkan",
-                                "device": "CPU-based renderer (Fallback)",
-                                "driver": "N/A",
-                                "error": msg,
-                            })
-                        );                        
-                    }
-                }
-            }
-        })
-    }
-
     pub fn supported() -> bool {
-        Self::init();
-        *IS_SUPPORTED.get_or_init(||{
-            let success = VK_CONTEXT.with_borrow(|cell| cell.is_some())
-                && Self::surface(&ImageInfo::new_n32_premul(
-                    ISize::new(100, 100),
-                    Some(ColorSpace::new_srgb()),
-                ))
-                .is_some();
-
-            if success{ 
-                Self::spawn_cleanup(); 
-            }
-            success
-        })
+        Self::status()["renderer"] == "GPU"
     }
 
-    fn spawn_cleanup(){
+    pub fn status() -> Value {
+        VK_STATUS.get_or_init(||{
+            // test whether a context can be created and do some one-time init if so
+            let context = VulkanContext::new()
+                .and_then(|mut ctx| match ctx.works(){
+                    true => Ok(ctx),
+                    false => Err("Vulkan device was instantiated but unable to render".to_string())
+                });
+                
+            match context {
+                Ok(context) => {
+                    Self::spawn_idle_watcher(); // watch for inactive contexts and deallocate them
+
+                    let device_props = context.physical_device.properties();
+                    let (mode, gpu_type) = match device_props.device_type {
+                        PhysicalDeviceType::IntegratedGpu => ("GPU", Some("Integrated GPU")),
+                        PhysicalDeviceType::DiscreteGpu => ("GPU", Some("Discrete GPU")),
+                        PhysicalDeviceType::VirtualGpu => ("GPU", Some("Virtual GPU")),
+                        _ => ("CPU", Some("Software Rasterizer"))
+                    };
+                    json!({
+                        "renderer": mode,
+                        "device": gpu_type.map(|t| format!("{} ({})",
+                            t, device_props.device_name)
+                        ),
+                        "driver":format!("{} ({})",
+                            device_props.driver_id.map(|id| format!("{:?}", id) ).unwrap_or("Unknown Driver".to_string()),
+                            device_props.driver_info.as_ref().unwrap_or(&"Unknown Version".to_string()),
+                        ),
+                        "api": "Vulkan",
+                    })
+                },
+                Err(msg) => json!({
+                    "renderer": "CPU",
+                    "api": "Vulkan",
+                    "device": "CPU-based renderer (Fallback)",
+                    "driver": "N/A",
+                    "error": msg,
+                })    
+            }
+        }).clone()
+    }
+
+    fn spawn_idle_watcher(){
         rayon::spawn(move || loop{
             std::thread::sleep(Duration::from_secs(1));
             rayon::spawn_broadcast(|_|{
                 // drop contexts that haven't been used in a while to free resources
                 VK_CONTEXT.with_borrow_mut(|cell| {
                     cell.take_if(|engine|{
-                        engine.last_use.elapsed() > Duration::from_secs(5)
+                        engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN
                     });
                 });
             });
         })
     }
 
+    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
+        match Self::supported() {
+            false => None,
+            true => VK_CONTEXT.with_borrow_mut(|local_ctx| {
+                // lazily initialize this thread's context then create the surface with it
+                local_ctx
+                    .take()
+                    .or_else(|| VulkanContext::new().ok() )
+                    .and_then(|ctx|{
+                        let ctx = local_ctx.insert(ctx);
+                        ctx.surface(image_info)
+                    })
+            })
+        }
+    }
+}
+
+
+#[allow(dead_code)]
+struct VulkanContext{
+    context: DirectContext,
+    library: Arc<VulkanLibrary>,
+    instance: Arc<Instance>,
+    physical_device: Arc<PhysicalDevice>,
+    device: Arc<Device>,
+    queue: Arc<Queue>,
+    last_use: Instant,
+}
+
+impl VulkanContext{
     fn new() -> Result<Self, String> {
         let library = VulkanLibrary::new().or(Err("Vulkan libraries not found on system"))?;
 
@@ -121,26 +156,6 @@ impl VulkanEngine {
             })
             .ok_or("No suitable Vulkan physical device found")?;
 
-        let device_props = physical_device.properties();
-        let (mode, gpu_type) = match device_props.device_type {
-            PhysicalDeviceType::IntegratedGpu => ("GPU", Some("Integrated GPU")),
-            PhysicalDeviceType::DiscreteGpu => ("GPU", Some("Discrete GPU")),
-            PhysicalDeviceType::VirtualGpu => ("GPU", Some("Virtual GPU")),
-            _ => ("CPU", Some("Software Rasterizer"))
-        };
-
-        Self::set_status(json!({
-            "renderer": mode,
-            "device": gpu_type.map(|t| format!("{} ({})",
-                t, device_props.device_name)
-            ),
-            "driver":format!("{} ({})",
-                device_props.driver_id.map(|id| format!("{:?}", id) ).unwrap_or("Unknown Driver".to_string()),
-                device_props.driver_info.as_ref().unwrap_or(&"Unknown Version".to_string()),
-            ),
-            "api": "Vulkan",
-        }));
-   
         let (device, mut queues) = Device::new(
             physical_device.clone(),
             DeviceCreateInfo {
@@ -197,36 +212,29 @@ impl VulkanEngine {
             physical_device,
             device,
             queue,
-            last_use: Instant::now()
+            last_use: Instant::now() + VK_CONTEXT_LIFESPAN
         })
     }
 
-    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
-        Self::init();
-        VK_CONTEXT.with_borrow_mut(|cell| match cell {
-            Some(engine) => {
-                engine.last_use = Instant::now();
-                surfaces::render_target(
-                    &mut engine.context,
-                    Budgeted::Yes,
-                    image_info,
-                    Some(4),
-                    SurfaceOrigin::BottomLeft,
-                    None,
-                    true,
-                    None,
-                )
-            },
-            _ => None
-        })
+    pub fn works(&mut self) -> bool{
+        self.surface(&ImageInfo::new_n32_premul(
+            ISize::new(100, 100),
+            Some(ColorSpace::new_srgb()),
+        )).is_some()
     }
 
-    pub fn set_status(msg: Value) {
-        VK_STATUS.with_borrow_mut(|status| *status = msg);
-    }
-
-    pub fn status() -> Value {
-        VK_STATUS.with_borrow(|err_cell| err_cell.clone() )
+    pub fn surface(&mut self, image_info: &ImageInfo) -> Option<Surface> {
+        self.last_use = Instant::now();
+        surfaces::render_target(
+            &mut self.context,
+            Budgeted::Yes,
+            image_info,
+            Some(4),
+            SurfaceOrigin::BottomLeft,
+            None,
+            false,
+            None,
+        )
     }
 
 }
