@@ -10,7 +10,7 @@ use winit::{
 use winit::platform::macos::WindowExtMacOS;
 
 use crate::utils::css_to_color;
-use crate::gpu::{Renderer, runloop};
+use crate::gpu::{self, Renderer};
 use crate::context::page::Page;
 use super::event::CanvasEvent;
 
@@ -146,7 +146,7 @@ impl Window {
 
 
     pub fn redraw(&mut self){
-        runloop(|| {
+        gpu::cleanup(|| {
             let paint = Paint::default();
             let matrix = self.fitting_matrix();
             let (clip, _) = matrix.map_rect(self.page.bounds);
@@ -160,7 +160,7 @@ impl Window {
     }
 
     pub fn handle_event(&mut self, event:CanvasEvent){
-        runloop(|| {
+        gpu::cleanup(|| {
             match event {
                 CanvasEvent::Page(page) => {
                     self.page = page;

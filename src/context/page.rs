@@ -9,7 +9,7 @@ const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 
 use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
-use crate::gpu::{RenderingEngine, runloop};
+use crate::gpu::{self, RenderingEngine};
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -146,7 +146,7 @@ impl Page{
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
         let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
 
-        runloop(||{
+        gpu::cleanup(||{
           if let Some(mut surface) = engine.get_surface(&img_info){
             surface
               .canvas()

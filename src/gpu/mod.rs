@@ -32,10 +32,10 @@ impl Engine {
 } 
 
 #[cfg(feature = "metal")]
-pub use crate::gpu::metal::autoreleasepool as runloop;
+pub use crate::gpu::metal::autoreleasepool as cleanup;
 #[cfg(not(feature = "metal"))]
 #[allow(dead_code)]
-pub fn runloop<T, F: FnOnce() -> T>(f: F) -> T { f() }
+pub fn cleanup<T, F: FnOnce() -> T>(f: F) -> T { f() }
 
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
