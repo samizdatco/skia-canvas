@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
+use std::time::{Instant, Duration};
 use cocoa::{appkit::NSView, base::id as cocoa_id};
 use core_graphics_types::geometry::CGSize;
 use metal::{
@@ -25,10 +26,8 @@ use winit::{
     event_loop::ActiveEventLoop,
 };
 
-thread_local!(
-    static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) };
-);
-
+thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
+static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
 static MTL_STATUS: OnceLock<Value> = OnceLock::new();
 
 // 
@@ -43,8 +42,11 @@ impl MetalEngine {
 
     pub fn status() -> Value {
         MTL_STATUS.get_or_init(||{
+            // test whether a context can be created and do some one-time init if so
             match MetalContext::new(){
                 Some(context) => {
+                    Self::spawn_idle_watcher(); // watch for inactive contexts and deallocate them
+
                     let device_name = format!("{} ({})", match context.device.location(){
                         MTLDeviceLocation::BuiltIn => "Integrated GPU",
                         MTLDeviceLocation::Slot => "Discrete GPU",
@@ -68,6 +70,21 @@ impl MetalEngine {
         }).clone()
     }
 
+    fn spawn_idle_watcher(){
+        rayon::spawn(move || loop{
+            // run forever, watching the other threads in the pool
+            std::thread::sleep(Duration::from_secs(1));
+            rayon::spawn_broadcast(|_|{
+                // drop contexts that haven't been used in a while to free resources
+                MTL_CONTEXT.with_borrow_mut(|cell| {
+                    cell.take_if(|engine|{
+                        engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN
+                    });
+                });
+            });
+        })
+    }
+
     pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
         match MetalEngine::supported() {
             false => None,
@@ -89,6 +106,7 @@ pub struct MetalContext {
     device: Device,
     queue: CommandQueue,
     context: DirectContext,
+    last_use: Instant,
 }
 
 impl MetalContext{
@@ -102,13 +120,15 @@ impl MetalContext{
                         queue.as_ptr() as mtl::Handle,
                     )
                 };
+                let last_use = Instant::now() + MTL_CONTEXT_LIFESPAN;
                 direct_contexts::make_metal(&backend, None)
-                    .map(|context| MetalContext{device, queue, context})
+                    .map(|context| MetalContext{device, queue, context, last_use})
             })
         })
     }
 
     fn surface(&mut self, image_info: &ImageInfo) -> Option<Surface> {
+        self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,
             Budgeted::Yes,
