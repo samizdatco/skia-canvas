@@ -59,6 +59,7 @@ impl VulkanEngine {
                     };
                     json!({
                         "renderer": mode,
+                        "api": "Vulkan",
                         "device": gpu_type.map(|t| format!("{} ({})",
                             t, device_props.device_name)
                         ),
@@ -66,7 +67,7 @@ impl VulkanEngine {
                             device_props.driver_id.map(|id| format!("{:?}", id) ).unwrap_or("Unknown Driver".to_string()),
                             device_props.driver_info.as_ref().unwrap_or(&"Unknown Version".to_string()),
                         ),
-                        "api": "Vulkan",
+                        "threads": rayon::current_num_threads(),
                     })
                 },
                 Err(msg) => json!({
@@ -74,6 +75,7 @@ impl VulkanEngine {
                     "api": "Vulkan",
                     "device": "CPU-based renderer (Fallback)",
                     "driver": "N/A",
+                    "threads": rayon::current_num_threads(),
                     "error": msg,
                 })    
             }

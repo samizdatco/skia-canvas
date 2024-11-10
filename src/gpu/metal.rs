@@ -57,13 +57,15 @@ impl MetalEngine {
                     json!({
                         "renderer": "GPU",
                         "api": "Metal",
-                        "device": device_name
+                        "device": device_name,
+                        "threads": rayon::current_num_threads(),
                     })        
                 }
                 None => json!({
                     "renderer": "CPU",
                     "api": "Metal",
                     "device": "CPU-based renderer (Fallback)",
+                    "threads": rayon::current_num_threads(),
                     "error": "GPU initialization failed",
                 })
             }
