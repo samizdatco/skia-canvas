@@ -1,5 +1,5 @@
 #![allow(unused_imports)]
-use std::{cell::RefCell, sync::{Arc, OnceLock}, ptr};
+use std::{cell::RefCell, sync::{Arc, OnceLock}, time::{Instant, Duration}, ptr};
 use serde_json::{json, Value};
 
 use vulkano::{
@@ -31,6 +31,7 @@ pub struct VulkanEngine {
     physical_device: Arc<PhysicalDevice>,
     device: Arc<Device>,
     queue: Arc<Queue>,
+    last_use: Instant,
 }
 
 impl VulkanEngine {
@@ -59,14 +60,33 @@ impl VulkanEngine {
 
     pub fn supported() -> bool {
         Self::init();
-        *IS_SUPPORTED.get_or_init(||
-            VK_CONTEXT.with_borrow(|cell| cell.is_some())
+        *IS_SUPPORTED.get_or_init(||{
+            let success = VK_CONTEXT.with_borrow(|cell| cell.is_some())
                 && Self::surface(&ImageInfo::new_n32_premul(
                     ISize::new(100, 100),
                     Some(ColorSpace::new_srgb()),
                 ))
-                .is_some()
-        )
+                .is_some();
+
+            if success{ 
+                Self::spawn_cleanup(); 
+            }
+            success
+        })
+    }
+
+    fn spawn_cleanup(){
+        rayon::spawn(move || loop{
+            std::thread::sleep(Duration::from_secs(1));
+            rayon::spawn_broadcast(|_|{
+                // drop contexts that haven't been used in a while to free resources
+                VK_CONTEXT.with_borrow_mut(|cell| {
+                    cell.take_if(|engine|{
+                        engine.last_use.elapsed() > Duration::from_secs(5)
+                    });
+                });
+            });
+        })
     }
 
     fn new() -> Result<Self, String> {
@@ -177,13 +197,15 @@ impl VulkanEngine {
             physical_device,
             device,
             queue,
+            last_use: Instant::now()
         })
     }
 
     pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
         Self::init();
         VK_CONTEXT.with_borrow_mut(|cell| match cell {
-            Some(engine) => 
+            Some(engine) => {
+                engine.last_use = Instant::now();
                 surfaces::render_target(
                     &mut engine.context,
                     Budgeted::Yes,
@@ -193,7 +215,8 @@ impl VulkanEngine {
                     None,
                     true,
                     None,
-                ),
+                )
+            },
             _ => None
         })
     }
