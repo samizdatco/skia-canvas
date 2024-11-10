@@ -10,7 +10,7 @@ use winit::{
 use winit::platform::macos::WindowExtMacOS;
 
 use crate::utils::css_to_color;
-use crate::gpu::{self, Renderer};
+use crate::gpu::Renderer;
 use crate::context::page::Page;
 use super::event::CanvasEvent;
 
@@ -146,81 +146,76 @@ impl Window {
 
 
     pub fn redraw(&mut self){
-        gpu::cleanup(|| {
-            let paint = Paint::default();
-            let matrix = self.fitting_matrix();
-            let (clip, _) = matrix.map_rect(self.page.bounds);
+        let paint = Paint::default();
+        let matrix = self.fitting_matrix();
+        let (clip, _) = matrix.map_rect(self.page.bounds);
 
-            self.renderer.draw(&self.handle, |canvas, _size| {
-                canvas.clear(self.background);
-                canvas.clip_rect(clip, None, Some(true));
-                canvas.draw_picture(self.page.get_picture(None).unwrap(), Some(&matrix), Some(&paint));
-            }).unwrap();
-        })
+        self.renderer.draw(&self.handle, |canvas, _size| {
+            canvas.clear(self.background);
+            canvas.clip_rect(clip, None, Some(true));
+            canvas.draw_picture(self.page.get_picture(None).unwrap(), Some(&matrix), Some(&paint));
+        }).unwrap();
     }
 
     pub fn handle_event(&mut self, event:CanvasEvent){
-        gpu::cleanup(|| {
-            match event {
-                CanvasEvent::Page(page) => {
-                    self.page = page;
-                    self.handle.request_redraw();
-                }
-                CanvasEvent::Visible(flag) => {
-                    self.handle.set_visible(flag);
-                }
-                CanvasEvent::Resizable(flag) => {
-                    self.handle.set_resizable(flag);
-                }
-                CanvasEvent::Title(title) => {
-                    self.handle.set_title(&title);
-                }
-                CanvasEvent::Cursor(icon) => {
-                    if let Some(icon) = icon{
-                        self.handle.set_cursor(icon);
-                    }
-                    self.handle.set_cursor_visible(icon.is_some());
-                }
-                CanvasEvent::Fit(mode) => {
-                    self.fit = mode;
-                }
-                CanvasEvent::Background(color) => {
-                    self.background = color;
-                }
-                CanvasEvent::Size(size) => {
-                    let size:PhysicalSize<u32> = size.to_physical(self.handle.scale_factor());
-                    if let Some(to_size) = self.handle.request_inner_size(size){
-                        self.resize(to_size);
-                    }
-                }
-                CanvasEvent::Position(loc) => {
-                    self.handle.set_outer_position(loc);
-                }
-                CanvasEvent::Fullscreen(to_fullscreen) => {
-                    match to_fullscreen{
-                        true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
-                        false => self.handle.set_fullscreen( None )
-                    }
-                }
-                CanvasEvent::WindowResized(size) => {
-                    self.resize(size);
-                }
-                CanvasEvent::RedrawingSuspended(suspended) => {
-                    self.suspended = suspended;
-                    if !suspended{
-                        self.redraw();
-                    }
-                }
-                CanvasEvent::RedrawRequested => {
-                    if !self.suspended{
-                        self.redraw()
-                    }
-                }
-
-                _ => {}
+        match event {
+            CanvasEvent::Page(page) => {
+                self.page = page;
+                self.handle.request_redraw();
             }
-        })
+            CanvasEvent::Visible(flag) => {
+                self.handle.set_visible(flag);
+            }
+            CanvasEvent::Resizable(flag) => {
+                self.handle.set_resizable(flag);
+            }
+            CanvasEvent::Title(title) => {
+                self.handle.set_title(&title);
+            }
+            CanvasEvent::Cursor(icon) => {
+                if let Some(icon) = icon{
+                    self.handle.set_cursor(icon);
+                }
+                self.handle.set_cursor_visible(icon.is_some());
+            }
+            CanvasEvent::Fit(mode) => {
+                self.fit = mode;
+            }
+            CanvasEvent::Background(color) => {
+                self.background = color;
+            }
+            CanvasEvent::Size(size) => {
+                let size:PhysicalSize<u32> = size.to_physical(self.handle.scale_factor());
+                if let Some(to_size) = self.handle.request_inner_size(size){
+                    self.resize(to_size);
+                }
+            }
+            CanvasEvent::Position(loc) => {
+                self.handle.set_outer_position(loc);
+            }
+            CanvasEvent::Fullscreen(to_fullscreen) => {
+                match to_fullscreen{
+                    true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
+                    false => self.handle.set_fullscreen( None )
+                }
+            }
+            CanvasEvent::WindowResized(size) => {
+                self.resize(size);
+            }
+            CanvasEvent::RedrawingSuspended(suspended) => {
+                self.suspended = suspended;
+                if !suspended{
+                    self.redraw();
+                }
+            }
+            CanvasEvent::RedrawRequested => {
+                if !self.suspended{
+                    self.redraw()
+                }
+            }
 
+            _ => {}
+        }
     }
 }
 

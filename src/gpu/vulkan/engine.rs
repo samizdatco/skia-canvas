@@ -13,7 +13,7 @@ use vulkano::{
 
 use skia_safe::gpu::vk::{BackendContext, GetProcOf};
 use skia_safe::gpu::{direct_contexts, surfaces, Budgeted, DirectContext, SurfaceOrigin};
-use skia_safe::{ColorSpace, ISize, ImageInfo, Surface};
+use skia_safe::{ColorSpace, ISize, ImageInfo, Surface, Data};
 
 
 thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );
@@ -92,6 +92,33 @@ impl VulkanEngine {
                 });
             });
         })
+    }
+
+    pub fn with_surface<F>(image_info: &ImageInfo, f:F) -> Result<Data, String>
+        where F:FnOnce(&mut Surface) -> Result<Data, String>
+    {
+        match VulkanEngine::supported() {
+            false => Err("Vulkan API not supported".to_string()),
+            true => VK_CONTEXT.with_borrow_mut(|local_ctx|{
+                let data = local_ctx
+                    // lazily initialize this thread's context...
+                    .take()
+                    .or_else(|| VulkanContext::new().ok() )
+                    .and_then(|ctx|{
+                        let ctx = local_ctx.insert(ctx);
+                        // ...then create the surface with it...
+                        ctx.surface(image_info)
+                    })
+                    .ok_or("Could not allocate surface".to_string())
+                    .and_then(|mut surface|
+                        // ... finally let the callback use it
+                        f(&mut surface)
+                    );
+                local_ctx.context.free_gpu_resources(); // unclear how useful this is
+                data
+            })
+        }
+
     }
 
     pub fn surface(image_info: &ImageInfo) -> Option<Surface> {

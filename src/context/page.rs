@@ -146,22 +146,17 @@ impl Page{
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
         let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
 
-        gpu::cleanup(||{
-          if let Some(mut surface) = engine.get_surface(&img_info){
-            surface
-              .canvas()
-              .set_matrix(&img_scale.into())
-              .draw_picture(&picture, None, None);
-            let data = surface
-              .image_snapshot()
-              .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
-              .map(|data| with_dpi(data, img_format, density));
+        engine.with_surface(&img_info, |surface|{
+          surface // draw to (potentially gpu-backed) rasterizer
+            .canvas()
+            .set_matrix(&img_scale.into())
+            .draw_picture(&picture, None, None);
 
-            surface.direct_context().map(|mut ctx|{ ctx.free_gpu_resources(); });
-            data.ok_or(format!("Could not encode as {}", format))
-          }else{
-            Err(format!("Could not allocate new {}×{} bitmap", img_dims.width, img_dims.height))
-          }
+          surface // generate bitmap in specified format
+            .image_snapshot()
+            .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
+            .map(|data| with_dpi(data, img_format, density))
+            .ok_or(format!("Could not encode as {}", format))
         })
       }else if format == "pdf"{
         let mut pdf_bytes = Vec::new();

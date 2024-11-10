@@ -9,7 +9,7 @@ use metal::{
     CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
     foreign_types::{ForeignType, ForeignTypeRef}
 };
-use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
+use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface, Data};
 use skia_safe::gpu::{
     mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
@@ -83,6 +83,31 @@ impl MetalEngine {
                 });
             });
         })
+    }
+
+    pub fn with_surface<F>(image_info: &ImageInfo, f:F) -> Result<Data, String>
+        where F:FnOnce(&mut Surface) -> Result<Data, String>
+    {
+        match MetalEngine::supported() {
+            false => Err("Metal API not supported".to_string()),
+            true => MTL_CONTEXT.with_borrow_mut(|local_ctx| autoreleasepool(||{
+                // lazily initialize this thread's context...
+                local_ctx
+                    .take()
+                    .or_else(|| MetalContext::new() )
+                    .and_then(|ctx|{
+                        let ctx = local_ctx.insert(ctx);
+                        // ...then create the surface with it...
+                        ctx.surface(image_info)
+                    })
+                    .ok_or("Could not allocate surface".to_string())
+                    .and_then(|mut surface|
+                        // ... finally let the callback use it
+                        f(&mut surface)
+                    )
+            }))
+        }
+
     }
 
     pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
@@ -188,26 +213,30 @@ impl MetalRenderer {
     }
 
     pub fn resize(&self, size: PhysicalSize<u32>) {
-        let cg_size = CGSize::new(size.width as f64, size.height as f64);
-        self.layer.set_drawable_size(cg_size);
+        autoreleasepool(|| {
+            let cg_size = CGSize::new(size.width as f64, size.height as f64);
+            self.layer.set_drawable_size(cg_size);
+        })
     }
 
     pub fn draw<F>(
         &mut self,
         window: &Arc<Window>,
         f: F,
-    ) -> Result<(), String> 
+    ) -> Result<(), String>
         where F:FnOnce(&skia_safe::Canvas, LogicalSize<f32>)
     {
-        let dpr = window.scale_factor();
-        let size = window.inner_size();
-        BACKEND.with_borrow_mut(|cell| {
-            let backend = cell.get_or_insert_with(|| MetalBackend::for_renderer(self));
+        autoreleasepool(||{
+            let dpr = window.scale_factor();
+            let size = window.inner_size();
+            BACKEND.with_borrow_mut(|cell| {
+                let backend = cell.get_or_insert_with(|| MetalBackend::for_renderer(self));
 
-            backend.render_to_layer(&self.layer, |canvas|{
-                canvas.reset_matrix();
-                canvas.scale((dpr as f32, dpr as f32));
-                f(canvas, LogicalSize::from_physical(size, dpr));
+                backend.render_to_layer(&self.layer, |canvas|{
+                    canvas.reset_matrix();
+                    canvas.scale((dpr as f32, dpr as f32));
+                    f(canvas, LogicalSize::from_physical(size, dpr));
+                })
             })
         })
     }

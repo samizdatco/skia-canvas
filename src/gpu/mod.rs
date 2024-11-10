@@ -1,5 +1,5 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{ImageInfo, Surface, surfaces};
+use skia_safe::{ImageInfo, Data, Surface, surfaces};
 use serde_json::Value;
 
 #[cfg(feature = "metal")]
@@ -23,19 +23,18 @@ struct Engine { }
 impl Engine {
     pub fn supported() -> bool { false }
     pub fn surface(_: &ImageInfo) -> Option<Surface> { None }
+    pub fn with_surface<F>(_: &ImageInfo, _:F)  -> Result<Data, String>
+        where F:FnOnce(&mut Surface) -> Result<Data, String>
+    {
+        Err("Compiled without GPU support".to_string())
+    }
     pub fn status() -> Value { serde_json::json!({
         "renderer": "CPU",
         "api": Value::Null,
         "device": "CPU-based renderer (compiled without GPU support)",
         "error": Value::Null,
     })}
-} 
-
-#[cfg(feature = "metal")]
-pub use crate::gpu::metal::autoreleasepool as cleanup;
-#[cfg(not(feature = "metal"))]
-#[allow(dead_code)]
-pub fn cleanup<T, F: FnOnce() -> T>(f: F) -> T { f() }
+}
 
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
@@ -55,6 +54,17 @@ impl RenderingEngine{
         match self {
             Self::GPU => Engine::supported(),
             Self::CPU => true
+        }
+    }
+
+    pub fn with_surface<F>(&self, image_info: &ImageInfo, f:F) -> Result<Data, String>
+        where F:FnOnce(&mut Surface) -> Result<Data, String>
+    {
+        match self {
+            Self::GPU => Engine::with_surface(image_info, f),
+            Self::CPU => surfaces::raster(image_info, None, None)
+                .ok_or("No raster".to_string())
+                .and_then(|mut surface|f(&mut surface))
         }
     }
 
@@ -86,6 +96,6 @@ impl RenderingEngine{
                 }
                 Some(msg.join(": "))
             }
-        }   
+        }
     }
 }
