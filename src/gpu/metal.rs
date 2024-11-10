@@ -90,39 +90,27 @@ impl MetalEngine {
     {
         match MetalEngine::supported() {
             false => Err("Metal API not supported".to_string()),
-            true => MTL_CONTEXT.with_borrow_mut(|local_ctx| autoreleasepool(||{
-                // lazily initialize this thread's context...
-                local_ctx
-                    .take()
-                    .or_else(|| MetalContext::new() )
-                    .and_then(|ctx|{
-                        let ctx = local_ctx.insert(ctx);
-                        // ...then create the surface with it...
-                        ctx.surface(image_info)
-                    })
-                    .ok_or("Could not allocate surface".to_string())
-                    .and_then(|mut surface|
-                        // ... finally let the callback use it
-                        f(&mut surface)
-                    )
-            }))
-        }
-
-    }
-
-    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
-        match MetalEngine::supported() {
-            false => None,
             true => MTL_CONTEXT.with_borrow_mut(|local_ctx| {
-                // lazily initialize this thread's context...
-                local_ctx
-                    .take()
-                    .or_else(|| MetalContext::new() )
-                    .and_then(|ctx|{
-                        let ctx = local_ctx.insert(ctx);
-                        // ...then create the surface with it
-                        ctx.surface(image_info)
-                    })
+                let data = autoreleasepool(||
+                    local_ctx
+                        // lazily initialize this thread's context...
+                        .take()
+                        .or_else(|| MetalContext::new() )
+                        .ok_or("Metal initialization failed".to_string())
+                        .and_then(|ctx|{
+                            let ctx = local_ctx.insert(ctx);
+                            // ...then create the surface with it...
+                            ctx.surface(image_info)
+                        })
+                        .and_then(|mut surface|
+                            // ... finally let the callback use it
+                            f(&mut surface)
+                        )
+                );
+                local_ctx.as_mut().map(|ctx|
+                    ctx.cleanup() // it's unclear how effective this is...
+                );
+                data
             })
         }
     }
@@ -152,7 +140,7 @@ impl MetalContext{
         })
     }
 
-    fn surface(&mut self, image_info: &ImageInfo) -> Option<Surface> {
+    fn surface(&mut self, image_info: &ImageInfo) -> Result<Surface, String> {
         self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,
@@ -163,7 +151,14 @@ impl MetalContext{
             None,
             false,
             None
+        ).ok_or(
+            format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height())
         )
+    }
+
+    fn cleanup(&mut self){
+        self.context.free_gpu_resources();
+        self.context.perform_deferred_cleanup(Duration::from_secs(1), None);
     }
 }
 

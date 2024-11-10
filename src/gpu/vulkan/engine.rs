@@ -104,35 +104,21 @@ impl VulkanEngine {
                     // lazily initialize this thread's context...
                     .take()
                     .or_else(|| VulkanContext::new().ok() )
+                    .ok_or("Vulkan initialization failed".to_string())
                     .and_then(|ctx|{
                         let ctx = local_ctx.insert(ctx);
                         // ...then create the surface with it...
                         ctx.surface(image_info)
                     })
-                    .ok_or("Could not allocate surface".to_string())
                     .and_then(|mut surface|
                         // ... finally let the callback use it
                         f(&mut surface)
                     );
-                local_ctx.context.free_gpu_resources(); // unclear how useful this is
+
+                local_ctx.as_mut().map(|ctx|
+                    ctx.cleanup() // it's unclear how effective this is
+                );
                 data
-            })
-        }
-
-    }
-
-    pub fn surface(image_info: &ImageInfo) -> Option<Surface> {
-        match Self::supported() {
-            false => None,
-            true => VK_CONTEXT.with_borrow_mut(|local_ctx| {
-                // lazily initialize this thread's context then create the surface with it
-                local_ctx
-                    .take()
-                    .or_else(|| VulkanContext::new().ok() )
-                    .and_then(|ctx|{
-                        let ctx = local_ctx.insert(ctx);
-                        ctx.surface(image_info)
-                    })
             })
         }
     }
@@ -247,10 +233,10 @@ impl VulkanContext{
         self.surface(&ImageInfo::new_n32_premul(
             ISize::new(100, 100),
             Some(ColorSpace::new_srgb()),
-        )).is_some()
+        )).is_ok()
     }
 
-    pub fn surface(&mut self, image_info: &ImageInfo) -> Option<Surface> {
+    pub fn surface(&mut self, image_info: &ImageInfo) -> Result<Surface, String> {
         self.last_use = Instant::now();
         surfaces::render_target(
             &mut self.context,
@@ -261,7 +247,13 @@ impl VulkanContext{
             None,
             false,
             None,
+        ).ok_or(
+            format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height())
         )
     }
 
+    fn cleanup(&mut self){
+        self.context.free_gpu_resources();
+        self.context.perform_deferred_cleanup(Duration::from_secs(1), None);
+    }
 }

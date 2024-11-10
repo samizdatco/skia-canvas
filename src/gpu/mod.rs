@@ -22,7 +22,6 @@ struct Engine { }
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 impl Engine {
     pub fn supported() -> bool { false }
-    pub fn surface(_: &ImageInfo) -> Option<Surface> { None }
     pub fn with_surface<F>(_: &ImageInfo, _:F)  -> Result<Data, String>
         where F:FnOnce(&mut Surface) -> Result<Data, String>
     {
@@ -63,15 +62,8 @@ impl RenderingEngine{
         match self {
             Self::GPU => Engine::with_surface(image_info, f),
             Self::CPU => surfaces::raster(image_info, None, None)
-                .ok_or("No raster".to_string())
+                .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
                 .and_then(|mut surface|f(&mut surface))
-        }
-    }
-
-    pub fn get_surface(&self, image_info: &ImageInfo) -> Option<Surface> {
-        match self {
-            Self::GPU => Engine::surface(image_info),
-            Self::CPU => surfaces::raster(image_info, None, None)
         }
     }
 
