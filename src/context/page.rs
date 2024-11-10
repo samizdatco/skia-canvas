@@ -157,7 +157,7 @@ impl Page{
               .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
               .map(|data| with_dpi(data, img_format, density));
 
-            surface.direct_context().unwrap().free_gpu_resources();
+            surface.direct_context().map(|mut ctx|{ ctx.free_gpu_resources(); });
             data.ok_or(format!("Could not encode as {}", format))
           }else{
             Err(format!("Could not allocate new {}×{} bitmap", img_dims.width, img_dims.height))
