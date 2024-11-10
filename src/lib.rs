@@ -110,8 +110,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Canvas_get_height", canvas::get_height)?;
   cx.export_function("Canvas_set_height", canvas::set_height)?;
 
-  cx.export_function("Canvas_get_async", canvas::get_async)?;
-  cx.export_function("Canvas_set_async", canvas::set_async)?;
   cx.export_function("Canvas_save", canvas::save)?;
   cx.export_function("Canvas_saveSync", canvas::saveSync)?;
   cx.export_function("Canvas_toBuffer", canvas::toBuffer)?;

@@ -13,12 +13,11 @@ pub struct Canvas{
   pub width: f32,
   pub height: f32,
   engine: Option<gpu::RenderingEngine>,
-  async_io: bool,
 }
 
 impl Canvas{
   pub fn new() -> Self{
-    Canvas{width:300.0, height:150.0, async_io:true, engine:None}
+    Canvas{width:300.0, height:150.0, engine:None}
   }
 
   pub fn engine(&mut self) -> gpu::RenderingEngine{
@@ -60,19 +59,6 @@ pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let height = float_arg(&mut cx, 1, "size")?;
   this.borrow_mut().height = height;
-  Ok(cx.undefined())
-}
-
-pub fn get_async(mut cx: FunctionContext) -> JsResult<JsBoolean> {
-  let this = cx.argument::<BoxedCanvas>(0)?;
-  let this = this.borrow();
-  Ok(cx.boolean(this.async_io))
-}
-
-pub fn set_async(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedCanvas>(0)?;
-  let go_async = cx.argument::<JsBoolean>(1)?;
-  this.borrow_mut().async_io = go_async.value(&mut cx);
   Ok(cx.undefined())
 }
 
