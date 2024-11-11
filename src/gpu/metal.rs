@@ -86,6 +86,7 @@ impl MetalEngine {
                 // drop contexts that haven't been used in a while to free resources
                 MTL_CONTEXT.with_borrow_mut(|cell| {
                     cell.take_if(|engine|{
+                        engine.cleanup(); // it's unclear how effective this is...
                         engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN
                     });
                 });
@@ -98,8 +99,8 @@ impl MetalEngine {
     {
         match MetalEngine::supported() {
             false => Err("Metal API not supported".to_string()),
-            true => MTL_CONTEXT.with_borrow_mut(|local_ctx| {
-                let data = autoreleasepool(||
+            true => MTL_CONTEXT.with_borrow_mut(|local_ctx|
+                autoreleasepool(||
                     local_ctx
                         // lazily initialize this thread's context...
                         .take()
@@ -114,12 +115,8 @@ impl MetalEngine {
                             // ... finally let the callback use it
                             f(&mut surface)
                         )
-                );
-                local_ctx.as_mut().map(|ctx|
-                    ctx.cleanup() // it's unclear how effective this is...
-                );
-                data
-            })
+                )
+            )
         }
     }
 }

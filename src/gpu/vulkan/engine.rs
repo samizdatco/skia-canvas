@@ -98,6 +98,7 @@ impl VulkanEngine {
                 // drop contexts that haven't been used in a while to free resources
                 VK_CONTEXT.with_borrow_mut(|cell| {
                     cell.take_if(|engine|{
+                        engine.cleanup(); // it's unclear how effective this is
                         engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN
                     });
                 });
@@ -111,7 +112,7 @@ impl VulkanEngine {
         match VulkanEngine::supported() {
             false => Err("Vulkan API not supported".to_string()),
             true => VK_CONTEXT.with_borrow_mut(|local_ctx|{
-                let data = local_ctx
+                local_ctx
                     // lazily initialize this thread's context...
                     .take()
                     .or_else(|| VulkanContext::new().ok() )
@@ -124,12 +125,7 @@ impl VulkanEngine {
                     .and_then(|mut surface|
                         // ... finally let the callback use it
                         f(&mut surface)
-                    );
-
-                local_ctx.as_mut().map(|ctx|
-                    ctx.cleanup() // it's unclear how effective this is
-                );
-                data
+                    )
             })
         }
     }
