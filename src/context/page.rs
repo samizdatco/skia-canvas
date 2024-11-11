@@ -127,14 +127,15 @@ impl Page{
     compositor.finish_recording_as_picture(Some(&self.bounds))
   }
 
-  pub fn encoded_as(&self, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>, engine:RenderingEngine) -> Result<Data, String> {
-    let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
+  pub fn encoded_as(&self, options:ExportOptions, engine:RenderingEngine) -> Result<Data, String> {
+    let ExportOptions{ format, quality, density, outline, matte } = options;
 
+    let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
     if self.bounds.is_empty(){
       Err("Width and height must be non-zero to generate an image".to_string())
     }else{
       let img_dims = self.bounds.size();
-      let img_format = match format {
+      let img_format = match format.as_str() {
         "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
         "png"          => Some(EncodedImageFormat::PNG),
         "webp"         => Some(EncodedImageFormat::WEBP),
@@ -176,10 +177,9 @@ impl Page{
     }
   }
 
-  #[allow(clippy::too_many_arguments)]
-  pub fn write(&self, filename: &str, file_format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>, engine:RenderingEngine) -> Result<(), String> {
+  pub fn write(&self, filename: &str, options:ExportOptions, engine:RenderingEngine) -> Result<(), String> {
     let path = FilePath::new(&filename);
-    let data = self.encoded_as(file_format, quality, density, outline, matte, engine)?;
+    let data = self.encoded_as(options, engine)?;
     fs::write(path, data.as_bytes()).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     )
@@ -222,7 +222,8 @@ impl PageSequence{
     self.pages.len()
   }
 
-  pub fn as_pdf(&self, quality:f32, density:f32, matte:Option<Color>) -> Result<Data, String>{
+  pub fn as_pdf(&self, options:ExportOptions) -> Result<Data, String>{
+    let ExportOptions{ quality, density, matte, .. } = options;
     let mut pdf_bytes = Vec::new();
     let pdf = self.pages
       .iter()
@@ -231,12 +232,12 @@ impl PageSequence{
     Ok(Data::new_copy(&pdf_bytes))
   }
 
-  pub fn write_image(&self, pattern:&str, format:&str, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
-    self.first().write(pattern, format, quality, density, outline, matte, self.engine)
+  pub fn write_image(&self, pattern:&str, options:ExportOptions) -> Result<(), String>{
+    self.first().write(pattern, options, self.engine)
   }
 
   #[allow(clippy::too_many_arguments)]
-  pub fn write_sequence(&self, pattern:&str, format:&str, padding:f32, quality:f32, density:f32, outline:bool, matte:Option<Color>) -> Result<(), String>{
+  pub fn write_sequence(&self, pattern:&str, padding:f32, options:ExportOptions) -> Result<(), String>{
     let padding = match padding as i32{
       -1 => (1.0 + (self.pages.len() as f32).log10().floor()) as usize,
       pad => pad as usize
@@ -248,13 +249,13 @@ impl PageSequence{
       .try_for_each(|(pp, page)|{
         let folio = format!("{:0width$}", pp+1, width=padding);
         let filename = pattern.replace("{}", folio.as_str());
-        page.write(&filename, format, quality, density, outline, matte, self.engine)
+        page.write(&filename, options.clone(), self.engine)
       })
   }
 
-  pub fn write_pdf(&self, path:&str, quality:f32, density:f32, matte:Option<Color>) -> Result<(), String>{
+  pub fn write_pdf(&self, path:&str, options:ExportOptions) -> Result<(), String>{
     let path = FilePath::new(&path);
-    match self.as_pdf(quality, density, matte){
+    match self.as_pdf(options){
       Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
         format!("{}: \"{}\"", why, path.display())
       ),
@@ -281,11 +282,11 @@ pub fn pages_arg(cx: &mut FunctionContext, idx:usize, canvas:&BoxedCanvas) -> Ne
 }
 
 fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Document{
-  pdf::new_document(buffer, Some(&pdf::Metadata { 
-    producer: "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string(), 
-    encoding_quality: Some((quality*100.0) as i32), 
-    raster_dpi: Some(density * 72.0), 
-    ..Default::default() 
+  pdf::new_document(buffer, Some(&pdf::Metadata {
+    producer: "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string(),
+    encoding_quality: Some((quality*100.0) as i32),
+    raster_dpi: Some(density * 72.0),
+    ..Default::default()
   }))
 }
 
@@ -317,4 +318,13 @@ fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{
     }
     _ => data
   }
+}
+
+#[derive(Clone)]
+pub struct ExportOptions{
+  pub format: String,
+  pub quality: f32,
+  pub density: f32,
+  pub outline: bool,
+  pub matte: Option<Color>,
 }

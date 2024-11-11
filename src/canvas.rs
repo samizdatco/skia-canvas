@@ -92,20 +92,16 @@ pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let pages = pages_arg(&mut cx, 1, &this)?;
-  let file_format = string_arg(&mut cx, 2, "format")?;
-  let quality = float_arg(&mut cx, 3, "quality")?;
-  let density = float_arg(&mut cx, 4, "density")?;
-  let outline = bool_arg(&mut cx, 5, "outline")?;
-  let matte = color_arg(&mut cx, 6);
+  let options = export_options_arg(&mut cx, 2)?;
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
   rayon::spawn(move || {
     let result = {
-      if file_format=="pdf" && pages.len() > 1 {
-        pages.as_pdf(quality, density, matte)
+      if options.format=="pdf" && pages.len() > 1 {
+        pages.as_pdf(options)
       }else{
-        pages.first().encoded_as(&file_format, quality, density, outline, matte, pages.engine)
+        pages.first().encoded_as(options, pages.engine)
       }
     };
 
@@ -123,28 +119,24 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
 pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let pages = pages_arg(&mut cx, 1, &this)?;
-  let file_format = string_arg(&mut cx, 2, "format")?;
-  let quality = float_arg(&mut cx, 3, "quality")?;
-  let density = float_arg(&mut cx, 4, "density")?;
-  let outline = bool_arg(&mut cx, 5, "outline")?;
-  let matte = color_arg(&mut cx, 6);
+  let options = export_options_arg(&mut cx, 2)?;
 
-    let encoded = {
-      if file_format=="pdf" && pages.len() > 1 {
-        pages.as_pdf(quality, density, matte)
-      }else{
-        pages.first().encoded_as(&file_format, quality, density, outline, matte, pages.engine)
-      }
-    };
-
-    match encoded{
-      Ok(data) => {
-        let mut buffer = cx.buffer(data.len())?;
-        buffer.as_mut_slice(&mut cx).copy_from_slice(&data);
-        Ok(buffer.upcast::<JsValue>())
-      },
-      Err(msg) => cx.throw_error(msg)
+  let encoded = {
+    if options.format=="pdf" && pages.len() > 1 {
+      pages.as_pdf(options)
+    }else{
+      pages.first().encoded_as(options, pages.engine)
     }
+  };
+
+  match encoded{
+    Ok(data) => {
+      let mut buffer = cx.buffer(data.len())?;
+      buffer.as_mut_slice(&mut cx).copy_from_slice(&data);
+      Ok(buffer.upcast::<JsValue>())
+    },
+    Err(msg) => cx.throw_error(msg)
+  }
 }
 
 pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
@@ -153,22 +145,18 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let name_pattern = string_arg(&mut cx, 2, "filePath")?;
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
-  let file_format = string_arg(&mut cx, 4, "format")?;
-  let quality = float_arg(&mut cx, 5, "quality")?;
-  let density = float_arg(&mut cx, 6, "density")?;
-  let outline = bool_arg(&mut cx, 7, "outline")?;
-  let matte = color_arg(&mut cx, 8);
+  let options = export_options_arg(&mut cx, 4)?;
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
   rayon::spawn(move || {
     let result = {
       if sequence {
-        pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
-      } else if file_format == "pdf" {
-        pages.write_pdf(&name_pattern, quality, density, matte)
+        pages.write_sequence(&name_pattern, padding, options)
+      } else if options.format == "pdf" {
+        pages.write_pdf(&name_pattern, options)
       } else {
-        pages.write_image(&name_pattern, &file_format, quality, density, outline, matte)
+        pages.write_image(&name_pattern, options)
       }
     };
 
@@ -187,19 +175,15 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let name_pattern = string_arg(&mut cx, 2, "filePath")?;
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
-  let file_format = string_arg(&mut cx, 4, "format")?;
-  let quality = float_arg(&mut cx, 5, "quality")?;
-  let density = float_arg(&mut cx, 6, "density")?;
-  let outline = bool_arg(&mut cx, 7, "outline")?;
-  let matte = color_arg(&mut cx, 8);
+  let options = export_options_arg(&mut cx, 4)?;
 
   let result = {
     if sequence {
-      pages.write_sequence(&name_pattern, &file_format, padding, quality, density, outline, matte)
-    } else if file_format == "pdf" {
-      pages.write_pdf(&name_pattern, quality, density, matte)
+      pages.write_sequence(&name_pattern, padding, options)
+    } else if options.format == "pdf" {
+      pages.write_pdf(&name_pattern, options)
     } else {
-      pages.write_image(&name_pattern, &file_format, quality, density, outline, matte)
+      pages.write_image(&name_pattern, options)
     }
   };
 

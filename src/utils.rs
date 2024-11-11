@@ -207,6 +207,15 @@ pub fn bool_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<b
   }
 }
 
+pub fn bool_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<bool>{
+  let key = cx.string(attr);
+  let val:Handle<JsValue> = obj.get(cx, key)?;
+  match val.downcast::<JsBoolean, _>(cx){
+    Ok(v) => Ok(v.value(cx) as bool),
+    Err(_e) => cx.throw_type_error(format!("Exptected a boolean value for \"{}\"", attr))
+  }
+}
+
 //
 // floats
 //
@@ -350,6 +359,15 @@ pub fn color_arg(cx: &mut FunctionContext, idx: usize) -> Option<Color> {
   }
 }
 
+pub fn opt_color_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<Color>{
+  let key = cx.string(attr);
+  obj.get(cx, key).ok()
+    .and_then(|val|
+      color_in(cx, val)
+    )
+}
+
+
 pub fn color_to_css<'a>(cx: &mut FunctionContext<'a>, color:&Color) -> JsResult<'a, JsValue> {
   let RGB {r, g, b} = color.to_rgb();
   let css = match color.a() {
@@ -439,6 +457,22 @@ pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Vec<Point>
       .collect();
     Ok(points)
   }
+}
+
+//
+// ExportOptions
+//
+
+use crate::context::page::ExportOptions;
+
+pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<ExportOptions>{
+  let opts = opt_object_arg(cx, idx).unwrap();
+  let format = string_for_key(cx, &opts, "format")?;
+  let quality = float_for_key(cx, &opts, "quality")?;
+  let density = float_for_key(cx, &opts, "density")?;
+  let outline = bool_for_key(cx, &opts, "outline")?;
+  let matte = opt_color_for_key(cx, &opts, "matte");
+  Ok(ExportOptions{ format, quality, density, outline, matte })
 }
 
 //
