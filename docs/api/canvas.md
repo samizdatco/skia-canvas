@@ -84,7 +84,7 @@ The method’s return value is a `CanvasRenderingContext2D` object which you can
 
 ### `saveAs()`
 ```js returns="Promise<void>"
-saveAs(filename, {page, format, matte, density=1, quality=0.92, outline=false})
+saveAs(filename, {page, format, matte, density=1, msaa=4, quality=0.92, outline=false})
 ```
 
 The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
@@ -110,6 +110,9 @@ By default, the images will be at a 1:1 ratio with the canvas's `width` and `hei
 canvas.saveAs('image.png', {density:2}) // choose the density explicitly
 canvas.saveAs('image@3x.png') // equivalent to setting the density to 3
 ```
+
+#### msaa
+The `msaa` argument allows you to control the number of samples used for each pixel by the GPU's multi-scale antialiasing (common values are `2`, `4`, & `8`, corresponding to 2𝗑, 4𝗑, or 8𝗑 sampling). Higher values will produce smoother-looking images but also increase resource usage. Setting the value to `false` will disable MSAA and use (slower but potentially higher-quality) shader-based AA routines instead. If omitted, the renderer defaults to 4x MSAA as it produces good results with relatively low overhead.
 
 #### quality
 The `quality` option is a number between 0 and 1.0 that controls the level of JPEG compression both when making JPEG files directly and when embedding them in a PDF. If omitted, quality will default to 0.92.

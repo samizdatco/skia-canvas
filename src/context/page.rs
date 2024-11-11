@@ -128,7 +128,7 @@ impl Page{
   }
 
   pub fn encoded_as(&self, options:ExportOptions, engine:RenderingEngine) -> Result<Data, String> {
-    let ExportOptions{ format, quality, density, outline, matte } = options;
+    let ExportOptions{ format, quality, density, outline, matte, msaa } = options;
 
     let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
     if self.bounds.is_empty(){
@@ -147,7 +147,7 @@ impl Page{
         let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
         let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
 
-        engine.with_surface(&img_info, |surface|{
+        engine.with_surface(&img_info, msaa, |surface|{
           surface // draw to (potentially gpu-backed) rasterizer
             .canvas()
             .set_matrix(&img_scale.into())
@@ -327,4 +327,5 @@ pub struct ExportOptions{
   pub density: f32,
   pub outline: bool,
   pub matte: Option<Color>,
+  pub msaa: Option<usize>,
 }

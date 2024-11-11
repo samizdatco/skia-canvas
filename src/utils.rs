@@ -221,12 +221,17 @@ pub fn bool_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str)
 //
 
 
-pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<f32>{
+pub fn opt_float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<f32>{
   let key = cx.string(attr);
-  let val:Handle<JsValue> = obj.get(cx, key)?;
-  match val.downcast::<JsNumber, _>(cx){
-    Ok(num) => Ok(num.value(cx) as f32),
-    Err(_e) => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
+  obj.get(cx, key).ok()
+    .and_then(|val:Handle<JsValue>| val.downcast::<JsNumber, _>(cx).ok() )
+    .map(|v| v.value(cx) as f32)
+}
+
+pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<f32>{
+  match opt_float_for_key(cx, &obj, attr) {
+    Some(num) => Ok(num),
+    None => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
   }
 }
 
@@ -472,7 +477,9 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let density = float_for_key(cx, &opts, "density")?;
   let outline = bool_for_key(cx, &opts, "outline")?;
   let matte = opt_color_for_key(cx, &opts, "matte");
-  Ok(ExportOptions{ format, quality, density, outline, matte })
+  let msaa = opt_float_for_key(cx, &opts, "msaa")
+    .map(|num| num.floor() as usize);
+  Ok(ExportOptions{ format, quality, density, outline, matte, msaa })
 }
 
 //
