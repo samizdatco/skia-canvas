@@ -60,7 +60,7 @@ impl RenderingEngine{
         where F:FnOnce(&mut Surface) -> Result<Data, String>
     {
         match self {
-            Self::GPU => Engine::with_surface(image_info, f),
+            Self::GPU => Engine::with_surface(image_info, None, f),
             Self::CPU => surfaces::raster(image_info, None, None)
                 .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
                 .and_then(|mut surface|f(&mut surface))

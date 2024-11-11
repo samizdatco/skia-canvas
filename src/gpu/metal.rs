@@ -53,11 +53,16 @@ impl MetalEngine {
                         MTLDeviceLocation::External => "External GPU",
                         _ => "Other GPU"
                     }, context.device.name());
-        
+
+                    let msaa:Vec<_> = (1..33).rev().filter(|s|{
+                        context.device.supports_texture_sample_count(*s)
+                    }).collect();
+
                     json!({
                         "renderer": "GPU",
                         "api": "Metal",
                         "device": device_name,
+                        "samples": msaa,
                         "threads": rayon::current_num_threads(),
                     })        
                 }
@@ -65,6 +70,7 @@ impl MetalEngine {
                     "renderer": "CPU",
                     "api": "Metal",
                     "device": "CPU-based renderer (Fallback)",
+                    "samples": [1],
                     "threads": rayon::current_num_threads(),
                     "error": "GPU initialization failed",
                 })
@@ -87,7 +93,7 @@ impl MetalEngine {
         })
     }
 
-    pub fn with_surface<F>(image_info: &ImageInfo, f:F) -> Result<Data, String>
+    pub fn with_surface<F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<Data, String>
         where F:FnOnce(&mut Surface) -> Result<Data, String>
     {
         match MetalEngine::supported() {
@@ -102,7 +108,7 @@ impl MetalEngine {
                         .and_then(|ctx|{
                             let ctx = local_ctx.insert(ctx);
                             // ...then create the surface with it...
-                            ctx.surface(image_info)
+                            ctx.surface(image_info, msaa)
                         })
                         .and_then(|mut surface|
                             // ... finally let the callback use it
@@ -142,13 +148,13 @@ impl MetalContext{
         })
     }
 
-    fn surface(&mut self, image_info: &ImageInfo) -> Result<Surface, String> {
+    fn surface(&mut self, image_info: &ImageInfo, msaa:Option<usize>) -> Result<Surface, String> {
         self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,
             Budgeted::Yes,
             image_info,
-            Some(4),
+            msaa.or(Some(4)),
             SurfaceOrigin::BottomLeft,
             None,
             false,

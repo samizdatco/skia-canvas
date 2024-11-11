@@ -57,6 +57,13 @@ impl VulkanEngine {
                         PhysicalDeviceType::VirtualGpu => ("GPU", Some("Virtual GPU")),
                         _ => ("CPU", Some("Software Rasterizer"))
                     };
+
+                    let msaa:Vec<_> = (1..33).rev()
+                        .filter_map(|s| vulkano::image::SampleCount::try_from(s).ok() )
+                        .filter(|s| device_props.framebuffer_color_sample_counts.contains_enum(*s) )
+                        .map(|s| s as usize)
+                        .collect();
+
                     json!({
                         "renderer": mode,
                         "api": "Vulkan",
@@ -67,6 +74,7 @@ impl VulkanEngine {
                             device_props.driver_id.map(|id| format!("{:?}", id) ).unwrap_or("Unknown Driver".to_string()),
                             device_props.driver_info.as_ref().unwrap_or(&"Unknown Version".to_string()),
                         ),
+                        "samples": msaa,
                         "threads": rayon::current_num_threads(),
                     })
                 },
@@ -75,6 +83,7 @@ impl VulkanEngine {
                     "api": "Vulkan",
                     "device": "CPU-based renderer (Fallback)",
                     "driver": "N/A",
+                    "samples": [1],
                     "threads": rayon::current_num_threads(),
                     "error": msg,
                 })    
@@ -96,7 +105,7 @@ impl VulkanEngine {
         })
     }
 
-    pub fn with_surface<F>(image_info: &ImageInfo, f:F) -> Result<Data, String>
+    pub fn with_surface<F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<Data, String>
         where F:FnOnce(&mut Surface) -> Result<Data, String>
     {
         match VulkanEngine::supported() {
@@ -110,7 +119,7 @@ impl VulkanEngine {
                     .and_then(|ctx|{
                         let ctx = local_ctx.insert(ctx);
                         // ...then create the surface with it...
-                        ctx.surface(image_info)
+                        ctx.surface(image_info, msaa)
                     })
                     .and_then(|mut surface|
                         // ... finally let the callback use it
@@ -235,16 +244,16 @@ impl VulkanContext{
         self.surface(&ImageInfo::new_n32_premul(
             ISize::new(100, 100),
             Some(ColorSpace::new_srgb()),
-        )).is_ok()
+        ), None).is_ok()
     }
 
-    pub fn surface(&mut self, image_info: &ImageInfo) -> Result<Surface, String> {
+    pub fn surface(&mut self, image_info: &ImageInfo, msaa:Option<usize>) -> Result<Surface, String> {
         self.last_use = Instant::now();
         surfaces::render_target(
             &mut self.context,
             Budgeted::Yes,
             image_info,
-            Some(4),
+            msaa.or(Some(4)),
             SurfaceOrigin::BottomLeft,
             None,
             false,
