@@ -84,7 +84,8 @@ impl VulkanEngine {
     }
 
     fn spawn_idle_watcher(){
-        rayon::spawn(move || loop{
+        // use a non-rayon thread so as not to compete with the worker threads
+        std::thread::spawn(move || loop{
             std::thread::sleep(Duration::from_secs(1));
             rayon::spawn_broadcast(|_|{
                 // drop contexts that haven't been used in a while to free resources
@@ -95,7 +96,7 @@ impl VulkanEngine {
                     });
                 });
             });
-        })
+        });
     }
 
     pub fn with_surface<F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<Data, String>
