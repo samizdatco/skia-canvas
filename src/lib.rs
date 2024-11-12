@@ -27,6 +27,13 @@ pub static FONT_LIBRARY: Lazy<Mutex<FontLibrary>> = Lazy::new(FontLibrary::share
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
+  // initialize thread pool w/ non-default size if requested
+  if let Ok(value) = std::env::var("SKIA_CANVAS_THREADS"){
+    if let Ok(num) = value.parse::<usize>(){
+      rayon::ThreadPoolBuilder::new().num_threads(num).build_global().unwrap();
+    }
+  }
+
   // -- Image -------------------------------------------------------------------------------------
 
   cx.export_function("Image_new", image::new)?;

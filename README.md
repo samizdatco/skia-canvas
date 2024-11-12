@@ -28,7 +28,7 @@ In particular, Skia Canvas:
   - can render to [windows][window] using an OS-native graphics pipeline and provides a browser-like [UI event][win_bind] framework
   - generates images in both raster (JPEG, PNG, & WEBP) and vector (PDF & SVG) formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
-  - uses native threads and the Node [worker pool](https://github.com/neon-bindings/rfcs/pull/35) for asynchronous rendering and file I/O
+  - uses native threads in a [user-configurable](#multithreading) worker pool for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - provides [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
@@ -103,6 +103,15 @@ Start by installing:
   5. On Linux: Fontconfig and OpenSSL
 
 [Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
+
+## Multithreading
+
+When rendering canvases in the background (e.g., by using the asynchronous [saveAs][saveAs] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's `engine.threads` property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
+
+For example, you can limit your asynchronous processing to two simultaneous tasks by running your script with:
+```bash
+SKIA_CANVAS_THREADS=2 node my-canvas-script.js
+```
 
 ## Example Usage
 
@@ -192,6 +201,7 @@ win.on("draw", e => {
 [bool-ops]: https://skia-canvas.org/api/path2d#complement-difference-intersect-union-and-xor
 [c2d_font]: https://skia-canvas.org/api/context#font
 [c2d_measuretext]: https://skia-canvas.org/api/context#measuretext
+[canvas]: https://skia-canvas.org/api/canvas
 [createProjection()]: https://skia-canvas.org/api/context#createprojection
 [createTexture()]: https://skia-canvas.org/api/context#createtexture
 [fontlibrary-use]: https://skia-canvas.org/api/font-library#use
@@ -210,6 +220,7 @@ win.on("draw", e => {
 [win_bind]: https://skia-canvas.org/api/window#on--off--once
 [window]: https://skia-canvas.org/api/window
 [node_napi]: https://nodejs.org/api/n-api.html#node-api-version-matrix
+[rayon]: https://crates.io/crates/rayon
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [letterSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/letterSpacing
