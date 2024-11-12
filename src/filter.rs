@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 use std::fmt;
 use skia_safe::{Paint, Matrix, Point, Color, MaskFilter, ImageFilter as SkImageFilter,
-                BlurStyle, FilterMode, MipmapMode, SamplingOptions, TileMode,
+                BlurStyle, FilterMode, MipmapMode, SamplingOptions, TileMode, ColorSpace,
                 image_filters, color_filters, table_color_filter};
 
 use crate::utils::*;
@@ -79,7 +79,7 @@ impl Filter {
             let scale = Point{x:matrix.scale_x(), y:matrix.scale_y()};
             let point = (offset.x / scale.x, offset.y / scale.y);
             let sigma = (    blur / scale.x,     blur / scale.y);
-            image_filters::drop_shadow(point, sigma, *color, None, chain, None)
+            image_filters::drop_shadow(point, sigma, *color, ColorSpace::new_srgb(), chain, None)
           },
           FilterSpec::Plain{ name, value } => match name.as_ref() {
             "blur" => {
