@@ -2177,7 +2177,8 @@ tests['drawImage() SVG from URL w/ patterns/effects'] = function (ctx, done) {
     done(null)
   }
   img.onerror = done
-  img.src = 'https://dev.w3.org/SVG/tools/svgweb/samples/svg-files/rg1024_metal_effect.svg'
+  img.crossOrigin = "anonymous"
+  img.src = 'https://skia-canvas.org/test/rg1024_metal_effect.svg'
 }
 
 //
@@ -2380,7 +2381,8 @@ tests['drawImage() SVG from remote URL'] = function (ctx, done) {
     done(null)
   }
   img.onerror = done
-  img.src = 'https://dev.w3.org/SVG/tools/svgweb/samples/svg-files/alphachannel.svg'
+  img.crossOrigin = "anonymous"
+  img.src = 'https://skia-canvas.org/test/alphachannel.svg'
 }
 
 tests['drawImage() SVG with font'] = function (ctx, done) {
