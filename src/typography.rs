@@ -451,6 +451,11 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
         }
     };
 
+    // if the setting is invalid, it should just be ignored
+    if css.is_empty() || color.is_none(){ return Ok(None) }
+
+    // As of skia_safe 0.78.2, `Gaps` mode is too buggy, with random breaks in places that don't have
+    // descenders. It would be nice to enable this in a future release once it stabilizes…
     let mode = TextDecorationMode::Through;
 
     let decoration = Decoration{ ty, style, mode, ..Decoration::default() };
