@@ -10,24 +10,28 @@ export class CanvasTexture {}
 // Images
 //
 
+
+
 export type ColorType = "rgba" | "rgb" | "bgra" | "argb"
-
-export interface ImageInfo {
-  /** Image width */
-  width: number
-  /** Image height */
-  height: number
-  /** Color type of pixel */
-  colorType: ColorType
+export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
+interface ImageDataSettings {
+  colorSpace?: ColorSpace
+  colorType?: ColorType
 }
-
-export interface ImageOptions {
-  /** Describes how to process raw image buffer with decoded pixels */
-  raw?: ImageInfo | undefined
+interface ImageData {
+  readonly colorSpace: ColorSpace
+  readonly colorType: ColorType
+  readonly data: Uint8ClampedArray
+  readonly height: number
+  readonly width: number
+}
+declare var ImageData: {
+  prototype: ImageData
+  new(sw: number, sh: number, settings?: ImageDataSettings): ImageData
+  new(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings): ImageData
 }
 
 export function loadImage(src: string | Buffer): Promise<Image>
-export class ImageData extends globalThis.ImageData {}
 export class Image {
   constructor()
   get src(): string
