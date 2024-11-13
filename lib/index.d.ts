@@ -10,7 +10,9 @@ export class CanvasTexture {}
 // Images
 //
 
-
+export function loadImage(src: string | Buffer): Promise<Image>
+export function loadImageData(src: string | Buffer, width: number, height?:number): Promise<ImageData>
+export function loadImageData(src: string | Buffer, width: number, height:number, settings?:ImageDataSettings): Promise<ImageData>
 
 export type ColorType = "rgba" | "rgb" | "bgra" | "argb"
 export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
@@ -31,7 +33,6 @@ declare var ImageData: {
   new(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings): ImageData
 }
 
-export function loadImage(src: string | Buffer): Promise<Image>
 export class Image {
   constructor()
   get src(): string
