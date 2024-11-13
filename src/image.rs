@@ -206,9 +206,15 @@ pub fn load_pixel_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let row_bytes = (width as usize) * color_type.bytes_per_pixel();
 
   let image_info = ImageInfo::new((width, height), color_type, AlphaType::Unpremul, None);
-  this.image = SkImage::from_raster_data(&image_info, data, row_bytes);
+  let success = match images::raster_from_data(&image_info, data, row_bytes){
+    Some(image) => {
+      this.content = Content::Bitmap(image);
+      true
+    }
+    None => false
+  };
 
-  Ok(cx.boolean(this.image.is_some()))
+  Ok(cx.boolean(success))
 }
 
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {

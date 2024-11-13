@@ -26,7 +26,7 @@ export interface ImageOptions {
   raw?: ImageInfo | undefined
 }
 
-export function loadImage(src: string | Buffer, options: ImageOptions? = null): Promise<Image>
+export function loadImage(src: string | Buffer): Promise<Image>
 export class ImageData extends globalThis.ImageData {}
 export class Image {
   constructor()
