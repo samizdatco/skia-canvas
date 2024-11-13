@@ -9,10 +9,10 @@ The Canvas object is a stand-in for the HTML `<canvas>` element. It defines imag
 | Image Dimensions               | Rendering Contexts            | Output                                                              |
 | --                             | --                            | --                                                                  |
 | [**width**][canvas_width]      | [**gpu**][canvas_gpu] 🧪      | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] 🧪       |
-| [**height**][canvas_height]    | [**pages**][canvas_pages] 🧪  | [saveAs()][saveAs] / [saveAsSync()][saveAs] 🧪                      |
-|                                | [getContext()][getContext]    | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |
-|                                | [newPage()][newPage] 🧪       | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] 🧪  |
-
+| [**height**][canvas_height]    | [**engine**][engine] 🧪       | [saveAs()][saveAs] / [saveAsSync()][saveAs] 🧪                      |
+|                                | [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |
+|                                | [getContext()][getContext]    | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] 🧪  |
+|                                | [newPage()][newPage] 🧪       |                                                                     |
 
 ## Creating new `Canvas` objects
 
@@ -60,6 +60,16 @@ function synchronous(){
 ### `.gpu`
 
 The `.gpu` attribute allows you to control whether rendering occurs on the graphics card or uses the CPU. Rendering is hardware accelerated by default, using [Metal](https://developer.apple.com/metal/) on macOS and [Vulkan](https://www.vulkan.org) on Linux and Windows. To use software-based rendering, set the `.gpu` property to `false`. If the current platform doesn't support GPU-based rendering, the property will be `false` by default (see [this article](https://linuxconfig.org/install-and-test-vulkan-on-linux) for some tips on getting Vulkan working on Linux).
+
+### `.engine`
+
+The `.engine` property is a read-only object that provides you with a status report on how this Canvas's images will be rendered. It contains the following fields:
+  - `renderer`: describes whether the `CPU` or `GPU` is currently being used to generate output images. If GPU initialization failed, the renderer will report being the `CPU`, even if you set the Canvas's [`.gpu`][canvas_gpu] property to `true`
+  - `api`: either `Metal` or `Vulkan` depending on your platform
+  - `device`: the identity of the ‘video card’ that was found during start-up
+  - `driver`: the name of the OS's device driver *‹vulkan-only›*
+  - `threads`: the number of threads in the worker pool that will be used for asynchronous [`saveAs`][saveAs] & [`toBuffer`][toBuffer] exports. By default this is the same as the number of CPU cores found, but can be overridden by setting the [`SKIA_CANVAS_THREADS`][multithreading] environment variable.
+  - `error`: if GPU initialization failed, this property will contain a description of what went wrong. Otherwise it will be undefined.
 
 ### `.pages`
 
@@ -138,11 +148,13 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 [canvas_gpu]: #gpu
 [canvas_pages]: #pages
 [context]: context.md
+[engine]: #engine
 [newPage]: #newpage
 [saveAs]: #saveas
 [shorthands]: #pdf-png-svg-jpg--webp
 [toBuffer]: #tobuffer
 [toDataURL_ext]: #todataurl
+[multithreading]: ../getting-started.md#multithreading
 [Buffer]: https://nodejs.org/api/buffer.html
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height

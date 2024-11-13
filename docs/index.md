@@ -21,7 +21,7 @@ In particular, Skia Canvas:
   - can render to [windows][window] using an OS-native graphics pipeline and provides a browser-like [UI event][win_bind] framework
   - generates images in both raster (JPEG, PNG, & WEBP) and vector (PDF & SVG) formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
-  - uses native threads in a [user-configurable][threadpool] worker pool for asynchronous rendering and file I/O
+  - uses native threads in a [user-configurable][multithreading] worker pool for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - provides [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
@@ -34,6 +34,7 @@ In particular, Skia Canvas:
     - proportional [letter-spacing][letterSpacing], [word-spacing][wordSpacing], and [leading][c2d_font]
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
     - use of non-system fonts [loaded][fontlibrary-use] from local files
+
 
 ## Example Usage
 
@@ -137,11 +138,11 @@ win.on("draw", e => {
 [p2d_trim]: api/path2d.md#trim
 [saveAs]: api/canvas.md#saveas
 [textwrap]: api/context.md#textwrap
-[threadpool]: getting-started.md#multithreading
 [toBuffer]: api/canvas.md#tobuffer
 [toDataURL_ext]: api/canvas.md#todataurl
 [win_bind]: api/window.md#on--off--once
 [window]: api/window.md
+[multithreading]: getting-started.md#multithreading
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [letterSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/letterSpacing

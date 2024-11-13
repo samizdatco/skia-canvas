@@ -15,8 +15,9 @@ Most of your interaction with the canvas will actually be directed toward its �
 | [save()][save()]                       | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**wordSpacing**][wordSpacing]                       | [drawCanvas() 🧪][drawcanvas]                      | [**shadowOffsetX**][shadowOffsetX]                       |
 | [restore()][restore()]                 | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**textAlign**][textAlign]                           | [drawImage()][drawImage()]                         | [**shadowOffsetY**][shadowOffsetY]                       |
 | [reset()][reset()]                     |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                     |                                                    |                                                          |
-| [clip()][clip()]                       |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**textWrap** 🧪][textwrap]                          |                                                    |                                                          |
-|                                        |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [measureText()][measureText()] [🧪][c2d_measuretext] |                                                    |                                                          |
+| [clip()][clip()]                       |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**textDecoration** 🧪][textDecoration]              |                                                    |                                                          |
+|                                        |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [**textWrap** 🧪][textwrap]                          |                                                    |                                                          |
+|                                        |                                              |                                                  |                                         |                                                   |                                          | [measureText()][measureText()] [🧪][c2d_measuretext] |                                                    |                                                          |
 |                                        |                                              |                                                  |                                         |                                                   |                                          | [outlineText() 🧪][outlineText()]                    |                                                    |                                                          |
 
 
@@ -34,10 +35,13 @@ The context’s [`.font`][font] property follows the CSS 2.1 standard and allows
 
 **The textTracking property has been removed** and replaced with the now-standard [`letterSpacing`][letterSpacing] property.
 
+### `.textDecoration`
+
+The `.textDecoration` property can be assigned a string using the same syntax as the CSS [`text-decoration`][css_textDecoration] property. With it, you can choose `underline`, `overline`, and `line-through` styles, specify the line color, and select a style like `wavy`, `dotted`, or `dashed`. Set it to `none` to go back to drawing undecorated text. This setting will persist across changes to the `.font` property.
+
 ### `.textWrap`
 
 The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()`
-
 
 ### `.lineDashMarker`
 
@@ -318,6 +322,7 @@ for (let i=0; i<8000; i++){
 [outlineText()]: #outlinetext
 [p2d_offset]: path2d.md#offset
 [p2d_transform]: path2d.md#transform
+[textDecoration]: #textdecoration
 [textwrap]: #textwrap
 [transforms]: #transform--settransform
 [reset()]: https://developer.chrome.com/blog/canvas2d/#context-reset
@@ -394,4 +399,5 @@ for (let i=0; i<8000; i++){
 [strokeText()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/strokeText
 [transform()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/transform
 [translate()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/translate
+[css_textDecoration]: https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration
 <!-- references_end -->

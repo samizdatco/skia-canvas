@@ -18,6 +18,8 @@
 
 ---
 
+
+
 Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and, accordingly, produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
 
 While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas to take greater advantage of Skia's advanced graphical features and provide a more expressive coding environment.
@@ -28,7 +30,7 @@ In particular, Skia Canvas:
   - can render to [windows][window] using an OS-native graphics pipeline and provides a browser-like [UI event][win_bind] framework
   - generates images in both raster (JPEG, PNG, & WEBP) and vector (PDF & SVG) formats
   - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
-  - uses native threads in a [user-configurable](#multithreading) worker pool for asynchronous rendering and file I/O
+  - uses native threads in a [user-configurable][multithreading] worker pool for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - provides [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
@@ -41,6 +43,8 @@ In particular, Skia Canvas:
     - proportional [letter-spacing][letterSpacing], [word-spacing][wordSpacing], and [leading][c2d_font]
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
     - use of non-system fonts [loaded][fontlibrary-use] from local files
+
+
 
 ## Installation
 
@@ -112,6 +116,8 @@ For example, you can limit your asynchronous processing to two simultaneous task
 ```bash
 SKIA_CANVAS_THREADS=2 node my-canvas-script.js
 ```
+
+
 
 ## Example Usage
 
@@ -219,6 +225,7 @@ win.on("draw", e => {
 [toDataURL_ext]: https://skia-canvas.org/api/canvas#todataurl
 [win_bind]: https://skia-canvas.org/api/window#on--off--once
 [window]: https://skia-canvas.org/api/window
+[multithreading]: https://skia-canvas.org/getting-started#multithreading
 [node_napi]: https://nodejs.org/api/n-api.html#node-api-version-matrix
 [rayon]: https://crates.io/crates/rayon
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
