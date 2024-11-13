@@ -34,38 +34,38 @@ interface DOMMatrix {
   m21: number, m22: number, m23: number, m24: number,
   m31: number, m32: number, m33: number, m34: number,
   m41: number, m42: number, m43: number, m44: number,
-  
+
   flipX(): DOMMatrix
   flipY(): DOMMatrix
   inverse(): DOMMatrix
   invertSelf(): DOMMatrix
-  
+
   multiply(other?: DOMMatrixInit): DOMMatrix
   multiplySelf(other?: DOMMatrixInit): DOMMatrix
   preMultiplySelf(other?: DOMMatrixInit): DOMMatrix
-  
+
   rotate(rotX?: number, rotY?: number, rotZ?: number): DOMMatrix
   rotateSelf(rotX?: number, rotY?: number, rotZ?: number): DOMMatrix
   rotateAxisAngle(x?: number, y?: number, z?: number, angle?: number): DOMMatrix
   rotateAxisAngleSelf(x?: number, y?: number, z?: number, angle?: number): DOMMatrix
   rotateFromVector(x?: number, y?: number): DOMMatrix
   rotateFromVectorSelf(x?: number, y?: number): DOMMatrix
-  
+
   scale(scaleX?: number, scaleY?: number, scaleZ?: number, originX?: number, originY?: number, originZ?: number): DOMMatrix
   scaleSelf(scaleX?: number, scaleY?: number, scaleZ?: number, originX?: number, originY?: number, originZ?: number): DOMMatrix
   scale3d(scale?: number, originX?: number, originY?: number, originZ?: number): DOMMatrix
   scale3dSelf(scale?: number, originX?: number, originY?: number, originZ?: number): DOMMatrix
-  
+
   skew(sx?: number, sy?:number): DOMMatrix
   skewSelf(sx?: number, sy?:number): DOMMatrix
   skewX(sx?: number): DOMMatrix
   skewXSelf(sx?: number): DOMMatrix
   skewY(sy?: number): DOMMatrix
   skewYSelf(sy?: number): DOMMatrix
-  
+
   translate(tx?: number, ty?: number, tz?: number): DOMMatrix
   translateSelf(tx?: number, ty?: number, tz?: number): DOMMatrix
-  
+
   setMatrixValue(transformList: string): DOMMatrix
   transformPoint(point?: DOMPointInit): DOMPoint
 

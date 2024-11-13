@@ -73,7 +73,6 @@ For example, you can limit your asynchronous processing to two simultaneous task
 SKIA_CANVAS_THREADS=2 node my-canvas-script.js
 ```
 
-
 <!-- references_begin -->
 [canvas]: api/canvas.md
 [saveAs]: api/canvas.md#saveas

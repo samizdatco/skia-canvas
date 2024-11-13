@@ -45,7 +45,7 @@ impl VulkanEngine {
                     true => Ok(ctx),
                     false => Err("Vulkan device was instantiated but unable to render".to_string())
                 });
-                
+
             match context {
                 Ok(context) => {
                     Self::spawn_idle_watcher(); // watch for inactive contexts and deallocate them
@@ -78,7 +78,7 @@ impl VulkanEngine {
                     "driver": "N/A",
                     "threads": rayon::current_num_threads(),
                     "error": msg,
-                })    
+                })
             }
         }).clone()
     }

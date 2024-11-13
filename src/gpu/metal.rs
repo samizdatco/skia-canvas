@@ -30,9 +30,9 @@ thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCe
 static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
 static MTL_STATUS: OnceLock<Value> = OnceLock::new();
 
-// 
+//
 // Offscreen rendering
-// 
+//
 pub struct MetalEngine {}
 
 impl MetalEngine {
@@ -59,7 +59,7 @@ impl MetalEngine {
                         "api": "Metal",
                         "device": device_name,
                         "threads": rayon::current_num_threads(),
-                    })        
+                    })
                 }
                 None => json!({
                     "renderer": "CPU",
@@ -174,9 +174,9 @@ impl MetalContext{
     }
 }
 
-// 
+//
 // Windowed rendering
-// 
+//
 
 pub struct MetalRenderer {
     layer: Arc<MetalLayer>,
@@ -285,14 +285,14 @@ impl MetalBackend {
         where F:FnOnce(&skia_safe::Canvas)
     {
         let drawable = layer
-            .next_drawable()            
+            .next_drawable()
             .ok_or("MetalBackend: could not allocate framebuffer".to_string())?;
 
         let drawable_size = {
             let size = layer.drawable_size();
             Size::new(size.width as scalar, size.height as scalar)
         };
-        
+
         let backend_render_target = unsafe {
             let texture_info =
                 mtl::TextureInfo::new(drawable.texture().as_ptr() as mtl::Handle);
@@ -301,7 +301,7 @@ impl MetalBackend {
                 &texture_info,
             )
         };
-        
+
         let mut surface = surfaces::wrap_backend_render_target(
             &mut self.skia_ctx,
             &backend_render_target,

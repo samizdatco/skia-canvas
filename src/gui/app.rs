@@ -3,9 +3,9 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use winit::{
     application::ApplicationHandler,
-    event::{ElementState, KeyEvent, StartCause, WindowEvent}, 
-    event_loop::{ActiveEventLoop, ControlFlow}, 
-    keyboard::{PhysicalKey, KeyCode}, 
+    event::{ElementState, KeyEvent, StartCause, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow},
+    keyboard::{PhysicalKey, KeyCode},
     window::WindowId
 };
 
@@ -45,7 +45,7 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
 
     }
 
-    fn new_events(&mut self, event_loop:&ActiveEventLoop, cause:StartCause) { 
+    fn new_events(&mut self, event_loop:&ActiveEventLoop, cause:StartCause) {
         if cause == StartCause::Init{
             // on initial pass, do a roundtrip to sync up the Window object's state attrs:
             // send just the initial window positions then read back all state
@@ -60,10 +60,10 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
         // handle window lifecycle events
         match event {
             WindowEvent::Destroyed | WindowEvent::CloseRequested => {
-                self.windows.remove(&window_id);                
+                self.windows.remove(&window_id);
                 if self.windows.is_empty() {
                     // quit after the last window is closed
-                    event_loop.exit(); 
+                    event_loop.exit();
                 }
             }
             WindowEvent::KeyboardInput {
@@ -95,7 +95,7 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
         }
     }
 
-    fn user_event(&mut self, event_loop:&ActiveEventLoop, event:CanvasEvent) { 
+    fn user_event(&mut self, event_loop:&ActiveEventLoop, event:CanvasEvent) {
         match event{
             CanvasEvent::Open(spec, page) => {
                 self.windows.add(event_loop, new_proxy(), spec, page);
@@ -123,7 +123,7 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
         }
     }
 
-    fn about_to_wait(&mut self, event_loop:&ActiveEventLoop) { 
+    fn about_to_wait(&mut self, event_loop:&ActiveEventLoop) {
         // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
         // a Render event, so only do a roundtrip if there are new UI events to be relayed
         if !self.cadence.active() && self.windows.has_ui_changes() {
@@ -131,7 +131,7 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
         }
 
         // delegate timing to the cadence if active, otherwise wait for ui events
-        event_loop.set_control_flow( 
+        event_loop.set_control_flow(
             match self.cadence.active(){
                 true => self.cadence.on_next_frame(|| add_event(CanvasEvent::Render) ),
                 false => ControlFlow::Wait
@@ -163,7 +163,7 @@ impl Default for Cadence {
 impl Cadence{
     fn at_startup(&mut self) -> bool{
         if self.begun{ false }
-        else{ 
+        else{
             self.begun = true;
             true // only return true on first call
         }
@@ -184,7 +184,7 @@ impl Cadence{
                         self.last += self.interval
                     }
                     draw();
-                }        
+                }
                 ControlFlow::WaitUntil(self.last + self.interval)
             },
             false => ControlFlow::Wait,
@@ -196,4 +196,3 @@ impl Cadence{
     }
 }
 
-  

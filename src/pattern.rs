@@ -135,6 +135,6 @@ pub fn repr(mut cx: FunctionContext) -> JsResult<JsString> {
     Content::Bitmap(..) => "Bitmap",
     _ => "Canvas"
   };
-  
+
   Ok(cx.string(format!("{} {}×{}", style, stamp.dims.width, stamp.dims.height)))
 }

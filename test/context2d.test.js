@@ -853,7 +853,7 @@ describe("Context2D", ()=>{
 
     describe("transform()", ()=>{
       const a=0.1, b=0, c=0, d=0.3, e=0, f=0
-  
+
       test('with args list', () => {
         ctx.transform(a, b, c, d, e, f)
         let matrix = ctx.currentTransform
@@ -861,7 +861,7 @@ describe("Context2D", ()=>{
           expect(matrix[term]).toBeCloseTo(val)
         )
       })
-  
+
       test('with DOMMatrix', () => {
         ctx.transform(new DOMMatrix().scale(0.1, 0.3));
         let matrix = ctx.currentTransform
@@ -869,7 +869,7 @@ describe("Context2D", ()=>{
           expect(matrix[term]).toBeCloseTo(val)
         )
       })
-  
+
       test('with matrix-like object', () => {
         ctx.transform({a, b, c, d, e, f});
         let matrix = ctx.currentTransform
@@ -877,7 +877,7 @@ describe("Context2D", ()=>{
           expect(matrix[term]).toBeCloseTo(val)
         )
       })
-  
+
       test('with css-style string', () => {
         // try a range of string inits
         const transforms = {
@@ -907,7 +907,7 @@ describe("Context2D", ()=>{
           "none": "matrix(1, 0, 0, 1, 0, 0)",
           "unset": "matrix(1, 0, 0, 1, 0, 0)",
         }
-      
+
         for (const input in transforms){
           let matrix = new DOMMatrix(input),
               roundtrip = new DOMMatrix(matrix.toString())
@@ -927,9 +927,9 @@ describe("Context2D", ()=>{
         expect( () => ctx.transform(0, 0, 0)).toThrow("Invalid transform matrix")
         expect( () => ctx.transform("nonesuch")).toThrow("Invalid transform matrix")
       })
-  
+
     })
-  
+
   })
 
 

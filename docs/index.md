@@ -35,7 +35,6 @@ In particular, Skia Canvas:
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
     - use of non-system fonts [loaded][fontlibrary-use] from local files
 
-
 ## Example Usage
 
 ### Generating image files

@@ -291,10 +291,10 @@ describe("FontLibrary", ()=>{
           name = "Monoton"
       expect(() => FontLibrary.use(woff)).not.toThrow()
       expect(FontLibrary.has(name)).toBe(true)
-  
+
       ctx.font = '256px Monoton'
       ctx.fillText('G', 128, 256)
-  
+
       // look for one of the gaps between the inline strokes of the G
       let bmp = ctx.getImageData(300, 172, 1, 1)
       expect(Array.from(bmp.data)).toEqual([0,0,0,0])

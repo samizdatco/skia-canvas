@@ -59,16 +59,16 @@ impl VulkanRenderer {
                     ..Default::default()
                 },
             )
-            .expect(&format!("Vulkan: could not create instance supporting: {:?}", required_extensions))    
+            .expect(&format!("Vulkan: could not create instance supporting: {:?}", required_extensions))
         };
 
         let device_extensions = DeviceExtensions {
             khr_swapchain: true, // we need a swapchain to manage repainting the window
             ..DeviceExtensions::empty()
         };
-    
+
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
-    
+
         // Collect the list of available devices & queues then select ‘best’ one for our needs
         let (physical_device, queue_family_index) = instance
             .enumerate_physical_devices()
@@ -102,7 +102,7 @@ impl VulkanRenderer {
                 }
             })
             .expect("Vulkan: no suitable physical device found");
-        
+
         // Use the physical device we selected to initialize a device with a single queue
         let (device, mut queues) = Device::new(
             physical_device.clone(),
@@ -116,7 +116,7 @@ impl VulkanRenderer {
             },
         )
         .expect("Vulkan: device initialization failed");
-    
+
         let queue = queues.next().unwrap();
 
         // Create a swapchain to manage frame buffers and vsync
@@ -253,7 +253,7 @@ impl VulkanRenderer {
     ) -> Result<(), String> {
         // make sure the framebuffers match the current window size
         self.prepare_swapchain(window);
-        
+
         if let Some((image_index, acquire_future)) = self.get_next_frame() {
             BACKEND.with_borrow_mut(|cell| {
                 let backend = cell.get_or_insert_with(||{ VulkanBackend::for_renderer(self) });
@@ -271,10 +271,10 @@ impl VulkanRenderer {
 
                 // pass the suface's canvas and dimensions to the user-provided callback
                 f(canvas, LogicalSize::from_physical(size, dpr));
-                
+
                 // display the result
                 backend.flush_framebuffer(self, image_index, acquire_future);
-            });    
+            });
         }
         Ok(())
     }
@@ -307,7 +307,7 @@ impl VulkanBackend{
             skia_ctx: unsafe {
                 let get_proc = |gpo| {
                     let get_device_proc_addr = instance.fns().v1_0.get_device_proc_addr;
-    
+
                     match gpo {
                         vk::GetProcOf::Instance(instance, name) => {
                             let vk_instance = ash::vk::Instance::from_raw(instance as _);
@@ -324,7 +324,7 @@ impl VulkanBackend{
                         ptr::null()
                     })
                 };
-    
+
                 let direct_context = direct_contexts::make_vulkan(
                     &vk::BackendContext::new(
                         instance.handle().as_raw() as _,
@@ -339,7 +339,7 @@ impl VulkanBackend{
                     None,
                 )
                 .expect("Vulkan: Failed to create Skia direct context");
-    
+
                 direct_context
             },
         }
@@ -352,7 +352,7 @@ impl VulkanBackend{
         let [width, height] = framebuffer.extent();
         let image_access = &framebuffer.attachments()[0];
         let image_object = image_access.image().handle().as_raw();
-    
+
         let format = image_access.format();
         let (vk_format, color_type) = match format {
             vulkano::format::Format::B8G8R8A8_UNORM => (
@@ -361,7 +361,7 @@ impl VulkanBackend{
             ),
             _ => panic!("Vulkan: unsupported color format {:?}", format),
         };
-    
+
         let image_info = &unsafe {
             vk::ImageInfo::new(
                 image_object as _,
@@ -376,12 +376,12 @@ impl VulkanBackend{
                 None,
             )
         };
-    
+
         let render_target = &backend_render_targets::make_vk(
             (width.try_into().unwrap(), height.try_into().unwrap()),
             image_info,
         );
-    
+
         surfaces::wrap_backend_render_target(
             &mut self.skia_ctx,
             render_target,
@@ -397,7 +397,7 @@ impl VulkanBackend{
         // flush the canvas's contents to the framebuffer
         self.skia_ctx.flush_and_submit();
         self.skia_ctx.free_gpu_resources();
-        
+
         // reclaim leftover resources from the last frame
         self.last_render.as_mut().unwrap().cleanup_finished();
 

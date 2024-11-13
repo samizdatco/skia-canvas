@@ -7,7 +7,7 @@ use std::iter::zip;
 use serde_json::Value;
 use std::cell::RefCell;
 use winit::{
-    event_loop::{ControlFlow, EventLoop, EventLoopProxy}, 
+    event_loop::{ControlFlow, EventLoop, EventLoopProxy},
     platform::run_on_demand::EventLoopExtRunOnDemand,
 };
 
@@ -54,14 +54,14 @@ fn validate_gpu(cx:&mut FunctionContext) -> Result<(), Throw>{
 
 pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let callback = cx.argument::<JsFunction>(1)?;
-    
+
     validate_gpu(&mut cx)?;
 
     // closure for using the callback to relay events to js and receive updates in return
     let roundtrip = |payload:Value, windows:&mut WindowManager| -> NeonResult<()>{
         let cx = &mut cx;
         let null = cx.null();
-        
+
         // send payload to js for event dispatch and canvas drawing then read back new state & page data
         let events = cx.string(payload.to_string()).upcast::<JsValue>();
         let response = callback.call(cx, null, vec![events])?
@@ -74,11 +74,11 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
             &response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx)
         ).expect("Malformed response from window event handler");
 
-        // pass each window's new state & page data to the window manager 
+        // pass each window's new state & page data to the window manager
         zip(contexts, specs).for_each(|(boxed_ctx, spec)| {
             if let Ok(ctx) = boxed_ctx.downcast::<BoxedContext2D, _>(cx){
                 windows.update_window(
-                    spec.clone(), 
+                    spec.clone(),
                     ctx.borrow().get_page()
                 )
             }

@@ -142,7 +142,7 @@ impl Filter {
                 image_filters::color_filter(color_table, chain, None)
               }else{
                 chain
-              }              
+              }
             },
             "opacity" => {
               let amt = value.clamp(0.0, 1.0);

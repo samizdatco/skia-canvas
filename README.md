@@ -18,8 +18,6 @@
 
 ---
 
-
-
 Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and, accordingly, produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
 
 While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas to take greater advantage of Skia's advanced graphical features and provide a more expressive coding environment.
@@ -43,8 +41,6 @@ In particular, Skia Canvas:
     - proportional [letter-spacing][letterSpacing], [word-spacing][wordSpacing], and [leading][c2d_font]
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
     - use of non-system fonts [loaded][fontlibrary-use] from local files
-
-
 
 ## Installation
 
@@ -116,8 +112,6 @@ For example, you can limit your asynchronous processing to two simultaneous task
 ```bash
 SKIA_CANVAS_THREADS=2 node my-canvas-script.js
 ```
-
-
 
 ## Example Usage
 
