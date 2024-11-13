@@ -1,6 +1,6 @@
 [package]
 name = "skia-canvas"
-version = "1.0.1"
+version = "1.1.0"
 description = "A canvas environment for Node"
 authors = ["Christian Swinehart <drafting@samizdat.co>"]
 license = "MIT"
@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 lto = "fat"
 
 [features]
+default=["vulkan","window"]
 metal = ["skia-safe/metal", "dep:metal", "dep:raw-window-handle", "dep:core-graphics-types", "dep:cocoa", "dep:objc"]
 vulkan = ["skia-safe/vulkan", "winit/rwh_05", "dep:ash", "dep:vulkano"]
 window = ["dep:winit"]
