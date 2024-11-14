@@ -3,7 +3,7 @@
 const _ = require('lodash'),
       fs = require('fs'),
       path = require('path'),
-      {Canvas, Image, FontLibrary, loadImage} = require('../lib'),
+      {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib'),
       simple = require('simple-get')
 
 jest.mock('simple-get', () => {
@@ -52,20 +52,6 @@ describe("Image", () => {
       expect(img).toMatchObject(LOADED)
     })
 
-    test("pixel buffer", () => {
-      const buffer = fs.readFileSync('test/assets/pentagon.raw');
-      let rawImage = new Image({
-        raw: {
-          width: 125,
-          height: 125,
-          colorType: 'rgba',
-        }
-      });
-
-      rawImage.src = buffer;
-      expect(rawImage).toMatchObject(LOADED);
-    })
-
     test("local file", () => {
       expect(img).toMatchObject(FRESH)
       img.src = PATH
@@ -99,15 +85,6 @@ describe("Image", () => {
 
       img = await loadImage(SVG_PATH)
       expect(img).toMatchObject(PARSED)
-
-      img = await loadImage(PATH.replace('.png', '.raw'), {
-        raw: {
-          width: 125,
-          height: 125,
-          colorType: 'rgba'
-        }
-      })
-      expect(img).toMatchObject(LOADED)
 
       expect(async () => { await loadImage('http://nonesuch') }).rejects.toEqual("HTTP_ERROR_404")
     })
@@ -151,21 +128,6 @@ describe("Image", () => {
       expect(img.complete).toEqual(true)
     })
 
-    test(".complete flag false with incorrect pixel buffer", () => {
-      const buffer = Buffer.alloc(10);
-      let rawImage = new Image({
-        raw: {
-          width: 60,
-          height: 60,
-          colorType: 'rgba',
-        }
-      })
-
-      rawImage.src = buffer
-
-      expect(rawImage.complete).toEqual(false)
-    })
-
     test(".onload callback", done => {
       // ensure that the fetch process can be overwritten while in flight
       img.onload = loaded => { throw Error("should not be called") }
@@ -181,24 +143,6 @@ describe("Image", () => {
         done()
       }
       img.src = 'http://nonesuch'
-    })
-
-    test(".onerror callback with incorrect image data", done => {
-      const buffer = fs.readFileSync('test/assets/pentagon.raw');
-      let rawImage = new Image({
-        raw: {
-          width: 700,
-          height: 700,
-          colorType: 'rgba',
-        }
-      })
-
-      rawImage.onerror = err => {
-        expect(err).toBeInstanceOf(Error)
-        done()
-      }
-
-      rawImage.src = buffer;
     })
 
     test(".decode promise", async () => {
@@ -275,6 +219,38 @@ describe("Image", () => {
   })
 })
 
+describe("ImageData", () => {
+  var FORMAT = 'test/assets/image/format.raw',
+      RGBA = {width:60, height:60, colorType:'rgba'},
+      BGRA = {width:60, height:60, colorType:'bgra'}
+
+  describe("can be initialized from", () => {
+    test("buffer", () => {
+      let buffer = fs.readFileSync(FORMAT)
+      let imgData = new ImageData(buffer, 60, 60)
+      expect(imgData).toMatchObject(RGBA)
+
+      expect(() => new ImageData(buffer, 60, 59))
+        .toThrow("ImageData dimensions must match buffer length")
+    })
+
+    test("loadImageData call", done => {
+      loadImageData(FORMAT, 60, 60).then(imgData => {
+        expect(imgData).toMatchObject(RGBA)
+        done()
+      })
+    })
+
+    test("canvas content", () => {
+      let canvas = new Canvas(60, 60),
+          ctx = canvas.getContext("2d")
+      let rgbaData = ctx.getImageData(0, 0, 60, 60)
+      expect(rgbaData).toMatchObject(RGBA)
+      let bgraData = ctx.getImageData(0, 0, 60, 60, {colorType:'bgra'})
+      expect(bgraData).toMatchObject(BGRA)
+    })
+  })
+})
 
 describe("FontLibrary", ()=>{
   let canvas, ctx,
