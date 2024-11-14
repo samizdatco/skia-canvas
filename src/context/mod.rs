@@ -28,6 +28,7 @@ use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
+use crate::image::ImageData;
 use page::{PageRecorder, Page};
 
 const BLACK:Color = Color::BLACK;
@@ -462,21 +463,18 @@ impl Context2D{
     self.get_page().get_picture(None)
   }
 
-  pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
+  pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, info:ImageInfo){
     let origin = origin.into();
-    let size = size.into();
-    let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
-
     if let Some(img) = self.get_image(){
       img.read_pixels(&info, buffer, info.min_row_bytes(), origin, CachingHint::Allow);
     }
   }
 
-  pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect){
+  pub fn blit_pixels(&mut self, image_data:ImageData, src_rect:&Rect, dst_rect:&Rect){
     // works just like draw_image in terms of src/dst rects, but clears the dst_rect and then draws
     // without clips, transforms, alpha, blend, or shadows
-    let data = Data::new_copy(buffer);
-    if let Some(bitmap) = images::raster_from_data(info, data, info.min_row_bytes()) {
+    let info = image_data.image_info();
+    if let Some(bitmap) = images::raster_from_data(&info, image_data.buffer, info.min_row_bytes()) {
       self.push(); // cache matrix & clip in self.state
       self.with_canvas(|canvas| {
         let paint = Paint::default();

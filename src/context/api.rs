@@ -803,9 +803,11 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let y = float_arg(&mut cx, 2, "y")? as i32;
   let width = float_arg(&mut cx, 3, "width")? as i32;
   let height = float_arg(&mut cx, 4, "height")? as i32;
+  let (color_type, color_space) = image_data_settings_arg(&mut cx, 5);
 
-  let mut buffer = cx.buffer(4 * (width * height) as usize)?;
-  this.get_pixels(buffer.as_mut_slice(&mut cx), (x, y), (width, height));
+  let info = ImageInfo::new((width as _, height as _), color_type, AlphaType::Unpremul, color_space);
+  let mut buffer = cx.buffer(info.bytes_per_pixel() * (width * height) as usize)?;
+  this.get_pixels(buffer.as_mut_slice(&mut cx), (x, y), info);
 
   Ok(buffer)
 }
@@ -813,11 +815,9 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
 pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let img_data = cx.argument::<JsObject>(1)?;
+  let img_data = image_data_arg(&mut cx, 1)?;
 
   // determine geometry
-  let width = float_for_key(&mut cx, &img_data, "width")?;
-  let height = float_for_key(&mut cx, &img_data, "height")?;
   let x = float_arg(&mut cx, 2, "x")?;
   let y = float_arg(&mut cx, 3, "y")?;
   let mut dirty = opt_float_args(&mut cx, 4..8);
@@ -831,19 +831,11 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       (Rect::from_xywh(*dx, *dy, *dw, *dh), Rect::from_xywh(*dx + x, *dy + y, *dw, *dh))
     },
     _ => (
-      Rect::from_xywh(0.0, 0.0, width, height),
-      Rect::from_xywh(x, y, width, height)
+      Rect::from_xywh(0.0, 0.0, img_data.width, img_data.height),
+      Rect::from_xywh(x, y, img_data.width, img_data.height)
   )};
 
-  let buffer: Handle<JsBuffer> = img_data.get(&mut cx, "data")?;
-  let info = ImageInfo::new(
-    (width as i32, height as i32),
-    ColorType::RGBA8888,
-    AlphaType::Unpremul,
-    None
-  );
-
-  this.blit_pixels(buffer.as_slice(&cx), &info, &src, &dst);
+  this.blit_pixels(img_data, &src, &dst);
   Ok(cx.undefined())
 }
 

@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{
-  Image as SkImage, ImageInfo, ISize, ColorType, AlphaType, Data, Size,
+  Image as SkImage, ImageInfo, ISize, ColorType, ColorSpace, AlphaType, Data, Size,
   FontMgr, Picture, PictureRecorder, Rect, image::images, svg,
   wrapper::PointerWrapper // for SVG Dom access, temporary until next skia-safe update
 };
@@ -104,6 +104,34 @@ impl Content{
     (src, dst)
   }
 }
+
+
+pub struct ImageData{
+  pub width: f32,
+  pub height: f32,
+  pub buffer: Data,
+  color_type: ColorType,
+  color_space: ColorSpace,
+}
+
+impl ImageData{
+  pub fn new(buffer:Data, width:f32, height:f32, color_type:String, color_space:String) -> Self{
+    let color_type = to_color_type(&color_type);
+    let color_space = to_color_space(&color_space);
+    Self{ buffer, width, height, color_type, color_space }
+  }
+
+  pub fn image_info(&self) -> ImageInfo{
+    ImageInfo::new(
+      (self.width as _, self.height as _),
+      self.color_type,
+      AlphaType::Unpremul,
+      self.color_space.clone()
+    )
+  }
+}
+
+
 
 //
 // -- Javascript Methods --------------------------------------------------------------------------
@@ -244,3 +272,4 @@ fn map_color_type(color_type: &str) -> ColorType {
     _ => ColorType::RGBA8888,
   }
 }
+
