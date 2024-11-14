@@ -144,7 +144,7 @@ impl Page{
         "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
         "png"          => Some(EncodedImageFormat::PNG),
         "webp"         => Some(EncodedImageFormat::WEBP),
-        "raw"          => Some(EncodedImageFormat::BMP),
+        "raw"          => Some(EncodedImageFormat::BMP), // just use BMP as a flag, don't actually encode
         _ => None
       };
 
