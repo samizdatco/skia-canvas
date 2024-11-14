@@ -87,6 +87,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- CanvasPattern -----------------------------------------------------------------------------
 
   cx.export_function("CanvasPattern_from_image", pattern::from_image)?;
+  cx.export_function("CanvasPattern_from_image_data", pattern::from_image_data)?;
   cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
   cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
   cx.export_function("CanvasPattern_repr", pattern::repr)?;

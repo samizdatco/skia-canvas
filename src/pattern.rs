@@ -86,6 +86,27 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   }
 }
 
+pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
+  let src = image_data_arg(&mut cx, 1)?;
+  let repetition = if cx.len() > 2 && cx.argument::<JsValue>(2)?.is_a::<JsNull, _>(&mut cx){
+    "".to_string() // null is a valid synonym for "repeat" (as is "")
+  }else{
+    string_arg(&mut cx, 2, "repetition")?
+  };
+
+  if let Some(repeat) = to_repeat_mode(&repetition){
+    let content = Content::from_image_data(src);
+    let dims:Size = content.size().into();
+    let mut matrix = Matrix::new_identity();
+    let stamp = Arc::new(Mutex::new(Stamp{
+      content, dims, repeat, matrix
+    }));
+    Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
+  }else{
+    cx.throw_error("Unknown pattern repeat style")
+  }
+}
+
 pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let src = cx.argument::<BoxedContext2D>(1)?;
   let repetition = if cx.len() > 2 && cx.argument::<JsValue>(2)?.is_a::<JsNull, _>(&mut cx){
