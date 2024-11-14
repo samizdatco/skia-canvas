@@ -599,7 +599,10 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let matte = opt_color_for_key(cx, &opts, "matte");
   let msaa = opt_float_for_key(cx, &opts, "msaa")
     .map(|num| num.floor() as usize);
-  Ok(ExportOptions{ format, quality, density, outline, matte, msaa })
+  let color_type = opt_string_for_key(cx, &opts, "colorType")
+    .map(|mode| to_color_type(&mode)).unwrap_or(ColorType::RGBA8888);
+
+  Ok(ExportOptions{ format, quality, density, outline, matte, msaa, color_type})
 }
 
 //

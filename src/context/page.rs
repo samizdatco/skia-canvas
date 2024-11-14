@@ -2,7 +2,12 @@ use std::fs;
 use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
-use skia_safe::{image::BitDepth, images, pdf, svg::{self, canvas::Flags, Canvas}, Canvas as SkCanvas, ClipOp, Color, ColorSpace, Data, Document, EncodedImageFormat, Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, Size};
+use skia_safe::{
+  image::BitDepth, images, pdf,
+  svg::{self, canvas::Flags, Canvas},
+  Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Data, Document,
+  Image as SkImage, ImageInfo, EncodedImageFormat, Matrix, Path, Picture, PictureRecorder, Rect, Size,
+};
 
 use crc::{Crc, CRC_32_ISO_HDLC};
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
@@ -128,7 +133,7 @@ impl Page{
   }
 
   pub fn encoded_as(&self, options:ExportOptions, engine:RenderingEngine) -> Result<Data, String> {
-    let ExportOptions{ format, quality, density, outline, matte, msaa } = options;
+    let ExportOptions{ format, quality, density, outline, matte, msaa, color_type } = options;
 
     let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
     if self.bounds.is_empty(){
@@ -139,6 +144,7 @@ impl Page{
         "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
         "png"          => Some(EncodedImageFormat::PNG),
         "webp"         => Some(EncodedImageFormat::WEBP),
+        "raw"          => Some(EncodedImageFormat::BMP),
         _ => None
       };
 
@@ -153,11 +159,21 @@ impl Page{
             .set_matrix(&img_scale.into())
             .draw_picture(&picture, None, None);
 
-          surface // generate bitmap in specified format
-            .image_snapshot()
-            .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
-            .map(|data| with_dpi(data, img_format, density))
-            .ok_or(format!("Could not encode as {}", format))
+          if format=="raw"{
+            // copy raw pixels to buffer, then copy again to Data (waiting for skia_safe to implement Data.writable_data)
+            let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
+            let mut buffer: Vec<u8> = vec![0; dst_info.bytes_per_pixel() * (img_dims.width * img_dims.height) as usize];
+            match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
+              true => Ok(Data::new_copy(&buffer)),
+              false => Err(format!("Could not encode as {} ({:?})", format, color_type))
+            }
+          }else{
+            surface // generate bitmap in specified format
+              .image_snapshot()
+              .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
+              .map(|data| with_dpi(data, img_format, density))
+              .ok_or(format!("Could not encode as {}", format))
+          }
         })
       }else if format == "pdf"{
         let mut pdf_bytes = Vec::new();
@@ -328,4 +344,5 @@ pub struct ExportOptions{
   pub outline: bool,
   pub matte: Option<Color>,
   pub msaa: Option<usize>,
+  pub color_type: ColorType
 }
