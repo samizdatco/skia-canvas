@@ -133,7 +133,11 @@ describe("Image", () => {
       img.onload = loaded => { throw Error("should not be called") }
       img.src = URL
 
-      img.onload = loaded => done()
+      img.onload = function(){
+        // confirm that `this` is set correctly
+        expect(this).toBe(img)
+        done()
+      }
       img.src = 'http://test/assets/globe.jpg'
     })
 
