@@ -26,17 +26,17 @@ interface ImageDataSettings {
   colorSpace?: ColorSpace
   colorType?: ColorType
 }
-interface ImageData {
+
+export class ImageData {
+  prototype: ImageData
+  constructor(sw: number, sh: number, settings?: ImageDataSettings)
+  constructor(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
+
   readonly colorSpace: ColorSpace
   readonly colorType: ColorType
   readonly data: Uint8ClampedArray
   readonly height: number
   readonly width: number
-}
-declare var ImageData: {
-  prototype: ImageData
-  new(sw: number, sh: number, settings?: ImageDataSettings): ImageData
-  new(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings): ImageData
 }
 
 export class Image {
