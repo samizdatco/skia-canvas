@@ -727,6 +727,8 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       img.borrow().content.clone()
     }else if let Ok(ctx) = source.downcast::<BoxedContext2D, _>(&mut cx){
       Content::from_context(&mut ctx.borrow_mut(), false)
+    }else if let Ok(image_data) = image_data_arg(&mut cx, 1){
+      Content::from_image_data(image_data)
     }else{
       Content::default()
     }

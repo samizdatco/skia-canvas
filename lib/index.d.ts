@@ -204,12 +204,13 @@ export interface CreateTextureOptions {
   offset?: Offset
 }
 
-export type CanvasImageSource = Canvas | Image;
+export type CanvasPatternSource = Canvas | Image;
+export type CanvasDrawable = Canvas | Image | ImageData;
 
 interface CanvasDrawImage {
-  drawImage(image: CanvasImageSource, dx: number, dy: number): void;
-  drawImage(image: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
-  drawImage(image: CanvasImageSource, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+  drawImage(image: CanvasDrawable, dx: number, dy: number): void;
+  drawImage(image: CanvasDrawable, dx: number, dy: number, dw: number, dh: number): void;
+  drawImage(image: CanvasDrawable, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
   drawCanvas(image: Canvas, dx: number, dy: number): void;
   drawCanvas(image: Canvas, dx: number, dy: number, dw: number, dh: number): void;
   drawCanvas(image: Canvas, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
@@ -221,7 +222,7 @@ interface CanvasFillStrokeStyles {
   createConicGradient(startAngle: number, x: number, y: number): CanvasGradient;
   createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradient;
   createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
-  createPattern(image: CanvasImageSource, repetition: string | null): CanvasPattern | null;
+  createPattern(image: CanvasPatternSource, repetition: string | null): CanvasPattern | null;
   createTexture(spacing: Offset, options?: CreateTextureOptions): CanvasTexture
 }
 
