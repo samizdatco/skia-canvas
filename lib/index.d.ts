@@ -39,7 +39,7 @@ export class ImageData {
   readonly width: number
 }
 
-export class Image {
+export class Image extends EventEmitter {
   constructor()
   get src(): string
   set src(src: string | Buffer)
