@@ -40,9 +40,10 @@ describe("Image", () => {
   beforeEach(() => img = new Image() )
 
   describe("can initialize bitmaps from", () => {
-    test("buffer", () => {
+    test("buffer", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = BUFFER
+      await img.decode()
       expect(img).toMatchObject(LOADED)
     })
 
@@ -52,9 +53,10 @@ describe("Image", () => {
       expect(img).toMatchObject(LOADED)
     })
 
-    test("local file", () => {
+    test("local file", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = PATH
+      await img.decode()
       expect(img).toMatchObject(LOADED)
     })
 
@@ -91,21 +93,24 @@ describe("Image", () => {
   })
 
   describe("can initialize SVGs from", () => {
-    test("buffer", () => {
+    test("buffer", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = SVG_BUFFER
+      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
 
-    test("data uri", () => {
+    test("data uri", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = SVG_DATA_URI
+      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
 
-    test("local file", () => {
+    test("local file", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = SVG_PATH
+      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
 
@@ -121,10 +126,11 @@ describe("Image", () => {
   })
 
   describe("sends notifications through", () => {
-    test(".complete flag", () => {
+    test(".complete flag", async () => {
       expect(img.complete).toEqual(false)
 
       img.src = PATH
+      await img.decode()
       expect(img.complete).toEqual(true)
     })
 
@@ -174,50 +180,57 @@ describe("Image", () => {
       return `data:${mime};base64,${content}`
     }
 
-    test("PNG", () => {
+    test("PNG", async () => {
       img.src = FORMAT + '.png'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("JPEG", () => {
+    test("JPEG", async () => {
       img.src = FORMAT + '.jpg'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("GIF", () => {
+    test("GIF", async () => {
       img.src = FORMAT + '.gif'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("BMP", () => {
+    test("BMP", async () => {
       img.src = FORMAT + '.bmp'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("ICO", () => {
+    test("ICO", async () => {
       img.src = FORMAT + '.ico'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("WEBP", () => {
+    test("WEBP", async () => {
       img.src = FORMAT + '.webp'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("SVG", () => {
+    test("SVG", async () => {
       img.src = FORMAT + '.svg'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
   })
