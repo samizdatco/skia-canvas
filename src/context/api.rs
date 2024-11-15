@@ -800,16 +800,18 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-  let x = float_arg(&mut cx, 1, "x")? as i32;
-  let y = float_arg(&mut cx, 2, "y")? as i32;
-  let width = float_arg(&mut cx, 3, "width")? as i32;
-  let height = float_arg(&mut cx, 4, "height")? as i32;
-  let (color_type, color_space) = image_data_settings_arg(&mut cx, 5);
+  let parent = cx.argument::<BoxedCanvas>(1)?;
+  let engine = parent.borrow_mut().engine();
+
+  let x = float_arg(&mut cx, 2, "x")? as i32;
+  let y = float_arg(&mut cx, 3, "y")? as i32;
+  let width = float_arg(&mut cx, 4, "width")? as i32;
+  let height = float_arg(&mut cx, 5, "height")? as i32;
+  let (color_type, color_space) = image_data_settings_arg(&mut cx, 6);
 
   let info = ImageInfo::new((width as _, height as _), color_type, AlphaType::Unpremul, color_space);
-  let mut buffer = cx.buffer(info.bytes_per_pixel() * (width * height) as usize)?;
-  this.get_pixels(buffer.as_mut_slice(&mut cx), (x, y), info);
+  let data = this.borrow_mut().get_pixels((x, y), info, engine).or_else(|e| cx.throw_error(format!("get_pixels failed: {}", e)))?;
+  let buffer = JsBuffer::from_slice(&mut cx, data.as_bytes())?;
 
   Ok(buffer)
 }

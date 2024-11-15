@@ -29,6 +29,7 @@ use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
 use crate::image::ImageData;
+use crate::gpu::RenderingEngine;
 use page::{PageRecorder, Page};
 
 const BLACK:Color = Color::BLACK;
@@ -196,8 +197,7 @@ impl Context2D{
   pub fn with_recorder<F>(&self, f:F)
     where F:FnOnce(MutexGuard<PageRecorder>)
   {
-    let recorder = Arc::clone(&self.recorder);
-    let recorder = recorder.lock().unwrap();
+    let recorder = self.recorder.lock().unwrap();
     f(recorder);
   }
 
@@ -448,26 +448,19 @@ impl Context2D{
   }
 
   pub fn get_page(&self) -> Page {
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    recorder.get_page()
+    self.recorder.lock().unwrap().get_page()
   }
 
   pub fn get_image(&self) -> Option<Image> {
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    recorder.get_image()
+    self.recorder.lock().unwrap().get_image()
   }
 
   pub fn get_picture(&mut self) -> Option<Picture> {
-    self.get_page().get_picture(None)
+    self.recorder.lock().unwrap().get_page().get_picture(None)
   }
 
-  pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, info:ImageInfo){
-    let origin = origin.into();
-    if let Some(img) = self.get_image(){
-      img.read_pixels(&info, buffer, info.min_row_bytes(), origin, CachingHint::Allow);
-    }
+  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, info:ImageInfo, engine:RenderingEngine) -> Result<Data, String>{
+    self.recorder.lock().unwrap().get_pixels(origin, &info, engine)
   }
 
   pub fn blit_pixels(&mut self, image_data:ImageData, src_rect:&Rect, dst_rect:&Rect){

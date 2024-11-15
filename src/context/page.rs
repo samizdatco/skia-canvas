@@ -3,10 +3,11 @@ use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
-  image::BitDepth, images, pdf,
+  image::{BitDepth, CachingHint}, images, pdf,
   svg::{self, canvas::Flags, Canvas},
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Data, Document,
   Image as SkImage, ImageInfo, EncodedImageFormat, Matrix, Path, Picture, PictureRecorder, Rect, Size,
+  IPoint,
 };
 
 use crc::{Crc, CRC_32_ISO_HDLC};
@@ -76,6 +77,24 @@ impl PageRecorder{
       }
       canvas.set_matrix(&self.matrix.into());
     }
+  }
+
+  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, dst_info:&ImageInfo, engine:RenderingEngine) -> Result<Data, String>{
+    let src_info = ImageInfo::new_n32_premul(self.bounds.size().to_floor(), dst_info.color_space());
+    let image = self.get_image().ok_or("Could not render bitmap")?; // use the cached bitmap if available
+
+    engine.with_surface(&src_info, Some(0), |surface|{
+      surface // draw to (potentially gpu-backed) rasterizer
+        .canvas()
+        .draw_image(image, -origin.into(), None);
+
+      // copy pixels into buffer (and convert to requested color_type)
+      let mut buffer: Vec<u8> = vec![0; dst_info.bytes_per_pixel() * (dst_info.width() * dst_info.height()) as usize];
+      match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
+        true => Ok(Data::new_copy(&buffer)),
+        false => Err(format!("Could get pixels in format: {:?}", dst_info.color_type()))
+      }
+    })
   }
 
   pub fn get_page(&mut self) -> Page{
