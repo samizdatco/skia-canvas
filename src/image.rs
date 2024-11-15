@@ -31,7 +31,8 @@ impl Default for Image{
 pub enum Content{
   Bitmap(SkImage),
   Vector(Picture),
-  Loading
+  Loading,
+  Broken,
 }
 
 impl Default for Content{
@@ -73,9 +74,16 @@ impl Content{
     }
   }
 
-  pub fn is_drawable(&self) -> bool {
+  pub fn is_complete(&self) -> bool {
     match &self{
       Content::Loading => false,
+      _ => true
+    }
+  }
+
+  pub fn is_drawable(&self) -> bool {
+    match &self{
+      Content::Loading | Content::Broken => false,
       _ => true
     }
   }
@@ -219,6 +227,8 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
     if let Some(picture) = compositor.finish_recording_as_picture(Some(&bounds)){
       this.content = Content::Vector(picture);
     }
+  }else{
+    this.content = Content::Broken
   }
 
   Ok(cx.boolean(this.content.is_drawable()))
@@ -239,5 +249,5 @@ pub fn get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-  Ok(cx.boolean(this.content.is_drawable()))
+  Ok(cx.boolean(this.content.is_complete()))
 }
