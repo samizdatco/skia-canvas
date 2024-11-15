@@ -3,8 +3,8 @@ use std::path::Path as FilePath;
 use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
-  image::{BitDepth, CachingHint}, images, pdf,
-  svg::{self, canvas::Flags, Canvas},
+  image::BitDepth, images, pdf,
+  svg::{self, canvas::Flags},
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Data, Document,
   Image as SkImage, ImageInfo, EncodedImageFormat, Matrix, Path, Picture, PictureRecorder, Rect, Size,
   IPoint,
@@ -15,7 +15,7 @@ const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 
 use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
-use crate::gpu::{self, RenderingEngine};
+use crate::gpu::RenderingEngine;
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -203,7 +203,7 @@ impl Page{
         Ok(Data::new_copy(&pdf_bytes))
       }else if format == "svg"{
         let flags = outline.then_some(Flags::CONVERT_TEXT_TO_PATHS);
-        let mut canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
+        let canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end())
       }else{
@@ -260,10 +260,10 @@ impl PageSequence{
   pub fn as_pdf(&self, options:ExportOptions) -> Result<Data, String>{
     let ExportOptions{ quality, density, matte, .. } = options;
     let mut pdf_bytes = Vec::new();
-    let pdf = self.pages
+    self.pages
       .iter()
       .try_fold(pdf_document(&mut pdf_bytes, quality, density), |doc, page| page.append_to(doc, matte))
-      .map(|doc| doc.close());
+      .map(|doc| doc.close())?;
     Ok(Data::new_copy(&pdf_bytes))
   }
 

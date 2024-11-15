@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use std::cell::RefCell;
-use neon::{prelude::*, types::buffer::TypedArray};
+use neon::prelude::*;
 
 use crate::utils::*;
 use crate::context::page::pages_arg;
@@ -107,8 +107,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
 
     deferred.settle_with(&channel, move |mut cx| {
       let data = result.or_else(|err| cx.throw_error(err))?;
-      let mut buffer = cx.buffer(data.len())?;
-      buffer.as_mut_slice(&mut cx).copy_from_slice(&data);
+      let buffer = JsBuffer::from_slice(&mut cx, data.as_bytes())?;
       Ok(buffer)
     });
   });
@@ -131,8 +130,7 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 
   match encoded{
     Ok(data) => {
-      let mut buffer = cx.buffer(data.len())?;
-      buffer.as_mut_slice(&mut cx).copy_from_slice(&data);
+      let buffer = JsBuffer::from_slice(&mut cx, data.as_bytes())?;
       Ok(buffer.upcast::<JsValue>())
     },
     Err(msg) => cx.throw_error(msg)

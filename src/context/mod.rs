@@ -1,4 +1,3 @@
-#![allow(unused_mut)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
@@ -6,15 +5,15 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
 use skia_safe::{
-  Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo, Contains,
-  Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType, ColorSpace, Data,
-  PaintStyle, BlendMode, AlphaType, ClipOp, PictureRecorder, Picture, Drawable,
-  image::CachingHint, images, image_filters, dash_path_effect, path_1d_path_effect,
+  Canvas as SkCanvas, Paint, Path, PathOp, Image, ImageInfo, Contains,
+  Rect, Point, IPoint, Size, Color, Color4f, ColorSpace, Data,
+  PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture,
+  images, image_filters, dash_path_effect, path_1d_path_effect,
   matrix::{ Matrix, TypeMask },
   textlayout::{ParagraphStyle, TextStyle},
   canvas::SrcRectConstraint::Strict,
   path_utils::fill_path_with_paint,
-  font_style::{FontStyle, Weight, Width, Slant},
+  font_style::{FontStyle, Width},
   path::FillType,
 };
 
@@ -481,9 +480,9 @@ impl Context2D{
     }
   }
 
-  pub fn set_font(&mut self, mut spec: FontSpec){
+  pub fn set_font(&mut self, spec: FontSpec){
     let mut library = FONT_LIBRARY.lock().unwrap();
-    if let Some(mut new_style) = library.update_style(&self.state.char_style, &spec){
+    if let Some(new_style) = library.update_style(&self.state.char_style, &spec){
       self.state.font = spec.canonical;
       self.state.font_variant = spec.variant.to_string();
       self.state.font_width = spec.width;
