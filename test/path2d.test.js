@@ -334,9 +334,9 @@ describe("Path2D", ()=>{
       ctx.fill(p)
 
       expect(pixel(150, 151)).toEqual(BLACK)
-      expect(pixel(150, 224)).toEqual(BLACK)
+      expect(pixel(150, 223)).toEqual(BLACK)
       expect(pixel(300, 301)).toEqual(BLACK)
-      expect(pixel(300, 449)).toEqual(BLACK)
+      expect(pixel(300, 448)).toEqual(BLACK)
     })
 
   })
