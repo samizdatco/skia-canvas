@@ -251,3 +251,23 @@ pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = this.borrow();
   Ok(cx.boolean(this.content.is_complete()))
 }
+
+pub fn pixels(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let this = cx.argument::<BoxedImage>(0)?;
+  let mut this = this.borrow_mut();
+  let (color_type, color_space) = image_data_settings_arg(&mut cx, 1);
+
+  let info = ImageInfo::new(this.content.size().to_floor(), color_type, AlphaType::Unpremul, color_space);
+  let mut pixels = cx.buffer(info.bytes_per_pixel() * (info.width() * info.height()) as usize)?;
+
+  match &this.content{
+    Content::Bitmap(image) => {
+      match image.read_pixels(&info, pixels.as_mut_slice(&mut cx), info.min_row_bytes(), (0,0), skia_safe::image::CachingHint::Allow){
+        true => Ok(pixels.upcast()),
+        false => Ok(cx.undefined().upcast())
+      }
+
+    }
+    _ => Ok(cx.undefined().upcast())
+  }
+}
