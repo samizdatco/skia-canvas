@@ -1,5 +1,5 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{ImageInfo, Data, Surface, surfaces};
+use skia_safe::{ImageInfo, Surface, surfaces};
 use serde_json::Value;
 
 #[cfg(feature = "metal")]
@@ -22,8 +22,8 @@ struct Engine { }
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 impl Engine {
     pub fn supported() -> bool { false }
-    pub fn with_surface<F>(_: &ImageInfo, _:Option<usize>, _:F)  -> Result<Data, String>
-        where F:FnOnce(&mut Surface) -> Result<Data, String>
+    pub fn with_surface<T, F>(_: &ImageInfo, _:Option<usize>, _:F)  -> Result<T, String>
+        where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         Err("Compiled without GPU support".to_string())
     }
@@ -56,8 +56,8 @@ impl RenderingEngine{
         }
     }
 
-    pub fn with_surface<F>(&self, image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<Data, String>
-        where F:FnOnce(&mut Surface) -> Result<Data, String>
+    pub fn with_surface<T,F>(&self, image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<T, String>
+        where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match self {
             Self::GPU => Engine::with_surface(image_info, msaa, f),

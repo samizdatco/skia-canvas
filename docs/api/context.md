@@ -3,22 +3,22 @@ description: The drawing API for a particular Canvas
 ---
 # CanvasRenderingContext2D
 
-Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
+> Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
-| Canvas State                           | Drawing                                      | Pattern & Color                                  | Line Style                              | Transform                                         | Bezier Paths                             | Typography                                           | Images                                             | Compositing Effects                                      |
-|----------------------------------------|----------------------------------------------|--------------------------------------------------|-----------------------------------------|---------------------------------------------------|------------------------------------------|------------------------------------------------------|----------------------------------------------------|----------------------------------------------------------|
-| [**canvas**][canvas_attr] [🧪][canvas] | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**direction**][direction]                           | [**imageSmoothingEnabled**][imageSmoothingEnabled] | [**filter**][filter]                                     |
-| [beginPath()][beginPath()]             | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                   | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]       | [lineTo()][lineTo()]                     | [**font**][font] [🧪][c2d_font]                      | [**imageSmoothingQuality**][imageSmoothingQuality] | [**globalAlpha**][globalAlpha]                           |
-| [closePath()][closePath()]             | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]   | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontVariant** 🧪][fontvariant]                    | [createImageData()][createImageData()]             | [**globalCompositeOperation**][globalCompositeOperation] |
-| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[🧪][drawText]     | [createLinearGradient()][createLinearGradient()] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]⧸[🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontStretch**][fontStretch]                       | [getImageData()][getImageData()]                   | [**shadowBlur**][shadowBlur]                             |
-| [isPointInStroke()][isPointInStroke()] | [strokeText()][strokeText()] ⧸[🧪][drawText] | [createRadialGradient()][createRadialGradient()] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**letterSpacing**][letterSpacing]                   | [putImageData()][putImageData()]                   | [**shadowColor**][shadowColor]                           |
-| [save()][save()]                       | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**wordSpacing**][wordSpacing]                       | [drawCanvas() 🧪][drawcanvas]                      | [**shadowOffsetX**][shadowOffsetX]                       |
-| [restore()][restore()]                 | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**textAlign**][textAlign]                           | [drawImage()][drawImage()]                         | [**shadowOffsetY**][shadowOffsetY]                       |
-| [reset()][reset()]                     |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                     |                                                    |                                                          |
-| [clip()][clip()]                       |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**textDecoration** 🧪][textDecoration]              |                                                    |                                                          |
-|                                        |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [**textWrap** 🧪][textwrap]                          |                                                    |                                                          |
-|                                        |                                              |                                                  |                                         |                                                   |                                          | [measureText()][measureText()] [🧪][c2d_measuretext] |                                                    |                                                          |
-|                                        |                                              |                                                  |                                         |                                                   |                                          | [outlineText() 🧪][outlineText()]                    |                                                    |                                                          |
+| Canvas State                           | Drawing                                      | Pattern & Color                                  | Line Style                              | Transform                                         | Bezier Paths                             | Typography                                           | Images                                                       | Compositing Effects                                      |
+|----------------------------------------|----------------------------------------------|--------------------------------------------------|-----------------------------------------|---------------------------------------------------|------------------------------------------|------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------|
+| [**canvas**][canvas_attr] [🧪][canvas] | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**direction**][direction]                           | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
+| [beginPath()][beginPath()]             | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                   | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]       | [lineTo()][lineTo()]                     | [**font**][font] [🧪][c2d_font]                      | [**imageSmoothingQuality**][imageSmoothingQuality]           | [**globalAlpha**][globalAlpha]                           |
+| [closePath()][closePath()]             | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]   | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontVariant** 🧪][fontvariant]                    | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
+| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[🧪][drawText]     | [createLinearGradient()][createLinearGradient()] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]⧸[🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontStretch**][fontStretch]                       | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
+| [isPointInStroke()][isPointInStroke()] | [strokeText()][strokeText()] ⧸[🧪][drawText] | [createRadialGradient()][createRadialGradient()] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**letterSpacing**][letterSpacing]                   | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
+| [save()][save()]                       | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**wordSpacing**][wordSpacing]                       | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
+| [restore()][restore()]                 | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**textAlign**][textAlign]                           | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
+| [reset()][reset()]                     |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                     |                                                              |                                                          |
+| [clip()][clip()]                       |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**textDecoration** 🧪][textDecoration]              |                                                              |                                                          |
+|                                        |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [**textWrap** 🧪][textwrap]                          |                                                              |                                                          |
+|                                        |                                              |                                                  |                                         |                                                   |                                          | [measureText()][measureText()] [🧪][c2d_measuretext] |                                                              |                                                          |
+|                                        |                                              |                                                  |                                         |                                                   |                                          | [outlineText() 🧪][outlineText()]                    |                                                              |                                                          |
 
 
 ## Properties
@@ -230,6 +230,36 @@ The rectangle defined by the `spacing` argument will be aligned with the canvas�
 #### `offset`
 As with `CanvasPattern` objects, textures are positioned globally relative to the upper left corner of the canvas—not the corner of the object currently being filled or stroked. To fine-tune the texture’s alignment with individual objects, set the `offset` argument to an `[x, y]` array with two numbers that will shift the texture relative to its origin.
 
+### `drawImage()`
+```js
+drawImage(img, x, y)
+drawImage(img, x, y, width, height)
+drawImage(img, srcX, srcY, srcWidth, srcHeight, x, y, width, height)
+```
+
+This method behaves identically to the standard [`drawImage()`][drawImage()] function, but accepts ImageData objects as well as Image and Canvas objects as its first argument.
+
+:::info[Note]
+Image objects loaded from SVG files that don't have an [intrinsic size][img_size] have some behavioral quirks to keep in mind when drawing:
+- When passed to `drawImage()` without size arguments, the SVG will be scaled to a size that fits within the Canvas's current bounds (using an approach akin to CSS's `object-fit: contain`).
+- When using the 9-argument version of `drawImage()`, the ‘crop’ arguments (`srcX`, `srcY`, `srcWidth`, & `srcHeight`) will correspond to this scaled-to-fit size, *not* the Image's reported `width` & `height`.
+:::
+
+
+### `createImageData()` & `getImageData()`
+```js returns="ImageData"
+createImageData(width, height)
+createImageData(width, height, {colorType="rgba", colorSpace="srgb"})
+createImageData(imagedata)
+
+getImageData(sx, sy, sw, sh)
+getImageData(sx, sy, sw, sh, {colorType="rgba", colorSpace="srgb"})
+```
+
+These methods behave identically to the standard [createImageData()][createImageData()] and [getImageData()][getImageData()] methods but have been extended to also accept an optional `colorType` value in their settings argument. The `colorType` defines the arrangement of individual color components in the ImageData's pixel array. If omitted, the type will default to `"rgba"`, but any of the [supported color types][imgdata_colortype] can be specified instead.
+
+The `colorSpace` argument is currently unused since non-sRGB colorspaces are not yet supported. You may omit it from your calls to these methods.
+
 ### `drawCanvas()`
 ```js
 drawCanvas(canvas, x, y)
@@ -251,6 +281,7 @@ dstCtx.drawImage(src, 0, 0, 150, 150)
 dstCtx.drawCanvas(src, 200, 0, 150, 150)
 ```
 ![drawCanvas preserves resolution-independence](../assets/drawCanvas@2x.png)
+
 
 ### `fillText()` & `strokeText()`
 ```js
@@ -315,11 +346,15 @@ for (let i=0; i<8000; i++){
 [createTexture()]: #createtexture
 [drawText]: #filltext--stroketext
 [drawcanvas]: #drawcanvas
+[drawimage]: #drawimage
 [fontvariant]: #fontvariant
 [lineDashFit]: #linedashfit
 [lineDashMarker]: #linedashmarker
 [newPage]: canvas.md#newpage
 [outlineText()]: #outlinetext
+[img_size]: image.md#width--height
+[imgdata_colortype]: imagedata.md#colortype
+[ctx_imagedata]: #createimagedata--getimagedata
 [p2d_offset]: path2d.md#offset
 [p2d_transform]: path2d.md#transform
 [textDecoration]: #textdecoration

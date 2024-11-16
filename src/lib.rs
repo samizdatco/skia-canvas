@@ -43,6 +43,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Image_get_width", image::get_width)?;
   cx.export_function("Image_get_height", image::get_height)?;
   cx.export_function("Image_get_complete", image::get_complete)?;
+  cx.export_function("Image_pixels", image::pixels)?;
 
   // -- Path2D ------------------------------------------------------------------------------------
 
@@ -87,6 +88,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- CanvasPattern -----------------------------------------------------------------------------
 
   cx.export_function("CanvasPattern_from_image", pattern::from_image)?;
+  cx.export_function("CanvasPattern_from_image_data", pattern::from_image_data)?;
   cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
   cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
   cx.export_function("CanvasPattern_repr", pattern::repr)?;

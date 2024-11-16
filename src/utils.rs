@@ -6,7 +6,7 @@ use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
 use css_color::Rgba;
-use skia_safe::{ Path, Matrix, Point, Color, RGB };
+use skia_safe::{ Path, Matrix, Point, Color, RGB, Data };
 
 
 //
@@ -86,7 +86,12 @@ pub fn opt_object_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize) -> Option<Han
   }
 }
 
-
+pub fn object_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize, attr:&str) -> NeonResult<Handle<'a, JsObject>>{
+  match opt_object_arg(cx, idx){
+    Some(val) => Ok(val),
+    None => cx.throw_type_error(format!("Exptected an object for \"{}\"", attr))
+  }
+}
 
 pub fn opt_object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsObject>, attr:&str) -> Option<Handle<'a, JsObject>>{
   let key = cx.string(attr);
@@ -94,6 +99,13 @@ pub fn opt_object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsO
     return val.downcast::<JsObject, _>(cx).ok()
   }
   None
+}
+
+pub fn object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsObject>, attr:&str) -> NeonResult<Handle<'a, JsObject>>{
+  match opt_object_for_key(cx, &obj, attr){
+    Some(val) => Ok(val),
+    None => cx.throw_type_error(format!("Exptected an object for \"{}\"", attr))
+  }
 }
 
 //
@@ -115,6 +127,13 @@ pub fn strings_at_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&st
   let array:Handle<JsArray> = obj.get(cx, attr)?;
   let list = array.to_vec(cx)?;
   Ok(strings_in(cx, &list))
+}
+
+pub fn opt_string_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<String>{
+  let key = cx.string(attr);
+  obj.get(cx, key).ok()
+    .and_then(|val:Handle<JsValue>| val.downcast::<JsString, _>(cx).ok() )
+    .map(|v| v.value(cx))
 }
 
 pub fn string_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<String>{
@@ -464,6 +483,107 @@ pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Vec<Point>
   }
 }
 
+
+//
+// ImageData
+//
+
+use crate::image::ImageData;
+use neon::types::buffer::TypedArray;
+use skia_safe::{ColorType, ColorSpace};
+
+pub fn image_data_arg(cx: &mut FunctionContext, idx:usize) -> NeonResult<ImageData>{
+  let obj = object_arg(cx, idx, "imageData")?;
+  let width = float_for_key(cx, &obj, "width")?;
+  let height = float_for_key(cx, &obj, "height")?;
+  let color_type = string_for_key(cx, &obj, "colorType")?;
+  let color_space = string_for_key(cx, &obj, "colorSpace")?;
+  let js_buffer: Handle<JsBuffer> = obj.get(cx, "data")?;
+  let buffer = Data::new_copy(js_buffer.as_slice(cx));
+
+  Ok(ImageData::new(buffer, width, height, color_type, color_space))
+}
+
+pub fn image_data_settings_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace){
+  match opt_object_arg(cx, idx){
+    Some(obj) => {
+      let color_type = opt_string_for_key(cx, &obj, "colorType").unwrap_or("rgba".to_string());
+      let color_space = opt_string_for_key(cx, &obj, "colorSpace").unwrap_or("srgb".to_string());
+      (to_color_type(&color_type), to_color_space(&color_space))
+    }
+    None => (ColorType::RGBA8888, ColorSpace::new_srgb())
+  }
+}
+
+pub fn to_color_space(mode_name:&str) -> ColorSpace{
+  match mode_name{
+    // TODO: add display-p3 support
+    "srgb" | _ => ColorSpace::new_srgb()
+  }
+}
+
+pub fn from_color_space(mode:ColorSpace) -> String{
+  match mode {
+    _ => "srgb"
+  }.to_string()
+}
+
+pub fn to_color_type(type_name: &str) -> ColorType {
+  match type_name {
+    "Alpha8" => ColorType::Alpha8,
+    "RGB565" => ColorType::RGB565,
+    "ARGB4444" => ColorType::ARGB4444,
+    "RGBA1010102" => ColorType::RGBA1010102,
+    "BGRA1010102" => ColorType::BGRA1010102,
+    "RGB101010x" => ColorType::RGB101010x,
+    "BGR101010x" => ColorType::BGR101010x,
+    "Gray8" => ColorType::Gray8,
+    "RGBAF16Norm" => ColorType::RGBAF16Norm,
+    "RGBAF16" => ColorType::RGBAF16,
+    "RGBAF32" => ColorType::RGBAF32,
+    "R8G8UNorm" => ColorType::R8G8UNorm,
+    "A16Float" => ColorType::A16Float,
+    "R16G16Float" => ColorType::R16G16Float,
+    "A16UNorm" => ColorType::A16UNorm,
+    "R16G16UNorm" => ColorType::R16G16UNorm,
+    "R16G16B16A16UNorm" => ColorType::R16G16B16A16UNorm,
+    "SRGBA8888" => ColorType::SRGBA8888,
+    "R8UNorm" => ColorType::R8UNorm,
+    "N32" => ColorType::N32,
+    "RGB888x"|"rgb" => ColorType::RGB888x,
+    "BGRA8888"|"bgra" => ColorType::BGRA8888,
+    "RGBA8888"|"rgba"|_ => ColorType::RGBA8888,
+  }
+}
+
+pub fn from_color_type(color_type: ColorType) -> String {
+  match color_type {
+    ColorType::Alpha8 => "Alpha8",
+    ColorType::RGB565 => "RGB565",
+    ColorType::ARGB4444 => "ARGB4444",
+    ColorType::RGBA8888 => "RGBA8888",
+    ColorType::RGB888x => "RGB888x",
+    ColorType::BGRA8888 => "BGRA8888",
+    ColorType::RGBA1010102 => "RGBA1010102",
+    ColorType::BGRA1010102 => "BGRA1010102",
+    ColorType::RGB101010x => "RGB101010x",
+    ColorType::BGR101010x => "BGR101010x",
+    ColorType::Gray8 => "Gray8",
+    ColorType::RGBAF16Norm => "RGBAF16Norm",
+    ColorType::RGBAF16 => "RGBAF16",
+    ColorType::RGBAF32 => "RGBAF32",
+    ColorType::R8G8UNorm => "R8G8UNorm",
+    ColorType::A16Float => "A16Float",
+    ColorType::R16G16Float => "R16G16Float",
+    ColorType::A16UNorm => "A16UNorm",
+    ColorType::R16G16UNorm => "R16G16UNorm",
+    ColorType::R16G16B16A16UNorm => "R16G16B16A16UNorm",
+    ColorType::SRGBA8888 => "SRGBA8888",
+    ColorType::R8UNorm => "R8UNorm",
+    _ => "unknown"
+  }.to_string()
+}
+
 //
 // ExportOptions
 //
@@ -479,7 +599,10 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let matte = opt_color_for_key(cx, &opts, "matte");
   let msaa = opt_float_for_key(cx, &opts, "msaa")
     .map(|num| num.floor() as usize);
-  Ok(ExportOptions{ format, quality, density, outline, matte, msaa })
+  let color_type = opt_string_for_key(cx, &opts, "colorType")
+    .map(|mode| to_color_type(&mode)).unwrap_or(ColorType::RGBA8888);
+
+  Ok(ExportOptions{ format, quality, density, outline, matte, msaa, color_type})
 }
 
 //

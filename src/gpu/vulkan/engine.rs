@@ -99,8 +99,8 @@ impl VulkanEngine {
         });
     }
 
-    pub fn with_surface<F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<Data, String>
-        where F:FnOnce(&mut Surface) -> Result<Data, String>
+    pub fn with_surface<T, F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<T, String>
+        where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match VulkanEngine::supported() {
             false => Err("Vulkan API not supported".to_string()),
@@ -220,11 +220,13 @@ impl VulkanContext{
         .ok_or("Failed to create Vulkan backend context")?;
 
         let sample_counts = physical_device.properties().framebuffer_color_sample_counts;
-        let msaa:Vec<usize> = [0,2,4,8,16,32].into_iter()
+        let mut msaa:Vec<usize> = [2,4,8,16,32].into_iter()
         .filter_map(|s| vulkano::image::SampleCount::try_from(s).ok() )
         .filter(|s| sample_counts.contains_enum(*s) )
         .map(|s| s as usize)
         .collect();
+
+        msaa.insert(0, 0); // also include the shader-based AA option
 
         Ok(Self {
             context,

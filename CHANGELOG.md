@@ -2,17 +2,25 @@
 
 ## 🥚 ⟩ [Unreleased]
 
-### New Documentation Website
-- Go to [skia-canvas.org](https://skia-canvas.org) for a more readable version of all the details that used to be wedged into the README file.
 
 ### New Features
+
+#### Website
+- Documentation is now hosted at [skia-canvas.org](https://skia-canvas.org). Go there for a more readable version of all the details that used to be wedged into the README file.
 
 #### Imagery
 - Added initial SVG rendering support. **Image**s can now load SVG files and can be drawn in a resolution-independent manner via [`drawImage()`][mdn_drawImage] (thanks to @mpaperno #180). Note that **Image**s loaded from SVG files that don't have a `width` and `height` set on their root `<svg>` element have some quirks as of this release:
   - The **Image** object's `width` and `height` will both (misleadingly) report to be `150`.
   - When passed to `drawImage()` without size arguments, the SVG will be scaled to a size that fits within the **Canvas**'s current bounds (using an approach akin to CSS's `object-fit: contain`).
   - When using the 9-argument version of `drawImage()`, the ‘crop’ arguments (`sx`, `sy`, `sWidth`, & `sHeight`) will correspond to this scaled-to-fit size, *not* the **Image**'s reported `width` & `height`.
-- **Canvas**.[saveAs()][Canvas.saveAs] can now generate WEBP images and **Image**s can load WEBP files as well (contributed by @mpaperno #177, h/t @revam for the initial work on this)
+- WEBP support
+  - **Canvas**.[saveAs()][Canvas.saveAs] & [toBuffer()][Canvas.toBuffer] can now generate WEBP images and **Image**s can load WEBP files as well (contributed by @mpaperno #177, h/t @revam for the initial work on this)
+- Raw pixel data support
+  - The `toBuffer()` and `saveAs()` methods now support `"raw"` as a format name and/or file extension, causing them to return non-encoded pixel data (by default in an `"rgba"` layout like a standard [ImageData][ImageData] buffer)
+  - Both functions now take an optional [`colorType`][colorType] argument to specify alternative pixel data layouts (e.g., `"rgb"` or `"bgra"`)
+- [**ImageData**][ImageData] enhancements
+  - The [drawImage()][mdn_drawImage] and [createPattern()][mdn_createPattern] methods have been extended to accept **ImageData** objects as arguments. Previously only [putImageData()][mdn_putImageData] could be used for rendering, but this method ignores the context's current transform, filters, opacity, etc.
+  - When creating an **ImageData** via the [getImageData()][mdn_getImageData] & [createImageData()][mdn_createImageData] methods or `new ImageData()` constructor, the optional settings arg now allows you to select the `colorType` for the buffer's pixels.
 
 #### Typography
 - **FontLibrary.**[use()][FontLibrary.use] now supports dynamically loaded [WOFF & WOFF2][woff_wiki] fonts
@@ -33,6 +41,7 @@
 
 ### Breaking Changes
 - An upgrade to [Neon][neon_rs] with [N-API v8][node_napi] raised the minimum required Node version to 12.22+, 14.17+, or 16+.
+- Images now load asynchronously in cases where the `src` property has been set to a local path. As a result, it's now necessary to `await img.decode()` or set up an `.on("load", …)` handler before drawing it—even when the `src` is non-remote.
 - The **KeyboardEvent** object returned by the `keyup`/`keydown` and `input` event listeners now has fields and values consistent with browser behavior. In particular, `code` is now a name (e.g., `ShiftLeft` or `KeyS`) rather than a numeric scancode, `key` is a straightforward label for the key (e.g., `Shift` or `s`) and the new [`location`][key_location] field provides a numeric description of which variant of a key was pressed.
 - The deprecated `.async` property has been removed. See the [v0.9.28](#--v0928--jan-12-2022) release notes for details.
 - The non-standard `.textTracking` property has been removed in favor of the new [`.letterSpacing`][letterSpacing] property
@@ -56,6 +65,7 @@
 - The GPU is now initialized only when it is needed, not at startup. As a result, setting that **Canvas**'s [`.gpu`][canvas_gpu] property to `false` immediately after creation will prevent any GPU-related resource acquisition from occurring (though rendering speed will be predictably slower).
 - The sample-count used by the GPU for multiscale antialiasing can now be configured through the optional [`msaa`][msaa] export argument. If omitted, defaults to 4x MSAA.
 - Added support for non-default imports (e.g., `import {Image} from "skia-canvs"`) when used as an ES Module.
+- The [getImageData()][mdn_getImageData] method now makes use of the GPU (if enabled) and caches data between calls, greatly improving performance for sequential queries
 
 [resizable]: /docs/api/window.md#resizable
 [key_location]: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/location
@@ -66,6 +76,7 @@
 [DOMMatrix]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrix
 [FontLibrary.use]: /docs/api/font-library.md#use
 [Canvas.saveAs]: /docs/api/canvas.md#saveas
+[Canvas.toBuffer]: /docs/api/canvas.md#tobuffer
 [letterSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/letterSpacing
 [wordSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/wordSpacing
 [fontStretch]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fontStretch
@@ -80,6 +91,12 @@
 [compositionend]: https://developer.mozilla.org/en-US/docs/Web/API/Element/compositionend_event
 [input]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/input_event
 [win_bind]: /docs/api/window.md#on--off--once
+[ImageData]: /docs/api/imagedata.md
+[colorType]: /docs/api/canvas.md#colortype
+[mdn_createPattern]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createPattern
+[mdn_getImageData]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getImageData
+[mdn_createImageData]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createImageData
+[mdn_putImageData]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/putImageData
 
 ## 📦 ⟩ [v1.0.2] ⟩ Aug 21, 2024
 
@@ -351,7 +368,7 @@
 [boolean-ops]: /docs/api/path2d.md#complement-difference-intersect-union-and-xor
 [p2d_bounds]: /docs/api/path2d.md#bounds
 [createConicGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createConicGradient
-[loadImage()]: /docs/api/utilities.md#loadimage
+[loadImage()]: /docs/api/image.md#loadimage
 
 ## 📦 ⟩ [v0.9.20] ⟩ Mar 27, 2021
 

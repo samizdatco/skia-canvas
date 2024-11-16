@@ -3,7 +3,7 @@
 const _ = require('lodash'),
       fs = require('fs'),
       path = require('path'),
-      {Canvas, Image, FontLibrary, loadImage} = require('../lib'),
+      {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib'),
       simple = require('simple-get')
 
 jest.mock('simple-get', () => {
@@ -40,9 +40,10 @@ describe("Image", () => {
   beforeEach(() => img = new Image() )
 
   describe("can initialize bitmaps from", () => {
-    test("buffer", () => {
+    test("buffer", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = BUFFER
+      await img.decode()
       expect(img).toMatchObject(LOADED)
     })
 
@@ -52,9 +53,10 @@ describe("Image", () => {
       expect(img).toMatchObject(LOADED)
     })
 
-    test("local file", () => {
+    test("local file", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = PATH
+      await img.decode()
       expect(img).toMatchObject(LOADED)
     })
 
@@ -91,21 +93,24 @@ describe("Image", () => {
   })
 
   describe("can initialize SVGs from", () => {
-    test("buffer", () => {
+    test("buffer", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = SVG_BUFFER
+      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
 
-    test("data uri", () => {
+    test("data uri", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = SVG_DATA_URI
+      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
 
-    test("local file", () => {
+    test("local file", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = SVG_PATH
+      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
 
@@ -121,10 +126,11 @@ describe("Image", () => {
   })
 
   describe("sends notifications through", () => {
-    test(".complete flag", () => {
+    test(".complete flag", async () => {
       expect(img.complete).toEqual(false)
 
       img.src = PATH
+      await img.decode()
       expect(img.complete).toEqual(true)
     })
 
@@ -133,7 +139,11 @@ describe("Image", () => {
       img.onload = loaded => { throw Error("should not be called") }
       img.src = URL
 
-      img.onload = loaded => done()
+      img.onload = function(){
+        // confirm that `this` is set correctly
+        expect(this).toBe(img)
+        done()
+      }
       img.src = 'http://test/assets/globe.jpg'
     })
 
@@ -170,55 +180,94 @@ describe("Image", () => {
       return `data:${mime};base64,${content}`
     }
 
-    test("PNG", () => {
+    test("PNG", async () => {
       img.src = FORMAT + '.png'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("JPEG", () => {
+    test("JPEG", async () => {
       img.src = FORMAT + '.jpg'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("GIF", () => {
+    test("GIF", async () => {
       img.src = FORMAT + '.gif'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("BMP", () => {
+    test("BMP", async () => {
       img.src = FORMAT + '.bmp'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("ICO", () => {
+    test("ICO", async () => {
       img.src = FORMAT + '.ico'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("WEBP", () => {
+    test("WEBP", async () => {
       img.src = FORMAT + '.webp'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
       img.src = asDataURI(img.src)
       expect(img).toMatchObject(PARSED)
     })
 
-    test("SVG", () => {
+    test("SVG", async () => {
       img.src = FORMAT + '.svg'
+      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
   })
 })
 
+describe("ImageData", () => {
+  var FORMAT = 'test/assets/image/format.raw',
+      RGBA = {width:60, height:60, colorType:'rgba'},
+      BGRA = {width:60, height:60, colorType:'bgra'}
+
+  describe("can be initialized from", () => {
+    test("buffer", () => {
+      let buffer = fs.readFileSync(FORMAT)
+      let imgData = new ImageData(buffer, 60, 60)
+      expect(imgData).toMatchObject(RGBA)
+
+      expect(() => new ImageData(buffer, 60, 59))
+        .toThrow("ImageData dimensions must match buffer length")
+    })
+
+    test("loadImageData call", done => {
+      loadImageData(FORMAT, 60, 60).then(imgData => {
+        expect(imgData).toMatchObject(RGBA)
+        done()
+      })
+    })
+
+    test("canvas content", () => {
+      let canvas = new Canvas(60, 60),
+          ctx = canvas.getContext("2d")
+      let rgbaData = ctx.getImageData(0, 0, 60, 60)
+      expect(rgbaData).toMatchObject(RGBA)
+      let bgraData = ctx.getImageData(0, 0, 60, 60, {colorType:'bgra'})
+      expect(bgraData).toMatchObject(BGRA)
+    })
+  })
+})
 
 describe("FontLibrary", ()=>{
   let canvas, ctx,
@@ -305,4 +354,3 @@ describe("FontLibrary", ()=>{
   })
 
 })
-

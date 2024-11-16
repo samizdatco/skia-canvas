@@ -11,8 +11,35 @@ export class CanvasTexture {}
 //
 
 export function loadImage(src: string | Buffer): Promise<Image>
-export class ImageData extends globalThis.ImageData {}
-export class Image {
+export function loadImageData(src: string | Buffer, width: number, height?:number): Promise<ImageData>
+export function loadImageData(src: string | Buffer, width: number, height:number, settings?:ImageDataSettings): Promise<ImageData>
+
+export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
+export type ColorType = "Alpha8" | "Gray8" | "R8UNorm" | // 1 byte/px
+  "A16Float" | "A16UNorm" | "ARGB4444" | "R8G8UNorm" | "RGB565" | // 2 bytes/px
+  "rgb"|"RGB888x" | "rgba"|"RGBA8888" | "bgra"|"BGRA8888" | "BGR101010x" | "BGRA1010102" | // 4 bytes/px
+  "R16G16Float" | "R16G16UNorm" | "RGB101010x" | "RGBA1010102" | "RGBA8888" |  "SRGBA8888" | // 4 bytes/px
+  "R16G16B16A16UNorm" | "RGBAF16" | "RGBAF16Norm" | // 8 bytes/px
+  "RGBAF32" // 16 bytes/px
+
+interface ImageDataSettings {
+  colorSpace?: ColorSpace
+  colorType?: ColorType
+}
+
+export class ImageData {
+  prototype: ImageData
+  constructor(sw: number, sh: number, settings?: ImageDataSettings)
+  constructor(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
+
+  readonly colorSpace: ColorSpace
+  readonly colorType: ColorType
+  readonly data: Uint8ClampedArray
+  readonly height: number
+  readonly width: number
+}
+
+export class Image extends EventEmitter {
   constructor()
   get src(): string
   set src(src: string | Buffer)
@@ -177,12 +204,13 @@ export interface CreateTextureOptions {
   offset?: Offset
 }
 
-export type CanvasImageSource = Canvas | Image;
+export type CanvasPatternSource = Canvas | Image;
+export type CanvasDrawable = Canvas | Image | ImageData;
 
 interface CanvasDrawImage {
-  drawImage(image: CanvasImageSource, dx: number, dy: number): void;
-  drawImage(image: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
-  drawImage(image: CanvasImageSource, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+  drawImage(image: CanvasDrawable, dx: number, dy: number): void;
+  drawImage(image: CanvasDrawable, dx: number, dy: number, dw: number, dh: number): void;
+  drawImage(image: CanvasDrawable, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
   drawCanvas(image: Canvas, dx: number, dy: number): void;
   drawCanvas(image: Canvas, dx: number, dy: number, dw: number, dh: number): void;
   drawCanvas(image: Canvas, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
@@ -194,7 +222,7 @@ interface CanvasFillStrokeStyles {
   createConicGradient(startAngle: number, x: number, y: number): CanvasGradient;
   createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradient;
   createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
-  createPattern(image: CanvasImageSource, repetition: string | null): CanvasPattern | null;
+  createPattern(image: CanvasPatternSource, repetition: string | null): CanvasPattern | null;
   createTexture(spacing: Offset, options?: CreateTextureOptions): CanvasTexture
 }
 
@@ -215,7 +243,8 @@ type FontVariantSetting = "normal" |
 /* east-asian */ "jis78" | "jis83" | "jis90" | "jis04" | "simplified" | "traditional" | "full-width" | "proportional-width" | "ruby" |
 /* position */ "super" | "sub";
 
-export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform, CanvasUserInterface {
+
+export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform, CanvasUserInterface {
   readonly canvas: Canvas
   fontVariant: FontVariantSetting
   textWrap: boolean
@@ -223,6 +252,7 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   lineDashMarker: Path2D | null
   lineDashFit: "move" | "turn" | "follow"
 
+  // transform argument extensions (accept DOMMatrix & matrix-like objectx, not just param lists)
   setTransform(transform?: Matrix): void
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
 
@@ -233,14 +263,22 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   set currentTransform(matrix: Matrix)
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
 
+  // skia/chrome beziers & convenience methods
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
   roundRect(x: number, y: number, width: number, height: number, radii: number | CornerRadius[]): void
+  reset(): void
   // getContextAttributes(): CanvasRenderingContext2DSettings;
 
+  // add maxWidth to work in conjunction with textWrap
   measureText(text: string, maxWidth?: number): TextMetrics
   outlineText(text: string, maxWidth?: number): Path2D
 
-  reset(): void
+  // use the local definitions for settings w/ supported ColorType values
+  createImageData(width: number, height: number, settings?: ImageDataSettings): ImageData;
+  createImageData(imagedata: ImageData): ImageData;
+  getImageData(x: number, y: number, width: number, height: number, settings?: ImageDataSettings): ImageData;
+  putImageData(imagedata: ImageData, dx: number, dy: number): void;
+  putImageData(imagedata: ImageData, dx: number, dy: number, dirtyX: number, dirtyY: number, dirtyWidth: number, dirtyHeight: number): void;
 }
 
 //

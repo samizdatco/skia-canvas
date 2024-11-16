@@ -1,4 +1,3 @@
-#![allow(unused_mut)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
@@ -6,15 +5,15 @@ use std::cell::RefCell;
 use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
 use skia_safe::{
-  Canvas as SkCanvas, Surface, Paint, Path, PathOp, Image, ImageInfo, Contains,
-  Rect, Point, IPoint, Size, ISize, Color, Color4f, ColorType, ColorSpace, Data,
-  PaintStyle, BlendMode, AlphaType, ClipOp, PictureRecorder, Picture, Drawable,
-  image::CachingHint, images, image_filters, dash_path_effect, path_1d_path_effect,
+  Canvas as SkCanvas, Paint, Path, PathOp, Image, ImageInfo, Contains,
+  Rect, Point, IPoint, Size, Color, Color4f, ColorSpace, Data,
+  PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture,
+  images, image_filters, dash_path_effect, path_1d_path_effect,
   matrix::{ Matrix, TypeMask },
   textlayout::{ParagraphStyle, TextStyle},
   canvas::SrcRectConstraint::Strict,
   path_utils::fill_path_with_paint,
-  font_style::{FontStyle, Weight, Width, Slant},
+  font_style::{FontStyle, Width},
   path::FillType,
 };
 
@@ -28,6 +27,8 @@ use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
+use crate::image::ImageData;
+use crate::gpu::RenderingEngine;
 use page::{PageRecorder, Page};
 
 const BLACK:Color = Color::BLACK;
@@ -195,8 +196,7 @@ impl Context2D{
   pub fn with_recorder<F>(&self, f:F)
     where F:FnOnce(MutexGuard<PageRecorder>)
   {
-    let recorder = Arc::clone(&self.recorder);
-    let recorder = recorder.lock().unwrap();
+    let recorder = self.recorder.lock().unwrap();
     f(recorder);
   }
 
@@ -447,36 +447,26 @@ impl Context2D{
   }
 
   pub fn get_page(&self) -> Page {
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    recorder.get_page()
+    self.recorder.lock().unwrap().get_page()
   }
 
   pub fn get_image(&self) -> Option<Image> {
-    let recorder = Arc::clone(&self.recorder);
-    let mut recorder = recorder.lock().unwrap();
-    recorder.get_image()
+    self.recorder.lock().unwrap().get_image()
   }
 
   pub fn get_picture(&mut self) -> Option<Picture> {
-    self.get_page().get_picture(None)
+    self.recorder.lock().unwrap().get_page().get_picture(None)
   }
 
-  pub fn get_pixels(&mut self, buffer: &mut [u8], origin: impl Into<IPoint>, size: impl Into<ISize>){
-    let origin = origin.into();
-    let size = size.into();
-    let info = ImageInfo::new(size, ColorType::RGBA8888, AlphaType::Unpremul, None);
-
-    if let Some(img) = self.get_image(){
-      img.read_pixels(&info, buffer, info.min_row_bytes(), origin, CachingHint::Allow);
-    }
+  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, info:ImageInfo, engine:RenderingEngine) -> Result<Data, String>{
+    self.recorder.lock().unwrap().get_pixels(origin, &info, engine)
   }
 
-  pub fn blit_pixels(&mut self, buffer: &[u8], info: &ImageInfo, src_rect:&Rect, dst_rect:&Rect){
+  pub fn blit_pixels(&mut self, image_data:ImageData, src_rect:&Rect, dst_rect:&Rect){
     // works just like draw_image in terms of src/dst rects, but clears the dst_rect and then draws
     // without clips, transforms, alpha, blend, or shadows
-    let data = Data::new_copy(buffer);
-    if let Some(bitmap) = images::raster_from_data(info, data, info.min_row_bytes()) {
+    let info = image_data.image_info();
+    if let Some(bitmap) = images::raster_from_data(&info, image_data.buffer, info.min_row_bytes()) {
       self.push(); // cache matrix & clip in self.state
       self.with_canvas(|canvas| {
         let paint = Paint::default();
@@ -490,9 +480,9 @@ impl Context2D{
     }
   }
 
-  pub fn set_font(&mut self, mut spec: FontSpec){
+  pub fn set_font(&mut self, spec: FontSpec){
     let mut library = FONT_LIBRARY.lock().unwrap();
-    if let Some(mut new_style) = library.update_style(&self.state.char_style, &spec){
+    if let Some(new_style) = library.update_style(&self.state.char_style, &spec){
       self.state.font = spec.canonical;
       self.state.font_variant = spec.variant.to_string();
       self.state.font_width = spec.width;

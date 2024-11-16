@@ -238,6 +238,35 @@ describe("Context2D", ()=>{
         }
       })
 
+      test("from ImageData", () => {
+        let blank = new Canvas()
+        ctx.fillStyle = ctx.createPattern(blank, 'repeat');
+        ctx.fillRect(0,0, 20,20);
+
+        let checkers = new Canvas(2, 2),
+            patCtx = checkers.getContext("2d");
+        patCtx.fillStyle = 'white';
+        patCtx.fillRect(0,0,2,2);
+        patCtx.fillStyle = 'black';
+        patCtx.fillRect(0,0,1,1);
+        patCtx.fillRect(1,1,1,1);
+
+        let checkersData = patCtx.getImageData(0,0,2,2)
+
+        let pattern = ctx.createPattern(checkersData, 'repeat')
+        ctx.fillStyle = pattern;
+        ctx.fillRect(0,0, 20,20);
+
+        let bmp = ctx.getImageData(0,0, 20,20)
+        let blackPixel = true
+        for (var i=0; i<bmp.data.length; i+=4){
+          if (i % (bmp.width*4) != 0) blackPixel = !blackPixel
+          expect(Array.from(bmp.data.slice(i, i+4))).toEqual(
+            blackPixel ? BLACK : WHITE
+          )
+        }
+      })
+
       test("from Canvas", () => {
         let blank = new Canvas()
         ctx.fillStyle = ctx.createPattern(blank, 'repeat');
@@ -378,10 +407,14 @@ describe("Context2D", ()=>{
 
   describe("supports", () => {
     test("filter", () => {
+      // results differ b/t cpu & gpu renderers so make sure test doesn't fail if gpu support isn't present
+      let {gpu} = canvas
+      canvas.gpu = false
       // make sure chains of filters compose correctly <https://codepen.io/sosuke/pen/Pjoqqp>
       ctx.filter = 'blur(5px) invert(56%) sepia(63%) saturate(4837%) hue-rotate(163deg) brightness(96%) contrast(101%)'
       ctx.fillRect(0,0,20,20)
       expect(pixel(10, 10)).toEqual([0, 162, 213, 245])
+      canvas.gpu = gpu
     })
 
     test('shadow', async() => {

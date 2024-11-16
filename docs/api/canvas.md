@@ -3,16 +3,16 @@ description: An emulation of the HTML <canvas> element
 ---
 # Canvas
 
-The Canvas object is a stand-in for the HTML `<canvas>` element. It defines image dimensions and provides a[rendering context][context] to draw to it. Once you’re ready to save or display what you’ve drawn, the canvas can [save][saveAs] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toDataURL_ext] to process manually.
+> The Canvas object is a stand-in for the HTML `<canvas>` element. It defines image dimensions and provides a [rendering context][context] to draw to it. Once you’re ready to save or display what you’ve drawn, the canvas can [save][saveAs] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toDataURL_ext] to process manually.
 
 
-| Image Dimensions               | Rendering Contexts            | Output                                                              |
-| --                             | --                            | --                                                                  |
-| [**width**][canvas_width]      | [**gpu**][canvas_gpu] 🧪      | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] 🧪       |
-| [**height**][canvas_height]    | [**engine**][engine] 🧪       | [saveAs()][saveAs] / [saveAsSync()][saveAs] 🧪                      |
-|                                | [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |
-|                                | [getContext()][getContext]    | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] 🧪  |
-|                                | [newPage()][newPage] 🧪       |                                                                     |
+| Rendering Contexts            | Output                                                              | Image Dimensions               |
+| --                            | --                                                                  | --                             |
+| [**gpu**][canvas_gpu] 🧪      | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] 🧪       | [**width**][canvas_width]      |
+| [**engine**][engine] 🧪       | [saveAs()][saveAs] / [saveAsSync()][saveAs] 🧪                      | [**height**][canvas_height]    |
+| [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |                                |
+| [getContext()][getContext]    | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] 🧪  |                                |
+| [newPage()][newPage] 🧪       |                                                                     |                                |
 
 ## Creating new `Canvas` objects
 
@@ -94,7 +94,7 @@ The method’s return value is a `CanvasRenderingContext2D` object which you can
 
 ### `saveAs()`
 ```js returns="Promise<void>"
-saveAs(filename, {page, format, matte, density=1, msaa=4, quality=0.92, outline=false})
+saveAs(filename, {page, format, matte, density=1, msaa=4, quality=0.92, outline=false, colorType='rgba'})
 ```
 
 The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
@@ -109,6 +109,10 @@ The optional `page` argument accepts an integer that allows for the individual s
 #### format
 
 The image format to generate, specified either as a mime-type string or file extension. The `format` argument will take precedence over the type specified through the `filename` argument’s extension, but is primarily useful when generating a file whose name cannot end with an extension for other reasons.
+
+Supported formats include:
+- Bitmap: `png`, `jpeg`, `webp`, `raw`
+- Vector: `svg`, `pdf`
 
 #### matte
 The optional `matte` argument accepts a color-string specifying the background that should be drawn *behind* the canvas in the exported image. Any transparent portions of the image will be filled with the matte color.
@@ -130,19 +134,24 @@ The `quality` option is a number between 0 and 1.0 that controls the level of JP
 #### outline
 When generating SVG output containing text, you have two options for how to handle the fonts that were used. By default, SVG files will contain `<text>` elements that refer to the fonts by name in the embedded stylesheet. This requires that viewers of the SVG have the same fonts available on their system (or accessible as webfonts). Setting the optional `outline` argument to `true` will trace all the letterforms and ‘burn’ them into the file as bézier paths. This will result in a much larger file (and one in which the original text strings will be unrecoverable), but it will be viewable regardless of the specifics of the system it’s displayed on.
 
+#### colorType
+
+Specifies the color type to use when exporting pixel data in `"raw"` format (for other formats this setting has no effect). If omitted, defaults to `"rgba"`. See the ImageData documentation for a [list of supported `colorType` formats][imgdata_colortype]
+
+
 ### `toBuffer()`
 ```js returns="Promise<Buffer>"
-toBuffer(format, {page, matte, density, quality, outline})
+toBuffer(format, {page, format, matte, density, msaa, quality, outline, colorType})
 ```
 
-Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the `saveAs` method.
+Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the [`saveAs`][saveAs] method.
 
 ### `toDataURL()`
 ```js returns="Promise<String>"
-toDataURL(format, {page, matte, density, quality, outline})
+toDataURL(format, {page, format, matte, density, msaa, quality, outline, colorType})
 ```
 
-This method accepts the same arguments and behaves similarly to `.toBuffer`. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
+This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
 
 <!-- references_begin -->
 [canvas_gpu]: #gpu
@@ -150,6 +159,7 @@ This method accepts the same arguments and behaves similarly to `.toBuffer`. How
 [context]: context.md
 [engine]: #engine
 [newPage]: #newpage
+[imgdata_colortype]: imagedata.md#colortype
 [saveAs]: #saveas
 [shorthands]: #pdf-png-svg-jpg--webp
 [toBuffer]: #tobuffer

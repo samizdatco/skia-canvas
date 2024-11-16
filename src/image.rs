@@ -5,7 +5,7 @@
 use std::cell::RefCell;
 use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{
-  Image as SkImage, ImageInfo, ISize, ColorType, AlphaType, Data, Size,
+  Image as SkImage, ImageInfo, ISize, ColorType, ColorSpace, AlphaType, Data, Size,
   FontMgr, Picture, PictureRecorder, Rect, image::images, svg,
   wrapper::PointerWrapper // for SVG Dom access, temporary until next skia-safe update
 };
@@ -31,7 +31,8 @@ impl Default for Image{
 pub enum Content{
   Bitmap(SkImage),
   Vector(Picture),
-  Loading
+  Loading,
+  Broken,
 }
 
 impl Default for Content{
@@ -58,6 +59,13 @@ impl Content{
     }.unwrap_or_default()
   }
 
+  pub fn from_image_data(image_data:ImageData) -> Self{
+    let info = image_data.image_info();
+    images::raster_from_data(&info, &image_data.buffer, info.min_row_bytes())
+      .map(|image| Content::Bitmap(image) )
+      .unwrap_or_default()
+  }
+
   pub fn size(&self) -> Size {
     match &self {
       Content::Bitmap(img) => img.dimensions().into(),
@@ -66,9 +74,16 @@ impl Content{
     }
   }
 
-  pub fn is_drawable(&self) -> bool {
+  pub fn is_complete(&self) -> bool {
     match &self{
       Content::Loading => false,
+      _ => true
+    }
+  }
+
+  pub fn is_drawable(&self) -> bool {
+    match &self{
+      Content::Loading | Content::Broken => false,
       _ => true
     }
   }
@@ -104,6 +119,35 @@ impl Content{
     (src, dst)
   }
 }
+
+
+#[derive(Debug)]
+pub struct ImageData{
+  pub width: f32,
+  pub height: f32,
+  pub buffer: Data,
+  color_type: ColorType,
+  color_space: ColorSpace,
+}
+
+impl ImageData{
+  pub fn new(buffer:Data, width:f32, height:f32, color_type:String, color_space:String) -> Self{
+    let color_type = to_color_type(&color_type);
+    let color_space = to_color_space(&color_space);
+    Self{ buffer, width, height, color_type, color_space }
+  }
+
+  pub fn image_info(&self) -> ImageInfo{
+    ImageInfo::new(
+      (self.width as _, self.height as _),
+      self.color_type,
+      AlphaType::Unpremul,
+      self.color_space.clone()
+    )
+  }
+}
+
+
 
 //
 // -- Javascript Methods --------------------------------------------------------------------------
@@ -183,6 +227,8 @@ pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
     if let Some(picture) = compositor.finish_recording_as_picture(Some(&bounds)){
       this.content = Content::Vector(picture);
     }
+  }else{
+    this.content = Content::Broken
   }
 
   Ok(cx.boolean(this.content.is_drawable()))
@@ -203,5 +249,25 @@ pub fn get_height(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn get_complete(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
-  Ok(cx.boolean(this.content.is_drawable()))
+  Ok(cx.boolean(this.content.is_complete()))
+}
+
+pub fn pixels(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let this = cx.argument::<BoxedImage>(0)?;
+  let mut this = this.borrow_mut();
+  let (color_type, color_space) = image_data_settings_arg(&mut cx, 1);
+
+  let info = ImageInfo::new(this.content.size().to_floor(), color_type, AlphaType::Unpremul, color_space);
+  let mut pixels = cx.buffer(info.bytes_per_pixel() * (info.width() * info.height()) as usize)?;
+
+  match &this.content{
+    Content::Bitmap(image) => {
+      match image.read_pixels(&info, pixels.as_mut_slice(&mut cx), info.min_row_bytes(), (0,0), skia_safe::image::CachingHint::Allow){
+        true => Ok(pixels.upcast()),
+        false => Ok(cx.undefined().upcast())
+      }
+
+    }
+    _ => Ok(cx.undefined().upcast())
+  }
 }

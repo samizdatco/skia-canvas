@@ -89,8 +89,8 @@ impl MetalEngine {
         });
     }
 
-    pub fn with_surface<F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<Data, String>
-        where F:FnOnce(&mut Surface) -> Result<Data, String>
+    pub fn with_surface<T, F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<T, String>
+        where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match MetalEngine::supported() {
             false => Err("Metal API not supported".to_string()),

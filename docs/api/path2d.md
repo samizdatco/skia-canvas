@@ -3,7 +3,7 @@ description: Bézier path construction & editing
 ---
 # Path2D
 
-The `Path2D` class allows you to create paths independent of a given[Canvas][canvas] or[graphics context][context]. These paths can be modified over time and drawn repeatedly (potentially on multiple canvases). `Path2D` objects can also be used as [lineDashMarker][lineDashMarker]s or as the repeating pattern in a [CanvasTexture][createTexture()].
+> The `Path2D` class allows you to create paths independent of a given [Canvas][canvas] or [graphics context][context]. These paths can be modified over time and drawn repeatedly (potentially on multiple canvases). `Path2D` objects can also be used as [lineDashMarker][lineDashMarker]s or as the repeating pattern in a [CanvasTexture][createTexture()].
 
 
 | Line Segments                              | Shapes                     | Boolean Ops 🧪           | Filters 🧪                       | Geometry 🧪                  |

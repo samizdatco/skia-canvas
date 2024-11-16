@@ -229,6 +229,35 @@ describe("Canvas", ()=>{
       }
     })
 
+    test("raw pixel buffers", async () => {
+      canvas.width = canvas.height = 4
+      ctx.fillStyle='#f00'
+      ctx.fillRect(0,0,1,1)
+      ctx.fillStyle='#0f0'
+      ctx.fillRect(1,0,1,1)
+      ctx.fillStyle='#00f'
+      ctx.fillRect(0,1,1,1)
+      ctx.fillStyle='#fff'
+      ctx.fillRect(1,1,1,1)
+
+      let rgba = ctx.getImageData(0, 0, 2, 2)
+      expect(rgba.data).toEqual(new Uint8ClampedArray([
+        255, 0,   0,   255,
+        0,   255, 0,   255,
+        0,   0,   255, 255,
+        255, 255, 255, 255
+      ]))
+
+      let bgra = ctx.getImageData(0, 0, 2, 2, {colorType:"bgra"})
+      expect(bgra.data).toEqual(new Uint8ClampedArray([
+        0,   0,   255, 255,
+        0,   255, 0,   255,
+        255, 0,   0,   255,
+        255, 255, 255, 255
+      ]))
+
+    })
+
     test("image-sequences", async () => {
       let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
       colors.forEach((color, i) => {
@@ -246,16 +275,17 @@ describe("Canvas", ()=>{
       let files = findTmp(`output-0?.png`)
       expect(files.length).toEqual(colors.length+1)
 
-      files.forEach((fn, i) => {
+      for (const [i, fn] of files.entries()){
         let img = new Image()
         img.src = fn
+        await img.decode()
         expect(img.complete).toBe(true)
 
         // second page inherits the first's size, then they increase
         let dim = i<2 ? 512 : 512 + 100 * (i-1)
         expect(img.width).toEqual(dim)
         expect(img.height).toEqual(dim)
-      })
+      }
 
     })
 
@@ -410,7 +440,7 @@ describe("Canvas", ()=>{
       }
     })
 
-    test("image-sequences", ()=>{
+    test("image-sequences", async ()=>{
       let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
       colors.forEach((color, i) => {
         let dim = 512 + 100*i
@@ -427,16 +457,17 @@ describe("Canvas", ()=>{
       let files = findTmp(`output-0?.png`)
       expect(files.length).toEqual(colors.length+1)
 
-      files.forEach((fn, i) => {
+      for (const [i, fn] of files.entries()){
         let img = new Image()
         img.src = fn
+        await img.decode()
         expect(img.complete).toBe(true)
 
         // second page inherits the first's size, then they increase
         let dim = i<2 ? 512 : 512 + 100 * (i-1)
         expect(img.width).toEqual(dim)
         expect(img.height).toEqual(dim)
-      })
+      }
     })
 
 

@@ -3,9 +3,7 @@ description: Display a canvas in a window and handle UI events
 ---
 # Window
 
-The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and update them in response to user input.
-
-Its attributes and methods include:
+> The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and update them in response to user input.
 
 | Dimensions               | Content                          | Interface            | Mode                         | Methods            |
 | --                       | --                               | --                   | --                           | --                 |
