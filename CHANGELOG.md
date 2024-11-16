@@ -92,7 +92,7 @@
 [input]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/input_event
 [win_bind]: /docs/api/window.md#on--off--once
 [ImageData]: /docs/api/imagedata.md
-[colorType]: /docs/api/canvas.md#colortype
+[colorType]: /docs/api/imagedata.md#colortype
 [mdn_createPattern]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createPattern
 [mdn_getImageData]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getImageData
 [mdn_createImageData]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createImageData
