@@ -13,8 +13,8 @@ The library exports a number of classes emulating familiar browser objects inclu
  - [CanvasPattern][CanvasPattern]
  - [CanvasRenderingContext2D][CanvasRenderingContext2D] ⧸ [extensions][context] 🧪
  - [DOMMatrix][DOMMatrix]
- - [Image][Image]
- - [ImageData][ImageData]
+ - [Image][Image] / [extensions][image] 🧪
+ - [ImageData][ImageData] / [extensions][imagedata] 🧪
  - [Path2D][p2d_mdn] ⧸ [extensions][path2d] 🧪
 
 In addition, the module contains:
@@ -22,6 +22,7 @@ In addition, the module contains:
 - [Window][window] a class allowing you to display your canvas interactively in an on-screen window
 - [App][app] a helper class for coordinating multiple windows in a single script
 - [loadImage()][loadimage] a utility function for loading `Image` objects asynchronously
+- [loadImageData()][loadimagedata] a utility function for loading `ImageData` objects asynchronously
 
 ----
 
@@ -36,7 +37,10 @@ import DocCardList from '@theme/DocCardList';
 [canvas]: canvas.md
 [context]: context.md
 [fontlibrary]: font-library.md
-[loadimage]: utilities.md#loadimage
+[loadimage]: image.md#loadimage
+[image]: image.md
+[imagedata]: imagedata.md
+[loadimagedata]: imagedata.md#loadimagedata
 [path2d]: path2d.md
 [window]: window.md
 [p2d_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/Path2D

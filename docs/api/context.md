@@ -13,7 +13,7 @@ Most of your interaction with the canvas will actually be directed toward its �
 | [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[🧪][drawText]     | [createLinearGradient()][createLinearGradient()] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]⧸[🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontStretch**][fontStretch]                       | [getImageData()][getImageData()]                   | [**shadowBlur**][shadowBlur]                             |
 | [isPointInStroke()][isPointInStroke()] | [strokeText()][strokeText()] ⧸[🧪][drawText] | [createRadialGradient()][createRadialGradient()] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**letterSpacing**][letterSpacing]                   | [putImageData()][putImageData()]                   | [**shadowColor**][shadowColor]                           |
 | [save()][save()]                       | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**wordSpacing**][wordSpacing]                       | [drawCanvas() 🧪][drawcanvas]                      | [**shadowOffsetX**][shadowOffsetX]                       |
-| [restore()][restore()]                 | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**textAlign**][textAlign]                           | [drawImage()][drawImage()]                         | [**shadowOffsetY**][shadowOffsetY]                       |
+| [restore()][restore()]                 | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**textAlign**][textAlign]                           | [drawImage()][drawImage()] / [🧪][drawimage]       | [**shadowOffsetY**][shadowOffsetY]                       |
 | [reset()][reset()]                     |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                     |                                                    |                                                          |
 | [clip()][clip()]                       |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**textDecoration** 🧪][textDecoration]              |                                                    |                                                          |
 |                                        |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [**textWrap** 🧪][textwrap]                          |                                                    |                                                          |
@@ -230,6 +230,21 @@ The rectangle defined by the `spacing` argument will be aligned with the canvas�
 #### `offset`
 As with `CanvasPattern` objects, textures are positioned globally relative to the upper left corner of the canvas—not the corner of the object currently being filled or stroked. To fine-tune the texture’s alignment with individual objects, set the `offset` argument to an `[x, y]` array with two numbers that will shift the texture relative to its origin.
 
+### `drawImage()`
+```js
+drawImage(img, x, y)
+drawImage(img, x, y, width, height)
+drawImage(img, srcX, srcY, srcWidth, srcHeight, x, y, width, height)
+```
+
+This method behaves identically to the standard [`drawImage()`][drawImage()] function, but accepts ImageData objects as well as Image and Canvas objects as its first argument.
+
+:::info[Note]
+Image objects loaded from SVG files that don't have an [intrinsic size][img_size] have some behavioral quirks to keep in mind when drawing:
+- When passed to `drawImage()` without size arguments, the SVG will be scaled to a size that fits within the Canvas's current bounds (using an approach akin to CSS's `object-fit: contain`).
+- When using the 9-argument version of `drawImage()`, the ‘crop’ arguments (`srcX`, `srcY`, `srcWidth`, & `srcHeight`) will correspond to this scaled-to-fit size, *not* the Image's reported `width` & `height`.
+:::
+
 ### `drawCanvas()`
 ```js
 drawCanvas(canvas, x, y)
@@ -315,11 +330,13 @@ for (let i=0; i<8000; i++){
 [createTexture()]: #createtexture
 [drawText]: #filltext--stroketext
 [drawcanvas]: #drawcanvas
+[drawimage]: #drawimage
 [fontvariant]: #fontvariant
 [lineDashFit]: #linedashfit
 [lineDashMarker]: #linedashmarker
 [newPage]: canvas.md#newpage
 [outlineText()]: #outlinetext
+[img_size]: image.md#width--height
 [p2d_offset]: path2d.md#offset
 [p2d_transform]: path2d.md#transform
 [textDecoration]: #textdecoration
