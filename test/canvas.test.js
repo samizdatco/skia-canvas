@@ -229,6 +229,35 @@ describe("Canvas", ()=>{
       }
     })
 
+    test("raw pixel buffers", async () => {
+      canvas.width = canvas.height = 4
+      ctx.fillStyle='#f00'
+      ctx.fillRect(0,0,1,1)
+      ctx.fillStyle='#0f0'
+      ctx.fillRect(1,0,1,1)
+      ctx.fillStyle='#00f'
+      ctx.fillRect(0,1,1,1)
+      ctx.fillStyle='#fff'
+      ctx.fillRect(1,1,1,1)
+
+      let rgba = ctx.getImageData(0, 0, 2, 2)
+      expect(rgba.data).toEqual(new Uint8ClampedArray([
+        255, 0,   0,   255,
+        0,   255, 0,   255,
+        0,   0,   255, 255,
+        255, 255, 255, 255
+      ]))
+
+      let bgra = ctx.getImageData(0, 0, 2, 2, {colorType:"bgra"})
+      expect(bgra.data).toEqual(new Uint8ClampedArray([
+        0,   0,   255, 255,
+        0,   255, 0,   255,
+        255, 0,   0,   255,
+        255, 255, 255, 255
+      ]))
+
+    })
+
     test("image-sequences", async () => {
       let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
       colors.forEach((color, i) => {
