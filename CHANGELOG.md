@@ -368,7 +368,7 @@
 [boolean-ops]: /docs/api/path2d.md#complement-difference-intersect-union-and-xor
 [p2d_bounds]: /docs/api/path2d.md#bounds
 [createConicGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createConicGradient
-[loadImage()]: /docs/api/utilities.md#loadimage
+[loadImage()]: /docs/api/image.md#loadimage
 
 ## 📦 ⟩ [v0.9.20] ⟩ Mar 27, 2021
 
