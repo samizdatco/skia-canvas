@@ -4,7 +4,7 @@ description: Bitmap & vector image container
 
 # Image
 
-Skia Canvas's **Image** object is a stripped-down version of the standard [**Image**](img_element) used in browser environments. Since the Canvas API ignores most of its properties, only the relevant ones have been recreated here.
+> Skia Canvas's **Image** object is a stripped-down version of the standard [**Image**][img_element] used in browser environments. Since the Canvas API ignores most of its properties, only the relevant ones have been recreated here.
 
 | Content                                        | Loading                      | Event Handlers                                            |
 | --                                             | --                           | --                                                        |
@@ -169,13 +169,14 @@ Note that you are not limited to web URLs when calling `loadImage`, but can incl
 [img_src]: #src
 [img_complete]: #complete
 [img_onload]: #onload--onerror
+[img_onerror]: #onload--onerror
 [img_size]: #width--height
 [img_decode]: #decode
-[img_onerror]: #onerror
 [event_emitter]: https://nodejs.org/api/events.html#class-eventemitter
 [Buffer]: https://nodejs.org/api/buffer.html
 [Promise]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
 [DataURL]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs
+[img_element]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement
 [drawImage()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
 [js_error]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error
 [url_encode]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/encodeURIComponent

@@ -3,7 +3,13 @@ description: Inspect your system fonts or load new ones
 ---
 # FontLibrary
 
-The `FontLibrary` is a static class which does not need to be instantiated with `new`. Instead you can access the properties and methods on the global `FontLibrary` you import from the module and its contents will be shared across all canvases you create.
+> The `FontLibrary` is a static class which does not need to be instantiated with `new`. Instead you can access the properties and methods on the global `FontLibrary` you import from the module and its contents will be shared across all canvases you create.
+
+| Installed Fonts           | Loading New Fonts | Typeface Details  |
+| --                        | --                | --                  |
+| [**families**](#families) | [use()](#use)     | [family()](#family) |
+| [has()](#has)             | [reset()](#reset) |                     |
+
 
 
 ## Properties

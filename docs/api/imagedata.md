@@ -4,13 +4,13 @@ description: Direct pixel access to image and canvas contents
 
 # ImageData
 
-The `ImageData` object offers a convenient container that bundled raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard ImageData][ImageData]'s structure and behavior, but extends it in a few ways.
+> The `ImageData` object offers a convenient container that bundled raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard ImageData][ImageData]'s structure and behavior, but extends it in a few ways.
 
-| Content                  | Dimensions                 | Format                                     |
-| --                       | --                         | --                                         |
-| [**data**][imgdata_data] | [**width**][imgdata_size]  | [**colorSpace**][mdn_ImageData_colorspace] |
-|                          | [**height**][imgdata_size] | [**colorType**][imgdata_colortype] 🧪      |
-|                          |                            | [**bytesPerPixel**][imgdata_bpp] 🧪        |
+| Dimensions                 | Format                                     | Pixel Data               |
+| --                         | --                                         | --                       |
+| [**width**][imgdata_size]  | [**colorSpace**][mdn_ImageData_colorspace] | [**data**][imgdata_data] |
+| [**height**][imgdata_size] | [**colorType**][imgdata_colortype] 🧪      |                          |
+|                            | [**bytesPerPixel**][imgdata_bpp] 🧪        |                          |
 
 ## Working with `ImageData` objects
 
@@ -159,7 +159,7 @@ let id = await loadImageData('https://skia-canvas.org/icon.raw', 64, 64, {colorT
 Note that in addition to HTTP URLs you may also call `loadImageData()` using Data URLs. Just make sure you use the mime type `application/octet-stream` in the header:
 
 ```js
-await loadImage('data:application/octet-stream;base64,//8A////AP///...')
+await loadImageData('data:application/octet-stream;base64,//8A////AP///...')
 ```
 
 <!-- references_begin -->

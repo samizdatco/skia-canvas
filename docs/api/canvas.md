@@ -3,16 +3,16 @@ description: An emulation of the HTML <canvas> element
 ---
 # Canvas
 
-The Canvas object is a stand-in for the HTML `<canvas>` element. It defines image dimensions and provides a[rendering context][context] to draw to it. Once you’re ready to save or display what you’ve drawn, the canvas can [save][saveAs] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toDataURL_ext] to process manually.
+> The Canvas object is a stand-in for the HTML `<canvas>` element. It defines image dimensions and provides a [rendering context][context] to draw to it. Once you’re ready to save or display what you’ve drawn, the canvas can [save][saveAs] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toDataURL_ext] to process manually.
 
 
-| Image Dimensions               | Rendering Contexts            | Output                                                              |
-| --                             | --                            | --                                                                  |
-| [**width**][canvas_width]      | [**gpu**][canvas_gpu] 🧪      | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] 🧪       |
-| [**height**][canvas_height]    | [**engine**][engine] 🧪       | [saveAs()][saveAs] / [saveAsSync()][saveAs] 🧪                      |
-|                                | [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |
-|                                | [getContext()][getContext]    | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] 🧪  |
-|                                | [newPage()][newPage] 🧪       |                                                                     |
+| Rendering Contexts            | Output                                                              | Image Dimensions               |
+| --                            | --                                                                  | --                             |
+| [**gpu**][canvas_gpu] 🧪      | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] 🧪       | [**width**][canvas_width]      |
+| [**engine**][engine] 🧪       | [saveAs()][saveAs] / [saveAsSync()][saveAs] 🧪                      | [**height**][canvas_height]    |
+| [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |                                |
+| [getContext()][getContext]    | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] 🧪  |                                |
+| [newPage()][newPage] 🧪       |                                                                     |                                |
 
 ## Creating new `Canvas` objects
 
@@ -148,10 +148,10 @@ Node [`Buffer`][Buffer] objects containing various image formats can be created 
 
 ### `toDataURL()`
 ```js returns="Promise<String>"
-toDataURL(format, {page, matte, density, quality, outline})
+toDataURL(format, {page, format, matte, density, msaa, quality, outline, colorType})
 ```
 
-This method accepts the same arguments and behaves similarly to `.toBuffer`. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
+This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
 
 <!-- references_begin -->
 [canvas_gpu]: #gpu
