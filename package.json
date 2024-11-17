@@ -16,10 +16,10 @@
     "lib": "./lib/browser.js",
     "path": "path-browserify"
   },
-  "main": "./lib",
+  "main": "./lib/index.js",
   "exports": {
-    "import": "./lib/esm.mjs",
-    "require": "./lib"
+    "import": "./lib/index.mjs",
+    "require": "./lib/index.js"
   },
   "scripts": {
     "build": "cargo-cp-artifact -nc lib/v8/index.node -- cargo build --message-format=json-render-diagnostics",
