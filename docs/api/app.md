@@ -4,7 +4,7 @@ description: Global window manager and process controller
 
 # App
 
-> The `App` global variable is a static class which does not need to be instantiated with `new`. Instead you can directly access its properties and methods on the `App` you import from the module. It allows you to access all the windows that are currently on screen, choose a frame rate for the `frame` and `draw` events, and control when the GUI event loop begins and terminates.
+> The `App` global variable is a static class which does not need to be instantiated with `new`. It allows you to access all the windows that are currently on screen, choose a frame rate for the `frame` and `draw` events, and control when the GUI event loop begins and terminates.
 
 | App Lifecycle       | Runtime State           | Individual Windows      |
 | --                  | --                      | --                      |

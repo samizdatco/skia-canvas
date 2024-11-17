@@ -4,7 +4,7 @@ description: Direct pixel access to image and canvas contents
 
 # ImageData
 
-> The `ImageData` object offers a convenient container that bundled raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard ImageData][ImageData]'s structure and behavior, but extends it in a few ways.
+> The `ImageData` object offers a convenient container that bundled raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard **ImageData**][ImageData]'s structure and behavior, but extends it in a few ways.
 
 | Dimensions                 | Format                                     | Pixel Data               |
 | --                         | --                                         | --                       |
