@@ -4,7 +4,7 @@
 
 const _ = require('lodash'),
       {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, loadImage} = require('../lib'),
-      css = require('../lib/css');
+      css = require('../lib/classes/css');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],

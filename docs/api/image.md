@@ -4,7 +4,7 @@ description: Bitmap & vector image container
 
 # Image
 
-> Skia Canvas's **Image** object is a stripped-down version of the standard [**Image**][img_element] used in browser environments. Since the Canvas API ignores most of its properties, only the relevant ones have been recreated here.
+> Skia Canvas's `Image` object is a stripped-down version of the [standard **Image**][img_element] used in browser environments. Since the Canvas API ignores most of its properties, only the relevant ones have been recreated here.
 
 | Content                                        | Loading                      | Event Handlers                                            |
 | --                                             | --                           | --                                                        |

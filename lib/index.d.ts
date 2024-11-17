@@ -31,6 +31,8 @@ export class ImageData {
   prototype: ImageData
   constructor(sw: number, sh: number, settings?: ImageDataSettings)
   constructor(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
+  constructor(image: Image, settings?: ImageDataSettings)
+  constructor(imageData: ImageData)
 
   readonly colorSpace: ColorSpace
   readonly colorType: ColorType

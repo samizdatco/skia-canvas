@@ -66,7 +66,7 @@ Start by installing:
 
 ## Multithreading
 
-When rendering canvases in the background (e.g., by using the asynchronous [saveAs][saveAs] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's `engine.threads` property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
+When rendering canvases in the background (e.g., by using the asynchronous [saveAs][saveAs] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's [`engine.threads`][engine] property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
 
 For example, you can limit your asynchronous processing to two simultaneous tasks by running your script with:
 ```bash
@@ -75,6 +75,7 @@ SKIA_CANVAS_THREADS=2 node my-canvas-script.js
 
 <!-- references_begin -->
 [canvas]: api/canvas.md
+[engine]: api/canvas.md#engine
 [saveAs]: api/canvas.md#saveas
 [toBuffer]: api/canvas.md#tobuffer
 [node_napi]: https://nodejs.org/api/n-api.html#node-api-version-matrix
