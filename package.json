@@ -12,14 +12,17 @@
   "bugs": {
     "url": "https://github.com/samizdatco/skia-canvas/issues"
   },
-  "browser": {
-    "lib": "./lib/browser.js",
-    "path": "path-browserify"
-  },
   "main": "./lib/index.js",
   "exports": {
-    "import": "./lib/index.mjs",
-    "require": "./lib/index.js"
+    "node": {
+      "import": "./lib/index.mjs",
+      "require": "./lib/index.js"
+    },
+    "browser": "./lib/browser.js",
+    "types": "./lib/index.d.ts"
+  },
+  "browser": {
+    "path": "path-browserify"
   },
   "scripts": {
     "build": "cargo-cp-artifact -nc lib/v8/index.node -- cargo build --message-format=json-render-diagnostics",
