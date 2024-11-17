@@ -106,7 +106,7 @@ Start by installing:
 
 ## Multithreading
 
-When rendering canvases in the background (e.g., by using the asynchronous [saveAs][saveAs] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's `engine.threads` property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
+When rendering canvases in the background (e.g., by using the asynchronous [saveAs][saveAs] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's [`engine.threads`][engine] property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
 
 For example, you can limit your asynchronous processing to two simultaneous tasks by running your script with:
 ```bash
@@ -204,6 +204,7 @@ win.on("draw", e => {
 [canvas]: https://skia-canvas.org/api/canvas
 [createProjection()]: https://skia-canvas.org/api/context#createprojection
 [createTexture()]: https://skia-canvas.org/api/context#createtexture
+[engine]: https://skia-canvas.org/api/canvas#engine
 [fontlibrary-use]: https://skia-canvas.org/api/font-library#use
 [fontvariant]: https://skia-canvas.org/api/context#fontvariant
 [lineDashMarker]: https://skia-canvas.org/api/context#linedashmarker
