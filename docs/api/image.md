@@ -75,7 +75,7 @@ The images you load can be from a variety of formats:
 In the browser these are writable properties that can control the display size of the image within the HTML page. But the context's [`drawImage`][drawImage()] method ignores them in favor of the image's intrinsic size. As a result, Skia Canvas doesn't let you overwrite the `width` and `height` properties (since it would have no effect anyway) and provides them as read-only values derived from the image data.
 
 :::info[Note]
-When loading an image from an SVG file, the intrinsic size may not be defined since the root `<svg>` element is not required to have a defined `width` and `height`. At the moment, Skia Canvas simply returns 150×150 as the image size regardless of the image's aspect ratio. In a future release, these dimensions will be adjusted to reflect the aspect ratio of the SVG's `viewbox` property.
+When loading an image from an SVG file, the intrinsic size may not be defined since the root `<svg>` element is not required to have a defined `width` and `height`. In these cases, the Image will be set to a fixed height of `150` and its width will be scaled to a value that matches the aspect ratio of the SVG's `viewbox` size.
 :::
 
 
@@ -119,9 +119,6 @@ img.decode().then(({width, height}) =>
     console.log(`dimensions: ${width}×${height}`)
 )
 ```
-
-
-
 
 ### `on()` / `off()` / `once()`
 
