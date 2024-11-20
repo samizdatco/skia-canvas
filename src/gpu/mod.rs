@@ -1,4 +1,6 @@
-use skia_safe::{ImageInfo, Surface};
+#![allow(clippy::upper_case_acronyms)]
+use skia_safe::{ImageInfo, Surface, surfaces};
+use serde_json::Value;
 
 #[cfg(feature = "metal")]
 mod metal;
@@ -20,14 +22,18 @@ struct Engine { }
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 impl Engine {
     pub fn supported() -> bool { false }
-    pub fn surface(_: &ImageInfo) -> Option<Surface> { None }
+    pub fn with_surface<T, F>(_: &ImageInfo, _:Option<usize>, _:F)  -> Result<T, String>
+        where F:FnOnce(&mut Surface) -> Result<T, String>
+    {
+        Err("Compiled without GPU support".to_string())
+    }
+    pub fn status() -> Value { serde_json::json!({
+        "renderer": "CPU",
+        "api": Value::Null,
+        "device": "CPU-based renderer (compiled without GPU support)",
+        "error": Value::Null,
+    })}
 }
-
-#[cfg(feature = "metal")]
-pub use crate::gpu::metal::autoreleasepool as runloop;
-#[cfg(not(feature = "metal"))]
-#[allow(dead_code)]
-pub fn runloop<T, F: FnOnce() -> T>(f: F) -> T { f() }
 
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
@@ -41,18 +47,47 @@ impl Default for RenderingEngine {
     }
 }
 
+#[allow(dead_code)]
 impl RenderingEngine{
-    pub fn supported(&self) -> bool {
+    pub fn selectable(&self) -> bool {
         match self {
             Self::GPU => Engine::supported(),
             Self::CPU => true
         }
     }
 
-    pub fn get_surface(&self, image_info: &ImageInfo) -> Option<Surface> {
+    pub fn with_surface<T,F>(&self, image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<T, String>
+        where F:FnOnce(&mut Surface) -> Result<T, String>
+    {
         match self {
-            Self::GPU => Engine::surface(image_info),
-            Self::CPU => Surface::new_raster(image_info, None, None)
+            Self::GPU => Engine::with_surface(image_info, msaa, f),
+            Self::CPU => surfaces::raster(image_info, None, None)
+                .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
+                .and_then(|mut surface|f(&mut surface))
+        }
+    }
+
+    pub fn status(&self) -> serde_json::Value {
+        let mut status = Engine::status();
+        if let Self::CPU = self{
+            if Engine::supported(){
+                status["renderer"] = Value::String("CPU".to_string());
+                status["device"] = Value::String("CPU-based renderer (GPU manually disabled)".to_string())
+            }
+        }
+        status
+    }
+
+    pub fn lacks_gpu_support(&self) -> Option<String> {
+        match Engine::supported(){
+            true => None,
+            false => {
+                let mut msg = vec!["No windowing support".to_string()];
+                if let Some(Value::String(error)) = Engine::status().get("error"){
+                    msg.push(error.to_string());
+                }
+                Some(msg.join(": "))
+            }
         }
     }
 }

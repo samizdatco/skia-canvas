@@ -3,20 +3,16 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 #![allow(non_snake_case)]
-use std::sync::{Mutex};
-use std::fs;
 use std::ops::Range;
-use std::path::Path;
-use std::collections::HashMap;
 use neon::prelude::*;
-use neon::result::Throw;
 
-use skia_safe::{Font, FontMgr, FontMetrics, FontArguments, Typeface, Data, Paint, Point, Rect, Path as SkPath};
+use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, Color};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
-use skia_safe::font_arguments::{VariationPosition, variation_position::{Coordinate}};
-use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, TextAlign,
-                            TextDirection, ParagraphStyle, Paragraph, ParagraphBuilder};
-
+use skia_safe::textlayout::{
+    FontCollection, TextStyle, TextAlign, TextDirection,
+    Decoration, TextDecoration, TextDecorationMode, TextDecorationStyle,
+    ParagraphStyle, Paragraph, ParagraphBuilder,
+};
 use crate::FONT_LIBRARY;
 use crate::utils::*;
 use crate::context::State;
@@ -34,12 +30,13 @@ pub struct Typesetter{
   typefaces: FontCollection,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
+  text_decoration: DecorationStyle,
 }
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
     let mut library = FONT_LIBRARY.lock().unwrap();
-    let (char_style, mut graf_style, baseline, wrap) = state.typography();
+    let (char_style, mut graf_style, text_decoration, baseline, wrap) = state.typography();
     let typefaces = library.collect_fonts(&char_style);
     let width = width.unwrap_or(GALLEY);
     let text = match wrap{
@@ -66,12 +63,21 @@ impl Typesetter{
       graf_style.set_strut_style(strut_style);
     }
 
-    Typesetter{text, width, baseline, typefaces, char_style, graf_style}
+    Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration}
   }
 
   pub fn layout(&self, paint:&Paint) -> (Paragraph, Point) {
     let mut char_style = self.char_style.clone();
-    char_style.set_foreground_color(Some(paint.clone()));
+    char_style.set_foreground_paint(paint);
+    char_style.set_decoration(
+      &self.text_decoration.for_layout(&char_style, paint.color())
+    );
+
+    // prevent SkParagraph from faking of the font style if the match isn't the requested weight/slant
+    let fams:Vec<String> = char_style.font_families().iter().map(|s| s.to_string()).collect();
+    if let Some(matched) = self.typefaces.clone().find_typefaces(&fams, char_style.font_style()).first(){
+      char_style.set_font_style(matched.font_style());
+    }
 
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
     paragraph_builder.push_style(&char_style);
@@ -135,40 +141,46 @@ impl Typesetter{
     results
   }
 
-  pub fn path(&mut self) -> Option<SkPath> {
-    let families:Vec<String> = self.char_style.font_families().iter().map(|fam| fam.to_string()).collect();
-    let matches = self.typefaces.find_typefaces(&families, self.char_style.font_style());
-    if let Some(typeface) = matches.first(){
-      let font = Font::from_typeface(typeface, self.char_style.font_size());
-      let (leading, metrics) = font.metrics();
-      let (width, bounds) = font.measure_str(&self.text, None);
-      let offset = (
-        width * get_alignment_factor(&self.graf_style),
-        get_baseline_offset(&metrics, self.baseline)
-      );
+  pub fn path(&mut self) -> SkPath {
+    let (mut paragraph, mut offset) = self.layout(&Paint::default());
+    offset.y -= self.char_style.font_metrics().ascent + paragraph.alphabetic_baseline();
 
-      Some(SkPath::from_str(&self.text, offset, &font))
-    }else{
-      None
-    }
+    let mut path = SkPath::new();
+    for idx in 0..paragraph.line_number(){
+      let (skipped, line) = paragraph.get_path_at(idx);
+      path.add_path(&line, offset, None);
+    };
+    path
   }
 }
 
 //
 // Font argument packing & unpacking
 //
-
+#[derive(Debug, Clone)]
 pub struct FontSpec{
-  families: Vec<String>,
-  size: f32,
-  leading: f32,
-  style: FontStyle,
-  features: Vec<(String, i32)>,
+  pub families: Vec<String>,
+  pub size: f32,
+  pub leading: f32,
+  pub weight: Weight,
+  pub width: Width,
+  pub slant: Slant,
+  pub features: Vec<(String, i32)>,
   pub variant: String,
   pub canonical: String
 }
 
-pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<Option<FontSpec>> {
+impl FontSpec{
+  pub fn with_width(&self, width:Width) -> Self{
+    Self{width, ..self.clone()}
+  }
+
+  pub fn style(&self) -> FontStyle{
+    FontStyle::new(self.weight, self.width, self.slant)
+  }
+}
+
+pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontSpec>> {
   let arg = cx.argument::<JsValue>(idx)?;
   if arg.is_a::<JsNull, _>(cx){ return Ok(None) }
 
@@ -186,8 +198,7 @@ pub fn font_arg(cx: &mut FunctionContext, idx: i32) -> NeonResult<Option<FontSpe
   let feat_obj:Handle<JsObject> = font_desc.get(cx, "features")?;
   let features = font_features(cx, &feat_obj)?;
 
-  let style = FontStyle::new(weight, width, slant);
-  Ok(Some(FontSpec{ families, size, leading, style, features, variant, canonical}))
+  Ok(Some(FontSpec{ families, size, leading, weight, slant, width, features, variant, canonical}))
 }
 
 pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
@@ -332,7 +343,7 @@ pub fn get_alignment_factor(graf_style:&ParagraphStyle) -> f32 {
   }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Baseline{ Top, Hanging, Middle, Alphabetic, Ideographic, Bottom }
 
 pub fn to_text_baseline(mode_name:&str) -> Option<Baseline>{
@@ -370,293 +381,126 @@ pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f32 {
   }
 }
 
-#[derive(PartialEq, Eq, Hash)]
-struct CollectionKey{ families:String, weight:i32, slant:Slant }
+#[derive(Clone, Debug)]
+pub struct DecorationStyle{
+  pub css: String,
+  pub decoration: Decoration,
+  pub size: Option<Spacing>,
+  pub color: Option<Color>,
+}
 
-impl CollectionKey{
-  pub fn new(style: &TextStyle) -> Self {
-    let families = style.font_families();
-    let families = families.iter().collect::<Vec<&str>>().join(", ");
-    let weight = *style.font_style().weight();
-    let slant = style.font_style().slant();
-    CollectionKey{ families, weight, slant }
+
+impl Default for DecorationStyle{
+  fn default() -> Self {
+    Self{decoration:Decoration::default(), size:None, color:None, css:"none".to_string()}
   }
 }
 
-//
-// Font collection management
-//
-
-pub struct FontLibrary{
-  pub fonts: Vec<(Typeface, Option<String>)>,
-  pub collection: FontCollection,
-  collection_cache: HashMap<CollectionKey, FontCollection>,
+impl DecorationStyle{
+  pub fn for_layout(&self, style:&TextStyle, text_color:Color) -> Decoration{
+    // convert `size` into a multiple of the current font's default thickness
+    let em_size = style.font_size();
+    let thickness = style.font_metrics()
+      .underline_thickness()
+      .unwrap_or(1.0);
+    let thickness_multiplier = self.size.clone()
+      .map(|size| size.in_px(em_size) / thickness)
+      .unwrap_or(1.0);
+    let color = self.color.unwrap_or(text_color);
+    Decoration{thickness_multiplier, color, ..self.decoration}
+  }
 }
 
-unsafe impl Send for FontLibrary {
-  // famous last words: this ‘should’ be safe in practice because the singleton is behind a mutex
-}
+pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<DecorationStyle>> {
+  if let Some(deco) = opt_object_arg(cx, idx){
+    let css = string_for_key(cx, &deco, "str")?;
 
-impl FontLibrary{
-  pub fn shared() -> Mutex<Self>{
-    let fonts = vec![];
-    let collection_cache = HashMap::new();
-    let mut collection = FontCollection::new();
-    collection.set_default_font_manager(FontMgr::new(), None);
-    Mutex::new(FontLibrary{ collection, collection_cache, fonts })
-  }
-
-  fn families(&self) -> Vec<String>{
-    let font_mgr = FontMgr::new();
-    let mut names:Vec<String> = font_mgr.family_names().collect();
-    for (font, alias) in &self.fonts {
-      names.push(match alias{
-        Some(name) => name.clone(),
-        None => font.family_name()
-      })
-    }
-    names.sort();
-    names.dedup();
-    names
-  }
-
-  fn family_details(&self, family:&str) -> (Vec<f32>, Vec<String>, Vec<String>){
-    // merge the system fonts and our dynamically added fonts into one list of FontStyles
-    let mut dynamic = TypefaceFontProvider::new();
-    for (font, alias) in &self.fonts{
-      dynamic.register_typeface(font.clone(), alias.clone());
-    }
-    let std_mgr = FontMgr::new();
-    let dyn_mgr:FontMgr = dynamic.into();
-    let mut std_set = std_mgr.match_family(&family);
-    let mut dyn_set = dyn_mgr.match_family(&family);
-    let std_styles = (0..std_set.count()).map(|i| std_set.style(i));
-    let dyn_styles = (0..dyn_set.count()).map(|i| dyn_set.style(i));
-    let all_styles = std_styles.chain(dyn_styles);
-
-    // set up a collection to query for variable fonts who specify their weights
-    // via the 'wght' axis rather than through distinct files with different FontStyles
-    let mut var_fc = FontCollection::new();
-    var_fc.set_default_font_manager(FontMgr::new(), None);
-    var_fc.set_asset_font_manager(Some(dyn_mgr));
-
-    // pull style values out of each matching font
-    let mut weights:Vec<i32> = vec![];
-    let mut widths:Vec<String> = vec![];
-    let mut styles:Vec<String> = vec![];
-    all_styles.for_each(|(style, _name)| {
-      widths.push(from_width(style.width()));
-      styles.push(from_slant(style.slant()));
-      weights.push(*style.weight());
-      if let Some(font) = var_fc.find_typefaces(&[&family], style).first(){
-        // for variable fonts, report all the 100× sizes they support within their wght range
-        weights.append(&mut typeface_wght_range(font));
-      }
-    });
-
-    // repackage collected values
-    widths.sort_by(|a, b| a.replace("normal", "_").partial_cmp(&b.replace("normal", "_")).unwrap());
-    widths.dedup();
-    styles.sort_by(|a, b| a.replace("normal", "_").partial_cmp(&b.replace("normal", "_")).unwrap());
-    styles.dedup();
-    weights.sort_unstable();
-    weights.dedup();
-    let weights = weights.iter().map(|w| *w as f32 ).collect();
-    (weights, widths, styles)
-  }
-
-  fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
-    // replace any previously added font with the same metadata/alias
-    if let Some(idx) = self.fonts.iter().position(|(old_font, old_alias)|
-      match alias.is_some(){
-        true => old_alias == &alias,
-        false => old_font.family_name() == font.family_name()
-      } && old_font.font_style() == font.font_style()
-    ){
-      self.fonts.remove(idx);
-    }
-    self.fonts.push((font, alias));
-
-    let mut assets = TypefaceFontProvider::new();
-    for (font, alias) in &self.fonts {
-      assets.register_typeface(font.clone(), alias.as_ref());
-    }
-
-    let mut collection = FontCollection::new();
-    collection.set_default_font_manager(FontMgr::new(), None);
-    collection.set_asset_font_manager(Some(assets.into()));
-    self.collection = collection;
-    self.collection_cache.drain();
-  }
-
-  pub fn update_style(&mut self, orig_style:&TextStyle, spec: &FontSpec) -> Option<TextStyle>{
-    let mut style = orig_style.clone();
-
-    // don't update the style if no usable family names were specified
-    let matches = self.collection.find_typefaces(&spec.families, spec.style);
-    if matches.is_empty(){
-      return None
-    }
-
-    style.set_font_style(spec.style);
-    style.set_font_families(&spec.families);
-    style.set_font_size(spec.size);
-    style.set_height(spec.leading / spec.size);
-    style.set_height_override(true);
-    style.reset_font_features();
-    for (feat, val) in &spec.features{
-      style.add_font_feature(feat, *val);
-    }
-    Some(style)
-  }
-
-  pub fn update_features(&mut self, orig_style:&TextStyle, features: &[(String, i32)]) -> TextStyle{
-    let mut style = orig_style.clone();
-    for (feat, val) in features{
-      style.add_font_feature(feat, *val);
-    }
-    style
-  }
-
-  pub fn collect_fonts(&mut self, style: &TextStyle) -> FontCollection {
-    let families = style.font_families();
-    let families:Vec<&str> = families.iter().collect();
-    let matches = self.collection.find_typefaces(&families, style.font_style());
-
-    // if the matched typeface is a variable font, create an instance that matches
-    // the current weight settings and return early with a new FontCollection that
-    // contains just that single font instance
-    if let Some(font) = matches.first() {
-      if let Some(params) = font.variation_design_parameters(){
-
-        // memoize the generation of single-weight FontCollections for variable fonts
-        let key = CollectionKey::new(style);
-        if let Some(collection) = self.collection_cache.get(&key){
-          return collection.clone()
-        }
-
-        // reconnect to the user-specified family name (if provided)
-        let alias = self.fonts.iter().find_map(|(face, alias)|
-          if Typeface::equal(font, face){ alias.clone() }else{ None }
-        );
-
-        for param in params {
-          let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-          let tag = String::from_utf8(chars).unwrap();
-          if tag == "wght"{
-            // NB: currently setting the value to *one less* than what was requested
-            //     to work around weird Skia behavior that returns something nonlinearly
-            //     weighted in many cases (but not for ±1 of that value). This makes it so
-            //     that n × 100 values will render correctly (and the bug will manifest at
-            //     n × 100 + 1 instead)
-            let weight = *style.font_style().weight() - 1;
-            let value = (weight as f32).max(param.min).min(param.max);
-            let coords = [ Coordinate { axis: param.tag, value } ];
-            let v_pos = VariationPosition { coordinates: &coords };
-            let args = FontArguments::new().set_variation_design_position(v_pos);
-            let face = font.clone_with_arguments(&args).unwrap();
-
-            let mut dynamic = TypefaceFontProvider::new();
-            dynamic.register_typeface(face, alias);
-
-            let mut collection = FontCollection::new();
-            collection.set_default_font_manager(FontMgr::new(), None);
-            collection.set_asset_font_manager(Some(dynamic.into()));
-            self.collection_cache.insert(key, collection.clone());
-            return collection
-          }
-        }
-      }
-    }
-
-    // if the matched font wasn't variable, then just return the standard collection
-    self.collection.clone()
-  }
-
-}
-
-//
-// Javascript Methods
-//
-
-pub fn get_families(mut cx: FunctionContext) -> JsResult<JsArray> {
-  let library = FONT_LIBRARY.lock().unwrap();
-  let families = library.families();
-  let names = strings_to_array(&mut cx, &families)?;
-  Ok(names)
-}
-
-pub fn has(mut cx: FunctionContext) -> JsResult<JsBoolean> {
-  let library = FONT_LIBRARY.lock().unwrap();
-  let family = string_arg(&mut cx, 1, "familyName")?;
-  let found = library.families().contains(&family);
-  Ok(cx.boolean(found))
-}
-
-pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
-  let library = FONT_LIBRARY.lock().unwrap();
-  let family = string_arg(&mut cx, 1, "familyName")?;
-  let (weights, widths, styles) = library.family_details(&family);
-
-  if weights.is_empty() {
-    return Ok(cx.undefined().upcast())
-  }
-
-  let name = cx.string(family);
-  let weights = floats_to_array(&mut cx, &weights)?;
-  let widths = strings_to_array(&mut cx, &widths)?;
-  let styles = strings_to_array(&mut cx, &styles)?;
-
-  let details = JsObject::new(&mut cx);
-  let attr = cx.string("family"); details.set(&mut cx, attr, name)?;
-  let attr = cx.string("weights"); details.set(&mut cx, attr, weights)?;
-  let attr = cx.string("widths"); details.set(&mut cx, attr, widths)?;
-  let attr = cx.string("styles"); details.set(&mut cx, attr, styles)?;
-
-  Ok(details.upcast())
-}
-
-pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
-  let alias = opt_string_arg(&mut cx, 1);
-  let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
-  let results = JsArray::new(&mut cx, filenames.len() as u32);
-
-  for (i, filename) in strings_in(&mut cx, &filenames).iter().enumerate(){
-    let path = Path::new(&filename);
-    let typeface = match fs::read(path){
-      Err(why) => {
-        return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
-      },
-      Ok(bytes) => Typeface::from_data(Data::new_copy(&bytes), None)
+    let line = string_for_key(cx, &deco, "line")?;
+    let ty = match line.as_str(){
+      "underline" => TextDecoration::UNDERLINE,
+      "overline" => TextDecoration::OVERLINE,
+      "line-through" => TextDecoration::LINE_THROUGH,
+      "none" | _ => return Ok(Some(DecorationStyle::default()))
     };
 
-    match typeface {
-      Some(font) => {
-        // add family/weight/width/slant details to return value
-        let details = typeface_details(&mut cx, filename, &font, alias.clone())?;
-        results.set(&mut cx, i as u32, details)?;
+    let line_style = string_for_key(cx, &deco, "style")?;
+    let style = match line_style.as_str(){
+      "wavy" => TextDecorationStyle::Wavy,
+      "dotted" => TextDecorationStyle::Dotted,
+      "dashed" => TextDecorationStyle::Dashed,
+      "double" => TextDecorationStyle::Double,
+      "solid" | _ => TextDecorationStyle::Solid,
+    };
 
-        // register the typeface
-        let mut library = FONT_LIBRARY.lock().unwrap();
-        library.add_typeface(font, alias.clone());
-      },
-      None => {
-        return cx.throw_error(format!("Could not decode font data in {}", path.display()))
-      }
+    let color = match string_for_key(cx, &deco, "color")?.as_str(){
+      "currentColor" => None,
+      color_str => css_to_color(&color_str),
+    };
+
+    let inherit = string_for_key(cx, &deco, "inherit")?;
+    let size = match inherit.as_str(){
+      "from-font" => None,
+      _ => match opt_object_for_key(cx, &deco, "thickness"){
+          Some(thickness) => {
+            let raw_size = float_for_key(cx, &thickness, "size")?;
+            let unit = string_for_key(cx, &thickness, "unit")?;
+            let px_size = float_for_key(cx, &thickness, "px")?;
+            Spacing::parse(raw_size, unit, px_size)
+          }
+          _ => None
+        }
+    };
+
+    // if the setting is invalid, it should just be ignored
+    if css.is_empty() || color.is_none(){ return Ok(None) }
+
+    // As of skia_safe 0.78.2, `Gaps` mode is too buggy, with random breaks in places that don't have
+    // descenders. It would be nice to enable this in a future release once it stabilizes…
+    let mode = TextDecorationMode::Through;
+
+    let decoration = Decoration{ ty, style, mode, ..Decoration::default() };
+    Ok(Some(DecorationStyle{ decoration, size, color, css} ))
+  }else{
+    Ok(None)
+  }
+}
+
+
+#[derive(Clone, Debug)]
+pub struct Spacing{
+  raw_size: f32,
+  unit: String,
+  px_size: f32,
+}
+
+impl Default for Spacing{
+  fn default() -> Self {
+      Self{raw_size:0.0, unit:"px".to_string(), px_size:0.0}
+  }
+}
+
+impl Spacing{
+  pub fn parse(raw_size:f32, unit:String, px_size:f32) -> Option<Self>{
+    let main_size = match unit.as_str(){
+      "em" | "rem" => raw_size,
+      _ => px_size
+    };
+
+    match main_size.is_nan(){
+      false => Some(Self{raw_size, unit, px_size}),
+      true => None
     }
   }
 
-  Ok(results.upcast())
+  pub fn in_px(&self, em_size:f32) -> f32{
+    match self.unit.as_str(){
+      "em" | "rem" => self.raw_size * em_size,
+      _ => self.px_size
+    }
+  }
+
+  pub fn to_string(&self) -> String{
+    format!("{}{}", self.raw_size, self.unit)
+  }
 }
 
-pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let mut library = FONT_LIBRARY.lock().unwrap();
-  library.fonts.clear();
-
-  let mut collection = FontCollection::new();
-  collection.set_default_font_manager(FontMgr::new(), None);
-  library.collection = collection;
-  library.collection_cache.drain();
-
-  Ok(cx.undefined())
-}

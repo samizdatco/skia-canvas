@@ -2,10 +2,21 @@
 <html>
   <head>
     <title>Skia Canvas: Visual Tests</title>
+    <meta name="color-scheme" content="dark light">
     <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/pixelmatch@4.0.2/index.min.js"></script>
+    <link rel="preload" href="Monoton-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <script src="https://bundle.run/pixelmatch@5.2.0"></script>
     <script src="/tests.js"></script>
     <style>
+      @font-face {
+        font-family: 'Monoton';
+        src: url(Monoton-Regular.woff2) format(woff2);
+      }
+
+      * {
+        box-sizing:border-box;
+      }
+
       body {
         font: 13px/1.4 "Raleway", Helvetica, Arial, sans-serif;
       }
@@ -43,10 +54,14 @@
       }
 
       header {
-        box-sizing:border-box;
         width:1000px;
-        padding-left:280px;
-        margin:80px auto 40px auto;
+        margin:20px auto;
+        display: grid;
+        grid-template-columns: 280px auto;
+      }
+
+      header h1 {
+        grid-column: 2/3;
       }
 
       #tests {
@@ -76,16 +91,107 @@
       }
 
       table th {
-        background: white;
+        background: Canvas;
         position: -webkit-sticky;
         position: sticky;
         top: 0;
       }
+
+      #options {
+        margin-top: 10px;
+      }
+
+      #options form {
+        width: max-content;
+        display: grid;
+        grid-template-columns: 40% auto;
+        justify-items: flex-start;
+        align-items: center;
+        gap: 1px 6px;
+        margin: 10px 0 0;
+      }
+
+      fieldset.inline {
+        display: grid;
+        grid-auto-flow: column;
+        column-gap: 4px;
+        width: 100%;
+        justify-items: flex-start;
+        align-items: center;
+        border: 0;
+        padding: .35em 0;
+      }
+
+      fieldset.buttonbox {
+        grid-column: 1/3;
+        column-gap: 24px;
+      }
+
+      input[type='number'] {
+        max-width: 4.5em;
+      }
+
     </style>
   </head>
   <body>
     <header>
       <h1>Visual Tests</h1>
+
+      <details id="options">
+        <summary>Options</summary>
+        <form id="optionsForm" method="get">
+
+          <label for="gpu" title="Use GPU-based rendering on skia and browser canvas (if available in skia build and enabled in browser settings).">GPU</label>
+          <fieldset class="inline">
+            <label for="gpu_0" title="The 'unset' option doesn't explicitly set the skia canvas 'gpu' property or browser rendering either way.">
+              <input type="radio" name="gpu" id="gpu_0" value="null"/>unset
+            </label>
+            <label for="gpu_1" title="Force GPU enabled (if availabe).">
+              <input type="radio" name="gpu" id="gpu_1" value="1"/>on
+            </label>
+            <label for="gpu_2" title="Force GPU disabled.">
+              <input type="radio" name="gpu" id="gpu_2" value="0"/>off
+            </label>
+          </fieldset>
+
+          <label for="width">Canvas Size</label>
+          <fieldset class="inline">
+            <input id="width" name="width" type="number" min="5" max="900" title="Canvas width">
+            x
+            <input name="height" type="number" min="5" max="900" title="Canvas height">
+          </fieldset>
+
+          <label for="cc">Canvas Color</label>
+          <fieldset class="inline">
+            <input id="cc" name="cc" type="color">
+            <label for="alpha">α</label>
+            <input id="alpha" name="alpha" type="number" min="0" max="1" step=".01" title="Transparency value for canvas color" />
+          </fieldset>
+
+          <label for="bc">Page Color</label>
+          <fieldset class="inline">
+            <input id="bc" name="bc" type="color" title="Canvas view background color. Clear the 'Default' checkbox to select." disabled>
+            <label title="Use browser default color. Clear this checkbox to be able to select a color.">
+              <input id="bc_default" name="bc_default" type="checkbox" value="1" onchange="this.form.bc.disabled = this.checked">Default
+            </label>
+          </fieldset>
+
+          <label for="diffMask" title="Pixel difference view options">Diff. View</label>
+          <fieldset class="inline">
+            <label for="threshold" title="Difference threshold value.">δε</label>
+            <input id="threshold" name="threshold" type="number" min="0" max="1" step=".001" title="Difference threshold value." />
+            <label title="Use transparent background for difference view (disables AA diff)">
+              <input id="diffMask" name="diffMask" type="checkbox">Mask
+            </label>
+          </fieldset>
+
+          <fieldset class="inline buttonbox">
+            <button type="button" onclick="document.location.href='/'">reset all</button>
+            <button type="submit" style="justify-self: stretch;">submit</button>
+          </fieldset>
+
+        </form>
+      </details>
 
       <p class="msg">
         The tests below compare rendering with <a href="https://www.npmjs.com/package/skia-canvas">skia-canvas</a> to the browser’s HTMLCanvas implementation.
@@ -95,7 +201,22 @@
     <main></main>
 
     <script>
-      window.addEventListener('load', runTests)
+      // runtime options, most set via cookies from 'express' loader
+      const opt = {
+        width: 200,
+        height: 200,
+        cc: '#FFFFFF',
+        bc: undefined,
+        bc_default: true,
+        gpu: undefined,
+        diffMask: true,
+        threshold: 0.15,
+      }
+
+      window.addEventListener('load', () => {
+        setupUi()
+        runTests()
+      })
 
       function create (type, attrs, children) {
         const element = Object.assign(document.createElement(type), attrs)
@@ -115,13 +236,25 @@
         })
       }
 
+      function svgLink (name) {
+        return create('a', {
+          href: '/svg?name=' + encodeURIComponent(name),
+          target: '_blank',
+          textContent: 'SVG'
+        })
+      }
+
       function localRendering (name, callback) {
-        var canvas = create('canvas', { width: 200, height: 200, title: name })
+        var canvas = create('canvas', { width: opt.width, height: opt.height, title: name })
         var tests = window.tests
-        var ctx = canvas.getContext('2d', { alpha: true })
+        var ctx = canvas.getContext('2d', {
+          alpha: true,
+          willReadFrequently: typeof opt.gpu == 'boolean' ? !opt.gpu : undefined
+        })
+        ctx.imageSmoothingEnabled = true;
         var initialFillStyle = ctx.fillStyle
-        ctx.fillStyle = 'white'
-        ctx.fillRect(0, 0, 200, 200)
+        ctx.fillStyle = opt.cc
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
         ctx.fillStyle = initialFillStyle
         if (tests[name].length === 2) {
           tests[name](ctx, callback)
@@ -133,17 +266,38 @@
       }
 
       function getDifference (canvas, image, outputCanvas) {
-        var imgCanvas = create('canvas', { width: 200, height: 200 })
+        var imgCanvas = create('canvas', { width: opt.width, height: opt.height })
         var ctx = imgCanvas.getContext('2d', { alpha: true })
-        var output = outputCanvas.getContext('2d', { alpha: true }).getImageData(0, 0, 200, 200)
-        ctx.drawImage(image, 0, 0, 200, 200)
-        var imageDataCanvas = ctx.getImageData(0, 0, 200, 200).data
-        var imageDataGolden = canvas.getContext('2d', { alpha: true }).getImageData(0, 0, 200, 200).data
-        window.pixelmatch(imageDataCanvas, imageDataGolden, output.data, 200, 200, {
-          includeAA: false,
-          threshold: 0.15
-        })
-        outputCanvas.getContext('2d', { alpha: true }).putImageData(output, 0, 0)
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(image, 0, 0, imgCanvas.width, imgCanvas.height)
+        const outCtx = outputCanvas.getContext('2d', { alpha: true })
+        var imageDataCanvas = ctx.getImageData(0, 0, imgCanvas.width, imgCanvas.height).data
+        try {
+          // this may throw a security error if an external image was painted onto the browser's canvas
+          var imageDataGolden = canvas.getContext('2d', { alpha: true }).getImageData(0, 0, canvas.width, canvas.height).data
+          var output = outCtx.createImageData(outputCanvas.width, outputCanvas.height)
+          window.pixelmatch(imageDataCanvas, imageDataGolden, output.data, imgCanvas.width, imgCanvas.height, {
+            includeAA: false,
+            threshold: opt.threshold,
+            alpha: 0.0,
+            diffMask: opt.diffMask,
+            aaColor: [0,255,0],
+            diffColorAlt: [0,0,255],
+          })
+          outCtx.putImageData(output, 0, 0)
+        }
+        catch {
+          // draw an X if the differencing fails (so it doesn't look like a 100% successful comparison)
+          outCtx.fillStyle = '#F00'
+          outCtx.fillRect(0, 0, imgCanvas.width, imgCanvas.height)
+          outCtx.strokeStyle = 'white'
+          outCtx.lineWidth = 3
+          outCtx.moveTo(0,0)
+          outCtx.lineTo(imgCanvas.width, imgCanvas.height)
+          outCtx.moveTo(0,imgCanvas.height)
+          outCtx.lineTo(imgCanvas.width, 0)
+          outCtx.stroke()
+        }
         return outputCanvas
       }
 
@@ -162,12 +316,12 @@
             create('th', { textContent: '' }),
             create('th', { textContent: 'skia-canvas' }),
             create('th', { textContent: 'Browser canvas' }),
-            create('th', { textContent: 'Pixel differences' }),
+            create('th', { textContent: 'Pixel differences', title: 'Red: only on left; Blue: only on right; Green: AA diff.' }),
 
           ]),
           create('tbody', {}, testNames.filter(name => name.match(/./i)).map(function (name) {
             var img = create('img')
-            var canvasOuput = create('canvas', { width: 200, height: 200, title: name })
+            var canvasOuput = create('canvas', { width: opt.width, height: opt.height, title: name })
             var canvas = localRendering(name, function () {
               img.onload = function () {
                 getDifference(canvas, img, canvasOuput)
@@ -176,7 +330,8 @@
             })
             return create('tr', {}, [
               create('td', {}, [create('h3', { textContent: name }),
-                                create('br') ,pdfLink(name) ]),
+                                create('br') ,pdfLink(name),
+                                create('br') ,svgLink(name) ]),
               create('td', {}, [img]),
               create('td', {}, [canvas]),
               create('td', {}, [canvasOuput]),
@@ -187,6 +342,60 @@
 
         document.querySelector("main").appendChild(table)
       }
+
+      function getCookie(name) {
+        const nameEQ = name + '=';
+        for (const cookie of document.cookie.split('; ')) {
+          if (cookie.indexOf(nameEQ) === 0) {
+            const value = cookie.substring(nameEQ.length);
+            return decodeURIComponent(value);
+          }
+        }
+        return null;
+      }
+
+      function populateForm() {
+        // console.log(opt)
+        const form = document.getElementById('optionsForm')
+        form.width.value = opt.width.toFixed(0)
+        form.height.value = opt.height.toFixed(0)
+        form.threshold.value = opt.threshold.toFixed(3)
+        form.gpu.value = opt.gpu == null ? 'null' : opt.gpu ? '1' : '0'
+        form.diffMask.checked = opt.diffMask
+        // somewhat primitive attempt to separate the alpha value from hex code, assumes a hex color value
+        const [_, rgb, a] = opt.cc.match(/#([\da-f]{1,2}[\da-f]{1,2}[\da-f]{1,2})([\da-f]+)?/i) || []
+        if (rgb) {
+          form.cc.value = '#' + rgb
+          let alpha = Math.min(Math.max(Math.round((parseInt(a, 16)) / 255 * 100) / 100, 0), 1);
+          form.alpha.value = Number.isFinite(alpha) ? alpha : 1
+        }
+        if (opt.bc)
+          form.bc.value = opt.bc
+        form.bc_default.checked = form.bc.disabled = opt.bc_default
+      }
+
+      function setupUi() {
+        // check cookie for runtime options
+        let renderOptions = getCookie('renderOptions')
+        if (renderOptions) {
+          try {
+            renderOptions = JSON.parse(renderOptions)
+            Object.assign(opt, renderOptions)
+          } catch (e) {
+            console.log("Options cookie parse error:", e)
+          }
+        }
+
+        // some options are set only via URL params
+        const params = new URL(location.href).searchParams
+        opt.threshold = parseFloat(params.get('threshold')) || opt.threshold
+        opt.diffMask = params.has('diffMask')
+
+        document.getElementsByTagName('main')[0].style.backgroundColor = !opt.bc_default && opt.bc ? opt.bc : 'unset'
+
+        populateForm();
+      }
+
     </script>
 
   </body>

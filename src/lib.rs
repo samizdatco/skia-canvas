@@ -1,5 +1,6 @@
+#![allow(unused_braces)]
 #![allow(clippy::unnecessary_wraps)]
-use std::sync::{Mutex};
+use std::sync::Mutex;
 use neon::prelude::*;
 use once_cell::sync::Lazy;
 
@@ -11,6 +12,7 @@ mod filter;
 mod gradient;
 mod pattern;
 mod texture;
+mod font_library;
 mod typography;
 mod utils;
 mod gpu;
@@ -18,12 +20,19 @@ mod gpu;
 mod gui;
 
 use context::api as ctx;
-use typography::FontLibrary;
+use font_library::FontLibrary;
 
-pub static FONT_LIBRARY: Lazy<Mutex<FontLibrary>> = Lazy::new(|| FontLibrary::shared() );
+pub static FONT_LIBRARY: Lazy<Mutex<FontLibrary>> = Lazy::new(FontLibrary::shared);
 
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
+
+  // initialize thread pool w/ non-default size if requested
+  if let Ok(value) = std::env::var("SKIA_CANVAS_THREADS"){
+    if let Ok(num) = value.parse::<usize>(){
+      rayon::ThreadPoolBuilder::new().num_threads(num).build_global().unwrap();
+    }
+  }
 
   // -- Image -------------------------------------------------------------------------------------
 
@@ -34,6 +43,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Image_get_width", image::get_width)?;
   cx.export_function("Image_get_height", image::get_height)?;
   cx.export_function("Image_get_complete", image::get_complete)?;
+  cx.export_function("Image_pixels", image::pixels)?;
 
   // -- Path2D ------------------------------------------------------------------------------------
 
@@ -78,6 +88,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- CanvasPattern -----------------------------------------------------------------------------
 
   cx.export_function("CanvasPattern_from_image", pattern::from_image)?;
+  cx.export_function("CanvasPattern_from_image_data", pattern::from_image_data)?;
   cx.export_function("CanvasPattern_from_canvas", pattern::from_canvas)?;
   cx.export_function("CanvasPattern_setTransform", pattern::setTransform)?;
   cx.export_function("CanvasPattern_repr", pattern::repr)?;
@@ -89,11 +100,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   // -- FontLibrary -------------------------------------------------------------------------------
 
-  cx.export_function("FontLibrary_get_families", typography::get_families)?;
-  cx.export_function("FontLibrary_has", typography::has)?;
-  cx.export_function("FontLibrary_family", typography::family)?;
-  cx.export_function("FontLibrary_addFamily", typography::addFamily)?;
-  cx.export_function("FontLibrary_reset", typography::reset)?;
+  cx.export_function("FontLibrary_get_families", font_library::get_families)?;
+  cx.export_function("FontLibrary_has", font_library::has)?;
+  cx.export_function("FontLibrary_family", font_library::family)?;
+  cx.export_function("FontLibrary_addFamily", font_library::addFamily)?;
+  cx.export_function("FontLibrary_reset", font_library::reset)?;
 
   // -- Canvas ------------------------------------------------------------------------------------
 
@@ -101,14 +112,13 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
   cx.export_function("Canvas_get_engine", canvas::get_engine)?;
   cx.export_function("Canvas_set_engine", canvas::set_engine)?;
+  cx.export_function("Canvas_get_engine_status", canvas::get_engine_status)?;
 
   cx.export_function("Canvas_get_width", canvas::get_width)?;
   cx.export_function("Canvas_set_width", canvas::set_width)?;
   cx.export_function("Canvas_get_height", canvas::get_height)?;
   cx.export_function("Canvas_set_height", canvas::set_height)?;
 
-  cx.export_function("Canvas_get_async", canvas::get_async)?;
-  cx.export_function("Canvas_set_async", canvas::set_async)?;
   cx.export_function("Canvas_save", canvas::save)?;
   cx.export_function("Canvas_saveSync", canvas::saveSync)?;
   cx.export_function("Canvas_toBuffer", canvas::toBuffer)?;
@@ -203,12 +213,18 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_textBaseline", ctx::set_textBaseline)?;
   cx.export_function("CanvasRenderingContext2D_get_direction", ctx::get_direction)?;
   cx.export_function("CanvasRenderingContext2D_set_direction", ctx::set_direction)?;
+  cx.export_function("CanvasRenderingContext2D_get_letterSpacing", ctx::get_letterSpacing)?;
+  cx.export_function("CanvasRenderingContext2D_set_letterSpacing", ctx::set_letterSpacing)?;
+  cx.export_function("CanvasRenderingContext2D_get_wordSpacing", ctx::get_wordSpacing)?;
+  cx.export_function("CanvasRenderingContext2D_set_wordSpacing", ctx::set_wordSpacing)?;
   cx.export_function("CanvasRenderingContext2D_get_fontVariant", ctx::get_fontVariant)?;
   cx.export_function("CanvasRenderingContext2D_set_fontVariant", ctx::set_fontVariant)?;
-  cx.export_function("CanvasRenderingContext2D_get_textTracking", ctx::get_textTracking)?;
-  cx.export_function("CanvasRenderingContext2D_set_textTracking", ctx::set_textTracking)?;
+  cx.export_function("CanvasRenderingContext2D_get_fontStretch", ctx::get_fontStretch)?;
+  cx.export_function("CanvasRenderingContext2D_set_fontStretch", ctx::set_fontStretch)?;
   cx.export_function("CanvasRenderingContext2D_get_textWrap", ctx::get_textWrap)?;
   cx.export_function("CanvasRenderingContext2D_set_textWrap", ctx::set_textWrap)?;
+  cx.export_function("CanvasRenderingContext2D_get_textDecoration", ctx::get_textDecoration)?;
+  cx.export_function("CanvasRenderingContext2D_set_textDecoration", ctx::set_textDecoration)?;
 
   // effects
   cx.export_function("CanvasRenderingContext2D_get_globalAlpha", ctx::get_globalAlpha)?;

@@ -1,22 +1,36 @@
-NAPI_VERSION := 6
+NAPI_VERSION := 8
 NPM := $(CURDIR)/node_modules
 NODEMON := $(CURDIR)/node_modules/.bin/nodemon
 JEST := $(CURDIR)/node_modules/.bin/jest
 LIBDIR := $(CURDIR)/lib/v$(NAPI_VERSION)
 LIB := $(LIBDIR)/index.node
+LIB_SRC := Cargo.toml $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src/*/*/*.rs)
 GIT_TAG = $(shell git describe)
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | cut -d '=' -f 2)
 NPM_VERSION = $(shell npm view skia-canvas version)
-.PHONY: build test visual check clean distclean release run preview
+.PHONY: optimized test debug visual check clean distclean release skia-version with-local-skia run preview
+.DEFAULT_GOAL := $(LIB)
 
-build: $(NPM)
-	@rm -f $(LIB)
-	@npm run build
+# platform-specific features to be passed to cargo
+OS=$(shell sh -c 'uname -s 2>/dev/null')
+ifeq ($(OS),Darwin)
+	FEATURES = metal,window
+else ifeq ($(OS),Linux)
+	FEATURES = vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
+else # Windows
+	FEATURES = vulkan,window
+endif
 
 $(NPM):
-	npm install
+	npm ci --ignore-scripts
 
-$(LIB): build
+$(LIB): $(NPM) $(LIB_SRC)
+	@npm run build
+	@touch $(LIB)
+
+optimized: $(NPM)
+	@rm -f $(LIB)
+	@npm run build -- --release --features $(FEATURES)
 
 test: $(LIB)
 	@$(JEST) --verbose
@@ -66,9 +80,8 @@ with-local-skia:
 	echo 'skia-bindings = { path = "../rust-skia/skia-bindings" }' >> Cargo.toml
 
 # debugging
-run: build
+run: $(LIB)
 	@node check.js
 
 preview: run
-	@open -a Preview.app out.png
-	@open -a "Visual Studio Code"
+	@less out.png || true

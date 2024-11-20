@@ -29,23 +29,20 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
+        cache: 'npm'
 
     - name: Use Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
 
-    - name: Build for Metal
-      if: ${{ matrix.os == 'macos-latest' }}
-      run: |
-        npm ci --ignore-scripts
-        npm run build -- --release --features metal,window
+    - name: Use Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: Build for Vulkan
-      if: ${{ matrix.os != 'macos-latest' }}
-      run: |
-        npm ci --ignore-scripts
-        npm run build -- --release --features vulkan,window
+    - name: Build module
+      run: make optimized
 
     - name: Run tests
-      run: npm test
+      run: |
+        npm test --verbose
+

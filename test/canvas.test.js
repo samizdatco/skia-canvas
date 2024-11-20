@@ -3,7 +3,7 @@
 const _ = require('lodash'),
       fs = require('fs'),
       tmp = require('tmp'),
-      glob = require('glob').sync,
+      glob = require('fast-glob').globSync,
       {Canvas, Image} = require('../lib');
 
 const BLACK = [0,0,0,255],
@@ -12,12 +12,14 @@ const BLACK = [0,0,0,255],
       MAGIC = {
         jpg: Buffer.from([0xFF, 0xD8, 0xFF]),
         png: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+        webp: Buffer.from([0x52, 0x49, 0x46, 0x46]),
         pdf: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d]),
         svg: Buffer.from(`<?xml version`, 'utf-8')
       },
       MIME = {
         png: "image/png",
         jpg: "image/jpeg",
+        webp: "image/webp",
         pdf: "application/pdf",
         svg: "image/svg+xml"
       };
@@ -28,7 +30,7 @@ describe("Canvas", ()=>{
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
 
   let TMP,
-      findTmp = pattern => glob(pattern, {root:TMP});
+      findTmp = pattern => glob(pattern, {cwd:TMP, absolute:true});
 
   beforeEach(()=>{
     canvas = new Canvas(WIDTH, HEIGHT)
@@ -162,7 +164,7 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.jpg
-      for (let path of findTmp(`/*`)){
+      for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
       }
@@ -177,7 +179,22 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.png
-      for (let path of findTmp(`/*`)){
+      for (let path of findTmp(`*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+
+    test("WEBPs", async ()=>{
+      await Promise.all([
+        canvas.saveAs(`${TMP}/output1.webp`),
+        canvas.saveAs(`${TMP}/output2.WEBP`),
+        canvas.saveAs(`${TMP}/output3`, {format:'webp'}),
+        canvas.saveAs(`${TMP}/output4.svg`, {format:'webp'}),
+      ])
+
+      let magic = MAGIC.webp
+      for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
       }
@@ -191,7 +208,7 @@ describe("Canvas", ()=>{
         canvas.saveAs(`${TMP}/output4.jpeg`, {format:'svg'}),
       ])
 
-      for (let path of findTmp(`/*`)){
+      for (let path of findTmp(`*`)){
         let svg = fs.readFileSync(path, 'utf-8')
         expect(svg).toMatch(/^<\?xml version/)
       }
@@ -206,10 +223,39 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.pdf
-      for (let path of findTmp(`/*`)){
+      for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
       }
+    })
+
+    test("raw pixel buffers", async () => {
+      canvas.width = canvas.height = 4
+      ctx.fillStyle='#f00'
+      ctx.fillRect(0,0,1,1)
+      ctx.fillStyle='#0f0'
+      ctx.fillRect(1,0,1,1)
+      ctx.fillStyle='#00f'
+      ctx.fillRect(0,1,1,1)
+      ctx.fillStyle='#fff'
+      ctx.fillRect(1,1,1,1)
+
+      let rgba = ctx.getImageData(0, 0, 2, 2)
+      expect(rgba.data).toEqual(new Uint8ClampedArray([
+        255, 0,   0,   255,
+        0,   255, 0,   255,
+        0,   0,   255, 255,
+        255, 255, 255, 255
+      ]))
+
+      let bgra = ctx.getImageData(0, 0, 2, 2, {colorType:"bgra"})
+      expect(bgra.data).toEqual(new Uint8ClampedArray([
+        0,   0,   255, 255,
+        0,   255, 0,   255,
+        255, 0,   0,   255,
+        255, 255, 255, 255
+      ]))
+
     })
 
     test("image-sequences", async () => {
@@ -226,19 +272,20 @@ describe("Canvas", ()=>{
 
       await canvas.saveAs(`${TMP}/output-{2}.png`)
 
-      let files = findTmp(`/output-0?.png`)
+      let files = findTmp(`output-0?.png`)
       expect(files.length).toEqual(colors.length+1)
 
-      files.forEach((fn, i) => {
+      for (const [i, fn] of files.entries()){
         let img = new Image()
         img.src = fn
+        await img.decode()
         expect(img.complete).toBe(true)
 
         // second page inherits the first's size, then they increase
         let dim = i<2 ? 512 : 512 + 100 * (i-1)
         expect(img.width).toEqual(dim)
         expect(img.height).toEqual(dim)
-      })
+      }
 
     })
 
@@ -334,7 +381,7 @@ describe("Canvas", ()=>{
       canvas.saveAsSync(`${TMP}/output6.png`, {format:'jpeg'})
 
       let magic = MAGIC.jpg
-      for (let path of findTmp(`/*`)){
+      for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
       }
@@ -347,7 +394,22 @@ describe("Canvas", ()=>{
       canvas.saveAsSync(`${TMP}/output4.svg`, {format:'png'})
 
       let magic = MAGIC.png
-      for (let path of findTmp(`/*`)){
+      for (let path of findTmp(`*`)){
+        let header = fs.readFileSync(path).slice(0, magic.length)
+        expect(header.equals(magic)).toBe(true)
+      }
+    })
+
+    test("WEBPs", async ()=>{
+      await Promise.all([
+        canvas.saveAsSync(`${TMP}/output1.webp`),
+        canvas.saveAsSync(`${TMP}/output2.WEBP`),
+        canvas.saveAsSync(`${TMP}/output3`, {format:'webp'}),
+        canvas.saveAsSync(`${TMP}/output4.svg`, {format:'webp'}),
+      ])
+
+      let magic = MAGIC.webp
+      for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
       }
@@ -359,7 +421,7 @@ describe("Canvas", ()=>{
       canvas.saveAsSync(`${TMP}/output3`, {format:'svg'})
       canvas.saveAsSync(`${TMP}/output4.jpeg`, {format:'svg'})
 
-      for (let path of findTmp(`/*`)){
+      for (let path of findTmp(`*`)){
         let svg = fs.readFileSync(path, 'utf-8')
         expect(svg).toMatch(/^<\?xml version/)
       }
@@ -372,13 +434,13 @@ describe("Canvas", ()=>{
       canvas.saveAsSync(`${TMP}/output4.jpg`, {format:'pdf'})
 
       let magic = MAGIC.pdf
-      for (let path of findTmp(`/*`)){
+      for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
         expect(header.equals(magic)).toBe(true)
       }
     })
 
-    test("image-sequences", ()=>{
+    test("image-sequences", async ()=>{
       let colors = ['orange', 'yellow', 'green', 'skyblue', 'purple']
       colors.forEach((color, i) => {
         let dim = 512 + 100*i
@@ -392,19 +454,20 @@ describe("Canvas", ()=>{
 
       canvas.saveAsSync(`${TMP}/output-{2}.png`)
 
-      let files = findTmp(`/output-0?.png`)
+      let files = findTmp(`output-0?.png`)
       expect(files.length).toEqual(colors.length+1)
 
-      files.forEach((fn, i) => {
+      for (const [i, fn] of files.entries()){
         let img = new Image()
         img.src = fn
+        await img.decode()
         expect(img.complete).toBe(true)
 
         // second page inherits the first's size, then they increase
         let dim = i<2 ? 512 : 512 + 100 * (i-1)
         expect(img.width).toEqual(dim)
         expect(img.height).toEqual(dim)
-      })
+      }
     })
 
 
