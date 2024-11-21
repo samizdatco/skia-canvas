@@ -211,11 +211,11 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 
 ### Notable contributors
 
-- @mpaparno contributed support for SVG rendering, raw image-buffer handling, WEBP import/export and numerous bugfixes
-- @Salmondx & @ggolda developed the initial Raw image loading & rendering routines
-- @lucasmerlin helped get GPU rendering working on Vulkan
-- @cprecioso & @saantonandre corrected and expanded upon the TypeScript type definitions
-- @meihuanyu contributed filter & path rendering fixes
+- [@mpaparno](https://github.com/mpaparno) contributed support for SVG rendering, raw image-buffer handling, WEBP import/export and numerous bugfixes
+- [@Salmondx](https://github.com/Salmondx) & [@ggolda](https://github.com/ggolda) developed the initial Raw image loading & rendering routines
+- [@lucasmerlin](https://github.com/lucasmerlin) helped get GPU rendering working on Vulkan
+- [@cprecioso](https://github.com/cprecioso) & [@saantonandre](https://github.com/saantonandre) corrected and expanded upon the TypeScript type definitions
+- [@meihuanyu](https://github.com/meihuanyu) contributed filter & path rendering fixes
 
 ## Copyright
 © 2020–2024 [Samizdat Drafting Co.](https://samizdat.co)
