@@ -16,7 +16,14 @@
   <a href="https://github.com/samizdatco/skia-canvas/discussions">Discussion Forum</a>
 </div>
 
+<div align="center">
+
+### [2.0 Beta now available for testing](https://github.com/samizdatco/skia-canvas/discussions/189)
+
+</div>
+
 ---
+
 
 Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and, accordingly, produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
 
@@ -197,6 +204,21 @@ win.on("draw", e => {
   ctx.fill()
 })
 ```
+## Acknowledgements
+
+This project is deeply indebted to the work of the [Rust Skia project](https://github.com/rust-skia/rust-skia) whose Skia bindings provide a safe and idiomatic interface to the mess of C++ that lies underneath. Many thanks to the developers of [node-canvas](https://github.com/Automattic/node-canvas) for their terrific set of unit tests. In the absence of an [Acid Test](https://www.acidtests.org) for canvas, these routines were invaluable.
+
+
+### Notable contributors
+
+- @mpaparno contributed support for SVG rendering, raw image-buffer handling, WEBP import/export and numerous bugfixes
+- @Salmondx & @ggolda developed the initial Raw image loading & rendering routines
+- @lucasmerlin helped get GPU rendering working on Vulkan
+- @cprecioso & @saantonandre corrected and expanded upon the TypeScript type definitions
+- @meihuanyu contributed filter & path rendering fixes
+
+## Copyright
+© 2020–2024 [Samizdat Drafting Co.](https://samizdat.co)
 
 [bool-ops]: https://skia-canvas.org/api/path2d#complement-difference-intersect-union-and-xor
 [c2d_font]: https://skia-canvas.org/api/context#font
