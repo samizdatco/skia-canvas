@@ -15,7 +15,7 @@ use crate::context::page::Page;
 use super::event::{CanvasEvent, Sieve};
 use super::window::{Window, WindowSpec};
 
-struct WindowRef { tx: Sender<CanvasEvent>, id: WindowId, spec: WindowSpec, sieve:Sieve }
+struct WindowRef { tx: Sender<CanvasEvent>, id: WindowId, spec: WindowSpec, sieve:Sieve, window:Window }
 
 #[derive(Default)]
 pub struct WindowManager {
@@ -26,9 +26,9 @@ pub struct WindowManager {
 impl WindowManager {
 
     pub fn add(&mut self, event_loop:&ActiveEventLoop, proxy:EventLoopProxy<CanvasEvent>, mut spec: WindowSpec, page: Page) {
-        let mut window = Window::new(event_loop, proxy, &mut spec, &page);
+        let (tx, rx) = channel::bounded(1024);
+        let mut window = Window::new(event_loop, proxy, &mut spec, &page, rx);
         let id = window.handle.id();
-        let (tx, rx) = channel::bounded(50);
         let mut sieve = Sieve::new(window.handle.scale_factor());
         if let Some(fit) = window.fitting_matrix().invert(){
             sieve.use_transform(fit);
@@ -52,31 +52,30 @@ impl WindowManager {
         }
 
         // hold a reference to the window on the main thread…
-        self.windows.push( WindowRef{ id, spec, tx, sieve } );
+        self.windows.push( WindowRef{ id, spec, tx, sieve, window } );
 
         // …but let the window's event handler & renderer run on a background thread
-        thread::spawn(move || {
-            while let Ok(event) = rx.recv() {
-                let mut queue = vec![event];
-                while !rx.is_empty(){
-                    queue.push(rx.recv().unwrap());
-                }
+        // thread::spawn(move || {
+        //     while let Ok(event) = rx.recv() {
+        //         let mut queue = vec![event];
+        //         while !rx.is_empty(){
+        //             queue.push(rx.recv().unwrap());
+        //         }
 
-                let mut needs_redraw = None;
-                queue.drain(..).for_each(|event|{
-                    match event {
-                        CanvasEvent::RedrawRequested => needs_redraw = Some(event),
-                        _ => window.handle_event(event)
-                    }
-                });
+        //         let mut needs_redraw = None;
+        //         queue.drain(..).for_each(|event|{
+        //             match event {
+        //                 CanvasEvent::RedrawRequested => needs_redraw = Some(event),
+        //                 _ => window.handle_event(event)
+        //             }
+        //         });
 
-                // deduplicate and defer redraw requests until all other events were handled
-                if let Some(event) = needs_redraw {
-                    window.handle_event(event)
-                }
-            }
-        });
-
+        //         // deduplicate and defer redraw requests until all other events were handled
+        //         if let Some(event) = needs_redraw {
+        //             window.handle_event(event)
+        //         }
+        //     }
+        // });
     }
 
     pub fn remove(&mut self, window_id:&WindowId){
@@ -90,6 +89,12 @@ impl WindowManager {
     pub fn send_event(&self, window_id:&WindowId, event:CanvasEvent){
         if let Some(tx) = self.windows.iter().find(|win| win.id == *window_id).map(|win| &win.tx){
             tx.send(event).ok();
+        }
+    }
+
+    pub fn dispatch_events(&mut self){
+        for window in &mut self.windows{
+            window.window.dispatch();
         }
     }
 

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use skia_safe::{Matrix, Color, Paint};
 use serde::{Serialize, Deserialize};
+use crossbeam::channel::{self, Receiver};
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize},
     event_loop::{ActiveEventLoop, EventLoopProxy},
@@ -57,10 +58,11 @@ pub struct Window {
     background: Color,
     page: Page,
     suspended: bool,
+    rx: Receiver<CanvasEvent>,
 }
 
 impl Window {
-    pub fn new(event_loop:&ActiveEventLoop, proxy:EventLoopProxy<CanvasEvent>, spec: &mut WindowSpec, page: &Page) -> Self {
+    pub fn new(event_loop:&ActiveEventLoop, proxy:EventLoopProxy<CanvasEvent>, spec: &mut WindowSpec, page: &Page, rx:Receiver<CanvasEvent>) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
         let background = match css_to_color(&spec.background){
             Some(color) => color,
@@ -85,7 +87,7 @@ impl Window {
 
         let renderer = Renderer::for_window(&event_loop, handle.clone());
 
-        Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, suspended:false, background }
+        Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, suspended:false, background, rx }
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>){
@@ -155,6 +157,27 @@ impl Window {
             canvas.clip_rect(clip, None, Some(true));
             canvas.draw_picture(self.page.get_picture(None).unwrap(), Some(&matrix), Some(&paint));
         }).unwrap();
+    }
+
+    pub fn dispatch(&mut self){
+        let rx = &self.rx;
+        let mut queue = vec![];
+        while !self.rx.is_empty(){
+            queue.push(rx.recv().unwrap());
+        }
+
+        let mut needs_redraw = None;
+        queue.drain(..).for_each(|event|{
+            match event {
+                CanvasEvent::RedrawRequested => needs_redraw = Some(event),
+                _ => self.handle_event(event)
+            }
+        });
+
+        // deduplicate and defer redraw requests until all other events were handled
+        if let Some(event) = needs_redraw {
+            self.handle_event(event)
+        }
     }
 
     pub fn handle_event(&mut self, event:CanvasEvent){
