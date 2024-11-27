@@ -236,27 +236,28 @@ impl MetalRenderer {
         autoreleasepool(||{
             let dpr = window.scale_factor();
             let size = window.inner_size();
-            BACKEND.with_borrow_mut(|cell| {
-                let backend = cell.get_or_insert_with(|| MetalBackend::for_renderer(self));
+            let mut backend = MetalBackend::for_renderer(self);
+            // BACKEND.with_borrow_mut(|cell| {
+            //     let backend = cell.get_or_insert_with(|| MetalBackend::for_renderer(self));
 
                 backend.render_to_layer(&self.layer, |canvas|{
                     canvas.reset_matrix();
                     canvas.scale((dpr as f32, dpr as f32));
                     f(canvas, LogicalSize::from_physical(size, dpr));
                 })
-            })
+            // })
         })
     }
 }
 
-impl Drop for MetalRenderer {
-    fn drop(&mut self) {
-        BACKEND.with_borrow_mut(|cell| *cell = None );
-    }
-}
+// impl Drop for MetalRenderer {
+//     fn drop(&mut self) {
+//         BACKEND.with_borrow_mut(|cell| *cell = None );
+//     }
+// }
 
 
-thread_local!(static BACKEND: RefCell<Option<MetalBackend>> = const { RefCell::new(None) } );
+// thread_local!(static BACKEND: RefCell<Option<MetalBackend>> = const { RefCell::new(None) } );
 
 pub struct MetalBackend {
     // each renderer's non-Send references need to be lazily allocated on the window's thread

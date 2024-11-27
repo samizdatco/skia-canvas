@@ -124,6 +124,7 @@ impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
     }
 
     fn about_to_wait(&mut self, event_loop:&ActiveEventLoop) {
+        self.windows.dispatch_events();
         // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
         // a Render event, so only do a roundtrip if there are new UI events to be relayed
         if !self.cadence.active() && self.windows.has_ui_changes() {
