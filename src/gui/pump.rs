@@ -57,14 +57,12 @@ impl App{
     }
 
     fn initial_sync(&mut self){
-        println!("overwrite {:?}", &self.payload);
         self.payload = self.windows.get_geometry();
         // println!("initial {:#?}", &self.payload);
         // self.payload.push(self.windows.get_geometry());
     }
 
     fn roundtrip(&mut self){
-        println!("overwrite {:?}", &self.payload);
         self.payload = self.windows.get_ui_changes();
         // println!("roundtrip {:#?}", &self.payload);
         // self.payload.push(self.windows.get_ui_changes());
@@ -97,7 +95,7 @@ impl ApplicationHandler<CanvasEvent> for App{
     }
 
     fn window_event( &mut self, event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
-        println!("window: {:?}: {:?}", event, window_id);
+        // println!("window: {:?}: {:?}", event, window_id);
         // dbg!(&event);
 
         // route UI events to the relevant window
@@ -131,7 +129,6 @@ impl ApplicationHandler<CanvasEvent> for App{
             }
 
             WindowEvent::RedrawRequested => {
-                println!("REQ for {:?}", window_id);
                 self.windows.send_event(&window_id, CanvasEvent::RedrawRequested);
             }
 
@@ -146,7 +143,6 @@ impl ApplicationHandler<CanvasEvent> for App{
         println!("canvas: {:?}", event);
         match event{
             CanvasEvent::Open(spec, page) => {
-                println!("opened");
                 self.windows.add(event_loop, self.proxy.clone(), spec, page);
                 self.initial_sync();
             }
@@ -174,6 +170,8 @@ impl ApplicationHandler<CanvasEvent> for App{
     }
 
     fn about_to_wait(&mut self, event_loop:&ActiveEventLoop) {
+        self.windows.dispatch_events();
+
         // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
         // a Render event, so only do a roundtrip if there are new UI events to be relayed
         if !self.cadence.active() && self.windows.has_ui_changes() {
