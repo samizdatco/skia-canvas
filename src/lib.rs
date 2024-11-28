@@ -247,14 +247,12 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- Window -----------------------------------------------------------------------------------
 
   #[cfg(feature = "window")] {
-    cx.export_function("App_launch", gui::launch)?;
+    cx.export_function("App_activate", gui::activate)?;
     cx.export_function("App_quit", gui::quit)?;
     cx.export_function("App_closeWindow", gui::close)?;
     cx.export_function("App_openWindow", gui::open)?;
     cx.export_function("App_setRate", gui::set_rate)?;
-
-    cx.export_function("App_activate", gui::activate)?;
-    cx.export_function("App_tick", gui::tick)?;
+    cx.export_function("App_setMode", gui::set_mode)?;
   }
 
   Ok(())
