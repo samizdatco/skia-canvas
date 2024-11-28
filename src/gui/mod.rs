@@ -56,7 +56,7 @@ fn validate_gpu(cx:&mut FunctionContext) -> Result<(), Throw>{
     Ok(())
 }
 
-pub fn activate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn activate(mut cx: FunctionContext) -> JsResult<JsBoolean> {
     let callback = cx.argument::<JsFunction>(1)?;
 
     validate_gpu(&mut cx)?;
@@ -91,12 +91,12 @@ pub fn activate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     };
 
     #[allow(deprecated)]
-    APP.with_borrow_mut(|app| {
+    let still_running = APP.with_borrow_mut(|app| {
         EVENT_LOOP.with_borrow_mut(|event_loop|{
-            app.activate(event_loop, roundtrip);
+            app.activate(event_loop, roundtrip)
         })
     });
-    Ok(cx.undefined())
+    Ok(cx.boolean(still_running))
 }
 
 pub fn set_rate(mut cx: FunctionContext) -> JsResult<JsNumber> {

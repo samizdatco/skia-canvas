@@ -40,7 +40,7 @@ impl Default for App{
 
 #[allow(deprecated)]
 impl App{
-    pub fn activate<F>(&mut self, event_loop:&mut EventLoop<CanvasEvent>, mut roundtrip:F)
+    pub fn activate<F>(&mut self, event_loop:&mut EventLoop<CanvasEvent>, mut roundtrip:F) -> bool
         where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
     {
         match self.mode{
@@ -48,10 +48,14 @@ impl App{
                 let handler = self.event_handler(roundtrip);
                 event_loop.set_control_flow(ControlFlow::Wait);
                 event_loop.run_on_demand(handler).ok();
+                false
             },
             LoopMode::Node => {
                 let handler = self.event_handler(roundtrip);
-                event_loop.pump_events(Some(std::time::Duration::ZERO), handler);
+                match event_loop.pump_events(Some(std::time::Duration::ZERO), handler){
+                    PumpStatus::Exit(..) => false,
+                    PumpStatus::Continue => true,
+                }
             }
         }
     }
@@ -106,8 +110,6 @@ impl App{
             Event::UserEvent(canvas_event) => match canvas_event{
                 CanvasEvent::Open(spec, page) => {
                     self.windows.add(event_loop, new_proxy(), spec, page);
-                    // self.initial_sync();
-                    // payload = self.windows.get_geometry();
                     roundtrip(self.windows.get_geometry(), &mut self.windows).ok();
                 }
                 CanvasEvent::Close(token) => {
@@ -118,8 +120,6 @@ impl App{
                 }
                 CanvasEvent::Render => {
                     // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                    // self.roundtrip();
-                    // payload = self.windows.get_ui_changes();
                     roundtrip(self.windows.get_ui_changes(), &mut self.windows).ok();
                 }
                 CanvasEvent::Transform(window_id, matrix) => {
