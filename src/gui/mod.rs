@@ -10,6 +10,7 @@ use std::cell::RefCell;
 use winit::{
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
     platform::run_on_demand::EventLoopExtRunOnDemand,
+    platform::pump_events::{EventLoopExtPumpEvents, PumpStatus},
 };
 
 use crate::utils::*;
@@ -17,9 +18,7 @@ use crate::context::BoxedContext2D;
 use crate::context::page::Page;
 
 pub mod pump;
-
-pub mod app;
-use app::{App, Roundtrip};
+use pump::{App, LoopMode};
 
 pub mod event;
 use event::CanvasEvent;
@@ -33,9 +32,8 @@ use window_mgr::WindowManager;
 use crate::gpu::RenderingEngine;
 
 thread_local!(
-    static APP_BUNDLE: RefCell<pump::AppBundle> = RefCell::new(pump::AppBundle::default());
-
     // the event loop can only be run from the main thread
+    static APP: RefCell<pump::App> = RefCell::new(pump::App::default());
     static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
     static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with(|event_loop|
         event_loop.borrow().create_proxy()
@@ -58,7 +56,7 @@ fn validate_gpu(cx:&mut FunctionContext) -> Result<(), Throw>{
     Ok(())
 }
 
-pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn activate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let callback = cx.argument::<JsFunction>(1)?;
 
     validate_gpu(&mut cx)?;
@@ -92,98 +90,12 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         Ok(())
     };
 
-    EVENT_LOOP.with(|event_loop| {
-        let mut app = App::with_callback(roundtrip);
-        let mut event_loop = event_loop.borrow_mut();
-        event_loop.set_control_flow(ControlFlow::Wait);
-        event_loop.run_app_on_demand(&mut app)
-    }).ok();
-
-    Ok(cx.undefined())
-}
-
-
-pub fn activate(mut cx: FunctionContext) -> JsResult<JsValue> {
-    let callback = cx.argument::<JsFunction>(1)?;
-
-    validate_gpu(&mut cx)?;
-
-    // closure for using the callback to relay events to js and receive updates in return
-    let roundtrip = |payload:Value, windows:&mut WindowManager| -> NeonResult<()>{
-        let cx = &mut cx;
-        let null = cx.null();
-
-        // send payload to js for event dispatch and canvas drawing then read back new state & page data
-        let events = cx.string(payload.to_string()).upcast::<JsValue>();
-        let response = callback.call(cx, null, vec![events])?
-            .downcast::<JsArray, _>(cx).or_throw(cx)?
-            .to_vec(cx)?;
-
-        // unpack boxed contexts & window state objects
-        let contexts:Vec<Handle<JsValue>> = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
-        let specs:Vec<WindowSpec> = serde_json::from_str(
-            &response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx)
-        ).expect("Malformed response from window event handler");
-
-        // pass each window's new state & page data to the window manager
-        zip(contexts, specs).for_each(|(boxed_ctx, spec)| {
-            if let Ok(ctx) = boxed_ctx.downcast::<BoxedContext2D, _>(cx){
-                windows.update_window(
-                    spec.clone(),
-                    ctx.borrow().get_page()
-                )
-            }
-        });
-        Ok(())
-    };
-
-
-    let payload = APP_BUNDLE.with_borrow_mut(|bundle| {
+    #[allow(deprecated)]
+    APP.with_borrow_mut(|app| {
         EVENT_LOOP.with_borrow_mut(|event_loop|{
-            bundle.run_cycle(event_loop, roundtrip)
+            app.activate(event_loop, roundtrip);
         })
     });
-
-    let js_payload = cx.string(payload.to_string()).upcast::<JsValue>();
-    Ok(js_payload)
-}
-
-pub fn tick(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    // let input = cx.argument::<JsArray>(1)?
-    //     .to_vec(&mut cx)?;
-
-    // // unpack boxed contexts & window state objects
-    // let pages:Vec<Page> = input[1].downcast::<JsArray, _>(&mut cx)
-    //     .or_throw(&mut cx)?
-    //     .to_vec(&mut cx)?
-    //     .iter()
-    //     .map(|elt| {
-    //         let boxed_ctx = elt.downcast::<BoxedContext2D, _>(&mut cx).unwrap();
-    //         let ctx = boxed_ctx.borrow();
-    //         ctx.get_page()
-    //     })
-    //     .collect();
-
-    // let specs:Vec<WindowSpec> = serde_json::from_str(
-    //     &input[0].downcast::<JsString, _>(&mut cx)
-    //         .or_throw(&mut cx)?
-    //         .value(&mut cx)
-    // ).expect("Malformed response from window event handler");
-
-
-    // APP_BUNDLE.with(|bundle| {
-    //     let mut bundle = bundle.borrow_mut();
-    //     bundle.update_windows(specs, pages);
-    // });
-
-    // // EVENT_LOOP.with(|event_loop| {
-    // //     let mut event_loop = event_loop.borrow_mut();
-    // //     APP.with(|app| {
-    // //         let app = app.borrow_mut();
-    // //         let timeout = Some(std::time::Duration::ZERO);
-    // //         let status = event_loop.pump_app_events(timeout, &mut app);
-    // //     });
-    // // });
     Ok(cx.undefined())
 }
 
@@ -191,6 +103,17 @@ pub fn set_rate(mut cx: FunctionContext) -> JsResult<JsNumber> {
     let fps = float_arg(&mut cx, 1, "framesPerSecond")? as u64;
     add_event(CanvasEvent::FrameRate(fps));
     Ok(cx.number(fps as f64))
+}
+
+pub fn set_mode(mut cx: FunctionContext) -> JsResult<JsString> {
+    let mode = string_arg(&mut cx, 1, "eventLoopMode")?;
+    let loop_mode = match mode.as_str(){
+        "node" => Ok(LoopMode::Node),
+        "native" => Ok(LoopMode::Native),
+        _ => cx.throw_error(format!("Invalid event loop mode: {}", mode))
+    }?;
+    APP.with_borrow_mut(|app| app.mode = loop_mode );
+    Ok(cx.string(mode))
 }
 
 pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -201,8 +124,6 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     validate_gpu(&mut cx)?;
 
     add_event(CanvasEvent::Open(spec, context.borrow().get_page()));
-
-    // add_event(CanvasEvent::Open(spec, context.borrow().get_page()));
     Ok(cx.undefined())
 }
 

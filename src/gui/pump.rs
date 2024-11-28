@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 use winit::{
     application::ApplicationHandler,
     platform::pump_events::{EventLoopExtPumpEvents, PumpStatus},
+    platform::run_on_demand::EventLoopExtRunOnDemand,
     event::{ElementState, KeyEvent, StartCause, Event, WindowEvent},
     event_loop::{EventLoop, EventLoopProxy, ActiveEventLoop, ControlFlow},
     keyboard::{PhysicalKey, KeyCode},
@@ -17,28 +18,48 @@ use super::window_mgr::WindowManager;
 use super::{add_event, new_proxy};
 use crate::context::page::Page;
 
-pub struct AppBundle{
+pub enum LoopMode{
+    Native, Node
+}
+
+pub struct App{
+    pub mode: LoopMode,
     windows: WindowManager,
     cadence: Cadence,
 }
 
-impl Default for AppBundle{
+impl Default for App{
     fn default() -> Self {
-        let windows = WindowManager::default();
-        let cadence = Cadence::default();
-        Self{windows, cadence}
+        Self{
+            windows: WindowManager::default(),
+            cadence: Cadence::default(),
+            mode: LoopMode::Native,
+        }
     }
 }
 
 #[allow(deprecated)]
-impl AppBundle{
-    pub fn run_cycle<F>(&mut self, event_loop:&mut EventLoop<CanvasEvent>, mut roundtrip:F) -> Value
+impl App{
+    pub fn activate<F>(&mut self, event_loop:&mut EventLoop<CanvasEvent>, mut roundtrip:F)
         where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
     {
-        let mut payload = json!({});
+        match self.mode{
+            LoopMode::Native => {
+                let handler = self.event_handler(roundtrip);
+                event_loop.set_control_flow(ControlFlow::Wait);
+                event_loop.run_on_demand(handler).ok();
+            },
+            LoopMode::Node => {
+                let handler = self.event_handler(roundtrip);
+                event_loop.pump_events(Some(std::time::Duration::ZERO), handler);
+            }
+        }
+    }
 
-        let timeout = Some(Duration::ZERO);
-        let status = event_loop.pump_events(timeout, |event, event_loop| match event {
+    pub fn event_handler<F>(&mut self, mut roundtrip:F) -> impl FnMut(Event<CanvasEvent>, &ActiveEventLoop) + use<'_, F>
+        where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
+    {
+        move |event, event_loop| match event {
             Event::WindowEvent { event:ref win_event, window_id } => {
                 self.windows.capture_ui_event(&window_id, win_event);
 
@@ -134,15 +155,7 @@ impl AppBundle{
 
             }
             _ => {}
-        });
-
-        payload
-    }
-
-    pub fn update_windows(&mut self, specs:Vec<WindowSpec>, pages:Vec<Page>){
-        zip(specs, pages).for_each(|(spec, page)| {
-            self.windows.update_window(spec, page)
-        });
+        }
     }
 }
 
