@@ -140,7 +140,7 @@ impl ApplicationHandler<CanvasEvent> for App{
     }
 
     fn user_event(&mut self, event_loop:&ActiveEventLoop, event:CanvasEvent) {
-        println!("canvas: {:?}", event);
+        // println!("canvas: {:?}", event);
         match event{
             CanvasEvent::Open(spec, page) => {
                 self.windows.add(event_loop, self.proxy.clone(), spec, page);
