@@ -17,8 +17,8 @@ use crate::utils::*;
 use crate::context::BoxedContext2D;
 use crate::context::page::Page;
 
-pub mod pump;
-use pump::{App, LoopMode};
+pub mod app;
+use app::{App, LoopMode};
 
 pub mod event;
 use event::CanvasEvent;
@@ -33,7 +33,7 @@ use crate::gpu::RenderingEngine;
 
 thread_local!(
     // the event loop can only be run from the main thread
-    static APP: RefCell<pump::App> = RefCell::new(pump::App::default());
+    static APP: RefCell<App> = RefCell::new(App::default());
     static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
     static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with(|event_loop|
         event_loop.borrow().create_proxy()
