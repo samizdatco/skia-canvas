@@ -1,27 +1,31 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 use ash::vk::Handle;
+use crossbeam::channel;
 use std::{
     cell::RefCell, ptr, sync::Arc
 };
 use skia_safe::gpu::{self, backend_render_targets, direct_contexts, surfaces, vk};
 use vulkano::{
     device::{
-        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue,
-        QueueCreateInfo, QueueFlags,
+        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned, Queue, QueueCreateInfo, QueueFlags
     },
     image::{view::ImageView, ImageUsage},
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass},
     swapchain::{
-        acquire_next_image, CompositeAlpha, Surface, Swapchain,
-        SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo,
+        self, acquire_next_image, CompositeAlpha, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo
     },
     sync::{self, GpuFuture},
     Validated, VulkanError, VulkanLibrary, VulkanObject,
 };
-
 use super::{VK_FORMATS, to_sk_format};
+use skia_safe::{
+    gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
+    Color, ColorType, Matrix, Paint,
+};
+use crate::context::page::Page;
+use crate::gpu::RenderEvent;
 
 #[cfg(feature = "window")]
 use winit::{
@@ -30,19 +34,11 @@ use winit::{
     window::Window,
 };
 
-thread_local!(
-    static BACKEND: RefCell<Option<VulkanBackend>> = const { RefCell::new(None) };
-);
 
-pub struct VulkanRenderer {
-    queue: Arc<Queue>,
-    swapchain: Arc<Swapchain>,
-    framebuffers: Vec<Arc<Framebuffer>>,
-    render_pass: Arc<RenderPass>,
-    swapchain_is_valid: bool,
+pub struct VulkanRenderer{
+    backend: channel::Sender<RenderEvent>,
 }
 
-#[cfg(feature = "window")]
 impl VulkanRenderer {
     pub fn for_window(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
         let instance = {
@@ -65,6 +61,7 @@ impl VulkanRenderer {
             ..DeviceExtensions::empty()
         };
 
+        let dpr = window.scale_factor();
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
 
         // Collect the list of available devices & queues then select ‘best’ one for our needs
@@ -167,6 +164,61 @@ impl VulkanRenderer {
             .unwrap()
         };
 
+        let (tx, rx) = channel::unbounded::<RenderEvent>();
+        std::thread::spawn(move || {
+            let mut backend = VulkanBackend::new(queue, swapchain);
+            while let Ok(event) = rx.recv() {
+                if !rx.is_empty(){ continue } // drop all but the last frame in the queue
+
+                match event{
+                    RenderEvent::Resize(width, height) => {
+                        backend.swapchain_is_valid = false;
+                        backend.prepare_swapchain((width, height).into());
+                    },
+                    RenderEvent::Draw(page, matrix, matte) => {
+                        let paint = Paint::default();
+                        let (clip, _) = matrix.map_rect(page.bounds);
+                        backend.render_frame(|canvas|{
+                            canvas.reset_matrix();
+                            canvas.scale((dpr as f32, dpr as f32));
+                            canvas.clip_rect(clip, None, Some(true));
+                            canvas.draw_picture(page.get_picture(matte).unwrap(), Some(&matrix), Some(&paint));
+                        }).unwrap();
+                    }
+                }
+
+            }
+        });
+
+        Self{backend:tx}
+    }
+
+    pub fn resize(&self, size: PhysicalSize<u32>) {
+        self.backend.send( RenderEvent::Resize(size.width, size.height) ).ok();
+    }
+
+    pub fn render(&self, page:Page, matrix:Matrix, matte:Option<Color>){
+        self.backend.send( RenderEvent::Draw(page, matrix, matte) ).ok();
+    }
+}
+
+
+struct VulkanBackend{
+    queue: Arc<Queue>,
+    framebuffers: Vec<Arc<Framebuffer>>,
+    render_pass: Arc<RenderPass>,
+    swapchain: Arc<Swapchain>,
+    swapchain_is_valid: bool,
+    last_render: Option<Box<dyn GpuFuture>>,
+    skia_ctx: gpu::DirectContext,
+}
+
+impl VulkanBackend{
+    fn new(queue:Arc<Queue>, swapchain:Arc<Swapchain>) -> Self{
+        let device = queue.device();
+        let instance = device.instance();
+        let library = instance.library();
+
         // Define the layout of the framebuffers and their role in the graphics pipeline
         let render_pass = vulkano::single_pass_renderpass!(
             device.clone(),
@@ -190,30 +242,59 @@ impl VulkanRenderer {
         let framebuffers = vec![];
         let swapchain_is_valid = false;
 
-        Self {
-            queue,
-            swapchain,
-            swapchain_is_valid,
-            render_pass,
-            framebuffers,
-        }
+        // Hold onto the previous GpuFuture so we can wait on its completion before the next frame
+        let last_render = Some(sync::now(device.clone()).boxed());
 
+        // Create a DirectContext that will let us use a surface & canvas to draw into framebuffers
+        let skia_ctx = unsafe {
+            let get_proc = |gpo| {
+                let get_device_proc_addr = instance.fns().v1_0.get_device_proc_addr;
+
+                match gpo {
+                    vk::GetProcOf::Instance(instance, name) => {
+                        let vk_instance = ash::vk::Instance::from_raw(instance as _);
+                        library.get_instance_proc_addr(vk_instance, name)
+                    }
+                    vk::GetProcOf::Device(device, name) => {
+                        let vk_device = ash::vk::Device::from_raw(device as _);
+                        get_device_proc_addr(vk_device, name)
+                    }
+                }
+                .map(|f| f as _)
+                .unwrap_or_else(|| {
+                    println!("Vulkan: failed to resolve {}", gpo.name().to_str().unwrap());
+                    ptr::null()
+                })
+            };
+
+            let direct_context = direct_contexts::make_vulkan(
+                &vk::BackendContext::new(
+                    instance.handle().as_raw() as _,
+                    device.physical_device().handle().as_raw() as _,
+                    device.handle().as_raw() as _,
+                    (
+                        queue.handle().as_raw() as _,
+                        queue.queue_family_index() as usize,
+                    ),
+                    &get_proc,
+                ),
+                None,
+            )
+            .expect("Vulkan: Failed to create Skia direct context");
+
+            direct_context
+        };
+
+        Self{queue, framebuffers, render_pass, swapchain, swapchain_is_valid, last_render, skia_ctx}
     }
 
-    pub fn resize(&mut self, _size: PhysicalSize<u32>) {
-        // we can get the dimensions from the window when reallocating framebuffers
-        self.swapchain_is_valid = false;
-    }
-
-    fn prepare_swapchain(&mut self, window: &Window) {
-        let window_size: PhysicalSize<u32> = window.inner_size();
-
+    fn prepare_swapchain(&mut self, size: PhysicalSize<u32>) {
         // Only regenerate the swapchain/framebuffers if we've flagged that it's necessary
-        if window_size.width > 0 && window_size.height > 0 && !self.swapchain_is_valid {
+        if size.width > 0 && size.height > 0 && !self.swapchain_is_valid {
             let (new_swapchain, new_images) = self
                 .swapchain
                 .recreate(SwapchainCreateInfo {
-                    image_extent: window_size.into(),
+                    image_extent: size.into(),
                     ..self.swapchain.create_info()
                 })
                 .expect("failed to recreate swapchain");
@@ -236,6 +317,27 @@ impl VulkanRenderer {
         }
     }
 
+    fn render_frame<F>(&mut self, f:F) -> Result<(), String>
+        where F:FnOnce(&skia_safe::Canvas)
+    {
+        // make sure the framebuffers match the current window size
+        self.prepare_swapchain(self.swapchain.image_extent().into());
+
+        if let Some((image_index, acquire_future)) = self.get_next_frame() {
+            // pull the appropriate framebuffer and create a skia Surface that renders to it
+            let framebuffer = self.framebuffers[image_index as usize].clone();
+            let mut surface = self.surface_for_framebuffer(framebuffer.clone());
+
+            // pass the suface's canvas and dimensions to the user-provided callback
+            f(surface.canvas());
+
+            // display the result
+            self.flush_framebuffer(image_index, acquire_future);
+        }
+
+        Ok(())
+    }
+
     fn get_next_frame(&mut self) -> Option<(u32, SwapchainAcquireFuture)> {
         // Request the next framebuffer and a GpuFuture for the render pass
         let (image_index, suboptimal, acquire_future) =
@@ -254,105 +356,6 @@ impl VulkanRenderer {
         }
 
         Some((image_index, acquire_future))
-    }
-
-    pub fn draw<F: FnOnce(&skia_safe::Canvas, LogicalSize<f32>)>(
-        &mut self,
-        window: &Window,
-        f: F,
-    ) -> Result<(), String> {
-        // make sure the framebuffers match the current window size
-        self.prepare_swapchain(window);
-
-        if let Some((image_index, acquire_future)) = self.get_next_frame() {
-            BACKEND.with_borrow_mut(|cell| {
-                let backend = cell.get_or_insert_with(||{ VulkanBackend::for_renderer(self) });
-
-                // pull the appropriate framebuffer and create a skia Surface that renders to it
-                let framebuffer = self.framebuffers[image_index as usize].clone();
-                let mut surface = backend.surface_for_framebuffer(framebuffer.clone());
-
-                // convert the window size to logical coords and pre-scale the canvas's matrix to match
-                let dpr = window.scale_factor();
-                let size = window.inner_size();
-                let canvas = surface.canvas();
-                canvas.reset_matrix();
-                canvas.scale((dpr as f32, dpr as f32));
-
-                // pass the suface's canvas and dimensions to the user-provided callback
-                f(canvas, LogicalSize::from_physical(size, dpr));
-
-                // display the result
-                backend.flush_framebuffer(self, image_index, acquire_future);
-            });
-        }
-        Ok(())
-    }
-}
-
-impl Drop for VulkanRenderer {
-    fn drop(&mut self) {
-        BACKEND.with_borrow_mut(|cell| *cell = None );
-    }
-}
-
-struct VulkanBackend{
-    // each renderer's non-Send references need to be lazily allocated on the window's thread
-    last_render: Option<Box<dyn GpuFuture>>,
-    skia_ctx: gpu::DirectContext,
-}
-
-impl VulkanBackend{
-    fn for_renderer(renderer:&VulkanRenderer) -> Self{
-        let queue = renderer.queue.clone();
-        let device = queue.device();
-        let instance = device.instance();
-        let library = instance.library();
-
-        Self{
-            // Hold onto the previous GpuFuture so we can wait on its completion before the next frame
-            last_render: Some(sync::now(device.clone()).boxed()),
-
-            // Create a DirectContext that will let us use a surface & canvas to draw into framebuffers
-            skia_ctx: unsafe {
-                let get_proc = |gpo| {
-                    let get_device_proc_addr = instance.fns().v1_0.get_device_proc_addr;
-
-                    match gpo {
-                        vk::GetProcOf::Instance(instance, name) => {
-                            let vk_instance = ash::vk::Instance::from_raw(instance as _);
-                            library.get_instance_proc_addr(vk_instance, name)
-                        }
-                        vk::GetProcOf::Device(device, name) => {
-                            let vk_device = ash::vk::Device::from_raw(device as _);
-                            get_device_proc_addr(vk_device, name)
-                        }
-                    }
-                    .map(|f| f as _)
-                    .unwrap_or_else(|| {
-                        println!("Vulkan: failed to resolve {}", gpo.name().to_str().unwrap());
-                        ptr::null()
-                    })
-                };
-
-                let direct_context = direct_contexts::make_vulkan(
-                    &vk::BackendContext::new(
-                        instance.handle().as_raw() as _,
-                        device.physical_device().handle().as_raw() as _,
-                        device.handle().as_raw() as _,
-                        (
-                            queue.handle().as_raw() as _,
-                            queue.queue_family_index() as usize,
-                        ),
-                        &get_proc,
-                    ),
-                    None,
-                )
-                .expect("Vulkan: Failed to create Skia direct context");
-
-                direct_context
-            },
-        }
     }
 
     fn surface_for_framebuffer(
@@ -398,7 +401,7 @@ impl VulkanBackend{
         .unwrap()
     }
 
-    fn flush_framebuffer(&mut self, renderer:&mut VulkanRenderer, image_index:u32, acquire_future:SwapchainAcquireFuture){
+    fn flush_framebuffer(&mut self, image_index:u32, acquire_future:SwapchainAcquireFuture){
         // flush the canvas's contents to the framebuffer
         self.skia_ctx.flush_and_submit();
         self.skia_ctx.free_gpu_resources();
@@ -413,9 +416,9 @@ impl VulkanBackend{
             .unwrap()
             .join(acquire_future)
             .then_swapchain_present(
-                renderer.queue.clone(),
+                self.queue.clone(),
                 SwapchainPresentInfo::swapchain_image_index(
-                    renderer.swapchain.clone(),
+                    self.swapchain.clone(),
                     image_index,
                 ),
             )
@@ -426,14 +429,14 @@ impl VulkanBackend{
                 self.last_render = Some(future.boxed());
             }
             Err(VulkanError::OutOfDate) => {
-                let device = renderer.queue.device();
+                let device = self.queue.device();
                 self.last_render = Some(sync::now(device.clone()).boxed());
-                renderer.swapchain_is_valid = false;
+                self.swapchain_is_valid = false;
             }
             Err(e) => {
                 panic!("Vulkan: swapchain flush failed: {e}");
             }
         };
-
     }
+
 }

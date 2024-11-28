@@ -43,15 +43,15 @@ thread_local!(
 );
 
 pub(crate) fn new_proxy() -> EventLoopProxy<CanvasEvent>{
-    // PROXY.with(|cell| cell.borrow().clone() )
-    APP_BUNDLE.with(|bundle|{
-        let bundle = bundle.borrow_mut();
+    APP_BUNDLE.with_borrow_mut(|bundle|{
         bundle.app.proxy.clone()
     })
 }
 
 pub(crate) fn add_event(event: CanvasEvent){
-    // PROXY.with(|cell| cell.borrow().send_event(event).ok() );
+    APP_BUNDLE.with_borrow_mut(|bundle|{
+        bundle.app.proxy.send_event(event).ok()
+    });
 }
 
 fn validate_gpu(cx:&mut FunctionContext) -> Result<(), Throw>{

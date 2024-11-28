@@ -1,6 +1,7 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{ImageInfo, Surface, surfaces};
+use skia_safe::{Matrix, Color, ImageInfo, Surface, surfaces};
 use serde_json::Value;
+use crate::context::page::Page;
 
 #[cfg(feature = "metal")]
 mod metal;
@@ -33,6 +34,12 @@ impl Engine {
         "device": "CPU-based renderer (compiled without GPU support)",
         "error": Value::Null,
     })}
+}
+
+#[derive(Clone, Debug)]
+enum RenderEvent{
+    Resize(u32, u32),
+    Draw(Page, Matrix, Option<Color>),
 }
 
 #[derive(Copy, Clone, Debug)]
