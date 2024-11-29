@@ -72,7 +72,7 @@ impl App{
                         self.windows.remove(&window_id);
                         if self.windows.is_empty() {
                             // quit after the last window is closed
-                            event_loop.exit();
+                            add_event(CanvasEvent::Quit);
                         }
                     }
 
@@ -91,15 +91,15 @@ impl App{
 
                     #[cfg(target_os = "macos")]
                     WindowEvent::Occluded(is_hidden) => {
-                        self.windows.send_event(&window_id, CanvasEvent::RedrawingSuspended(*is_hidden));
+                        self.windows.suspend_redraw(&window_id, *is_hidden);
                     }
 
                     WindowEvent::RedrawRequested => {
-                        self.windows.send_event(&window_id, CanvasEvent::RedrawRequested);
+                        self.windows.redraw(&window_id);
                     }
 
                     WindowEvent::Resized(size) => {
-                        self.windows.send_event(&window_id, CanvasEvent::WindowResized(*size));
+                        self.windows.resized(&window_id, *size);
                     }
 
                     _ => {}
@@ -136,8 +136,6 @@ impl App{
 
 
             Event::AboutToWait => {
-                self.windows.dispatch_events();
-
                 // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
                 // a Render event, so only do a roundtrip if there are new UI events to be relayed
                 if !self.cadence.active() && self.windows.has_ui_changes() {

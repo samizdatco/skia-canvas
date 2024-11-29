@@ -148,89 +148,72 @@ impl Window {
 
 
     pub fn redraw(&mut self){
-        self.renderer.render(self.page.clone(), self.fitting_matrix(), Some(self.background));
-    }
-
-    pub fn dispatch(&mut self){
-        let rx = &self.rx;
-        let mut queue = vec![];
-        while !self.rx.is_empty(){
-            queue.push(rx.recv().unwrap());
-        }
-
-        let mut needs_redraw = None;
-        queue.drain(..).for_each(|event|{
-            match event {
-                CanvasEvent::RedrawRequested => needs_redraw = Some(event),
-                _ => self.handle_event(event)
-            }
-        });
-
-        // deduplicate and defer redraw requests until all other events were handled
-        if let Some(event) = needs_redraw {
-            self.handle_event(event)
+        if !self.suspended{
+            self.renderer.render(self.page.clone(), self.fitting_matrix(), Some(self.background));
         }
     }
 
-    pub fn handle_event(&mut self, event:CanvasEvent){
-        match event {
-            CanvasEvent::Page(page) => {
-                self.page = page;
-                self.handle.request_redraw();
-            }
-            CanvasEvent::Visible(flag) => {
-                self.handle.set_visible(flag);
-            }
-            CanvasEvent::Resizable(flag) => {
-                self.handle.set_resizable(flag);
-            }
-            CanvasEvent::Title(title) => {
-                self.handle.set_title(&title);
-            }
-            CanvasEvent::Cursor(icon) => {
-                if let Some(icon) = icon{
-                    self.handle.set_cursor(icon);
-                }
-                self.handle.set_cursor_visible(icon.is_some());
-            }
-            CanvasEvent::Fit(mode) => {
-                self.fit = mode;
-            }
-            CanvasEvent::Background(color) => {
-                self.background = color;
-            }
-            CanvasEvent::Size(size) => {
-                let size:PhysicalSize<u32> = size.to_physical(self.handle.scale_factor());
-                if let Some(to_size) = self.handle.request_inner_size(size){
-                    self.resize(to_size);
-                }
-            }
-            CanvasEvent::Position(loc) => {
-                self.handle.set_outer_position(loc);
-            }
-            CanvasEvent::Fullscreen(to_fullscreen) => {
-                match to_fullscreen{
-                    true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
-                    false => self.handle.set_fullscreen( None )
-                }
-            }
-            CanvasEvent::WindowResized(size) => {
-                self.resize(size);
-            }
-            CanvasEvent::RedrawingSuspended(suspended) => {
-                self.suspended = suspended;
-                if !suspended{
-                    self.redraw();
-                }
-            }
-            CanvasEvent::RedrawRequested => {
-                if !self.suspended{
-                    self.redraw()
-                }
-            }
+    pub fn set_page(&mut self, page:Page){
+        self.page = page;
+        self.handle.request_redraw();
+    }
 
-            _ => {}
+    pub fn set_visible(&mut self, flag:bool){
+        self.handle.set_visible(flag);
+    }
+
+    pub fn set_resizable(&mut self, flag:bool){
+        self.handle.set_resizable(flag);
+    }
+
+    pub fn set_title(&mut self, title:&str){
+        self.handle.set_title(title);
+    }
+
+    pub fn set_cursor(&mut self, icon:Option<CursorIcon>){
+        if let Some(icon) = icon{
+            self.handle.set_cursor(icon);
+        }
+        self.handle.set_cursor_visible(icon.is_some());
+    }
+
+    pub fn set_fit(&mut self, mode:Fit){
+        self.fit = mode;
+    }
+
+    pub fn set_background(&mut self, color:Color){
+        self.background = color;
+    }
+
+    pub fn set_size(&mut self, size:LogicalSize<u32>){
+        let size:PhysicalSize<u32> = size.to_physical(self.handle.scale_factor());
+        if let Some(to_size) = self.handle.request_inner_size(size){
+            self.resize(to_size);
         }
     }
+
+    pub fn set_position(&mut self, loc:LogicalPosition<i32>){
+        self.handle.set_outer_position(loc);
+    }
+
+    pub fn set_fullscreen(&mut self, to_fullscreen:bool){
+        match to_fullscreen{
+            true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
+            false => self.handle.set_fullscreen( None )
+        }
+    }
+
+    pub fn did_resize(&mut self, size:PhysicalSize<u32>){
+        self.resize(size);
+    }
+
+    pub fn set_redrawing_suspended(&mut self, suspended:bool){
+        self.suspended = suspended;
+        if !suspended{
+            self.redraw();
+        }
+    }
+
+
 }
 
