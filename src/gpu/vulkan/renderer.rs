@@ -25,7 +25,6 @@ use skia_safe::{
 use crate::context::page::Page;
 use crate::gpu::RenderEvent;
 
-#[cfg(feature = "window")]
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
     event_loop::ActiveEventLoop,
@@ -172,7 +171,6 @@ impl VulkanRenderer {
                         }).unwrap();
                     }
                 }
-
             }
         });
 
@@ -197,6 +195,12 @@ struct VulkanBackend{
     swapchain_is_valid: bool,
     last_render: Option<Box<dyn GpuFuture>>,
     skia_ctx: gpu::DirectContext,
+}
+
+impl Drop for VulkanBackend{
+    fn drop(&mut self) {
+        self.skia_ctx.abandon();
+    }
 }
 
 impl VulkanBackend{

@@ -265,7 +265,12 @@ pub struct MetalBackend {
     queue: CommandQueue,
 }
 
-#[cfg(feature = "window")]
+impl Drop for MetalBackend{
+    fn drop(&mut self) {
+        self.skia_ctx.abandon();
+    }
+}
+
 impl MetalBackend {
     pub fn for_layer(layer:&MetalLayer) -> Self{
         let queue = layer.device().new_command_queue();
