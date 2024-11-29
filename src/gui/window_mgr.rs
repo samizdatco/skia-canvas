@@ -119,6 +119,10 @@ impl WindowManager {
                 updates.push(CanvasEvent::Fullscreen(spec.fullscreen));
             }
 
+            if spec.resizable != win.spec.resizable {
+                updates.push(CanvasEvent::Resizable(spec.resizable));
+            }
+
             if spec.cursor != win.spec.cursor || spec.cursor_hidden != win.spec.cursor_hidden {
                 let icon = if spec.cursor_hidden{ None }else{ Some(spec.cursor) };
                 updates.push(CanvasEvent::Cursor(icon));
