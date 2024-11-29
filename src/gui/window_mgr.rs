@@ -4,7 +4,7 @@ use skia_safe::Matrix;
 use crossbeam::channel::{self, Sender};
 use serde_json::{Map, Value};
 use winit::{
-    dpi::{LogicalSize, LogicalPosition},
+    dpi::{LogicalSize, LogicalPosition, PhysicalSize},
     event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoopProxy},
     window::WindowId,
@@ -15,7 +15,7 @@ use crate::context::page::Page;
 use super::event::{CanvasEvent, Sieve};
 use super::window::{Window, WindowSpec};
 
-struct WindowRef { tx: Sender<CanvasEvent>, id: WindowId, spec: WindowSpec, sieve:Sieve, window:Window }
+struct WindowRef { id: WindowId, spec: WindowSpec, sieve:Sieve, window:Window }
 
 #[derive(Default)]
 pub struct WindowManager {
@@ -52,30 +52,7 @@ impl WindowManager {
         }
 
         // hold a reference to the window on the main thread…
-        self.windows.push( WindowRef{ id, spec, tx, sieve, window } );
-
-        // …but let the window's event handler & renderer run on a background thread
-        // thread::spawn(move || {
-        //     while let Ok(event) = rx.recv() {
-        //         let mut queue = vec![event];
-        //         while !rx.is_empty(){
-        //             queue.push(rx.recv().unwrap());
-        //         }
-
-        //         let mut needs_redraw = None;
-        //         queue.drain(..).for_each(|event|{
-        //             match event {
-        //                 CanvasEvent::RedrawRequested => needs_redraw = Some(event),
-        //                 _ => window.handle_event(event)
-        //             }
-        //         });
-
-        //         // deduplicate and defer redraw requests until all other events were handled
-        //         if let Some(event) = needs_redraw {
-        //             window.handle_event(event)
-        //         }
-        //     }
-        // });
+        self.windows.push( WindowRef{ id, spec, sieve, window } );
     }
 
     pub fn remove(&mut self, window_id:&WindowId){
@@ -86,42 +63,28 @@ impl WindowManager {
         self.windows.retain(|win| win.spec.id != token);
     }
 
-    pub fn send_event(&self, window_id:&WindowId, event:CanvasEvent){
-        if let Some(tx) = self.windows.iter().find(|win| win.id == *window_id).map(|win| &win.tx){
-            tx.send(event).ok();
-        }
-    }
-
-    pub fn dispatch_events(&mut self){
-        for window in &mut self.windows{
-            window.window.dispatch();
-        }
-    }
-
     pub fn update_window(&mut self, mut spec:WindowSpec, page:Page){
-        let mut updates:Vec<CanvasEvent> = vec![];
-
         if let Some(mut win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
             if spec.width != win.spec.width || spec.height != win.spec.height {
-                updates.push(CanvasEvent::Size(LogicalSize::new(spec.width as u32, spec.height as u32)));
+                win.window.set_size(LogicalSize::new(spec.width as u32, spec.height as u32));
             }
 
             if let (Some(left), Some(top)) = (spec.left, spec.top){
                 if spec.left != win.spec.left || spec.top != win.spec.top {
-                    updates.push(CanvasEvent::Position(LogicalPosition::new(left as i32, top as i32)));
+                    win.window.set_position(LogicalPosition::new(left as i32, top as i32));
                 }
             }
 
             if spec.title != win.spec.title {
-                updates.push(CanvasEvent::Title(spec.title.clone()));
+                win.window.set_title(&spec.title);
             }
 
             if spec.visible != win.spec.visible {
-                updates.push(CanvasEvent::Visible(spec.visible));
+                win.window.set_visible(spec.visible);
             }
 
             if spec.fullscreen != win.spec.fullscreen {
-                updates.push(CanvasEvent::Fullscreen(spec.fullscreen));
+                win.window.set_fullscreen(spec.fullscreen);
             }
 
             if spec.resizable != win.spec.resizable {
@@ -130,30 +93,45 @@ impl WindowManager {
 
             if spec.cursor != win.spec.cursor || spec.cursor_hidden != win.spec.cursor_hidden {
                 let icon = if spec.cursor_hidden{ None }else{ Some(spec.cursor) };
-                updates.push(CanvasEvent::Cursor(icon));
+                win.window.set_cursor(icon);
             }
 
             if spec.fit != win.spec.fit {
-                updates.push(CanvasEvent::Fit(spec.fit));
+                win.window.set_fit(spec.fit);
             }
 
             if spec.background != win.spec.background {
                 if let Some(color) = css_to_color(&spec.background) {
-                    updates.push(CanvasEvent::Background(color));
+                    win.window.set_background(color);
                 }else{
                     spec.background = win.spec.background.clone();
                 }
             }
 
-            updates.push(CanvasEvent::Page(page));
-
-            updates.drain(..).for_each(|event| {
-                win.tx.send(event).ok();
-            });
+            win.window.set_page(page);
 
             win.spec = spec;
         }
     }
+
+    pub fn redraw(&mut self, window_id:&WindowId){
+        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
+            win.window.redraw();
+        }
+    }
+
+    pub fn resized(&mut self, window_id:&WindowId, size:PhysicalSize<u32>){
+        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
+            win.window.did_resize(size);
+        }
+    }
+
+    pub fn suspend_redraw(&mut self, window_id:&WindowId, flag:bool){
+        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
+            win.window.set_redrawing_suspended(flag);
+        }
+    }
+
 
     pub fn capture_ui_event(&mut self, window_id:&WindowId, event:&WindowEvent){
         if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
@@ -172,7 +150,7 @@ impl WindowManager {
     pub fn set_fullscreen_state(&mut self, window_id:&WindowId, is_fullscreen:bool){
         if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
             // tell the window to change state
-            win.tx.send(CanvasEvent::Fullscreen(is_fullscreen)).ok();
+            win.window.set_fullscreen(is_fullscreen);
         }
         // and make sure the change is reflected in local state
         self.use_fullscreen_state(window_id, is_fullscreen);
