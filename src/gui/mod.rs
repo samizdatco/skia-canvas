@@ -40,10 +40,6 @@ thread_local!(
     ));
 );
 
-pub(crate) fn new_proxy() -> EventLoopProxy<CanvasEvent>{
-    PROXY.with_borrow_mut(|proxy| proxy.clone() )
-}
-
 pub(crate) fn add_event(event: CanvasEvent){
     PROXY.with_borrow_mut(|proxy| proxy.send_event(event).ok() );
 }

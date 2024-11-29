@@ -4,8 +4,8 @@ use serde::{Serialize, Deserialize};
 use crossbeam::channel::{self, Receiver};
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize},
-    event_loop::{ActiveEventLoop, EventLoopProxy},
-    window::{Window as WinitWindow, CursorIcon, Fullscreen},
+    event_loop::ActiveEventLoop,
+    window::{Window as WinitWindow, WindowId, CursorIcon, Fullscreen},
 };
 #[cfg(target_os = "macos" )]
 use winit::platform::macos::WindowExtMacOS;
@@ -13,7 +13,7 @@ use winit::platform::macos::WindowExtMacOS;
 use crate::utils::css_to_color;
 use crate::gpu::Renderer;
 use crate::context::page::Page;
-use super::event::CanvasEvent;
+use super::event::{CanvasEvent, Sieve};
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -52,17 +52,16 @@ pub enum Cursor {
 }
 pub struct Window {
     pub handle: Arc<WinitWindow>,
-    proxy: EventLoopProxy<CanvasEvent>,
+    pub spec: WindowSpec,
+    pub sieve: Sieve,
     renderer: Renderer,
-    fit: Fit,
     background: Color,
     page: Page,
     suspended: bool,
-    rx: Receiver<CanvasEvent>,
 }
 
 impl Window {
-    pub fn new(event_loop:&ActiveEventLoop, proxy:EventLoopProxy<CanvasEvent>, spec: &mut WindowSpec, page: &Page, rx:Receiver<CanvasEvent>) -> Self {
+    pub fn new(event_loop:&ActiveEventLoop, mut spec:WindowSpec, page:&Page) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
         let background = match css_to_color(&spec.background){
             Some(color) => color,
@@ -79,25 +78,38 @@ impl Window {
             .with_title(spec.title.clone())
             .with_visible(false)
             .with_resizable(spec.resizable);
-        let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
+        let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let renderer = Renderer::for_window(&event_loop, handle.clone());
+        let sieve = Sieve::new(handle.scale_factor());
         if let (Some(left), Some(top)) = (spec.left, spec.top){
             handle.set_outer_position(LogicalPosition::new(left, top));
         }
 
-        let renderer = Renderer::for_window(&event_loop, handle.clone());
+        Self{ spec, handle, sieve, renderer, page:page.clone(), suspended:false, background}
+    }
 
-        Self{ handle, proxy, renderer, page:page.clone(), fit:spec.fit, suspended:false, background, rx }
+    pub fn id(&self) -> WindowId {
+        self.handle.id()
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>){
         if let Some(monitor) = self.handle.current_monitor(){
             self.renderer.resize(size);
             self.reposition_ime(size);
+            self.update_fit();
 
-            let id = self.handle.id();
-            self.proxy.send_event(CanvasEvent::Transform(id, self.fitting_matrix().invert() )).ok();
-            self.proxy.send_event(CanvasEvent::InFullscreen(id, monitor.size() == size )).ok();
+            let is_fullscreen = monitor.size() == size;
+            if self.spec.fullscreen != is_fullscreen{
+                self.sieve.go_fullscreen(is_fullscreen);
+                self.spec.fullscreen = is_fullscreen;
+            }
+        }
+    }
+
+    pub fn update_fit(&mut self){
+        if let Some(fit) = self.fitting_matrix().invert(){
+            self.sieve.use_transform(fit);
         }
     }
 
@@ -118,7 +130,7 @@ impl Window {
         let fit_x = size.width / dims.width;
         let fit_y = size.height / dims.height;
 
-        let sf = match self.fit{
+        let sf = match self.spec.fit{
             Fit::Cover => fit_x.max(fit_y),
             Fit::ScaleDown => fit_x.min(fit_y).min(1.0),
             Fit::Contain => fit_x.min(fit_y),
@@ -127,12 +139,12 @@ impl Window {
             _ => 1.0
         };
 
-        let (x_scale, y_scale) = match self.fit{
+        let (x_scale, y_scale) = match self.spec.fit{
             Fit::Fill => (fit_x, fit_y),
             _ => (sf, sf)
         };
 
-        let (x_shift, y_shift) = match self.fit{
+        let (x_shift, y_shift) = match self.spec.fit{
             Fit::Resize => (0.0, 0.0),
             _ => ( (size.width - dims.width * x_scale) / 2.0,
                    (size.height - dims.height * y_scale) / 2.0 )
@@ -178,7 +190,7 @@ impl Window {
     }
 
     pub fn set_fit(&mut self, mode:Fit){
-        self.fit = mode;
+        self.spec.fit = mode;
     }
 
     pub fn set_background(&mut self, color:Color){

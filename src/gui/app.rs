@@ -15,7 +15,7 @@ use winit::{
 use super::event::CanvasEvent;
 use super::window::WindowSpec;
 use super::window_mgr::WindowManager;
-use super::{add_event, new_proxy};
+use super::{add_event};
 use crate::context::page::Page;
 
 pub enum LoopMode{
@@ -109,7 +109,7 @@ impl App{
 
             Event::UserEvent(canvas_event) => match canvas_event{
                 CanvasEvent::Open(spec, page) => {
-                    self.windows.add(event_loop, new_proxy(), spec, page);
+                    self.windows.add(event_loop, spec, page);
                     roundtrip(self.windows.get_geometry(), &mut self.windows).ok();
                 }
                 CanvasEvent::Close(token) => {
@@ -122,16 +122,9 @@ impl App{
                     // relay UI-driven state changes to js and render the next frame in the (active) cadence
                     roundtrip(self.windows.get_ui_changes(), &mut self.windows).ok();
                 }
-                CanvasEvent::Transform(window_id, matrix) => {
-                    self.windows.use_ui_transform(&window_id, &matrix);
-                },
-                CanvasEvent::InFullscreen(window_id, is_fullscreen) => {
-                    self.windows.use_fullscreen_state(&window_id, is_fullscreen);
-                }
                 CanvasEvent::FrameRate(fps) => {
                     self.cadence.set_frame_rate(fps)
                 }
-                _ => {}
             },
 
 
