@@ -161,7 +161,7 @@ impl Window {
 
     pub fn redraw(&mut self){
         if !self.suspended{
-            self.renderer.render(self.page.clone(), self.fitting_matrix(), Some(self.background));
+            self.renderer.draw(self.page.clone(), self.fitting_matrix(), Some(self.background));
         }
     }
 

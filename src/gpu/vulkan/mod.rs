@@ -2,9 +2,10 @@ use vulkano::format::Format as VkFormat;
 use skia_safe::{ gpu::vk, ColorType };
 
 pub mod engine;
-pub use engine::VulkanEngine;
 
+#[cfg(feature = "window")]
 pub mod renderer;
+
 pub use renderer::VulkanRenderer;
 
 static VK_FORMATS: &'static [VkFormat] = &[
