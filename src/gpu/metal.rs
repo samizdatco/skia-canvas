@@ -7,7 +7,7 @@ use metal::{
     CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
     foreign_types::{ForeignType, ForeignTypeRef}
 };
-use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface, Paint};
+use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
 use skia_safe::gpu::{
     mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
@@ -235,13 +235,13 @@ impl MetalRenderer{
                             layer.set_drawable_size(cg_size);
                         },
                         GpuEvent::Draw(page, matrix, matte) => {
-                            let paint = Paint::default();
                             let (clip, _) = matrix.map_rect(page.bounds);
+                            let scale = Matrix::scale((dpr as f32, dpr as f32));
                             backend.render_to_layer(&layer, |canvas|{
-                                canvas.reset_matrix();
-                                canvas.scale((dpr as f32, dpr as f32));
-                                canvas.clip_rect(clip, None, Some(true));
-                                canvas.draw_picture(page.get_picture(matte).unwrap(), Some(&matrix), Some(&paint));
+                                canvas.clear(matte)
+                                    .set_matrix(&scale.into())
+                                    .clip_rect(clip, None, Some(true))
+                                    .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
                             }).unwrap();
                         }
                     }
@@ -256,7 +256,7 @@ impl MetalRenderer{
         self.backend.send( GpuEvent::Resize(size) ).ok();
     }
 
-    pub fn draw(&self, page:Page, matrix:Matrix, matte:Option<Color>){
+    pub fn draw(&self, page:Page, matrix:Matrix, matte:Color){
         self.backend.send( GpuEvent::Draw(page, matrix, matte) ).ok();
     }
 }

@@ -17,7 +17,7 @@ use vulkano::{
 use super::{VK_FORMATS, to_sk_format};
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
-    Color, ColorType, Matrix, Paint,
+    Color, ColorType, Matrix,
 };
 use winit::{
     dpi::PhysicalSize,
@@ -172,13 +172,13 @@ impl VulkanRenderer {
                         backend.prepare_swapchain(size.into());
                     },
                     GpuEvent::Draw(page, matrix, matte) => {
-                        let paint = Paint::default();
                         let (clip, _) = matrix.map_rect(page.bounds);
+                        let scale = Matrix::scale((dpr as f32, dpr as f32));
                         backend.render_frame(|canvas|{
-                            canvas.reset_matrix();
-                            canvas.scale((dpr as f32, dpr as f32));
-                            canvas.clip_rect(clip, None, Some(true));
-                            canvas.draw_picture(page.get_picture(matte).unwrap(), Some(&matrix), Some(&paint));
+                            canvas.clear(matte)
+                                .set_matrix(&scale.into())
+                                .clip_rect(clip, None, Some(true))
+                                .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
                         }).unwrap();
                     }
                 }
@@ -192,7 +192,7 @@ impl VulkanRenderer {
         self.backend.send( GpuEvent::Resize(size) ).ok();
     }
 
-    pub fn draw(&self, page:Page, matrix:Matrix, matte:Option<Color>){
+    pub fn draw(&self, page:Page, matrix:Matrix, matte:Color){
         self.backend.send( GpuEvent::Draw(page, matrix, matte) ).ok();
     }
 }
