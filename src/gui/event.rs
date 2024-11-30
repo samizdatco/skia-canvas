@@ -24,7 +24,7 @@ pub enum CanvasEvent{
 
 pub enum GpuEvent{
   Resize(PhysicalSize<u32>),
-  Draw(Page, Matrix, Option<Color>),
+  Draw(Page, Matrix, Color),
 }
 
 #[derive(Debug, Serialize)]

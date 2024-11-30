@@ -14,7 +14,6 @@ crate-type = ["cdylib"]
 lto = "fat"
 
 [features]
-default = ["metal", "window"]
 metal = ["skia-safe/metal", "dep:metal", "dep:raw-window-handle", "dep:core-graphics-types", "dep:cocoa", "dep:objc"]
 vulkan = ["skia-safe/vulkan", "winit/rwh_05", "dep:ash", "dep:vulkano"]
 window = ["dep:winit"]
