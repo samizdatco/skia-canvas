@@ -72,8 +72,9 @@ impl App{
                 match win_event {
                     WindowEvent::Destroyed | WindowEvent::CloseRequested => {
                         self.windows.remove(&window_id);
-                        if self.windows.is_empty() {
-                            // quit after the last window is closed
+
+                        // exit after the last window is closed (but only in run_on_demand mode)
+                        if self.windows.is_empty() && matches!(self.mode, LoopMode::Native){
                             add_event(CanvasEvent::Quit);
                         }
                     }
