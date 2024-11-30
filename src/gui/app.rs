@@ -54,10 +54,8 @@ impl App{
             },
             LoopMode::Node => {
                 let handler = self.event_handler(roundtrip);
-                match event_loop.pump_events(Some(std::time::Duration::ZERO), handler){
-                    PumpStatus::Exit(..) => false,
-                    PumpStatus::Continue => true,
-                }
+                event_loop.pump_events(Some(Duration::ZERO), handler);
+                self.cadence.should_continue() || !self.windows.is_empty()
             }
         }
     }
@@ -77,10 +75,12 @@ impl App{
                     WindowEvent::Destroyed | WindowEvent::CloseRequested => {
                         self.windows.remove(&window_id);
 
-                        // exit after the last window is closed (but only in run_on_demand mode)
-                        if self.windows.is_empty() && matches!(self.mode, LoopMode::Native){
-                            add_event(CanvasEvent::Quit);
-                        }
+                        // after the last window is closed, either exit (in run_on_demand mode)
+                        // or wait for the window destructor to run (in pump_events mode)
+                        if self.windows.is_empty(){ match self.mode{
+                            LoopMode::Native => event_loop.exit(),
+                            LoopMode::Node => self.cadence.loop_again(),
+                        }}
                     }
 
                     WindowEvent::KeyboardInput {
@@ -162,7 +162,7 @@ struct Cadence{
     rate: u64,
     last: Instant,
     interval: Duration,
-    begun: bool,
+    needs_cleanup: Option<bool>,
 }
 
 impl Default for Cadence {
@@ -171,18 +171,19 @@ impl Default for Cadence {
             rate: 0,
             last: Instant::now(),
             interval: Duration::new(0, 0),
-            begun: false,
+            needs_cleanup: Some(true), // ensure at least one post-Init loop
         }
     }
 }
 
 impl Cadence{
-    fn at_startup(&mut self) -> bool{
-        if self.begun{ false }
-        else{
-            self.begun = true;
-            true // only return true on first call
-        }
+    fn loop_again(&mut self){
+        // flag that a clean-up event-loop pass is necessary (e.g., for reflecting window closures)
+        self.needs_cleanup = Some(true)
+    }
+
+    fn should_continue(&mut self) -> bool{
+        self.needs_cleanup.take().is_some()
     }
 
     fn set_frame_rate(&mut self, rate:u64){
