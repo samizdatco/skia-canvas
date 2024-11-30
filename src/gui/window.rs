@@ -116,7 +116,7 @@ impl Window {
     pub fn reposition_ime(&mut self, size:PhysicalSize<u32>){
         // place the input region in the bottom left corner so the UI doesn't cover the window
         let dpr = self.handle.scale_factor();
-        let window_height = size.to_logical::<u32>(dpr).height;
+        let window_height = size.to_logical::<i32>(dpr).height;
         self.handle.set_ime_allowed(true);
         self.handle.set_ime_cursor_area(
             LogicalPosition::new(15, window_height-20), LogicalSize::new(100, 15)
