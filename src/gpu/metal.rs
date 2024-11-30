@@ -106,7 +106,6 @@ impl MetalEngine {
 }
 pub struct MetalContext {
     device: Device,
-    queue: CommandQueue,
     context: DirectContext,
     msaa: Vec<usize>,
     last_use: Instant,
@@ -128,7 +127,7 @@ impl MetalContext{
                     *s==0 || device.supports_texture_sample_count(*s as _)
                 }).collect();
                 direct_contexts::make_metal(&backend, None)
-                    .map(|context| MetalContext{device, queue, context, msaa, last_use})
+                    .map(|context| MetalContext{device, context, msaa, last_use})
             })
         })
     }
