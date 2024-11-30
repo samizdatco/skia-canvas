@@ -124,7 +124,7 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 pub fn close(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let token = string_arg(&mut cx, 0, "windowID")?;
+    let token = float_arg(&mut cx, 0, "windowID")? as u32;
     add_event(CanvasEvent::Close(token));
     Ok(cx.undefined())
 }

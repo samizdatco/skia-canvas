@@ -18,7 +18,7 @@ use super::event::{CanvasEvent, Sieve};
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowSpec {
-    pub id: String,
+    pub id: u32,
     pub left: Option<f32>,
     pub top: Option<f32>,
     pub title: String,
