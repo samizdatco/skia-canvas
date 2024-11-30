@@ -1,7 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{Matrix, Color, ImageInfo, Surface, surfaces};
+use skia_safe::{ImageInfo, Surface, surfaces};
 use serde_json::Value;
-use crate::context::page::Page;
 
 #[cfg(feature = "metal")]
 mod metal;
@@ -14,9 +13,9 @@ pub use crate::gpu::metal::MetalRenderer as Renderer;
 #[cfg(feature = "vulkan")]
 mod vulkan;
 #[cfg(feature = "vulkan")]
-use crate::gpu::vulkan::VulkanEngine as Engine;
+use crate::gpu::vulkan::engine::VulkanEngine as Engine;
 #[cfg(all(feature = "vulkan", feature = "window"))]
-pub use crate::gpu::vulkan::VulkanRenderer as Renderer;
+pub use crate::gpu::vulkan::renderer::VulkanRenderer as Renderer;
 
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 struct Engine { }
@@ -34,12 +33,6 @@ impl Engine {
         "device": "CPU-based renderer (compiled without GPU support)",
         "error": Value::Null,
     })}
-}
-
-#[derive(Clone, Debug)]
-enum RenderEvent{
-    Resize(u32, u32),
-    Draw(Page, Matrix, Option<Color>),
 }
 
 #[derive(Copy, Clone, Debug)]

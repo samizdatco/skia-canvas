@@ -12,11 +12,13 @@ use winit::{
     window::WindowId
 };
 
-use super::event::CanvasEvent;
-use super::window::WindowSpec;
-use super::window_mgr::WindowManager;
-use super::{add_event};
 use crate::context::page::Page;
+use super::{
+    event::CanvasEvent,
+    window::WindowSpec,
+    window_mgr::WindowManager,
+    add_event,
+};
 
 pub enum LoopMode{
     Native, Node

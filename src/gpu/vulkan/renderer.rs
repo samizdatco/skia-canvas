@@ -1,10 +1,6 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use ash::vk::Handle;
 use crossbeam::channel;
-use std::{
-    cell::RefCell, collections::HashMap, ptr, sync::Arc
-};
+use std::{ptr, sync::Arc};
 use vulkano::{
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned, Queue, QueueCreateInfo, QueueFlags
@@ -13,7 +9,7 @@ use vulkano::{
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass},
     swapchain::{
-        self, acquire_next_image, CompositeAlpha, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo
+        acquire_next_image, CompositeAlpha, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo
     },
     sync::{self, GpuFuture},
     Validated, VulkanError, VulkanLibrary, VulkanObject,
@@ -22,18 +18,20 @@ use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
     Color, ColorType, Matrix, Paint,
 };
-use crate::context::page::Page;
-use crate::gpu::RenderEvent;
-
 use winit::{
-    dpi::{LogicalSize, PhysicalSize},
+    dpi::PhysicalSize,
     event_loop::ActiveEventLoop,
-    window::{Window, WindowId},
+    window::Window,
+};
+
+use crate::{
+    context::page::Page,
+    gui::event::GpuEvent,
 };
 
 
 pub struct VulkanRenderer{
-    backend: channel::Sender<RenderEvent>,
+    backend: channel::Sender<GpuEvent>,
 }
 
 impl VulkanRenderer {
@@ -149,18 +147,18 @@ impl VulkanRenderer {
             .unwrap()
         };
 
-        let (tx, rx) = channel::unbounded::<RenderEvent>();
+        let (tx, rx) = channel::unbounded::<GpuEvent>();
         std::thread::spawn(move || {
             let mut backend = VulkanBackend::new(queue, swapchain);
             while let Ok(event) = rx.recv() {
                 if !rx.is_empty(){ continue } // drop all but the last frame in the queue
 
                 match event{
-                    RenderEvent::Resize(width, height) => {
+                    GpuEvent::Resize(size) => {
                         backend.swapchain_is_valid = false;
-                        backend.prepare_swapchain((width, height).into());
+                        backend.prepare_swapchain(size.into());
                     },
-                    RenderEvent::Draw(page, matrix, matte) => {
+                    GpuEvent::Draw(page, matrix, matte) => {
                         let paint = Paint::default();
                         let (clip, _) = matrix.map_rect(page.bounds);
                         backend.render_frame(|canvas|{
@@ -178,11 +176,11 @@ impl VulkanRenderer {
     }
 
     pub fn resize(&self, size: PhysicalSize<u32>) {
-        self.backend.send( RenderEvent::Resize(size.width, size.height) ).ok();
+        self.backend.send( GpuEvent::Resize(size) ).ok();
     }
 
-    pub fn render(&self, page:Page, matrix:Matrix, matte:Option<Color>){
-        self.backend.send( RenderEvent::Draw(page, matrix, matte) ).ok();
+    pub fn draw(&self, page:Page, matrix:Matrix, matte:Option<Color>){
+        self.backend.send( GpuEvent::Draw(page, matrix, matte) ).ok();
     }
 }
 

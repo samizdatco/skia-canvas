@@ -22,6 +22,11 @@ pub enum CanvasEvent{
   Quit,
 }
 
+pub enum GpuEvent{
+  Resize(PhysicalSize<u32>),
+  Draw(Page, Matrix, Option<Color>),
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum UiEvent{
@@ -36,7 +41,6 @@ pub enum UiEvent{
   Resize(LogicalSize<u32>),
   Fullscreen(bool),
 }
-
 
 #[derive(Debug)]
 pub struct Sieve{

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 use std::time::{Instant, Duration};
@@ -9,26 +7,13 @@ use metal::{
     CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
     foreign_types::{ForeignType, ForeignTypeRef}
 };
-use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface, Data, Matrix, Paint, Color};
+use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface, Paint};
 use skia_safe::gpu::{
     mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
-use objc::runtime::YES;
-pub use objc::rc::autoreleasepool;
+use objc::{runtime::YES, rc::autoreleasepool};
 use serde_json::{json, Value};
 use crossbeam::channel;
-
-use crate::context::page::Page;
-use super::RenderEvent;
-
-#[cfg(feature = "window")]
-use winit::{
-    dpi::{LogicalSize, PhysicalSize},
-    platform::macos::WindowExtMacOS,
-    window::Window,
-    raw_window_handle::HasWindowHandle,
-    event_loop::ActiveEventLoop,
-};
 
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
 static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
@@ -181,10 +166,28 @@ impl MetalContext{
 //
 // Windowed rendering
 //
+
+#[cfg(feature = "window")]
+use {
+    crate::{
+        context::page::Page,
+        gui::event::GpuEvent,
+    },
+    winit::{
+        dpi::PhysicalSize,
+        window::Window,
+        raw_window_handle::HasWindowHandle,
+        event_loop::ActiveEventLoop,
+    },
+    skia_safe::{Matrix, Color},
+};
+
+#[cfg( feature = "window")]
 pub struct MetalRenderer {
-    backend: channel::Sender<RenderEvent>,
+    backend: channel::Sender<GpuEvent>,
 }
 
+#[cfg( feature = "window")]
 impl MetalRenderer{
     pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
         let device = Device::system_default().expect("no device found");
@@ -228,11 +231,11 @@ impl MetalRenderer{
 
                 autoreleasepool(||{
                     match event{
-                        RenderEvent::Resize(width, height) => {
-                            let cg_size = CGSize::new(width as f64, height as f64);
+                        GpuEvent::Resize(size) => {
+                            let cg_size = CGSize::new(size.width as f64, size.height as f64);
                             layer.set_drawable_size(cg_size);
                         },
-                        RenderEvent::Draw(page, matrix, matte) => {
+                        GpuEvent::Draw(page, matrix, matte) => {
                             let paint = Paint::default();
                             let (clip, _) = matrix.map_rect(page.bounds);
                             backend.render_to_layer(&layer, |canvas|{
@@ -251,11 +254,11 @@ impl MetalRenderer{
     }
 
     pub fn resize(&self, size: PhysicalSize<u32>) {
-        self.backend.send( RenderEvent::Resize(size.width, size.height) ).ok();
+        self.backend.send( GpuEvent::Resize(size) ).ok();
     }
 
-    pub fn render(&self, page:Page, matrix:Matrix, matte:Option<Color>){
-        self.backend.send( RenderEvent::Draw(page, matrix, matte) ).ok();
+    pub fn draw(&self, page:Page, matrix:Matrix, matte:Option<Color>){
+        self.backend.send( GpuEvent::Draw(page, matrix, matte) ).ok();
     }
 }
 
