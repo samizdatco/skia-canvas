@@ -35,8 +35,8 @@ thread_local!(
     // the event loop can only be run from the main thread
     static APP: RefCell<App> = RefCell::new(App::default());
     static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
-    static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with(|event_loop|
-        event_loop.borrow().create_proxy()
+    static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with_borrow(|event_loop|
+        event_loop.create_proxy()
     ));
 );
 
@@ -130,6 +130,7 @@ pub fn close(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 pub fn quit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    APP.with_borrow_mut(|app| app.close_all() );
     add_event(CanvasEvent::Quit);
     Ok(cx.undefined())
 }
