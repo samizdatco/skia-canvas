@@ -62,6 +62,10 @@ impl App{
         }
     }
 
+    pub fn close_all(&mut self){
+        self.windows.remove_all();
+    }
+
     pub fn event_handler<F>(&mut self, mut roundtrip:F) -> impl FnMut(Event<CanvasEvent>, &ActiveEventLoop) + use<'_, F>
         where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
     {
