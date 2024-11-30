@@ -53,7 +53,7 @@ impl WindowManager {
         self.windows.retain(|win| win.id() != *window_id);
     }
 
-    pub fn remove_by_token(&mut self, token:&str){
+    pub fn remove_by_token(&mut self, token:u32){
         self.windows.retain(|win| win.spec.id != token);
     }
 
@@ -149,9 +149,9 @@ impl WindowManager {
         let mut state = Map::new();
         self.windows.iter_mut().for_each(|win|{
             if let Some(payload) = win.sieve.serialize(){
-                ui.insert(win.spec.id.clone(), payload);
+                ui.insert(win.spec.id.to_string(), payload);
             }
-            state.insert(win.spec.id.clone(), json!(win.spec));
+            state.insert(win.spec.id.to_string(), json!(win.spec));
         });
         json!({ "ui": ui, "state": state })
     }
@@ -159,7 +159,7 @@ impl WindowManager {
     pub fn get_geometry(&mut self) -> Value {
         let mut positions = Map::new();
         self.windows.iter_mut().for_each(|win|{
-            positions.insert(win.spec.id.clone(), json!({"left":win.spec.left, "top":win.spec.top}));
+            positions.insert(win.spec.id.to_string(), json!({"left":win.spec.left, "top":win.spec.top}));
         });
         json!({"geom":positions})
     }

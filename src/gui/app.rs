@@ -120,7 +120,7 @@ impl App{
                     roundtrip(self.windows.get_geometry(), &mut self.windows).ok();
                 }
                 CanvasEvent::Close(token) => {
-                    self.windows.remove_by_token(&token);
+                    self.windows.remove_by_token(token);
                 }
                 CanvasEvent::Quit => {
                     event_loop.exit();

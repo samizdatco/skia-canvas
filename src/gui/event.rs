@@ -16,7 +16,7 @@ use super::window::{WindowSpec, Fit};
 #[derive(Debug, Clone)]
 pub enum CanvasEvent{
   Open(WindowSpec, Page),
-  Close(String),
+  Close(u32),
   FrameRate(u64),
   Render,
   Quit,
