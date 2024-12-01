@@ -164,7 +164,9 @@ impl VulkanRenderer {
         std::thread::spawn(move || {
             let mut backend = VulkanBackend::new(queue, swapchain);
             while let Ok(event) = rx.recv() {
-                if !rx.is_empty(){ continue } // drop all but the last frame in the queue
+                if !rx.is_empty() && matches!(event, GpuEvent::Draw(..)){
+                    continue; // drop all but the last Draw frame in the queue
+                }
 
                 match event{
                     GpuEvent::Resize(size) => {

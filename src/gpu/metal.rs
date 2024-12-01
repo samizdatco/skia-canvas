@@ -226,7 +226,9 @@ impl MetalRenderer{
         std::thread::spawn(move || {
             let mut backend = MetalBackend::for_layer(&layer);
             while let Ok(event) = rx.recv() {
-                if !rx.is_empty(){ continue } // drop all but the last frame in the queue
+                if !rx.is_empty() && matches!(event, GpuEvent::Draw(..)){
+                    continue; // drop all but the last Draw frame in the queue
+                }
 
                 autoreleasepool(||{
                     match event{
