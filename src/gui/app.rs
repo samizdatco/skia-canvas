@@ -136,7 +136,6 @@ impl App{
                 // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
                 // a Render event, so only do a roundtrip if there are new UI events to be relayed
                 if !self.cadence.active() && self.windows.has_ui_changes() {
-                    // payload = self.windows.get_ui_changes();
                     roundtrip(self.windows.get_ui_changes(), &mut self.windows).ok();
                 }
 
