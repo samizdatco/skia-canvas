@@ -204,6 +204,14 @@ impl Cadence{
     pub fn on_next_frame<F:FnMut()>(&mut self, mode:LoopMode, mut draw:F) -> ControlFlow{
         match self.active() {
             true => {
+                // if node is handling the event loop, we can't use polling to wait for the
+                // render deadline, so instead we'll pause the thread for up to 1.5ms, making sure
+                // we can then draw immediately after
+                let dt = self.last.elapsed();
+                if matches!(mode, LoopMode::Node) && dt >= self.wakeup && dt < self.render{
+                    std::thread::sleep(self.render - dt);
+                }
+
                 // call the draw callback if it's time & make sure the next deadline is in the future
                 if self.last.elapsed() >= self.render{
                     draw();
