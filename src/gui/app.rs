@@ -126,10 +126,6 @@ impl App{
                 CanvasEvent::Quit => {
                     event_loop.exit();
                 }
-                CanvasEvent::Render => {
-                    // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                    roundtrip(self.windows.get_ui_changes(), &mut self.windows).ok();
-                }
                 CanvasEvent::FrameRate(fps) => {
                     self.cadence.set_frame_rate(fps)
                 }
@@ -147,7 +143,10 @@ impl App{
                 // delegate timing to the cadence if active, otherwise wait for ui events
                 event_loop.set_control_flow(
                     match self.cadence.active(){
-                        true => self.cadence.on_next_frame(||{ add_event(CanvasEvent::Render) }),
+                        true => self.cadence.on_next_frame(self.mode, ||{
+                            // relay UI-driven state changes to js and render the next frame in the (active) cadence
+                            roundtrip(self.windows.get_ui_changes(), &mut self.windows).ok();
+                         }),
                         false => ControlFlow::Wait
                     }
                 );
@@ -198,7 +197,11 @@ impl Cadence{
         self.rate = rate;
     }
 
-    fn on_next_frame<F:Fn()>(&mut self, draw:F) -> ControlFlow{
+    fn active(&self) -> bool{
+        self.rate > 0
+    }
+
+    pub fn on_next_frame<F:FnMut()>(&mut self, mode:LoopMode, mut draw:F) -> ControlFlow{
         match self.active() {
             true => {
                 // call the draw callback if it's time & make sure the next deadline is in the future
@@ -218,10 +221,6 @@ impl Cadence{
             },
             false => ControlFlow::Wait
         }
-    }
-
-    fn active(&self) -> bool{
-        self.rate > 0
     }
 }
 
