@@ -165,7 +165,6 @@ impl Window {
 
     pub fn redraw(&mut self){
         if !self.suspended{
-            self.handle.pre_present_notify();
             self.renderer.draw(self.page.clone(), self.fitting_matrix(), self.background);
         }
     }

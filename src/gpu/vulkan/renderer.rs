@@ -176,6 +176,7 @@ impl VulkanRenderer {
                     GpuEvent::Draw(page, matrix, matte) => {
                         let (clip, _) = matrix.map_rect(page.bounds);
                         let scale = Matrix::scale((dpr as f32, dpr as f32));
+                        window.pre_present_notify();
                         backend.render_frame(|canvas|{
                             canvas.clear(matte)
                                 .set_matrix(&scale.into())
