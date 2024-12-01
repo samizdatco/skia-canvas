@@ -18,7 +18,6 @@ pub enum CanvasEvent{
   Open(WindowSpec, Page),
   Close(u32),
   FrameRate(u64),
-  Render,
   Quit,
 }
 
