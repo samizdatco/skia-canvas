@@ -29,6 +29,7 @@ pub struct PageRecorder{
   matrix: Matrix,
   clip: Option<Path>,
   changed: bool,
+  rev: usize,
 }
 
 impl PageRecorder{
@@ -36,7 +37,7 @@ impl PageRecorder{
     let mut rec = PictureRecorder::new();
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
-    PageRecorder{ current:rec, changed:false, layers:vec![], cache:None, matrix:Matrix::default(), clip:None, bounds }
+    PageRecorder{ current:rec, changed:false, layers:vec![], cache:None, matrix:Matrix::default(), clip:None, bounds, rev:0 }
   }
 
   pub fn append<F>(&mut self, f:F)
@@ -49,7 +50,9 @@ impl PageRecorder{
   }
 
   pub fn set_bounds(&mut self, bounds:Rect){
+    let rev = self.rev;
     *self = PageRecorder::new(bounds);
+    self.rev = rev + 1;
   }
 
   pub fn update_bounds(&mut self, bounds:Rect){
@@ -105,6 +108,7 @@ impl PageRecorder{
       }
       self.current.begin_recording(self.bounds, None);
       self.changed = false;
+      self.rev += 1;
       self.cache = None;
       self.restore();
     }
@@ -112,6 +116,7 @@ impl PageRecorder{
     Page{
       layers: self.layers.clone(),
       bounds: self.bounds,
+      rev: self.rev,
     }
   }
 
@@ -135,6 +140,7 @@ impl PageRecorder{
 pub struct Page{
   pub layers: Vec<Picture>,
   pub bounds: Rect,
+  pub rev: usize
 }
 
 impl Page{
