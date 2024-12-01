@@ -77,11 +77,14 @@ impl Window {
             .with_transparent(background.a() < 255)
             .with_title(spec.title.clone())
             .with_visible(false)
+            .with_cursor(spec.cursor)
             .with_resizable(spec.resizable);
 
         let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
         let renderer = Renderer::for_window(&event_loop, handle.clone());
         let sieve = Sieve::new(handle.scale_factor());
+
+        handle.set_cursor_visible(!spec.cursor_hidden);
         if let (Some(left), Some(top)) = (spec.left, spec.top){
             handle.set_outer_position(LogicalPosition::new(left, top));
         }
