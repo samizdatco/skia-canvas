@@ -120,22 +120,6 @@ impl WindowManager {
         self.windows.iter_mut().find(|win| win.id() == *id).map(f);
     }
 
-    pub fn redraw(&mut self, id:&WindowId){
-        self.find(id, |win| win.redraw() );
-    }
-
-    pub fn resized(&mut self, id:&WindowId, size:PhysicalSize<u32>){
-        self.find(id, |win| win.did_resize(size) );
-    }
-
-    pub fn suspend_redraw(&mut self, id:&WindowId, flag:bool){
-        self.find(id, |win| win.set_redrawing_suspended(flag) )
-    }
-
-    pub fn set_fullscreen_state(&mut self, id:&WindowId, is_fullscreen:bool){
-        self.find(id, |win| win.set_fullscreen(is_fullscreen) )
-    }
-
     pub fn capture_ui_event(&mut self, id:&WindowId, event:&WindowEvent){
         self.find(id, |win| win.sieve.capture(event) )
     }

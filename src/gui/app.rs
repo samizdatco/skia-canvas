@@ -94,20 +94,20 @@ impl App{
                             },
                         ..
                     } => {
-                        self.windows.set_fullscreen_state(&window_id, false);
+                        self.windows.find(&window_id, |win| win.set_fullscreen(false) );
+                    }
+
+                    WindowEvent::Resized(size) => {
+                        self.windows.find(&window_id, |win| win.did_resize(*size) );
                     }
 
                     #[cfg(target_os = "macos")]
                     WindowEvent::Occluded(is_hidden) => {
-                        self.windows.suspend_redraw(&window_id, *is_hidden);
+                        self.windows.find(&window_id, |win| win.set_redrawing_suspended(*is_hidden) );
                     }
 
                     WindowEvent::RedrawRequested => {
-                        self.windows.redraw(&window_id);
-                    }
-
-                    WindowEvent::Resized(size) => {
-                        self.windows.resized(&window_id, *size);
+                        self.windows.find(&window_id, |win| win.redraw() );
                     }
 
                     _ => {}
