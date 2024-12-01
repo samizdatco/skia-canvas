@@ -97,6 +97,10 @@ impl App{
                         self.windows.find(&window_id, |win| win.set_fullscreen(false) );
                     }
 
+                    WindowEvent::Moved(loc) => {
+                        self.windows.find(&window_id, |win| win.did_move(*loc) );
+                    }
+
                     WindowEvent::Resized(size) => {
                         self.windows.find(&window_id, |win| win.did_resize(*size) );
                     }
