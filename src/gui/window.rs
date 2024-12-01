@@ -3,12 +3,18 @@ use skia_safe::{Matrix, Color, Paint};
 use serde::{Serialize, Deserialize};
 use crossbeam::channel::{self, Receiver};
 use winit::{
-    dpi::{LogicalSize, LogicalPosition, PhysicalSize},
+    dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
+    window::{CursorIcon, Fullscreen, Window as WinitWindow, WindowId},
     event_loop::ActiveEventLoop,
-    window::{Window as WinitWindow, WindowId, CursorIcon, Fullscreen},
 };
+
 #[cfg(target_os = "macos" )]
-use winit::platform::macos::WindowExtMacOS;
+use {
+    winit::platform::macos::{WindowExtMacOS, MonitorHandleExtMacOS},
+    core_graphics_types::base::CGFloat,
+    cocoa::base::id as cocoa_id,
+    objc::{sel, sel_impl, msg_send},
+};
 
 use crate::utils::css_to_color;
 use crate::gpu::Renderer;
@@ -102,9 +108,22 @@ impl Window {
             self.reposition_ime(size);
             self.update_fit();
 
-            let is_fullscreen = monitor.size() == size;
             let LogicalSize{width, height} = self.handle.inner_size().to_logical::<f32>(self.handle.scale_factor());
             self.spec = WindowSpec{width, height, ..self.spec.clone()};
+
+            // account for the notch height (if present)
+            let mut monitor_size = monitor.size();
+            #[cfg(target_os = "macos" )]
+            if let Some(screen) = monitor.ns_screen(){
+                struct NSEdgeInsets { top: CGFloat, left: CGFloat, bottom: CGFloat, right: CGFloat }
+                let insets:NSEdgeInsets = unsafe {msg_send![screen as cocoa_id, safeAreaInsets]};
+                if insets.top > 0.0 {
+                    monitor_size.height -= (self.handle.scale_factor() * insets.top) as u32;
+                    monitor_size.height -= 10;
+                }
+            }
+
+            let is_fullscreen = monitor_size == size;
             if self.spec.fullscreen != is_fullscreen{
                 self.sieve.go_fullscreen(is_fullscreen);
                 self.spec.fullscreen = is_fullscreen;
