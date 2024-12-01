@@ -219,8 +219,6 @@ impl MetalRenderer{
             layer
         };
 
-        let dpr = window.scale_factor();
-
         // spawn a background thread where the Backend will wait for new pages via its rx channel
         let (tx, rx) = channel::unbounded();
         std::thread::spawn(move || {
@@ -237,8 +235,10 @@ impl MetalRenderer{
                             layer.set_drawable_size(cg_size);
                         },
                         GpuEvent::Draw(page, matrix, matte) => {
+                            let dpr = window.scale_factor();
                             let (clip, _) = matrix.map_rect(page.bounds);
                             let scale = Matrix::scale((dpr as f32, dpr as f32));
+                            window.pre_present_notify();
                             backend.render_to_layer(&layer, |canvas|{
                                 canvas.clear(matte)
                                     .set_matrix(&scale.into())
