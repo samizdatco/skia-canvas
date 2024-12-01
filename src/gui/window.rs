@@ -103,6 +103,8 @@ impl Window {
             self.update_fit();
 
             let is_fullscreen = monitor.size() == size;
+            let LogicalSize{width, height} = self.handle.inner_size().to_logical::<f32>(self.handle.scale_factor());
+            self.spec = WindowSpec{width, height, ..self.spec.clone()};
             if self.spec.fullscreen != is_fullscreen{
                 self.sieve.go_fullscreen(is_fullscreen);
                 self.spec.fullscreen = is_fullscreen;
@@ -110,6 +112,11 @@ impl Window {
         }
 
         self.handle.request_redraw();
+    }
+
+    pub fn reposition(&mut self, loc:LogicalPosition<i32>){
+        self.spec.left = Some(loc.x as _);
+        self.spec.top = Some(loc.y as _);
     }
 
     pub fn update_fit(&mut self){
@@ -212,6 +219,7 @@ impl Window {
 
     pub fn set_position(&mut self, loc:LogicalPosition<i32>){
         self.handle.set_outer_position(loc);
+        self.reposition(loc);
     }
 
     pub fn set_fullscreen(&mut self, to_fullscreen:bool){
@@ -219,6 +227,10 @@ impl Window {
             true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
             false => self.handle.set_fullscreen( None )
         }
+    }
+
+    pub fn did_move(&mut self, size:PhysicalPosition<i32>){
+        self.reposition(size.to_logical(self.handle.scale_factor()));
     }
 
     pub fn did_resize(&mut self, size:PhysicalSize<u32>){
