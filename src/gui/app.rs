@@ -20,6 +20,7 @@ use super::{
     add_event,
 };
 
+#[derive(Copy, Clone)]
 pub enum LoopMode{
     Native, Node
 }
@@ -161,7 +162,8 @@ impl App{
 struct Cadence{
     rate: u64,
     last: Instant,
-    interval: Duration,
+    wakeup: Duration,
+    render: Duration,
     needs_cleanup: Option<bool>,
 }
 
@@ -170,7 +172,8 @@ impl Default for Cadence {
         Self{
             rate: 0,
             last: Instant::now(),
-            interval: Duration::new(0, 0),
+            wakeup: Duration::new(0, 0),
+            render: Duration::new(0, 0),
             needs_cleanup: Some(true), // ensure at least one post-Init loop
         }
     }
@@ -189,22 +192,31 @@ impl Cadence{
     fn set_frame_rate(&mut self, rate:u64){
         if rate == self.rate{ return }
         let frame_time = 1_000_000_000/rate.max(1);
-        self.interval = Duration::from_nanos(frame_time);
+        let watch_interval = 1_500_000.max(frame_time/10);
+        self.render = Duration::from_nanos(frame_time);
+        self.wakeup = Duration::from_nanos(frame_time - watch_interval);
         self.rate = rate;
     }
 
     fn on_next_frame<F:Fn()>(&mut self, draw:F) -> ControlFlow{
         match self.active() {
             true => {
-                if self.last.elapsed() >= self.interval{
-                    while self.last < Instant::now() - self.interval{
-                        self.last += self.interval
-                    }
+                // call the draw callback if it's time & make sure the next deadline is in the future
+                if self.last.elapsed() >= self.render{
                     draw();
+                    while self.last < Instant::now() - self.render{
+                        self.last += self.render
+                    }
                 }
-                ControlFlow::WaitUntil(self.last + self.interval)
+
+                // if winit is in control, we can use waiting & polling to hit the deadline
+                match self.last.elapsed() < self.wakeup {
+                    true => ControlFlow::WaitUntil(self.last + self.wakeup),
+                    false => ControlFlow::Poll,
+                }
+
             },
-            false => ControlFlow::Wait,
+            false => ControlFlow::Wait
         }
     }
 
