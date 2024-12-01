@@ -108,6 +108,8 @@ impl Window {
                 self.spec.fullscreen = is_fullscreen;
             }
         }
+
+        self.handle.request_redraw();
     }
 
     pub fn update_fit(&mut self){
@@ -161,16 +163,18 @@ impl Window {
         matrix
     }
 
-
     pub fn redraw(&mut self){
         if !self.suspended{
+            self.handle.pre_present_notify();
             self.renderer.draw(self.page.clone(), self.fitting_matrix(), self.background);
         }
     }
 
     pub fn set_page(&mut self, page:Page){
+        if self.page.rev != page.rev{
+            self.handle.request_redraw();
+        }
         self.page = page;
-        self.handle.request_redraw();
     }
 
     pub fn set_visible(&mut self, flag:bool){
