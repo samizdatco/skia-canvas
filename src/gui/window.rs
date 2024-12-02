@@ -99,7 +99,7 @@ impl Window {
         self.update_fit();
 
         let LogicalSize{width, height} = self.handle.inner_size().to_logical::<f32>(self.handle.scale_factor());
-        let mut is_fullscreen = self.handle.fullscreen().is_some()
+        let is_fullscreen = self.handle.fullscreen().is_some()
             && width >= self.spec.width
             && height >= self.spec.height;
 

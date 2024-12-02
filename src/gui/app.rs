@@ -37,7 +37,7 @@ impl Default for App{
 
 #[allow(deprecated)]
 impl App{
-    pub fn activate<F>(&mut self, event_loop:&mut EventLoop<CanvasEvent>, mut roundtrip:F) -> bool
+    pub fn activate<F>(&mut self, event_loop:&mut EventLoop<CanvasEvent>, roundtrip:F) -> bool
         where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
     {
         match self.mode{
