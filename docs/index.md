@@ -119,7 +119,6 @@ win.on("draw", e => {
   ctx.fill()
 })
 ```
-
 <!-- references_begin -->
 [bool-ops]: api/path2d.md#complement-difference-intersect-union-and-xor
 [c2d_font]: api/context.md#font

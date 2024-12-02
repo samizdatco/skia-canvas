@@ -3,7 +3,7 @@ description: Inspect your system fonts or load new ones
 ---
 # FontLibrary
 
-> The `FontLibrary` is a static class which does not need to be instantiated with `new`. Instead you can access the properties and methods on the global `FontLibrary` you import from the module and its contents will be shared across all canvases you create.
+> The `FontLibrary` global variable is a static class which does not need to be instantiated with `new`. Instead you can access the properties and methods on the global `FontLibrary` you import from the module and its contents will be shared across all canvases you create.
 
 | Installed Fonts           | Loading New Fonts | Typeface Details  |
 | --                        | --                | --                  |
@@ -56,10 +56,15 @@ FontLibrary.use(familyName, [...fontPaths])
 FontLibrary.use({familyName:[...fontPaths], ...)
 ```
 
-The `FontLibrary.use()` method allows you to dynamically load local font files and use them with your canvases. By default it will use whatever family name is in the font metadata, but this can be overridden by an alias you provide. Since font-wrangling can be messy, `use` can be called in a number of different ways:
+The `FontLibrary.use()` method allows you to dynamically load local font files and use them with your canvases. It can read fonts in the OpenType (`.otf`), TrueType (`.ttf`), and web-font (`.woff` & `.woff2`) file formats.
+
+
+By default the family name will be take from the font metadata, but this can be overridden by an alias you provide. Since font-wrangling can be messy, `use` can be called in a number of different ways:
 
 #### with a list of file paths
 ```js
+import {FontLibrary} from 'skia-canvas'
+
 // with default family name
 FontLibrary.use([
   "fonts/Oswald-Regular.ttf",
@@ -77,7 +82,7 @@ FontLibrary.use("Grizwald", [
 
 #### with a list of ‘glob’ patterns
 
-> Note to Windows users: Due to recent changes to the [glob][glob] module, you must write paths using unix-style forward slashes. Backslashes are now used solely for escaping wildcard characters.
+> Note to Windows users: Due to recent changes to the [glob][glob] module, you must write paths using unix-style _forward_ slashes. Backslashes are now used solely for escaping wildcard characters.
 
 ```js
 // with default family name
