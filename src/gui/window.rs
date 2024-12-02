@@ -9,12 +9,7 @@ use winit::{
 };
 
 #[cfg(target_os = "macos" )]
-use {
-    winit::platform::macos::{WindowExtMacOS, MonitorHandleExtMacOS},
-    core_graphics_types::base::CGFloat,
-    cocoa::base::id as cocoa_id,
-    objc::{sel, sel_impl, msg_send},
-};
+use winit::platform::macos::{WindowExtMacOS, MonitorHandleExtMacOS};
 
 use crate::utils::css_to_color;
 use crate::gpu::Renderer;
@@ -103,31 +98,19 @@ impl Window {
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>){
-        if let Some(monitor) = self.handle.current_monitor(){
-            self.renderer.resize(size);
-            self.reposition_ime(size);
-            self.update_fit();
+        self.renderer.resize(size);
+        self.reposition_ime(size);
+        self.update_fit();
 
-            let LogicalSize{width, height} = self.handle.inner_size().to_logical::<f32>(self.handle.scale_factor());
-            self.spec = WindowSpec{width, height, ..self.spec.clone()};
+        let LogicalSize{width, height} = self.handle.inner_size().to_logical::<f32>(self.handle.scale_factor());
+        let mut is_fullscreen = self.handle.fullscreen().is_some()
+            && width >= self.spec.width
+            && height >= self.spec.height;
 
-            // account for the notch height (if present)
-            let mut monitor_size = monitor.size();
-            #[cfg(target_os = "macos" )]
-            if let Some(screen) = monitor.ns_screen(){
-                struct NSEdgeInsets { top: CGFloat, left: CGFloat, bottom: CGFloat, right: CGFloat }
-                let insets:NSEdgeInsets = unsafe {msg_send![screen as cocoa_id, safeAreaInsets]};
-                if insets.top > 0.0 {
-                    monitor_size.height -= (self.handle.scale_factor() * insets.top) as u32;
-                    monitor_size.height -= 10;
-                }
-            }
-
-            let is_fullscreen = monitor_size == size;
-            if self.spec.fullscreen != is_fullscreen{
-                self.sieve.go_fullscreen(is_fullscreen);
-                self.spec.fullscreen = is_fullscreen;
-            }
+        self.spec = WindowSpec{width, height, ..self.spec.clone()};
+        if self.spec.fullscreen != is_fullscreen{
+            self.sieve.go_fullscreen(is_fullscreen);
+            self.spec.fullscreen = is_fullscreen;
         }
 
         self.handle.request_redraw();
