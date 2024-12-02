@@ -5,8 +5,8 @@ use crossbeam::channel::{self, Sender};
 use serde_json::{Map, Value};
 use winit::{
     dpi::{LogicalSize, LogicalPosition, PhysicalSize},
+    event_loop::ActiveEventLoop,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop},
     window::WindowId,
 };
 
@@ -60,7 +60,6 @@ impl WindowManager {
     pub fn remove_all(&mut self){
         self.windows.clear();
     }
-
     pub fn update_window(&mut self, mut spec:WindowSpec, page:Page){
         if let Some(mut win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
             if spec.width != win.spec.width || spec.height != win.spec.height {
@@ -83,6 +82,7 @@ impl WindowManager {
 
             if spec.fullscreen != win.spec.fullscreen {
                 win.set_fullscreen(spec.fullscreen);
+                win.sieve.go_fullscreen(spec.fullscreen);
             }
 
             if spec.resizable != win.spec.resizable {
