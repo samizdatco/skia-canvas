@@ -13,9 +13,9 @@ pub use crate::gpu::metal::MetalRenderer as Renderer;
 #[cfg(feature = "vulkan")]
 mod vulkan;
 #[cfg(feature = "vulkan")]
-use crate::gpu::vulkan::VulkanEngine as Engine;
+use crate::gpu::vulkan::engine::VulkanEngine as Engine;
 #[cfg(all(feature = "vulkan", feature = "window"))]
-pub use crate::gpu::vulkan::VulkanRenderer as Renderer;
+pub use crate::gpu::vulkan::renderer::VulkanRenderer as Renderer;
 
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 struct Engine { }

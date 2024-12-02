@@ -2,6 +2,7 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+use std::sync::OnceLock;
 use neon::{prelude::*, result::Throw};
 use std::iter::zip;
 use serde_json::Value;
@@ -9,13 +10,15 @@ use std::cell::RefCell;
 use winit::{
     event_loop::{ControlFlow, EventLoop, EventLoopProxy},
     platform::run_on_demand::EventLoopExtRunOnDemand,
+    platform::pump_events::{EventLoopExtPumpEvents, PumpStatus},
 };
 
 use crate::utils::*;
 use crate::context::BoxedContext2D;
+use crate::context::page::Page;
 
 pub mod app;
-use app::App;
+use app::{App, LoopMode};
 
 pub mod event;
 use event::CanvasEvent;
@@ -30,18 +33,15 @@ use crate::gpu::RenderingEngine;
 
 thread_local!(
     // the event loop can only be run from the main thread
+    static APP: RefCell<App> = RefCell::new(App::default());
     static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
-    static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with(|event_loop|
-        event_loop.borrow().create_proxy()
+    static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with_borrow(|event_loop|
+        event_loop.create_proxy()
     ));
 );
 
-pub(crate) fn new_proxy() -> EventLoopProxy<CanvasEvent>{
-    PROXY.with(|cell| cell.borrow().clone() )
-}
-
 pub(crate) fn add_event(event: CanvasEvent){
-    PROXY.with(|cell| cell.borrow().send_event(event).ok() );
+    PROXY.with_borrow_mut(|proxy| proxy.send_event(event).ok() );
 }
 
 fn validate_gpu(cx:&mut FunctionContext) -> Result<(), Throw>{
@@ -52,7 +52,7 @@ fn validate_gpu(cx:&mut FunctionContext) -> Result<(), Throw>{
     Ok(())
 }
 
-pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+pub fn activate(mut cx: FunctionContext) -> JsResult<JsBoolean> {
     let callback = cx.argument::<JsFunction>(1)?;
 
     validate_gpu(&mut cx)?;
@@ -86,20 +86,30 @@ pub fn launch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         Ok(())
     };
 
-    EVENT_LOOP.with(|event_loop| {
-        let mut app = App::with_callback(roundtrip);
-        let mut event_loop = event_loop.borrow_mut();
-        event_loop.set_control_flow(ControlFlow::Wait);
-        event_loop.run_app_on_demand(&mut app)
-    }).ok();
-
-    Ok(cx.undefined())
+    #[allow(deprecated)]
+    let still_running = APP.with_borrow_mut(|app| {
+        EVENT_LOOP.with_borrow_mut(|event_loop|{
+            app.activate(event_loop, roundtrip)
+        })
+    });
+    Ok(cx.boolean(still_running))
 }
 
 pub fn set_rate(mut cx: FunctionContext) -> JsResult<JsNumber> {
     let fps = float_arg(&mut cx, 1, "framesPerSecond")? as u64;
     add_event(CanvasEvent::FrameRate(fps));
     Ok(cx.number(fps as f64))
+}
+
+pub fn set_mode(mut cx: FunctionContext) -> JsResult<JsString> {
+    let mode = string_arg(&mut cx, 1, "eventLoopMode")?;
+    let loop_mode = match mode.as_str(){
+        "node" => Ok(LoopMode::Node),
+        "native" => Ok(LoopMode::Native),
+        _ => cx.throw_error(format!("Invalid event loop mode: {}", mode))
+    }?;
+    APP.with_borrow_mut(|app| app.mode = loop_mode );
+    Ok(cx.string(mode))
 }
 
 pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -114,12 +124,13 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 pub fn close(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let token = string_arg(&mut cx, 0, "windowID")?;
+    let token = float_arg(&mut cx, 0, "windowID")? as u32;
     add_event(CanvasEvent::Close(token));
     Ok(cx.undefined())
 }
 
 pub fn quit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    APP.with_borrow_mut(|app| app.close_all() );
     add_event(CanvasEvent::Quit);
     Ok(cx.undefined())
 }

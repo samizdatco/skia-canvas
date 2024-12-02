@@ -15,37 +15,15 @@ use super::window::{WindowSpec, Fit};
 
 #[derive(Debug, Clone)]
 pub enum CanvasEvent{
-  // app api
   Open(WindowSpec, Page),
-  Close(String),
+  Close(u32),
   FrameRate(u64),
   Quit,
+}
 
-  // app -> window
-  Page(Page),
-
-  // window -> app
-  Transform(WindowId, Option<Matrix>),
-  InFullscreen(WindowId, bool),
-
-  // cadence triggers
-  Render,
-
-  // script -> window
-  Title(String),
-  Fullscreen(bool),
-  Visible(bool),
-  Resizable(bool),
-  Cursor(Option<CursorIcon>),
-  Background(Color),
-  Fit(Fit),
-  Position(LogicalPosition<i32>),
-  Size(LogicalSize<u32>),
-
-  // encapsulated WindowEvents
-  WindowResized(PhysicalSize<u32>),
-  RedrawRequested,
-  RedrawingSuspended(bool),
+pub enum GpuEvent{
+  Resize(PhysicalSize<u32>),
+  Draw(Page, Matrix, Color),
 }
 
 #[derive(Debug, Serialize)]
@@ -62,7 +40,6 @@ pub enum UiEvent{
   Resize(LogicalSize<u32>),
   Fullscreen(bool),
 }
-
 
 #[derive(Debug)]
 pub struct Sieve{

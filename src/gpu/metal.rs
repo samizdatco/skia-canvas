@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 use std::time::{Instant, Duration};
@@ -9,22 +7,13 @@ use metal::{
     CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
     foreign_types::{ForeignType, ForeignTypeRef}
 };
-use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface, Data};
+use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
 use skia_safe::gpu::{
     mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
-use objc::runtime::YES;
-pub use objc::rc::autoreleasepool;
+use objc::{runtime::YES, rc::autoreleasepool};
 use serde_json::{json, Value};
-
-#[cfg(feature = "window")]
-use winit::{
-    dpi::{LogicalSize, PhysicalSize},
-    platform::macos::WindowExtMacOS,
-    window::Window,
-    raw_window_handle::HasWindowHandle,
-    event_loop::ActiveEventLoop,
-};
+use crossbeam::channel;
 
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
 static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
@@ -117,7 +106,6 @@ impl MetalEngine {
 }
 pub struct MetalContext {
     device: Device,
-    queue: CommandQueue,
     context: DirectContext,
     msaa: Vec<usize>,
     last_use: Instant,
@@ -139,7 +127,7 @@ impl MetalContext{
                     *s==0 || device.supports_texture_sample_count(*s as _)
                 }).collect();
                 direct_contexts::make_metal(&backend, None)
-                    .map(|context| MetalContext{device, queue, context, msaa, last_use})
+                    .map(|context| MetalContext{device, context, msaa, last_use})
             })
         })
     }
@@ -178,13 +166,28 @@ impl MetalContext{
 // Windowed rendering
 //
 
+#[cfg(feature = "window")]
+use {
+    crate::{
+        context::page::Page,
+        gui::event::GpuEvent,
+    },
+    winit::{
+        dpi::PhysicalSize,
+        window::Window,
+        raw_window_handle::HasWindowHandle,
+        event_loop::ActiveEventLoop,
+    },
+    skia_safe::{Matrix, Color},
+};
+
+#[cfg( feature = "window")]
 pub struct MetalRenderer {
-    layer: Arc<MetalLayer>,
-    device: Arc<Device>,
+    backend: channel::Sender<GpuEvent>,
 }
 
-// The windowed renderer
-impl MetalRenderer {
+#[cfg( feature = "window")]
+impl MetalRenderer{
     pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
         let device = Device::system_default().expect("no device found");
 
@@ -216,47 +219,49 @@ impl MetalRenderer {
             layer
         };
 
-        Self { layer: Arc::new(layer), device: Arc::new(device) }
+        // spawn a background thread where the Backend will wait for new pages via its rx channel
+        let (tx, rx) = channel::unbounded();
+        std::thread::spawn(move || {
+            let mut backend = MetalBackend::for_layer(&layer);
+            while let Ok(event) = rx.recv() {
+                if !rx.is_empty() && matches!(event, GpuEvent::Draw(..)){
+                    continue; // drop all but the last Draw frame in the queue
+                }
+
+                autoreleasepool(||{
+                    match event{
+                        GpuEvent::Resize(size) => {
+                            let cg_size = CGSize::new(size.width as f64, size.height as f64);
+                            layer.set_drawable_size(cg_size);
+                        },
+                        GpuEvent::Draw(page, matrix, matte) => {
+                            let dpr = window.scale_factor();
+                            let (clip, _) = matrix.map_rect(page.bounds);
+                            let scale = Matrix::scale((dpr as f32, dpr as f32));
+                            window.pre_present_notify();
+                            backend.render_to_layer(&layer, |canvas|{
+                                canvas.clear(matte)
+                                    .set_matrix(&scale.into())
+                                    .clip_rect(clip, None, Some(true))
+                                    .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
+                            }).unwrap();
+                        }
+                    }
+                })
+            }
+        });
+
+        Self{backend:tx}
     }
 
     pub fn resize(&self, size: PhysicalSize<u32>) {
-        autoreleasepool(|| {
-            let cg_size = CGSize::new(size.width as f64, size.height as f64);
-            self.layer.set_drawable_size(cg_size);
-        })
+        self.backend.send( GpuEvent::Resize(size) ).ok();
     }
 
-    pub fn draw<F>(
-        &mut self,
-        window: &Arc<Window>,
-        f: F,
-    ) -> Result<(), String>
-        where F:FnOnce(&skia_safe::Canvas, LogicalSize<f32>)
-    {
-        autoreleasepool(||{
-            let dpr = window.scale_factor();
-            let size = window.inner_size();
-            BACKEND.with_borrow_mut(|cell| {
-                let backend = cell.get_or_insert_with(|| MetalBackend::for_renderer(self));
-
-                backend.render_to_layer(&self.layer, |canvas|{
-                    canvas.reset_matrix();
-                    canvas.scale((dpr as f32, dpr as f32));
-                    f(canvas, LogicalSize::from_physical(size, dpr));
-                })
-            })
-        })
+    pub fn draw(&self, page:Page, matrix:Matrix, matte:Color){
+        self.backend.send( GpuEvent::Draw(page, matrix, matte) ).ok();
     }
 }
-
-impl Drop for MetalRenderer {
-    fn drop(&mut self) {
-        BACKEND.with_borrow_mut(|cell| *cell = None );
-    }
-}
-
-
-thread_local!(static BACKEND: RefCell<Option<MetalBackend>> = const { RefCell::new(None) } );
 
 pub struct MetalBackend {
     // each renderer's non-Send references need to be lazily allocated on the window's thread
@@ -264,20 +269,22 @@ pub struct MetalBackend {
     queue: CommandQueue,
 }
 
-#[cfg(feature = "window")]
-impl MetalBackend {
-    pub fn for_renderer(renderer:&MetalRenderer) -> Self {
-        let queue = renderer.device.new_command_queue();
+impl Drop for MetalBackend{
+    fn drop(&mut self) {
+        self.skia_ctx.abandon();
+    }
+}
 
+impl MetalBackend {
+    pub fn for_layer(layer:&MetalLayer) -> Self{
+        let queue = layer.device().new_command_queue();
         let backend_ctx = unsafe {
             mtl::BackendContext::new(
-                renderer.device.as_ptr() as mtl::Handle,
+                layer.device().as_ptr() as mtl::Handle,
                 queue.as_ptr() as mtl::Handle,
             )
         };
-
         let skia_ctx = direct_contexts::make_metal(&backend_ctx, None).unwrap();
-
         Self { skia_ctx, queue }
     }
 

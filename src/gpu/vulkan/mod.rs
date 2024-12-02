@@ -1,5 +1,4 @@
 pub mod engine;
-pub use engine::VulkanEngine;
 
+#[cfg(feature = "window")]
 pub mod renderer;
-pub use renderer::VulkanRenderer;
