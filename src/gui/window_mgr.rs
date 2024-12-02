@@ -57,7 +57,7 @@ impl WindowManager {
         self.windows.clear();
     }
     pub fn update_window(&mut self, mut spec:WindowSpec, page:Page){
-        if let Some(mut win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
+        if let Some(win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
             if spec.width != win.spec.width || spec.height != win.spec.height {
                 win.set_size(LogicalSize::new(spec.width as u32, spec.height as u32));
             }
@@ -112,7 +112,7 @@ impl WindowManager {
         }
     }
 
-    pub fn find<F>(&mut self, id:&WindowId, mut f:F) where F:FnMut(&mut Window){
+    pub fn find<F>(&mut self, id:&WindowId, f:F) where F:FnMut(&mut Window){
         self.windows.iter_mut().find(|win| win.id() == *id).map(f);
     }
 
@@ -150,10 +150,6 @@ impl WindowManager {
             positions.insert(win.spec.id.to_string(), json!({"left":win.spec.left, "top":win.spec.top}));
         });
         json!({"geom":positions})
-    }
-
-    pub fn len(&self) -> usize {
-        self.windows.len()
     }
 
     pub fn is_empty(&self) -> bool {

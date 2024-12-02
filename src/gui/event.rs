@@ -208,7 +208,7 @@ impl Sieve{
 
       WindowEvent::Ime( event, ..) => {
         match &event {
-          Ime::Preedit(string, Some(range)) => {
+          Ime::Preedit(string, Some(_range)) => {
             if !self.compose_begun{
               self.queue.push(UiEvent::Composition{
                 event:"compositionstart".to_string(), data:"".to_string()
@@ -261,7 +261,7 @@ impl Sieve{
       }
     }
 
-    if let Some(modfiers) = modifiers {
+    if modifiers.is_some() {
       payload.insert(0, json!({"modifiers": modifiers}));
     }
 
