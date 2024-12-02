@@ -1,7 +1,8 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!-- ## 🥚 ⟩ [Unreleased] -->
 
+## 📦 ⟩ [v2.0.0] ⟩ Dec 2, 2024
 
 ### New Features
 
@@ -383,7 +384,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v1.0.2...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v2.0.0...HEAD
+[v2.0.0]: https://github.com/samizdatco/skia-canvas/compare/v1.0.2...v2.0.0
 [v1.0.2]: https://github.com/samizdatco/skia-canvas/compare/v1.0.1...v1.0.2
 [v1.0.1]: https://github.com/samizdatco/skia-canvas/compare/v1.0.0...v1.0.1
 [v1.0.0]: https://github.com/samizdatco/skia-canvas/compare/v0.9.30...v1.0.0
