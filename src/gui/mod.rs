@@ -2,20 +2,14 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
-use std::sync::OnceLock;
 use neon::{prelude::*, result::Throw};
 use std::iter::zip;
 use serde_json::Value;
 use std::cell::RefCell;
-use winit::{
-    event_loop::{ControlFlow, EventLoop, EventLoopProxy},
-    platform::run_on_demand::EventLoopExtRunOnDemand,
-    platform::pump_events::{EventLoopExtPumpEvents, PumpStatus},
-};
+use winit::event_loop::{EventLoop, EventLoopProxy};
 
 use crate::utils::*;
 use crate::context::BoxedContext2D;
-use crate::context::page::Page;
 
 pub mod app;
 use app::{App, LoopMode};

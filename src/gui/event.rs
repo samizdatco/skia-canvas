@@ -6,12 +6,10 @@ use winit::{
   dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
   event::{ElementState, KeyEvent, Ime, Modifiers, MouseButton, MouseScrollDelta, WindowEvent},
   keyboard::{ModifiersState, KeyCode, KeyLocation, NamedKey, PhysicalKey::Code, Key::{Character, Named}},
-  platform::scancode::PhysicalKeyExtScancode,
-  window::{CursorIcon, WindowId}
 };
 
 use crate::context::page::Page;
-use super::window::{WindowSpec, Fit};
+use super::window::WindowSpec;
 
 #[derive(Debug, Clone)]
 pub enum CanvasEvent{

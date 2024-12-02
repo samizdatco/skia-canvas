@@ -1,10 +1,7 @@
-use std::thread;
 use serde_json::json;
-use skia_safe::Matrix;
-use crossbeam::channel::{self, Sender};
 use serde_json::{Map, Value};
 use winit::{
-    dpi::{LogicalSize, LogicalPosition, PhysicalSize},
+    dpi::{LogicalSize, LogicalPosition},
     event_loop::ActiveEventLoop,
     event::WindowEvent,
     window::WindowId,
@@ -12,7 +9,6 @@ use winit::{
 
 use crate::utils::css_to_color;
 use crate::context::page::Page;
-use super::event::{CanvasEvent, Sieve};
 use super::window::{Window, WindowSpec};
 
 #[derive(Default)]
