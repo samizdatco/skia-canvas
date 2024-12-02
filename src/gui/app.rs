@@ -1,23 +1,17 @@
 use neon::prelude::*;
 use std::time::{Duration, Instant};
-use std::iter::zip;
-use serde_json::{json, Value};
+use serde_json::Value;
 use winit::{
-    application::ApplicationHandler,
-    platform::pump_events::{EventLoopExtPumpEvents, PumpStatus},
+    platform::pump_events::{EventLoopExtPumpEvents},
     platform::run_on_demand::EventLoopExtRunOnDemand,
-    event::{ElementState, KeyEvent, StartCause, Event, WindowEvent},
-    event_loop::{EventLoop, EventLoopProxy, ActiveEventLoop, ControlFlow},
+    event::{ElementState, KeyEvent, Event, WindowEvent},
+    event_loop::{EventLoop, ActiveEventLoop, ControlFlow},
     keyboard::{PhysicalKey, KeyCode},
-    window::WindowId
 };
 
-use crate::context::page::Page;
 use super::{
     event::CanvasEvent,
-    window::WindowSpec,
     window_mgr::WindowManager,
-    add_event,
 };
 
 #[derive(Copy, Clone)]

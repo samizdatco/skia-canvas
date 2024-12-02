@@ -1,20 +1,16 @@
 use std::sync::Arc;
-use skia_safe::{Matrix, Color, Paint};
+use skia_safe::{Matrix, Color};
 use serde::{Serialize, Deserialize};
-use crossbeam::channel::{self, Receiver};
 use winit::{
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
     window::{CursorIcon, Fullscreen, Window as WinitWindow, WindowId},
     event_loop::ActiveEventLoop,
 };
 
-#[cfg(target_os = "macos" )]
-use winit::platform::macos::{WindowExtMacOS, MonitorHandleExtMacOS};
-
 use crate::utils::css_to_color;
 use crate::gpu::Renderer;
 use crate::context::page::Page;
-use super::event::{CanvasEvent, Sieve};
+use super::event::Sieve;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
