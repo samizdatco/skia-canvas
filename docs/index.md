@@ -68,7 +68,7 @@ async function render(){
 render()
 
 // ...or save the file synchronously from the main thread
-canvas.saveAsSync("rainbox.pdf")
+canvas.saveAsSync("rainbox.png")
 ```
 
 ### Multi-page sequences
