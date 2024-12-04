@@ -12,7 +12,7 @@ use crate::context::page::Page;
 use super::window::WindowSpec;
 
 #[derive(Debug, Clone)]
-pub enum CanvasEvent{
+pub enum AppEvent{
   Open(WindowSpec, Page),
   Close(u32),
   FrameRate(u64),

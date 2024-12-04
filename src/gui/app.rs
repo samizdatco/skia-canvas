@@ -10,7 +10,7 @@ use winit::{
 };
 
 use super::{
-    event::CanvasEvent,
+    event::AppEvent,
     window_mgr::WindowManager,
 };
 
@@ -37,7 +37,7 @@ impl Default for App{
 
 #[allow(deprecated)]
 impl App{
-    pub fn activate<F>(&mut self, event_loop:&mut EventLoop<CanvasEvent>, roundtrip:F) -> bool
+    pub fn activate<F>(&mut self, event_loop:&mut EventLoop<AppEvent>, roundtrip:F) -> bool
         where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
     {
         match self.mode{
@@ -59,7 +59,7 @@ impl App{
         self.windows.remove_all();
     }
 
-    pub fn event_handler<F>(&mut self, mut roundtrip:F) -> impl FnMut(Event<CanvasEvent>, &ActiveEventLoop) + use<'_, F>
+    pub fn event_handler<F>(&mut self, mut roundtrip:F) -> impl FnMut(Event<AppEvent>, &ActiveEventLoop) + use<'_, F>
         where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
     {
         move |event, event_loop| match event {
@@ -113,19 +113,19 @@ impl App{
             },
 
 
-            Event::UserEvent(canvas_event) => match canvas_event{
-                CanvasEvent::Open(spec, page) => {
+            Event::UserEvent(app_event) => match app_event{
+                AppEvent::Open(spec, page) => {
                     self.windows.add(event_loop, spec, page);
                     roundtrip(self.windows.get_geometry(), &mut self.windows).ok();
                 }
-                CanvasEvent::Close(token) => {
+                AppEvent::Close(token) => {
                     self.windows.remove_by_token(token);
                 }
-                CanvasEvent::Quit => {
-                    event_loop.exit();
-                }
-                CanvasEvent::FrameRate(fps) => {
+                AppEvent::FrameRate(fps) => {
                     self.cadence.set_frame_rate(fps)
+                }
+                AppEvent::Quit => {
+                    event_loop.exit();
                 }
             },
 
