@@ -14,7 +14,7 @@ pub mod app;
 use app::{App, LoopMode};
 
 pub mod event;
-use event::CanvasEvent;
+use event::AppEvent;
 
 pub mod window;
 use window::WindowSpec;
@@ -25,15 +25,14 @@ use window_mgr::WindowManager;
 use crate::gpu::RenderingEngine;
 
 thread_local!(
-    // the event loop can only be run from the main thread
     static APP: RefCell<App> = RefCell::new(App::default());
-    static EVENT_LOOP: RefCell<EventLoop<CanvasEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
-    static PROXY: RefCell<EventLoopProxy<CanvasEvent>> = RefCell::new(EVENT_LOOP.with_borrow(|event_loop|
+    static EVENT_LOOP: RefCell<EventLoop<AppEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
+    static PROXY: RefCell<EventLoopProxy<AppEvent>> = RefCell::new(EVENT_LOOP.with_borrow(|event_loop|
         event_loop.create_proxy()
     ));
 );
 
-pub(crate) fn add_event(event: CanvasEvent){
+pub(crate) fn add_event(event: AppEvent){
     PROXY.with_borrow_mut(|proxy| proxy.send_event(event).ok() );
 }
 
@@ -90,7 +89,7 @@ pub fn activate(mut cx: FunctionContext) -> JsResult<JsBoolean> {
 
 pub fn set_rate(mut cx: FunctionContext) -> JsResult<JsNumber> {
     let fps = float_arg(&mut cx, 1, "framesPerSecond")? as u64;
-    add_event(CanvasEvent::FrameRate(fps));
+    add_event(AppEvent::FrameRate(fps));
     Ok(cx.number(fps as f64))
 }
 
@@ -112,18 +111,18 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
     validate_gpu(&mut cx)?;
 
-    add_event(CanvasEvent::Open(spec, context.borrow().get_page()));
+    add_event(AppEvent::Open(spec, context.borrow().get_page()));
     Ok(cx.undefined())
 }
 
 pub fn close(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let token = float_arg(&mut cx, 0, "windowID")? as u32;
-    add_event(CanvasEvent::Close(token));
+    add_event(AppEvent::Close(token));
     Ok(cx.undefined())
 }
 
 pub fn quit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     APP.with_borrow_mut(|app| app.close_all() );
-    add_event(CanvasEvent::Quit);
+    add_event(AppEvent::Quit);
     Ok(cx.undefined())
 }
