@@ -205,7 +205,10 @@ impl Window {
     }
 
     pub fn set_background(&mut self, color:Color){
-        self.background = color;
+        if self.background != color{
+            self.background = color;
+            self.handle.request_redraw();
+        }
     }
 
     pub fn set_size(&mut self, size:LogicalSize<u32>){
@@ -238,7 +241,7 @@ impl Window {
     pub fn set_redrawing_suspended(&mut self, suspended:bool){
         self.suspended = suspended;
         if !suspended{
-            self.redraw();
+            self.handle.request_redraw();
         }
     }
 

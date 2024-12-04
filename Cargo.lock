@@ -1748,6 +1748,7 @@ dependencies = [
  "serde",
  "serde_json",
  "skia-safe",
+ "spin_sleep",
  "vulkano",
  "winit",
 ]
@@ -1824,6 +1825,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "spin_sleep"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64bd7227d85bfd1b8df51e0d83da36d9baaee85eb75730386ef8e3ab6f2a2ea3"
+dependencies = [
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

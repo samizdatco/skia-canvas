@@ -50,31 +50,44 @@ pub fn activate(mut cx: FunctionContext) -> JsResult<JsBoolean> {
     validate_gpu(&mut cx)?;
 
     // closure for using the callback to relay events to js and receive updates in return
-    let roundtrip = |payload:Value, windows:&mut WindowManager| -> NeonResult<()>{
+    let roundtrip = |payload:Value, windows:Option<&mut WindowManager>| -> NeonResult<()>{
+        let is_render = windows.is_some();
         let cx = &mut cx;
-        let null = cx.null();
 
-        // send payload to js for event dispatch and canvas drawing then read back new state & page data
-        let events = cx.string(payload.to_string()).upcast::<JsValue>();
-        let response = callback.call(cx, null, vec![events])?
-            .downcast::<JsArray, _>(cx).or_throw(cx)?
-            .to_vec(cx)?;
+        // send payload to js for event dispatch and canvas drawing
+        let mut call = callback.call_with(cx);
+        call.arg(cx.boolean(is_render))
+            .arg(cx.string(payload.to_string()));
 
-        // unpack boxed contexts & window state objects
-        let contexts:Vec<Handle<JsValue>> = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
-        let specs:Vec<WindowSpec> = serde_json::from_str(
-            &response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx)
-        ).expect("Malformed response from window event handler");
+        match windows{
+            Some(window_mgr) => {
+                // update window specs & page content, but only if it's time to render a new frame
+                let response = call.apply::<JsValue, _>(cx)?
+                    .downcast::<JsArray, _>(cx).or_throw(cx)?
+                    .to_vec(cx)?;
 
-        // pass each window's new state & page data to the window manager
-        zip(contexts, specs).for_each(|(boxed_ctx, spec)| {
-            if let Ok(ctx) = boxed_ctx.downcast::<BoxedContext2D, _>(cx){
-                windows.update_window(
-                    spec.clone(),
-                    ctx.borrow().get_page()
-                )
-            }
-        });
+                // unpack boxed contexts & window state objects
+                let contexts:Vec<Handle<JsValue>> = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
+                let specs:Vec<WindowSpec> = serde_json::from_str(
+                    &response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx)
+                ).or_else(|err| cx.throw_error("Malformed response from window event handler") )?;
+
+                // pass each window's new state & page data to the window manager
+                zip(contexts, specs).for_each(|(boxed_ctx, spec)| {
+                    if let Ok(ctx) = boxed_ctx.downcast::<BoxedContext2D, _>(cx){
+                        window_mgr.update_window(
+                            spec.clone(),
+                            ctx.borrow().get_page()
+                        )
+                    }
+                });
+            },
+            None => {
+                // if this is just a UI-event delivery pass, ignore the return value
+                call.exec(cx)?
+            },
+        }
+
         Ok(())
     };
 

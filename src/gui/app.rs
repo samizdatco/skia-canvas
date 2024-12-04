@@ -38,7 +38,7 @@ impl Default for App{
 #[allow(deprecated)]
 impl App{
     pub fn activate<F>(&mut self, event_loop:&mut EventLoop<AppEvent>, roundtrip:F) -> bool
-        where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
+        where F:FnMut(Value, Option<&mut WindowManager>) -> NeonResult<()>
     {
         match self.mode{
             LoopMode::Native => {
@@ -60,7 +60,7 @@ impl App{
     }
 
     pub fn event_handler<F>(&mut self, mut roundtrip:F) -> impl FnMut(Event<AppEvent>, &ActiveEventLoop) + use<'_, F>
-        where F:FnMut(Value, &mut WindowManager) -> NeonResult<()>
+        where F:FnMut(Value, Option<&mut WindowManager>) -> NeonResult<()>
     {
         move |event, event_loop| match event {
             Event::WindowEvent { event:ref win_event, window_id } => {
@@ -116,7 +116,7 @@ impl App{
             Event::UserEvent(app_event) => match app_event{
                 AppEvent::Open(spec, page) => {
                     self.windows.add(event_loop, spec, page);
-                    roundtrip(self.windows.get_geometry(), &mut self.windows).ok();
+                    roundtrip(self.windows.get_geometry(), Some(&mut self.windows)).ok();
                 }
                 AppEvent::Close(token) => {
                     self.windows.remove_by_token(token);
@@ -131,23 +131,18 @@ impl App{
 
 
             Event::AboutToWait => {
-                // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
-                // a Render event, so only do a roundtrip if there are new UI events to be relayed
-                if !self.cadence.active() && self.windows.has_ui_changes() {
-                    roundtrip(self.windows.get_ui_changes(), &mut self.windows).ok();
+                // dispatch UI events if new ones have arrived
+                if self.windows.has_ui_changes() {
+                    roundtrip(self.windows.get_ui_changes(), None).ok();
                 }
 
-                // delegate timing to the cadence if active, otherwise wait for ui events
+                // let the cadence decide when to switch to poll-mode or sleep the thread
                 event_loop.set_control_flow(
-                    match self.cadence.active(){
-                        true => self.cadence.on_next_frame(self.mode, ||{
-                            // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                            roundtrip(self.windows.get_ui_changes(), &mut self.windows).ok();
-                         }),
-                        false => ControlFlow::Wait
-                    }
+                    self.cadence.on_next_frame(self.mode, || {
+                        // relay UI-driven state changes to js and render the next frame in the (active) cadence
+                        roundtrip(self.windows.get_ui_changes(), Some(&mut self.windows)).ok();
+                    })
                 );
-
             }
             _ => {}
         }
@@ -194,37 +189,29 @@ impl Cadence{
         self.rate = rate;
     }
 
-    fn active(&self) -> bool{
-        self.rate > 0
-    }
-
     pub fn on_next_frame<F:FnMut()>(&mut self, mode:LoopMode, mut draw:F) -> ControlFlow{
-        match self.active() {
-            true => {
-                // if node is handling the event loop, we can't use polling to wait for the
-                // render deadline, so instead we'll pause the thread for up to 1.5ms, making sure
-                // we can then draw immediately after
-                let dt = self.last.elapsed();
-                if matches!(mode, LoopMode::Node) && dt >= self.wakeup && dt < self.render{
-                    std::thread::sleep(self.render - dt);
-                }
+        // if node is handling the event loop, we can't use polling to wait for the
+        // render deadline, so instead we'll pause the thread for up to 1.5ms, making sure
+        // we can then draw immediately after
+        let dt = self.last.elapsed();
+        if matches!(mode, LoopMode::Node) && dt >= self.wakeup && dt < self.render{
+            if let Some(sleep_time) = self.render.checked_sub(self.last.elapsed()){
+                spin_sleep::sleep(sleep_time);
+            }
+        }
 
-                // call the draw callback if it's time & make sure the next deadline is in the future
-                if self.last.elapsed() >= self.render{
-                    draw();
-                    while self.last < Instant::now() - self.render{
-                        self.last += self.render
-                    }
-                }
+        // call the draw callback if it's time & make sure the next deadline is in the future
+        if self.last.elapsed() >= self.render{
+            draw();
+            while self.last < Instant::now() - self.render{
+                self.last += self.render
+            }
+        }
 
-                // if winit is in control, we can use waiting & polling to hit the deadline
-                match self.last.elapsed() < self.wakeup {
-                    true => ControlFlow::WaitUntil(self.last + self.wakeup),
-                    false => ControlFlow::Poll,
-                }
-
-            },
-            false => ControlFlow::Wait
+        // if winit is in control, we can use waiting & polling to hit the deadline
+        match self.last.elapsed() < self.wakeup {
+            true => ControlFlow::WaitUntil(self.last + self.wakeup),
+            false => ControlFlow::Poll,
         }
     }
 }
