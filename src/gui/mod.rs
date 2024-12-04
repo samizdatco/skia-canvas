@@ -105,8 +105,8 @@ pub fn set_mode(mut cx: FunctionContext) -> JsResult<JsString> {
 }
 
 pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let win_config = string_arg(&mut cx, 0, "Window configuration")?;
-    let context = cx.argument::<BoxedContext2D>(1)?;
+    let win_config = string_arg(&mut cx, 1, "Window configuration")?;
+    let context = cx.argument::<BoxedContext2D>(2)?;
     let spec = serde_json::from_str::<WindowSpec>(&win_config).expect("Invalid window state");
 
     validate_gpu(&mut cx)?;
@@ -116,7 +116,7 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 pub fn close(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let token = float_arg(&mut cx, 0, "windowID")? as u32;
+    let token = float_arg(&mut cx, 1, "windowID")? as u32;
     add_event(AppEvent::Close(token));
     Ok(cx.undefined())
 }
