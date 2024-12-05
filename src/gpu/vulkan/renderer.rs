@@ -4,6 +4,7 @@ use ash::vk::Handle;
 use std::{
     cell::RefCell, ptr, sync::Arc
 };
+use skia_safe::gpu::{self, backend_render_targets, direct_contexts, surfaces, vk};
 use vulkano::{
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, Queue,
@@ -20,17 +21,13 @@ use vulkano::{
     Validated, VulkanError, VulkanLibrary, VulkanObject,
 };
 
-use skia_safe::{
-    gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
-};
-
-use super::{supported_vulkano_formats, to_sk_format};
+use super::{VK_FORMATS, to_sk_format};
 
 #[cfg(feature = "window")]
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
     event_loop::ActiveEventLoop,
-    window::{Window},
+    window::Window,
 };
 
 thread_local!(
@@ -128,17 +125,19 @@ impl VulkanRenderer {
                 .surface_capabilities(&surface, Default::default())
                 .unwrap();
 
-
             // choose the first device format that is on the supported list
-            let supported_formats = supported_vulkano_formats();
             let device_formats = physical_device
                 .surface_formats(&surface, Default::default())
                 .unwrap();
             let (image_format, _) = device_formats.clone()
                 .into_iter()
-                .find(|(fmt, _)| supported_formats.contains(fmt))
+                .find(|(fmt, _)| VK_FORMATS.contains(fmt))
                 .unwrap_or_else(||
-                    panic!("Vulkan: no format supported by Skia was found. Supported: {:#?} Found: {:#?}", supported_formats, device_formats)
+                    panic!(
+                        "Vulkan: no format supported by Skia was found on device.\nSupported formats: {:?}\nDevice formats: {:?}",
+                        VK_FORMATS,
+                        device_formats
+                    )
                 );
 
             Swapchain::new(
