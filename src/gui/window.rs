@@ -108,8 +108,6 @@ impl Window {
             self.sieve.go_fullscreen(is_fullscreen);
             self.spec.fullscreen = is_fullscreen;
         }
-
-        self.handle.request_redraw();
     }
 
     pub fn reposition(&mut self, loc:LogicalPosition<i32>){
