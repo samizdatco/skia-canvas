@@ -1,8 +1,6 @@
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 use std::time::{Instant, Duration};
-use cocoa::{appkit::NSView, base::id as cocoa_id};
-use core_graphics_types::geometry::CGSize;
 use metal::{
     CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
     foreign_types::{ForeignType, ForeignTypeRef}
@@ -11,7 +9,7 @@ use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
 use skia_safe::gpu::{
     mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
-use objc::{runtime::YES, rc::autoreleasepool};
+use objc::rc::autoreleasepool;
 use serde_json::{json, Value};
 use crossbeam::channel;
 
@@ -168,56 +166,67 @@ impl MetalContext{
 
 #[cfg(feature = "window")]
 use {
+    skia_safe::{Matrix, Color},
+    raw_window_metal::Layer,
+    core_graphics_types::geometry::CGSize,
+    objc::{msg_send, sel, sel_impl, runtime::{YES, NO, Object}},
+    winit::{
+        dpi::PhysicalSize,
+        window::Window,
+        raw_window_handle::{RawWindowHandle, HasWindowHandle},
+        event_loop::ActiveEventLoop,
+    },
     crate::{
         context::page::Page,
         gui::event::GpuEvent,
     },
-    winit::{
-        dpi::PhysicalSize,
-        window::Window,
-        raw_window_handle::HasWindowHandle,
-        event_loop::ActiveEventLoop,
-    },
-    skia_safe::{Matrix, Color},
 };
 
-#[cfg( feature = "window")]
+#[allow(non_upper_case_globals)]
+#[link(name = "QuartzCore", kind = "framework")]
+extern "C" {
+    static kCAGravityTopLeft: *mut Object;
+    static kCAGravityBottomLeft: *mut Object;
+}
+
+#[cfg(feature = "window")]
 pub struct MetalRenderer {
     backend: channel::Sender<GpuEvent>,
 }
 
-#[cfg( feature = "window")]
+#[cfg(feature = "window")]
 impl MetalRenderer{
     pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
-        let device = Device::system_default().expect("no device found");
+        let device = Device::system_default().expect("Metal device not found");
 
-        let raw_window_handle = window
+        let raw_window = window
             .window_handle()
             .expect("Failed to retrieve a window handle")
             .as_raw();
 
-        let layer = {
-            let draw_size = window.inner_size();
-            let layer = MetalLayer::new();
-            layer.set_device(&device);
-            layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
-            layer.set_presents_with_transaction(false);
-            layer.set_opaque(false);
-            layer.set_framebuffer_only(false); // to enable blend modes
-
-            unsafe {
-                let view = match raw_window_handle {
-                    raw_window_handle::RawWindowHandle::AppKit(appkit) => {
-                        appkit.ns_view.as_ptr()
-                    }
-                    _ => panic!("Wrong window handle type"),
-                } as cocoa_id;
-                view.setWantsLayer(YES);
-                view.setLayer(layer.as_ref() as *const _ as _);
-            }
-            layer.set_drawable_size(CGSize::new(draw_size.width as f64, draw_size.height as f64));
-            layer
+        let raw_layer = match raw_window {
+            RawWindowHandle::AppKit(handle) => unsafe { Layer::from_ns_view(handle.ns_view) },
+            RawWindowHandle::UiKit(handle) => unsafe { Layer::from_ui_view(handle.ui_view) },
+            _ => panic!("Unsupported window handle type"),
         };
+
+        let layer = unsafe{
+            let mtl_layer = MetalLayer::from_ptr(raw_layer.into_raw().as_ptr().cast());
+            let gravity = match msg_send![mtl_layer.as_ptr(), contentsAreFlipped] {
+                YES => kCAGravityBottomLeft,
+                NO => kCAGravityTopLeft,
+            };
+            let _: () = msg_send![mtl_layer.as_ptr(), setContentsGravity: gravity];
+            mtl_layer
+        };
+        layer.set_device(&device);
+        layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+        layer.set_presents_with_transaction(false);
+        layer.set_opaque(false);
+        layer.set_framebuffer_only(false); // to enable blend modes
+
+        let draw_size = window.inner_size();
+        layer.set_drawable_size(CGSize::new(draw_size.width as f64, draw_size.height as f64));
 
         // spawn a background thread where the Backend will wait for new pages via its rx channel
         let (tx, rx) = channel::unbounded();
