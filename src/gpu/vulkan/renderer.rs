@@ -59,7 +59,6 @@ impl VulkanRenderer {
             ..DeviceExtensions::empty()
         };
 
-        let dpr = window.scale_factor();
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
 
         // Collect the list of available devices & queues then select ‘best’ one for our needs
@@ -175,11 +174,8 @@ impl VulkanRenderer {
                     },
                     GpuEvent::Draw(page, matrix, matte) => {
                         let (clip, _) = matrix.map_rect(page.bounds);
-                        let scale = Matrix::scale((dpr as f32, dpr as f32));
-                        window.pre_present_notify();
-                        backend.render_frame(|canvas|{
+                        backend.render_frame(&window, |canvas|{
                             canvas.clear(matte)
-                                .set_matrix(&scale.into())
                                 .clip_rect(clip, None, Some(true))
                                 .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
                         }).unwrap();
@@ -321,7 +317,7 @@ impl VulkanBackend{
         }
     }
 
-    fn render_frame<F>(&mut self, f:F) -> Result<(), String>
+    fn render_frame<F>(&mut self, window:&Window, f:F) -> Result<(), String>
         where F:FnOnce(&skia_safe::Canvas)
     {
         // make sure the framebuffers match the current window size
@@ -332,11 +328,13 @@ impl VulkanBackend{
             let framebuffer = self.framebuffers[image_index as usize].clone();
             let mut surface = self.surface_for_framebuffer(framebuffer.clone());
 
-            // pass the suface's canvas and dimensions to the user-provided callback
-            f(surface.canvas());
+            // pass the suface's canvas to the user-provided callback
+            let dpr = window.scale_factor();
+            let scale = Matrix::scale((dpr as f32, dpr as f32));
+            f(surface.canvas().set_matrix(&scale.into()));
 
             // display the result
-            self.flush_framebuffer(image_index, acquire_future);
+            self.flush_framebuffer(window, image_index, acquire_future);
         }
 
         Ok(())
@@ -405,13 +403,16 @@ impl VulkanBackend{
         .unwrap()
     }
 
-    fn flush_framebuffer(&mut self, image_index:u32, acquire_future:SwapchainAcquireFuture){
+    fn flush_framebuffer(&mut self, window:&Window, image_index:u32, acquire_future:SwapchainAcquireFuture){
         // flush the canvas's contents to the framebuffer
         self.skia_ctx.flush_and_submit();
         self.skia_ctx.free_gpu_resources();
 
         // reclaim leftover resources from the last frame
         self.last_render.as_mut().unwrap().cleanup_finished();
+
+        // let winit know that rendering is complete
+        window.pre_present_notify();
 
         // send the framebuffer to the gpu and display it on screen
         let future = self
