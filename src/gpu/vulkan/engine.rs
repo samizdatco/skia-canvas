@@ -13,7 +13,7 @@ use vulkano::{
 
 use skia_safe::gpu::vk::{BackendContext, GetProcOf};
 use skia_safe::gpu::{direct_contexts, surfaces, Budgeted, DirectContext, SurfaceOrigin};
-use skia_safe::{ColorSpace, ISize, ImageInfo, Surface, Data};
+use skia_safe::{ColorSpace, ISize, ImageInfo, Surface};
 
 
 thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );

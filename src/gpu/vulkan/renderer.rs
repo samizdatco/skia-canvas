@@ -2,7 +2,7 @@
 #![allow(unused_imports)]
 use ash::vk::Handle;
 use std::{
-    cell::RefCell, collections::HashMap, ptr, sync::Arc
+    cell::RefCell, ptr, sync::Arc
 };
 use vulkano::{
     device::{
@@ -22,7 +22,6 @@ use vulkano::{
 
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
-    Color, Matrix,
 };
 
 use super::{supported_vulkano_formats, to_sk_format};
@@ -31,7 +30,7 @@ use super::{supported_vulkano_formats, to_sk_format};
 use winit::{
     dpi::{LogicalSize, PhysicalSize},
     event_loop::ActiveEventLoop,
-    window::{Window, WindowId},
+    window::{Window},
 };
 
 thread_local!(
