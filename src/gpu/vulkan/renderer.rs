@@ -22,8 +22,10 @@ use vulkano::{
 
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
-    ColorType,
+    Color, Matrix,
 };
+
+use super::{supported_vulkano_formats, to_sk_format};
 
 #[cfg(feature = "window")]
 use winit::{
@@ -126,9 +128,19 @@ impl VulkanRenderer {
             let surface_capabilities = physical_device
                 .surface_capabilities(&surface, Default::default())
                 .unwrap();
-            let (image_format, _) = physical_device
+
+
+            // choose the first device format that is on the supported list
+            let supported_formats = supported_vulkano_formats();
+            let device_formats = physical_device
                 .surface_formats(&surface, Default::default())
-                .unwrap()[0];
+                .unwrap();
+            let (image_format, _) = device_formats.clone()
+                .into_iter()
+                .find(|(fmt, _)| supported_formats.contains(fmt))
+                .unwrap_or_else(||
+                    panic!("Vulkan: no format supported by Skia was found. Supported: {:#?} Found: {:#?}", supported_formats, device_formats)
+                );
 
             Swapchain::new(
                 device.clone(),
@@ -354,13 +366,8 @@ impl VulkanBackend{
         let image_object = image_access.image().handle().as_raw();
 
         let format = image_access.format();
-        let (vk_format, color_type) = match format {
-            vulkano::format::Format::B8G8R8A8_UNORM => (
-                skia_safe::gpu::vk::Format::B8G8R8A8_UNORM,
-                ColorType::BGRA8888,
-            ),
-            _ => panic!("Vulkan: unsupported color format {:?}", format),
-        };
+        let (vk_format, color_type) = to_sk_format(&format)
+            .unwrap_or_else(|| panic!("Vulkan: unsupported color format {:?}", format));
 
         let image_info = &unsafe {
             vk::ImageInfo::new(
