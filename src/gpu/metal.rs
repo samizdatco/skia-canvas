@@ -222,6 +222,7 @@ impl MetalRenderer{
         layer.set_device(&device);
         layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
         layer.set_presents_with_transaction(false);
+        layer.set_display_sync_enabled(true);
         layer.set_opaque(false);
         layer.set_framebuffer_only(false); // to enable blend modes
 
@@ -233,10 +234,6 @@ impl MetalRenderer{
         std::thread::spawn(move || {
             let mut backend = MetalBackend::for_layer(&layer);
             while let Ok(event) = rx.recv() {
-                if !rx.is_empty() && matches!(event, GpuEvent::Draw(..)){
-                    continue; // drop all but the last Draw frame in the queue
-                }
-
                 autoreleasepool(||{
                     match event{
                         GpuEvent::Resize(size) => {
@@ -244,13 +241,9 @@ impl MetalRenderer{
                             layer.set_drawable_size(cg_size);
                         },
                         GpuEvent::Draw(page, matrix, matte) => {
-                            let dpr = window.scale_factor();
                             let (clip, _) = matrix.map_rect(page.bounds);
-                            let scale = Matrix::scale((dpr as f32, dpr as f32));
-                            window.pre_present_notify();
-                            backend.render_to_layer(&layer, |canvas|{
+                            backend.render_to_layer(&layer, &window, |canvas|{
                                 canvas.clear(matte)
-                                    .set_matrix(&scale.into())
                                     .clip_rect(clip, None, Some(true))
                                     .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
                             }).unwrap();
@@ -297,7 +290,7 @@ impl MetalBackend {
         Self { skia_ctx, queue }
     }
 
-    fn render_to_layer<F>(&mut self, layer:&MetalLayer, f:F) -> Result<(), String>
+    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, f:F) -> Result<(), String>
         where F:FnOnce(&skia_safe::Canvas)
     {
         let drawable = layer
@@ -327,11 +320,14 @@ impl MetalBackend {
             None,
         ).ok_or("MetalBackend: could not create render target")?;
 
-        f(surface.canvas());
+        let dpr = window.scale_factor();
+        let scale = Matrix::scale((dpr as f32, dpr as f32));
+        f(surface.canvas().set_matrix(&scale.into()));
 
         self.skia_ctx.flush_and_submit();
         self.skia_ctx.free_gpu_resources();
 
+        window.pre_present_notify();
         let command_buffer = self.queue.new_command_buffer();
         command_buffer.present_drawable(drawable);
         command_buffer.commit();
