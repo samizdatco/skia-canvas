@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 use std::time::{Instant, Duration};
 use metal::{
+    foreign_types::{ForeignType, ForeignTypeRef},
     CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
-    foreign_types::{ForeignType, ForeignTypeRef}
 };
 use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
 use skia_safe::gpu::{
@@ -11,7 +11,6 @@ use skia_safe::gpu::{
 };
 use objc::rc::autoreleasepool;
 use serde_json::{json, Value};
-use crossbeam::channel;
 
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
 static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
@@ -176,10 +175,7 @@ use {
         raw_window_handle::{RawWindowHandle, HasWindowHandle},
         event_loop::ActiveEventLoop,
     },
-    crate::{
-        context::page::Page,
-        gui::event::GpuEvent,
-    },
+    crate::context::page::Page,
 };
 
 #[allow(non_upper_case_globals)]
@@ -191,7 +187,9 @@ extern "C" {
 
 #[cfg(feature = "window")]
 pub struct MetalRenderer {
-    backend: channel::Sender<GpuEvent>,
+    window: Arc<Window>,
+    backend: MetalBackend,
+    layer: MetalLayer,
 }
 
 #[cfg(feature = "window")]
@@ -229,44 +227,27 @@ impl MetalRenderer{
         let draw_size = window.inner_size();
         layer.set_drawable_size(CGSize::new(draw_size.width as f64, draw_size.height as f64));
 
-        // spawn a background thread where the Backend will wait for new pages via its rx channel
-        let (tx, rx) = channel::unbounded();
-        std::thread::spawn(move || {
-            let mut backend = MetalBackend::for_layer(&layer);
-            while let Ok(event) = rx.recv() {
-                autoreleasepool(||{
-                    match event{
-                        GpuEvent::Resize(size) => {
-                            let cg_size = CGSize::new(size.width as f64, size.height as f64);
-                            layer.set_drawable_size(cg_size);
-                        },
-                        GpuEvent::Draw(page, matrix, matte) => {
-                            let (clip, _) = matrix.map_rect(page.bounds);
-                            backend.render_to_layer(&layer, &window, |canvas|{
-                                canvas.clear(matte)
-                                    .clip_rect(clip, None, Some(true))
-                                    .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
-                            }).unwrap();
-                        }
-                    }
-                })
-            }
-        });
+        let backend = MetalBackend::for_layer(&layer);
 
-        Self{backend:tx}
+        Self{window, layer, backend}
     }
 
-    pub fn resize(&self, size: PhysicalSize<u32>) {
-        self.backend.send( GpuEvent::Resize(size) ).ok();
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        let cg_size = CGSize::new(size.width as f64, size.height as f64);
+        self.layer.set_drawable_size(cg_size);
     }
 
-    pub fn draw(&self, page:Page, matrix:Matrix, matte:Color){
-        self.backend.send( GpuEvent::Draw(page, matrix, matte) ).ok();
+    pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
+        let (clip, _) = matrix.map_rect(page.bounds);
+        self.backend.render_to_layer(&self.layer, &self.window, |canvas|{
+            canvas.clear(matte)
+                .clip_rect(clip, None, Some(true))
+                .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
+        }).unwrap();
     }
 }
 
 pub struct MetalBackend {
-    // each renderer's non-Send references need to be lazily allocated on the window's thread
     skia_ctx: DirectContext,
     queue: CommandQueue,
 }

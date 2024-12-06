@@ -1,5 +1,4 @@
 use ash::vk::Handle;
-use crossbeam::channel;
 use std::{ptr, sync::Arc};
 use vulkano::{
     device::{
@@ -25,16 +24,13 @@ use winit::{
     window::Window,
 };
 
-use crate::{
-    context::page::Page,
-    gui::event::GpuEvent,
-};
-
+use crate::context::page::Page;
 use super::{VK_FORMATS, to_sk_format};
 
 
 pub struct VulkanRenderer{
-    backend: channel::Sender<GpuEvent>,
+    window: Arc<Window>,
+    backend: VulkanBackend,
 }
 
 impl VulkanRenderer {
@@ -161,40 +157,21 @@ impl VulkanRenderer {
             .unwrap()
         };
 
-        let (tx, rx) = channel::unbounded::<GpuEvent>();
-        std::thread::spawn(move || {
-            let mut backend = VulkanBackend::new(queue, swapchain);
-            while let Ok(event) = rx.recv() {
-                if !rx.is_empty() && matches!(event, GpuEvent::Draw(..)){
-                    continue; // drop all but the last Draw frame in the queue
-                }
-
-                match event{
-                    GpuEvent::Resize(size) => {
-                        backend.swapchain_is_valid = false;
-                        backend.prepare_swapchain(size.into());
-                    },
-                    GpuEvent::Draw(page, matrix, matte) => {
-                        let (clip, _) = matrix.map_rect(page.bounds);
-                        backend.render_frame(&window, |canvas|{
-                            canvas.clear(matte)
-                                .clip_rect(clip, None, Some(true))
-                                .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
-                        }).unwrap();
-                    }
-                }
-            }
-        });
-
-        Self{backend:tx}
+        Self{window, backend:VulkanBackend::new(queue, swapchain)}
     }
 
-    pub fn resize(&self, size: PhysicalSize<u32>) {
-        self.backend.send( GpuEvent::Resize(size) ).ok();
+    pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        self.backend.swapchain_is_valid = false;
+        self.backend.prepare_swapchain(size.into());
     }
 
-    pub fn draw(&self, page:Page, matrix:Matrix, matte:Color){
-        self.backend.send( GpuEvent::Draw(page, matrix, matte) ).ok();
+    pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
+        let (clip, _) = matrix.map_rect(page.bounds);
+        self.backend.render_frame(&self.window, |canvas|{
+            canvas.clear(matte)
+                .clip_rect(clip, None, Some(true))
+                .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
+        }).unwrap();
     }
 }
 

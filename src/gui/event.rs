@@ -19,11 +19,6 @@ pub enum AppEvent{
   Quit,
 }
 
-pub enum GpuEvent{
-  Resize(PhysicalSize<u32>),
-  Draw(Page, Matrix, Color),
-}
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum UiEvent{
