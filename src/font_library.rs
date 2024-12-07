@@ -16,6 +16,7 @@ use skia_safe::{FontMgr, FontArguments, Typeface};
 use skia_safe::font_style::{FontStyle, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
+use skia_safe::utils::OrderedFontMgr;
 
 use crate::FONT_LIBRARY;
 use crate::utils::*;
@@ -106,35 +107,26 @@ pub struct FontLibrary{
     }
 
     pub fn font_mgr(&mut self) -> FontMgr {
-      // builds a single font manager with access to both system and user-loaded fonts (for use w/ SVG images)
-      let sys_mgr = self.mgr.clone();
-      let mut union_mgr = TypefaceFontProvider::new();
+      // collect non-system fonts in a provider
+      let mut dyn_mgr = TypefaceFontProvider::new();
 
       // add a sensible fallback as the first font so the default isn't just whatever is alphabetically first
-      self.font_collection()
+      if let Some(fallback) = self.font_collection()
         .find_typefaces(&["system-ui", "sans-serif", "serif"], FontStyle::normal())
-        .into_iter().nth(0)
-        .map(|fallback| {
-          union_mgr.register_typeface(fallback, None);
-        });
-
-      // add all system fonts
-      for i in 0..sys_mgr.count_families() {
-        let mut style_set = sys_mgr.new_style_set(i);
-        for style_index in 0..style_set.count() {
-          if let Some(typeface) = style_set.new_typeface(style_index){
-            union_mgr.register_typeface(typeface, None);
-          }
-        }
-      }
+        .into_iter().nth(0){ dyn_mgr.register_typeface(fallback, None); }
 
       // add generic mappings & user-loaded fonts
       for (font, alias) in &self.generics{
-        union_mgr.register_typeface(font.clone(), alias.as_deref());
+        dyn_mgr.register_typeface(font.clone(), alias.as_deref());
       }
       for (font, alias) in &self.fonts{
-        union_mgr.register_typeface(font.clone(), alias.as_deref());
+        dyn_mgr.register_typeface(font.clone(), alias.as_deref());
       }
+
+      // merge system & non-system fonts into single FontMgr
+      let mut union_mgr = OrderedFontMgr::new();
+      union_mgr.append(dyn_mgr); // generics & user-loaded fonts
+      union_mgr.append(self.mgr.clone()); // system fonts
       union_mgr.into()
     }
 
