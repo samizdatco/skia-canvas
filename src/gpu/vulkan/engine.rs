@@ -8,7 +8,6 @@ use vulkano::{
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     Handle, VulkanLibrary, VulkanObject,
 };
-
 use skia_safe::{
     gpu::{
         vk::{BackendContext, GetProcOf},
