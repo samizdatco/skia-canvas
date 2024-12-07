@@ -50,15 +50,15 @@ impl VulkanEngine {
                     Self::spawn_idle_watcher(); // watch for inactive contexts and deallocate them
 
                     let device_props = context.physical_device.properties();
-                    let (mode, gpu_type) = match device_props.device_type {
-                        PhysicalDeviceType::IntegratedGpu => ("GPU", Some("Integrated GPU")),
-                        PhysicalDeviceType::DiscreteGpu => ("GPU", Some("Discrete GPU")),
-                        PhysicalDeviceType::VirtualGpu => ("GPU", Some("Virtual GPU")),
-                        _ => ("CPU", Some("Software Rasterizer"))
+                    let gpu_type = match device_props.device_type {
+                        PhysicalDeviceType::IntegratedGpu => Some("Integrated GPU"),
+                        PhysicalDeviceType::DiscreteGpu => Some("Discrete GPU"),
+                        PhysicalDeviceType::VirtualGpu => Some("Virtual GPU"),
+                        _ => Some("Software Rasterizer")
                     };
 
                     json!({
-                        "renderer": mode,
+                        "renderer": "GPU",
                         "api": "Vulkan",
                         "device": gpu_type.map(|t| format!("{} ({})",
                             t, device_props.device_name)
