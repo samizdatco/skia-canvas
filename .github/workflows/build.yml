@@ -129,6 +129,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    - name: Enable long paths
+      run: git config --system core.longpaths true
+
     - name: Checkout repository
       uses: actions/checkout@v4
 
