@@ -455,7 +455,6 @@ describe("Canvas", ()=>{
       canvas.saveAsSync(`${TMP}/output-{2}.png`)
 
       let files = findTmp(`/output-0?.png`)
-      console.log({files})
       expect(files.length).toEqual(colors.length+1)
 
       for (const [i, fn] of files.entries()){
@@ -463,8 +462,6 @@ describe("Canvas", ()=>{
         img.src = fn
         await img.decode()
         expect(img.complete).toBe(true)
-
-        console.log({img})
 
         // second page inherits the first's size, then they increase
         let dim = i<2 ? 512 : 512 + 100 * (i-1)
