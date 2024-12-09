@@ -2,6 +2,15 @@
 
 <!-- ## 🥚 ⟩ [Unreleased] -->
 
+## 📦 ⟩ [v2.0.1] ⟩ Dec 8, 2024
+
+### Misc. Improvements
+- Added support for Intel integrated GPUs that would previously throw an "instantiated but unable to render" error
+  - Note: you may need to upgrade to the latest Mesa drivers ([24.3.1 or later](https://launchpad.net/~kisak/+archive/ubuntu/kisak-mesa)), especially for in-window rendering to work correctly on Linux
+- Fixed window initialization for Vulkan GPUs that default to a framebuffer color-format Skia doesn't support
+- Vulkan drivers that fall back to the [Mesa LLVMpipe](https://docs.mesa3d.org/drivers/llvmpipe.html) software renderer now work correctly
+- Optimized font library initialization to improve SVG parsing speed
+
 ## 📦 ⟩ [v2.0.0] ⟩ Dec 2, 2024
 
 ### New Features
@@ -384,7 +393,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v2.0.0...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v2.0.1...HEAD
+[v2.0.1]: https://github.com/samizdatco/skia-canvas/compare/v2.0.0...v2.0.1
 [v2.0.0]: https://github.com/samizdatco/skia-canvas/compare/v1.0.2...v2.0.0
 [v1.0.2]: https://github.com/samizdatco/skia-canvas/compare/v1.0.1...v1.0.2
 [v1.0.1]: https://github.com/samizdatco/skia-canvas/compare/v1.0.0...v1.0.1
