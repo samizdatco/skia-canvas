@@ -1,7 +1,8 @@
 ---
-title: "About"
+title: ""
 hide_title: true
 sidebar_position: -1
+sidebar_label: "About"
 ---
 
 <div id="hero">
