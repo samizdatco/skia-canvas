@@ -6,10 +6,13 @@
 
 ### Misc. Improvements
 - Added support for Intel integrated GPUs that would previously throw an "instantiated but unable to render" error
-  - Note: you may need to upgrade to the latest Mesa drivers ([24.3.1 or later](https://launchpad.net/~kisak/+archive/ubuntu/kisak-mesa)), especially for in-window rendering to work correctly on Linux
+  - Note: you may need to upgrade to the latest Mesa drivers ([24.3.1 or later][mesa_ppa]), especially for in-window rendering to work correctly on Linux
 - Fixed window initialization for Vulkan GPUs that default to a framebuffer color-format Skia doesn't support
-- Vulkan drivers that fall back to the [Mesa LLVMpipe](https://docs.mesa3d.org/drivers/llvmpipe.html) software renderer now work correctly
+- Vulkan drivers that fall back to the [Mesa LLVMpipe][mesa_llvmpipe] software renderer now work correctly
 - Optimized font library initialization to improve SVG parsing speed
+
+[mesa_ppa]: https://launchpad.net/~kisak/+archive/ubuntu/kisak-mesa
+[mesa_llvmpipe]: https://docs.mesa3d.org/drivers/llvmpipe.html
 
 ## 📦 ⟩ [v2.0.0] ⟩ Dec 2, 2024
 
