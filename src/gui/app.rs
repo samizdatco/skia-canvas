@@ -2,7 +2,7 @@ use neon::prelude::*;
 use std::time::{Duration, Instant};
 use serde_json::Value;
 use winit::{
-    platform::pump_events::{EventLoopExtPumpEvents},
+    platform::pump_events::EventLoopExtPumpEvents,
     platform::run_on_demand::EventLoopExtRunOnDemand,
     event::{ElementState, KeyEvent, Event, WindowEvent},
     event_loop::{EventLoop, ActiveEventLoop, ControlFlow},
@@ -153,18 +153,14 @@ impl App{
 struct Cadence{
     rate: u64,
     last: Instant,
-    wakeup: Duration,
-    render: Duration,
     needs_cleanup: Option<bool>,
 }
 
 impl Default for Cadence {
     fn default() -> Self {
         Self{
-            rate: 0,
+            rate: 60,
             last: Instant::now(),
-            wakeup: Duration::new(0, 0),
-            render: Duration::new(0, 0),
             needs_cleanup: Some(true), // ensure at least one post-Init loop
         }
     }
@@ -181,38 +177,38 @@ impl Cadence{
     }
 
     fn set_frame_rate(&mut self, rate:u64){
-        if rate == self.rate{ return }
-        let frame_time = 1_000_000_000/rate.max(1);
-        let watch_interval = 1_500_000.max(frame_time/10);
-        self.render = Duration::from_nanos(frame_time);
-        self.wakeup = Duration::from_nanos(frame_time - watch_interval);
         self.rate = rate;
     }
 
     pub fn on_next_frame<F:FnMut()>(&mut self, mode:LoopMode, mut draw:F) -> ControlFlow{
-        // if node is handling the event loop, we can't use polling to wait for the
-        // render deadline, so instead we'll pause the thread for up to 1.5ms, making sure
-        // we can then draw immediately after
+        // determine the upcoming deadlines for actually rendering and for spinning in preparation
+        let frame_time = 1_000_000_000/self.rate.max(1);
+        let watch_interval = 1_500_000.min(frame_time/10);
+        let render = Duration::from_nanos(frame_time);
+        let wakeup = Duration::from_nanos(frame_time - watch_interval);
+
+        // if node is handling the event loop, we can't use polling to wait for the render
+        // deadline. so instead we'll pause the thread for the last 10% of the inter-frame
+        // time (up to 1.5ms), making sure we can then draw immediately after
         let dt = self.last.elapsed();
-        if matches!(mode, LoopMode::Node) && dt >= self.wakeup && dt < self.render{
-            if let Some(sleep_time) = self.render.checked_sub(self.last.elapsed()){
+        if matches!(mode, LoopMode::Node) && dt >= wakeup && dt < render{
+            if let Some(sleep_time) = render.checked_sub(self.last.elapsed()){
                 spin_sleep::sleep(sleep_time);
             }
         }
 
         // call the draw callback if it's time & make sure the next deadline is in the future
-        if self.last.elapsed() >= self.render{
+        if self.last.elapsed() >= render{
             draw();
-            while self.last < Instant::now() - self.render{
-                self.last += self.render
+            while self.last < Instant::now() - render{
+                self.last += render
             }
         }
 
         // if winit is in control, we can use waiting & polling to hit the deadline
-        match self.last.elapsed() < self.wakeup {
-            true => ControlFlow::WaitUntil(self.last + self.wakeup),
+        match self.last.elapsed() < wakeup {
+            true => ControlFlow::WaitUntil(self.last + wakeup),
             false => ControlFlow::Poll,
         }
     }
 }
-
