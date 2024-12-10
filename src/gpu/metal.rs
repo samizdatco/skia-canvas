@@ -190,6 +190,7 @@ pub struct MetalRenderer {
     window: Arc<Window>,
     backend: MetalBackend,
     layer: MetalLayer,
+    resized: bool,
 }
 
 #[cfg(feature = "window")]
@@ -229,21 +230,24 @@ impl MetalRenderer{
 
         let backend = MetalBackend::for_layer(&layer);
 
-        Self{window, layer, backend}
+        Self{window, layer, backend, resized:false}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         let cg_size = CGSize::new(size.width as f64, size.height as f64);
         self.layer.set_drawable_size(cg_size);
+        self.resized = true;
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
-        self.backend.render_to_layer(&self.layer, &self.window, |canvas|{
+        self.backend.render_to_layer(&self.layer, &self.window, self.resized, |canvas|{
             canvas.clear(matte)
                 .clip_rect(clip, None, Some(true))
                 .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
         }).unwrap();
+
+        self.resized = false; // only the first render after a resize needs to be synchronous
     }
 }
 
@@ -271,7 +275,7 @@ impl MetalBackend {
         Self { skia_ctx, queue }
     }
 
-    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, f:F) -> Result<(), String>
+    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, f:F) -> Result<(), String>
         where F:FnOnce(&skia_safe::Canvas)
     {
         let drawable = layer
@@ -312,6 +316,10 @@ impl MetalBackend {
         let command_buffer = self.queue.new_command_buffer();
         command_buffer.present_drawable(drawable);
         command_buffer.commit();
+
+        // during resizes, ensure drawing is complete before returning
+        if sync{ command_buffer.wait_until_completed(); }
+
         Ok(())
     }
 
