@@ -91,35 +91,28 @@ impl App{
                 let keep_running = channel.send(move |mut cx| {
 
                     // define closure to relay events to js and receive canvas updates in return
-                    let roundtrip = |payload:Value, windows:Option<&mut WindowManager>| -> NeonResult<()>{
-                        let window_state = App::dispatch_events(&mut cx, payload, windows.is_some())?;
-                        if let Some(window_mgr) = windows{
-                            for (spec, page) in window_state{
-                                window_mgr.update_window(spec, page)
-                            }
-                        }
-
-                        Ok(())
+                    let dispatch = |payload:Value, windows:Option<&mut WindowManager>| -> NeonResult<()>{
+                        App::dispatch_events(&mut cx, payload, windows)
                     };
 
                     // run the winit event loop (either once or until all windows are closed depending on mode)
-                    Ok(APP.with_borrow_mut(|app| {
+                    APP.with_borrow_mut(|app| {
                         EVENT_LOOP.with_borrow_mut(|event_loop|{
                             match app.mode{
                                 LoopMode::Native => {
-                                    let handler = app.event_handler(roundtrip);
+                                    let handler = app.event_handler(dispatch);
                                     event_loop.set_control_flow(ControlFlow::Wait);
                                     event_loop.run_on_demand(handler).ok();
-                                    false
+                                    Ok(false)
                                 },
                                 LoopMode::Node => {
-                                    let handler = app.event_handler(roundtrip);
+                                    let handler = app.event_handler(dispatch);
                                     event_loop.pump_events(Some(Duration::ZERO), handler);
-                                    app.cadence.should_continue() || !app.windows.is_empty()
+                                    Ok(app.cadence.should_continue() || !app.windows.is_empty())
                                 }
                             }
                         })
-                    }))
+                    })
                 }).join();
 
                 // in node-events mode, wait briefly before checking for new events
@@ -134,22 +127,28 @@ impl App{
         });
     }
 
-    fn dispatch_events(cx:&mut TaskContext, payload:Value, is_render:bool) -> NeonResult<Vec<(WindowSpec, Page)>>{
-        // send payload to js for event dispatch and canvas drawing
+    fn dispatch_events(cx:&mut TaskContext, events:Value, window_mgr:Option<&mut WindowManager>) -> NeonResult<()>{
+        // window_mgr is only present if it's time to collect updated canvas contents from js
+        let is_render = window_mgr.is_some();
+
+        // js callback is passed render flag & json-encoded event queue
         let mut call = match RENDER_CALLBACK.get(){
-            None => return Ok(vec![]),
+            None => return Ok(()),
             Some(callback)=> callback.to_inner(cx).call_with(cx),
         };
         call.arg(cx.boolean(is_render))
-            .arg(cx.string(payload.to_string()));
+            .arg(cx.string(events.to_string()));
 
-        match is_render{
-            true => {
-                // for a full roundtrip, pass events to js then unpack updated window specs & contexts
+        match window_mgr{
+            None => call.exec(cx)?, // if this is just a UI-event delivery, fire & forget
+
+            Some(window_mgr) => {
+                // for a full roundtrip, first pass events to js
                 let response = call.apply::<JsValue, _>(cx)?
                     .downcast::<JsArray, _>(cx).or_throw(cx)?
                     .to_vec(cx)?;
 
+                // then unpack the returned window specs & contexts
                 let specs_json = response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
                 let specs:Vec<WindowSpec> = serde_json::from_str(&specs_json)
                     .or_else(|err| cx.throw_error(format!("Malformed response from window event handler: {}", err)) )?;
@@ -160,23 +159,17 @@ impl App{
                         .map(|ctx| ctx.borrow().get_page())
                 );
 
-                // group spec + page pairs for each window
-                let window_state = zip(specs, pages)
+                // update each window with its new state & content
+                zip(specs, pages)
                     .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
-                    .collect();
-
-                Ok(window_state)
+                    .for_each(|(spec, page)| window_mgr.update_window(spec, page) );
             }
+        };
 
-            false => {
-                // if this is just a UI-event delivery pass, ignore the js callback's return value
-                call.exec(cx)?;
-                Ok(vec![])
-            }
-        }
+        Ok(())
     }
 
-    fn event_handler<F>(&mut self, mut roundtrip:F) -> impl FnMut(Event<AppEvent>, &ActiveEventLoop) + use<'_, F>
+    fn event_handler<F>(&mut self, mut dispatch:F) -> impl FnMut(Event<AppEvent>, &ActiveEventLoop) + use<'_, F>
         where F:FnMut(Value, Option<&mut WindowManager>) -> NeonResult<()>
     {
         move |event, event_loop| match event {
@@ -233,7 +226,7 @@ impl App{
             Event::UserEvent(app_event) => match app_event{
                 AppEvent::Open(spec, page) => {
                     self.windows.add(event_loop, spec, page);
-                    roundtrip(self.windows.get_geometry(), Some(&mut self.windows)).ok();
+                    dispatch(self.windows.get_geometry(), Some(&mut self.windows)).ok();
                 }
                 AppEvent::Close(token) => {
                     self.windows.remove_by_token(token);
@@ -250,14 +243,14 @@ impl App{
             Event::AboutToWait => {
                 // dispatch UI events if new ones have arrived
                 if self.windows.has_ui_changes() {
-                    roundtrip(self.windows.get_ui_changes(), None).ok();
+                    dispatch(self.windows.get_ui_changes(), None).ok();
                 }
 
                 // let the cadence decide when to switch to poll-mode or sleep the thread
                 event_loop.set_control_flow(
                     self.cadence.on_next_frame(self.mode, || {
                         // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                        roundtrip(self.windows.get_ui_changes(), Some(&mut self.windows)).ok();
+                        dispatch(self.windows.get_ui_changes(), Some(&mut self.windows)).ok();
                     })
                 );
             }
