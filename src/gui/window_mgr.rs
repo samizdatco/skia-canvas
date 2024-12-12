@@ -136,8 +136,8 @@ impl WindowManager {
         let mut ui = Map::new();
         let mut state = Map::new();
         self.windows.iter_mut().for_each(|win|{
-            if let Some(payload) = win.sieve.serialize(){
-                ui.insert(win.spec.id.to_string(), payload);
+            if !win.sieve.is_empty(){
+                ui.insert(win.spec.id.to_string(), win.sieve.collect());
             }
             state.insert(win.spec.id.to_string(), json!(win.spec));
         });

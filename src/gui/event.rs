@@ -1,9 +1,8 @@
-use skia_safe::{Matrix, Color};
+use skia_safe::Matrix;
 use serde::Serialize;
 use serde_json::json;
-use std::collections::HashSet;
 use winit::{
-  dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
+  dpi::{LogicalPosition, LogicalSize, PhysicalPosition},
   event::{ElementState, KeyEvent, Ime, Modifiers, MouseButton, MouseScrollDelta, WindowEvent},
   keyboard::{ModifiersState, KeyCode, KeyLocation, NamedKey, PhysicalKey::Code, Key::{Character, Named}},
 };
@@ -25,20 +24,40 @@ pub enum UiEvent{
   #[allow(non_snake_case)]
   Wheel{deltaX:f32, deltaY:f32},
   Move{left:f32, top:f32},
-  Keyboard{event:String, key:String, code:KeyCode, location:u32, repeat:bool},
+  Keyboard{event:String, key:String, code:KeyCode, location:u32, modifiers:ModifierKeys, repeat:bool},
   Composition{event:String, data:String},
+  Mouse{event:String, button:Option<u16>, point:LogicalPosition::<f32>, page_point:LogicalPosition::<f32>, modifiers:ModifierKeys},
   Input(Option<String>),
-  Mouse(String),
   Focus(bool),
   Resize(LogicalSize<u32>),
   Fullscreen(bool),
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModifierKeys{
+  shift_key: bool,
+  ctrl_key: bool,
+  alt_key: bool,
+  meta_key: bool,
+}
+
+impl From<ModifiersState> for ModifierKeys{
+  fn from(state:ModifiersState) -> Self{
+    ModifierKeys{
+      shift_key: state.shift_key(),
+      ctrl_key: state.control_key(),
+      alt_key: state.alt_key(),
+      meta_key: state.super_key(),
+    }
+  }
 }
 
 #[derive(Debug)]
 pub struct Sieve{
   dpr: f64,
   queue: Vec<UiEvent>,
-  key_modifiers: ModifiersState,
+  key_modifiers: ModifierKeys,
   mouse_point: PhysicalPosition::<f64>,
   mouse_button: Option<u16>,
   mouse_transform: Matrix,
@@ -51,7 +70,7 @@ impl Sieve{
     Sieve{
       dpr,
       queue: vec![],
-      key_modifiers: Modifiers::default().state(),
+      key_modifiers: Modifiers::default().state().into(),
       mouse_point: PhysicalPosition::default(),
       mouse_button: None,
       mouse_transform: Matrix::new_identity(),
@@ -66,6 +85,21 @@ impl Sieve{
 
   pub fn go_fullscreen(&mut self, is_full:bool){
     self.queue.push(UiEvent::Fullscreen(is_full));
+  }
+
+  fn add_mouse_event(&mut self, event:&str){
+    // helper to attach positions & keyboard modifiers for each type of mouse event
+    let raw_position = LogicalPosition::<f32>::from_physical(self.mouse_point, self.dpr);
+    let canvas_point = self.mouse_transform.map_point((raw_position.x, raw_position.y));
+    let canvas_position = LogicalPosition::<f32>::new(canvas_point.x, canvas_point.y);
+
+    self.queue.push(UiEvent::Mouse{
+      event: event.to_string(),
+      point: canvas_position,
+      page_point: raw_position,
+      button: self.mouse_button,
+      modifiers: self.key_modifiers,
+    })
   }
 
   pub fn capture(&mut self, event:&WindowEvent){
@@ -85,24 +119,20 @@ impl Sieve{
       }
 
       WindowEvent::ModifiersChanged(modifiers) => {
-        self.key_modifiers = modifiers.state();
+        self.key_modifiers = modifiers.state().into();
       }
 
       WindowEvent::CursorEntered{..} => {
-        let mouse_event = "mouseenter".to_string();
-        self.queue.push(UiEvent::Mouse(mouse_event));
+        self.add_mouse_event("mouseenter");
       }
 
       WindowEvent::CursorLeft{..} => {
-        let mouse_event = "mouseleave".to_string();
-        self.queue.push(UiEvent::Mouse(mouse_event));
+        self.add_mouse_event("mouseleave");
       }
 
       WindowEvent::CursorMoved{position, ..} => {
-        if *position != self.mouse_point{
-          self.mouse_point = *position;
-          self.queue.push(UiEvent::Mouse("mousemove".to_string()));
-        }
+        self.mouse_point = *position;
+        self.add_mouse_event("mousemove");
       }
 
       WindowEvent::MouseWheel{delta, ..} => {
@@ -131,7 +161,12 @@ impl Sieve{
           MouseButton::Forward => Some(4),
           MouseButton::Other(num) => Some(*num)
         };
-        self.queue.push(UiEvent::Mouse(mouse_event));
+
+        self.add_mouse_event(&mouse_event);
+
+        if *state == ElementState::Released{
+          self.mouse_button = None;
+        }
       }
 
       WindowEvent::KeyboardInput { event: KeyEvent {
@@ -164,6 +199,7 @@ impl Sieve{
           key: key_text.clone(),
           code: key_code.clone(),
           location: key_location,
+          modifiers: self.key_modifiers,
           repeat: *repeat
         });
 
@@ -230,62 +266,10 @@ impl Sieve{
     }
   }
 
-  pub fn serialize(&mut self) -> Option<serde_json::Value>{
-    if self.queue.is_empty(){ return None }
-
-    let mut payload: Vec<serde_json::Value> = vec![];
-    let mut mouse_events: HashSet<String> = HashSet::new();
-    let mut modifiers:Option<ModifiersState> = None;
-    let mut last_wheel:Option<&UiEvent> = None;
-
-    for change in &self.queue {
-      match change{
-        UiEvent::Mouse(event_type) => {
-          modifiers = Some(self.key_modifiers);
-          mouse_events.insert(event_type.clone());
-        }
-        UiEvent::Wheel{..} => {
-          modifiers = Some(self.key_modifiers);
-          last_wheel = Some(&change);
-        }
-        UiEvent::Input(..) | UiEvent::Keyboard{..} => {
-          modifiers = Some(self.key_modifiers);
-          payload.push(json!(change));
-        }
-        _ => payload.push(json!(change))
-      }
-    }
-
-    if modifiers.is_some() {
-      payload.insert(0, json!({"modifiers": modifiers}));
-    }
-
-    if !mouse_events.is_empty() {
-      let viewport_point = LogicalPosition::<f32>::from_physical(self.mouse_point, self.dpr);
-      let canvas_point = self.mouse_transform.map_point((viewport_point.x, viewport_point.y));
-
-      payload.push(json!({
-        "mouse": {
-          "events": mouse_events,
-          "button": self.mouse_button,
-          "x": canvas_point.x,
-          "y": canvas_point.y,
-          "pageX": viewport_point.x,
-          "pageY": viewport_point.y,
-        }
-      }));
-
-      if mouse_events.contains("mouseup"){
-        self.mouse_button = None;
-      }
-    }
-
-    if let Some(wheel) = last_wheel{
-      payload.push(json!(wheel));
-    }
-
+  pub fn collect(&mut self) -> serde_json::Value{
+    let payload = json!(self.queue);
     self.queue.clear();
-    Some(json!(payload))
+    payload
   }
 
   pub fn is_empty(&self) -> bool {
