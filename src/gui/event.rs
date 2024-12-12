@@ -27,7 +27,7 @@ pub enum UiEvent{
   Keyboard{event:String, key:String, code:KeyCode, location:u32, modifiers:ModifierKeys, repeat:bool},
   Composition{event:String, data:String},
   Mouse{event:String, button:Option<u16>, point:LogicalPosition::<f32>, page_point:LogicalPosition::<f32>, modifiers:ModifierKeys},
-  Input(Option<String>),
+  Input(Option<String>, String),
   Focus(bool),
   Resize(LogicalSize<u32>),
   Fullscreen(bool),
@@ -217,19 +217,28 @@ impl Sieve{
           match state{
             // ignore keyups, just report presses & repeats
             ElementState::Pressed => {
-              // in addition to printable characters, report space & delete as input
+              // in addition to printable characters, report spacing & deletion as input
               let key_char = match &logical_key{
                 Character(c) => Some(c.to_string()),
+                Named(NamedKey::Tab) => Some("\t".to_string()),
                 Named(NamedKey::Space) => Some(" ".to_string()),
-                Named(NamedKey::Backspace | NamedKey::Delete) => Some("".to_string()),
+                Named(NamedKey::Backspace | NamedKey::Delete | NamedKey::Enter) => Some("".to_string()),
                 _ => None
               };
 
+              let input_type = match &logical_key{
+                Named(NamedKey::Backspace) => "deleteContentBackward",
+                Named(NamedKey::Delete) => "deleteContentForward",
+                Named(NamedKey::Enter) => "insertLineBreak",
+                _ => "insertText"
+              }.to_string();
+
               if let Some(string) = key_char{
-                self.queue.push(UiEvent::Input(match !string.is_empty(){
+                let data = match !string.is_empty(){
                   true => Some(string),
                   false => None,
-                }));
+                };
+                self.queue.push(UiEvent::Input(data, input_type));
               };
             },
             _ => {},
@@ -255,7 +264,7 @@ impl Sieve{
             self.queue.push(UiEvent::Composition {
               event:"compositionend".to_string(), data:string.clone()
             });
-            self.queue.push(UiEvent::Input(Some(string.clone()))); // emit the composed character
+            self.queue.push(UiEvent::Input(Some(string.clone()), "insertCompositionText".to_string())); // emit the composed character
             self.compose_begun = false;
           },
           _ => {}
