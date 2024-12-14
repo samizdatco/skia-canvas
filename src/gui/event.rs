@@ -26,7 +26,7 @@ pub enum UiEvent{
   Move{left:f32, top:f32},
   Keyboard{event:String, key:String, code:KeyCode, location:u32, modifiers:ModifierKeys, repeat:bool},
   Composition{event:String, data:String},
-  Mouse{event:String, button:Option<u16>, point:LogicalPosition::<f32>, page_point:LogicalPosition::<f32>, modifiers:ModifierKeys},
+  Mouse{event:String, button:Option<u16>, buttons:u16, point:LogicalPosition::<f32>, page_point:LogicalPosition::<f32>, modifiers:ModifierKeys},
   Input(Option<String>, String),
   Focus(bool),
   Resize(LogicalSize<u32>),
@@ -60,6 +60,7 @@ pub struct Sieve{
   key_modifiers: ModifierKeys,
   mouse_point: PhysicalPosition::<f64>,
   mouse_button: Option<u16>,
+  mouse_buttons: u16,
   mouse_transform: Matrix,
   compose_begun: bool,
   compose_ongoing: bool,
@@ -73,6 +74,7 @@ impl Sieve{
       key_modifiers: Modifiers::default().state().into(),
       mouse_point: PhysicalPosition::default(),
       mouse_button: None,
+      mouse_buttons: 0,
       mouse_transform: Matrix::new_identity(),
       compose_begun: false,
       compose_ongoing: false,
@@ -98,6 +100,7 @@ impl Sieve{
       point: canvas_position,
       page_point: raw_position,
       button: self.mouse_button,
+      buttons: self.mouse_buttons,
       modifiers: self.key_modifiers,
     })
   }
@@ -148,24 +151,26 @@ impl Sieve{
       }
 
       WindowEvent::MouseInput{state, button, ..} => {
-        let mouse_event = match state {
-          ElementState::Pressed => "mousedown",
-          ElementState::Released => "mouseup"
-        }.to_string();
-
-        self.mouse_button = match button {
-          MouseButton::Left => Some(0),
-          MouseButton::Middle => Some(1),
-          MouseButton::Right => Some(2),
-          MouseButton::Back => Some(3),
-          MouseButton::Forward => Some(4),
-          MouseButton::Other(num) => Some(*num)
+        let (button_id, button_bits) = match button {
+          MouseButton::Left => (0, 1),
+          MouseButton::Middle => (1, 4),
+          MouseButton::Right => (2, 2),
+          MouseButton::Back => (3, 8),
+          MouseButton::Forward => (4, 16),
+          MouseButton::Other(num) => (*num, 0),
         };
 
-        self.add_mouse_event(&mouse_event);
-
-        if *state == ElementState::Released{
-          self.mouse_button = None;
+        self.mouse_button = Some(button_id);
+        match state {
+          ElementState::Pressed => {
+            self.mouse_buttons |= button_bits;
+            self.add_mouse_event("mousedown");
+          },
+          ElementState::Released => {
+            self.mouse_buttons &= !button_bits;
+            self.add_mouse_event("mouseup");
+            self.mouse_button = None;
+          },
         }
       }
 
