@@ -4,7 +4,6 @@ use std::{
     sync::{Arc, OnceLock},
     iter::zip,
     cell::RefCell,
-    thread::sleep,
     time::{Duration, Instant},
 };
 use winit::{
@@ -103,11 +102,12 @@ impl App{
                                     let handler = app.event_handler(dispatch);
                                     event_loop.set_control_flow(ControlFlow::Wait);
                                     event_loop.run_on_demand(handler).ok();
-                                    Ok(false)
-                                },
+                                    Ok(false) // final window was closed
+                                }
                                 LoopMode::Node => {
+                                    let poll_time = app.cadence.next_wakeup() - Instant::now();
                                     let handler = app.event_handler(dispatch);
-                                    event_loop.pump_events(Some(Duration::ZERO), handler);
+                                    event_loop.pump_events(Some(poll_time), handler);
                                     Ok(app.cadence.should_continue() || !app.windows.is_empty())
                                 }
                             }
@@ -115,9 +115,8 @@ impl App{
                     })
                 }).join();
 
-                // in node-events mode, wait briefly before checking for new events
                 match keep_running{
-                    Ok(true) => sleep(Duration::from_millis(1)),
+                    Ok(true) => continue,
                     _ => break
                 }
             }
@@ -241,13 +240,8 @@ impl App{
 
 
             Event::AboutToWait => {
-                // dispatch UI events if new ones have arrived
-                if self.windows.has_ui_changes() {
-                    dispatch(self.windows.get_ui_changes(), None).ok();
-                }
-
-                // let the cadence decide when to switch to poll-mode or sleep the thread
                 event_loop.set_control_flow(
+                    // let the cadence decide when to switch to poll-mode or sleep the thread
                     self.cadence.on_next_frame(self.mode, || {
                         // relay UI-driven state changes to js and render the next frame in the (active) cadence
                         dispatch(self.windows.get_ui_changes(), Some(&mut self.windows)).ok();
@@ -288,6 +282,13 @@ impl Cadence{
 
     fn set_frame_rate(&mut self, rate:u64){
         self.rate = rate;
+    }
+
+    pub fn next_wakeup(&self) -> Instant{
+        let frame_time = 1_000_000_000/self.rate.max(1);
+        let watch_interval = 1_500_000.min(frame_time/10);
+        let wakeup = Duration::from_nanos(frame_time - watch_interval);
+        self.last + wakeup
     }
 
     pub fn on_next_frame<F:FnMut()>(&mut self, mode:LoopMode, mut draw:F) -> ControlFlow{
