@@ -85,13 +85,8 @@ impl WindowManager {
                 win.set_resizable(spec.resizable);
             }
 
-            if spec.resizable != win.spec.resizable {
-                updates.push(CanvasEvent::Resizable(spec.resizable));
-            }
-
-            if spec.cursor != win.spec.cursor || spec.cursor_hidden != win.spec.cursor_hidden {
-                let icon = if spec.cursor_hidden{ None }else{ Some(spec.cursor) };
-                win.set_cursor(icon);
+            if spec.cursor != win.spec.cursor {
+                win.set_cursor(&spec.cursor);
             }
 
             if spec.fit != win.spec.fit {

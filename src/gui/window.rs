@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use skia_safe::{Matrix, Color};
 use serde::{Serialize, Deserialize};
 use winit::{
@@ -26,9 +26,7 @@ pub struct WindowSpec {
     pub page: u32,
     pub width: f32,
     pub height: f32,
-    #[serde(with = "Cursor")]
-    pub cursor: CursorIcon,
-    pub cursor_hidden: bool,
+    pub cursor: String,
     pub fit: Fit,
 }
 
@@ -47,6 +45,7 @@ pub enum Cursor {
     NResize, NsResize, NwResize, NwseResize, Pointer, Progress, RowResize, SeResize,
     SResize, SwResize, Text, VerticalText, Wait, WResize, ZoomIn, ZoomOut,
 }
+
 pub struct Window {
     pub handle: Arc<WinitWindow>,
     pub spec: WindowSpec,
@@ -74,14 +73,16 @@ impl Window {
             .with_transparent(background.a() < 255)
             .with_title(spec.title.clone())
             .with_visible(false)
-            .with_cursor(spec.cursor)
             .with_resizable(spec.resizable);
 
         let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
         let renderer = Renderer::for_window(&event_loop, handle.clone());
         let sieve = Sieve::new(handle.scale_factor());
 
-        handle.set_cursor_visible(!spec.cursor_hidden);
+        let cursor_icon = CursorIcon::from_str(&spec.cursor).ok();
+        handle.set_cursor(cursor_icon.unwrap_or_default());
+        handle.set_cursor_visible(cursor_icon.is_some());
+
         if let (Some(left), Some(top)) = (spec.left, spec.top){
             handle.set_outer_position(LogicalPosition::new(left, top));
         }
@@ -191,11 +192,10 @@ impl Window {
         self.handle.set_title(title);
     }
 
-    pub fn set_cursor(&mut self, icon:Option<CursorIcon>){
-        if let Some(icon) = icon{
-            self.handle.set_cursor(icon);
-        }
-        self.handle.set_cursor_visible(icon.is_some());
+    pub fn set_cursor(&mut self, icon:&str){
+        let cursor_icon = CursorIcon::from_str(icon).ok();
+        self.handle.set_cursor(cursor_icon.unwrap_or_default());
+        self.handle.set_cursor_visible(cursor_icon.is_some());
     }
 
     pub fn set_fit(&mut self, mode:Fit){
