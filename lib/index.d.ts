@@ -256,7 +256,7 @@ declare var DOMMatrix: {
 // Canvas
 //
 
-export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "pdf" | "svg";
+export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "raw" | "pdf" | "svg";
 
 export interface RenderOptions {
   /** Page to export: Defaults to 1 (i.e., first page) */
@@ -273,11 +273,26 @@ export interface RenderOptions {
 
   /** Convert text to paths for SVG exports */
   outline?: boolean
+
+  /** Number of samples used for antialising each pixel */
+  msaa?: number | false
+
+  /** Color type to use when exporting in "raw" format */
+  colorType?: ColorType
 }
 
 export interface SaveOptions extends RenderOptions {
   /** Image format to use */
   format?: ExportFormat
+}
+
+export interface EngineDetails {
+  renderer: "CPU" | "GPU"
+  api: "Vulkan" | "Metal"
+  device: string
+  driver?: string
+  threads: number
+  error?: string
 }
 
 /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas) */
@@ -311,6 +326,7 @@ export class Canvas {
 
   get gpu(): boolean
   set gpu(enabled: boolean)
+  readonly engine: EngineDetails
 
   saveAs(filename: string, options?: SaveOptions): Promise<void>
   toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
@@ -812,6 +828,8 @@ export const FontLibrary: FontLibrary
 //
 
 import { EventEmitter } from "stream";
+export type EventLoopMode = "node" | "native"
+export type TextInputType = "insertText" | "deleteContentBackward" | "deleteContentForward" | "insertLineBreak" | "insertCompositionText"
 export type FitStyle = "none" | "contain-x" | "contain-y" | "contain" | "cover" | "fill" | "scale-down" | "resize"
 export type CursorStyle = "default" | "crosshair" | "hand" | "arrow" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
                           "cell" | "vertical-text" | "alias" | "copy" | "no-drop" | "grab" | "grabbing" | "all-scroll" | "zoom-in" | "zoom-out" |
@@ -839,6 +857,7 @@ type MouseEventProps = {
   pageX: number;
   pageY: number;
   button: number;
+  buttons: number,
   ctrlKey: boolean;
   altKey: boolean;
   metaKey: boolean;
@@ -864,7 +883,7 @@ type WindowEvents = {
   keyup: KeyboardEventProps
   input: {
     data: string
-    inputType: 'insertText'
+    inputType: TextInputType
   };
   wheel: { deltaX: number; deltaY: number }
   fullscreen: { enabled: boolean }
@@ -905,12 +924,16 @@ export class Window extends EventEmitter<{
   close(): void
 }
 
-export interface App{
+export interface App extends EventEmitter<{
+  "open": {type: "open", target: Window},
+  "close": {type: "close", target: Window},
+}>{
   readonly windows: Window[]
   readonly running: boolean
+  eventLoop: EventLoopMode
   fps: number
 
-  launch(): void
+  launch(): Promise<undefined>
   quit(): void
 }
 
