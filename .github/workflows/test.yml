@@ -16,7 +16,7 @@ jobs:
         os:
           - macos-latest
           - windows-latest
-          - ubuntu-latest
+          - ubuntu-22.04
         node:
           - 16
           - 22
