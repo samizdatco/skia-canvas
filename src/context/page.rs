@@ -108,7 +108,6 @@ impl PageRecorder{
       }
       self.current.begin_recording(self.bounds, None);
       self.changed = false;
-      self.rev += 1;
       self.cache = None;
       self.restore();
     }
@@ -141,6 +140,12 @@ pub struct Page{
   pub layers: Vec<Picture>,
   pub bounds: Rect,
   pub rev: usize
+}
+
+impl PartialEq for Page {
+  fn eq(&self, other: &Self) -> bool {
+      self.rev == other.rev && self.layers.len() == other.layers.len()
+  }
 }
 
 impl Page{
