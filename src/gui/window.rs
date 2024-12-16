@@ -174,7 +174,7 @@ impl Window {
     }
 
     pub fn set_page(&mut self, page:Page){
-        if self.page.rev != page.rev{
+        if self.page != page{
             self.handle.request_redraw();
         }
         self.page = page;
