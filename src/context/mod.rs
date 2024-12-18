@@ -356,7 +356,10 @@ impl Context2D{
   }
 
   pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
-    let mut clip = path.unwrap_or_else(|| self.path.clone()) ;
+    let mut clip = match path{
+      Some(path) => path.with_transform(&self.state.matrix),
+      None => self.path.clone()
+    };
     clip.set_fill_type(rule);
 
     self.state.clip = match &self.state.clip {
