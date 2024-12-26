@@ -173,7 +173,7 @@ impl App{
     {
         move |event, event_loop| match event {
             Event::WindowEvent { event:ref win_event, window_id } => {
-                self.windows.capture_ui_event(&window_id, win_event);
+                self.windows.find(&window_id, |win| win.sieve.capture(win_event) );
 
                 match win_event {
                     WindowEvent::Destroyed | WindowEvent::CloseRequested => {

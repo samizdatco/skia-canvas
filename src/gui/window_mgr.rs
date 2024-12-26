@@ -111,10 +111,6 @@ impl WindowManager {
         self.windows.iter_mut().find(|win| win.id() == *id).map(f);
     }
 
-    pub fn capture_ui_event(&mut self, id:&WindowId, event:&WindowEvent){
-        self.find(id, |win| win.sieve.capture(event) )
-    }
-
     pub fn has_ui_changes(&self) -> bool {
         self.windows.iter().any(|win| !win.sieve.is_empty() )
     }
