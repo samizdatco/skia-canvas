@@ -112,15 +112,7 @@ impl WindowManager {
     }
 
     pub fn capture_ui_event(&mut self, id:&WindowId, event:&WindowEvent){
-        self.find(id, |win|{
-            // work around a winit 0.30.x bug that's generating spurious Moved events during resizes
-            if let WindowEvent::Moved(pt) = event{
-                let LogicalPosition{x, y} = pt.to_logical(win.handle.scale_factor());
-                if Some(x)==win.spec.left && Some(y)==win.spec.top{ return }
-            }
-
-            win.sieve.capture(event)
-        })
+        self.find(id, |win| win.sieve.capture(event) )
     }
 
     pub fn has_ui_changes(&self) -> bool {
