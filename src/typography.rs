@@ -441,12 +441,7 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
     let size = match inherit.as_str(){
       "from-font" => None,
       _ => match opt_object_for_key(cx, &deco, "thickness"){
-          Some(thickness) => {
-            let raw_size = float_for_key(cx, &thickness, "size")?;
-            let unit = string_for_key(cx, &thickness, "unit")?;
-            let px_size = float_for_key(cx, &thickness, "px")?;
-            Spacing::parse(raw_size, unit, px_size)
-          }
+          Some(thickness) => Spacing::from_obj(cx, &thickness)?,
           _ => None
         }
     };
@@ -465,7 +460,9 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
   }
 }
 
-
+//
+// Em-relative lengths (for text spacing & decoration thickness)
+//
 #[derive(Clone, Debug)]
 pub struct Spacing{
   raw_size: f32,
@@ -480,6 +477,13 @@ impl Default for Spacing{
 }
 
 impl Spacing{
+  pub fn from_obj(cx: &mut FunctionContext, spacing:&Handle<JsObject>) -> NeonResult<Option<Self>>{
+    let raw_size = float_for_key(cx, &spacing, "size")?;
+    let unit = string_for_key(cx, &spacing, "unit")?;
+    let px_size = float_for_key(cx, &spacing, "px")?;
+    Ok(Self::parse(raw_size, unit, px_size))
+  }
+
   pub fn parse(raw_size:f32, unit:String, px_size:f32) -> Option<Self>{
     let main_size = match unit.as_str(){
       "em" | "rem" => raw_size,
@@ -504,3 +508,12 @@ impl Spacing{
   }
 }
 
+pub fn opt_spacing_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize) -> NeonResult<Option<Spacing>>{
+  match cx.argument::<JsValue>(idx)?.is_a::<JsNull, _>(cx){
+    true => Ok(None),
+    false => {
+      let spacing = cx.argument::<JsObject>(idx)?;
+      Spacing::from_obj(cx, &spacing)
+    }
+  }
+}
