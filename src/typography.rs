@@ -89,7 +89,7 @@ impl Typesetter{
     let metrics = self.char_style.font_metrics();
     let shift = get_baseline_offset(&metrics, self.baseline);
     let offset = (
-      self.width * get_alignment_factor(&self.graf_style),
+      self.alignment_offset(),
       shift - paragraph.alphabetic_baseline(),
     );
 
@@ -99,13 +99,13 @@ impl Typesetter{
   pub fn metrics(&self) -> Vec<Vec<f32>>{
     let (paragraph, _) = self.layout(&Paint::default());
     let font_metrics = self.char_style.font_metrics();
+    let alignment = self.alignment_offset();
     let offset = get_baseline_offset(&font_metrics, self.baseline);
     let hang = get_baseline_offset(&font_metrics, Baseline::Hanging) - offset;
     let norm = get_baseline_offset(&font_metrics, Baseline::Alphabetic) - offset;
     let ideo = get_baseline_offset(&font_metrics, Baseline::Ideographic) - offset;
     let ascent = norm - font_metrics.ascent;
     let descent = font_metrics.descent - norm;
-    let alignment = get_alignment_factor(&self.graf_style) * self.width;
 
     if paragraph.line_number() == 0 {
       return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, ascent, descent, hang, norm, ideo]]
@@ -151,6 +151,26 @@ impl Typesetter{
       path.add_path(&line, offset, None);
     };
     path
+  }
+
+  fn alignment_offset(&self) -> f32{
+    // convert start/end to left/right depending on writing system
+    let gravity = match (self.graf_style.text_direction(), self.graf_style.text_align()){
+      (TextDirection::LTR, TextAlign::Start) | (TextDirection::RTL, TextAlign::End) => TextAlign::Left,
+      (TextDirection::LTR, TextAlign::End) | (TextDirection::RTL, TextAlign::Start) => TextAlign::Right,
+      (_, alignment) => alignment,
+    };
+
+    // `alignment_factor` shifts the entire line to left/right/center align it
+    // `spacing_step` compensates for the letterspacing Paragraph adds before the line's first character
+    let (alignment_factor, spacing_step) = match gravity{
+      TextAlign::Left | TextAlign::Justify => (0.0, -0.5),
+      TextAlign::Center => (-0.5, 0.5),
+      TextAlign::Right => (-1.0, 1.0),
+      _ => (0.0, 0.0) // start & end have already been remapped
+    };
+
+    alignment_factor * self.width + spacing_step * self.char_style.letter_spacing()
   }
 }
 
@@ -324,23 +344,6 @@ pub fn from_text_align(mode:TextAlign) -> String{
     TextAlign::Start => "start",
     TextAlign::End => "end",
   }.to_string()
-}
-
-pub fn get_alignment_factor(graf_style:&ParagraphStyle) -> f32 {
-  match graf_style.text_direction() {
-    TextDirection::LTR => match graf_style.text_align() {
-      TextAlign::Left | TextAlign::Start => 0.0,
-      TextAlign::Right | TextAlign::End => -1.0,
-      TextAlign::Center => -0.5,
-      TextAlign::Justify => 0.0 // unsupported
-    },
-    TextDirection::RTL => match graf_style.text_align() {
-      TextAlign::Left | TextAlign::End => 0.0,
-      TextAlign::Right | TextAlign::Start => -1.0,
-      TextAlign::Center => -0.5,
-      TextAlign::Justify => 0.0 // unsupported
-    }
-  }
 }
 
 #[derive(Copy, Clone, Debug)]
