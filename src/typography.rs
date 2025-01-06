@@ -9,9 +9,7 @@ use neon::prelude::*;
 use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, Color};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
-    FontCollection, TextStyle, TextAlign, TextDirection,
-    Decoration, TextDecoration, TextDecorationMode, TextDecorationStyle,
-    ParagraphStyle, Paragraph, ParagraphBuilder,
+    Decoration, FontCollection, FontFamilies, Paragraph, ParagraphBuilder, ParagraphStyle, TextAlign, TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextStyle
 };
 use crate::FONT_LIBRARY;
 use crate::utils::*;
@@ -36,32 +34,13 @@ pub struct Typesetter{
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
     let mut library = FONT_LIBRARY.lock().unwrap();
-    let (char_style, mut graf_style, text_decoration, baseline, wrap) = state.typography();
+    let (char_style, graf_style, text_decoration, baseline, wrap) = state.typography();
     let typefaces = library.collect_fonts(&char_style);
     let width = width.unwrap_or(GALLEY);
     let text = match wrap{
       true => text.to_string(),
-      false => {
-        graf_style.set_max_lines(1);
-        text.replace("\n", " ")
-      }
+      false => text.replace("\n", " ")
     };
-
-    if wrap {
-      // make sure line-breaks use the current leading
-      let mut strut_style = graf_style.strut_style().clone();
-      let (leading, size) = if char_style.height() < 1.0 {
-        ( strut_style.leading(), char_style.font_size() * char_style.height() )
-      }else{
-        ( char_style.height() - 1.0, char_style.font_size() )
-      };
-      strut_style
-        .set_strut_enabled(true)
-        .set_force_strut_height(true)
-        .set_font_size(size)
-        .set_leading(leading);
-      graf_style.set_strut_style(strut_style);
-    }
 
     Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration}
   }
@@ -181,7 +160,7 @@ impl Typesetter{
 pub struct FontSpec{
   pub families: Vec<String>,
   pub size: f32,
-  pub leading: f32,
+  pub line_height: Option<f32>,
   pub weight: Weight,
   pub width: Width,
   pub slant: Slant,
@@ -209,16 +188,16 @@ pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontS
   let canonical = string_for_key(cx, &font_desc, "canonical")?;
   let variant = string_for_key(cx, &font_desc, "variant")?;
   let size = float_for_key(cx, &font_desc, "size")?;
-  let leading = float_for_key(cx, &font_desc, "lineHeight")?;
-
   let weight = Weight::from(float_for_key(cx, &font_desc, "weight")? as i32);
   let slant = to_slant(string_for_key(cx, &font_desc, "style")?.as_str());
   let width = to_width(string_for_key(cx, &font_desc, "stretch")?.as_str());
+  let line_height = opt_float_for_key(cx, &font_desc, "lineHeight")
+    .map(|pt_size| pt_size / size);
 
   let feat_obj:Handle<JsObject> = font_desc.get(cx, "features")?;
   let features = font_features(cx, &feat_obj)?;
 
-  Ok(Some(FontSpec{ families, size, leading, weight, slant, width, features, variant, canonical}))
+  Ok(Some(FontSpec{ families, size, line_height, weight, slant, width, features, variant, canonical}))
 }
 
 pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
@@ -374,12 +353,17 @@ pub fn from_text_baseline(mode:Baseline) -> String{
 }
 
 pub fn get_baseline_offset(metrics: &FontMetrics, mode:Baseline) -> f32 {
+  // see TextMetrics::GetFontBaseline from Chromium for reference:
+  // https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/html/canvas/text_metrics.cc#L34
+  //
+  // Note that `ascent` is typically a negative value and `descent` positive whereas the calculated baseline-offset
+  // value will push text down for positive values and up for negative ones (thus all the negation happening below…)
   match mode{
     Baseline::Top => -metrics.ascent,
-    Baseline::Hanging => metrics.cap_height,
-    Baseline::Middle => metrics.cap_height / 2.0,
+    Baseline::Hanging => -metrics.ascent * 0.8, // fonts can define this in their metrics but skia doesn't parse it, so use same approximation as Chrome
+    Baseline::Middle => -(metrics.ascent + metrics.descent) / 2.0, // NB: actually *subtracting* descent from ascent but signs confuse matters
     Baseline::Alphabetic => 0.0,
-    Baseline::Ideographic => -metrics.descent,
+    Baseline::Ideographic => -metrics.descent, // accessible via Paragraph::ideographic_baseline (but not currently used)
     Baseline::Bottom => -metrics.descent,
   }
 }

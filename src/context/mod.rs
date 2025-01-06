@@ -10,7 +10,7 @@ use skia_safe::{
   PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture,
   images, image_filters, dash_path_effect, path_1d_path_effect,
   matrix::{ Matrix, TypeMask },
-  textlayout::{ParagraphStyle, TextStyle},
+  textlayout::{ParagraphStyle, TextStyle, StrutStyle},
   canvas::SrcRectConstraint::Strict,
   path_utils::fill_path_with_paint,
   font_style::{FontStyle, Width},
@@ -82,6 +82,7 @@ pub struct State{
   word_spacing: Spacing,
   text_decoration: DecorationStyle,
   text_wrap: bool,
+  line_height: Option<f32>,
 }
 
 impl Default for State {
@@ -130,25 +131,46 @@ impl Default for State {
       letter_spacing: Spacing::default(),
       word_spacing: Spacing::default(),
       text_decoration: DecorationStyle::default(),
-      text_wrap: false
+      text_wrap: false,
+      line_height: None,
     }
   }
 }
 
 impl State{
   pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, Baseline, bool) {
-    (
-      {
-        let mut style = self.char_style.clone();
-        style.set_word_spacing(self.word_spacing.in_px(style.font_size()));
-        style.set_letter_spacing(self.letter_spacing.in_px(style.font_size()));
-        style
-      },
-      self.graf_style.clone(),
-      self.text_decoration.clone(),
-      self.text_baseline,
-      self.text_wrap
-    )
+    let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
+    char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
+    char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));
+
+    let mut graf_style = self.graf_style.clone(); // inherit align & ltr/rtl settings
+    let font_families = char_style.font_families(); // consult proper metrics for height & leading defaults
+
+    if self.text_wrap{
+      let mut strut_style = StrutStyle::new();
+      strut_style
+        .set_font_families(&font_families.iter().collect::<Vec<_>>())
+        .set_font_style(char_style.font_style())
+        .set_font_size(char_style.font_size())
+        .set_force_strut_height(true)
+        .set_strut_enabled(true);
+
+      // if lineHeight is unspecified leave letterspacing at -1 to use font's default spacing,
+      // otherwise adjust strut's height & leading appropriately
+      if let Some(height) = self.line_height{
+        strut_style
+          .set_leading((height - 1.0).max(0.0))
+          .set_height(height.min(1.0))
+          .set_height_override(true);
+      }
+
+      graf_style.set_strut_style(strut_style);
+    }else{
+      graf_style.set_max_lines(Some(1));
+    }
+
+
+    ( char_style, graf_style, self.text_decoration.clone(), self.text_baseline, self.text_wrap )
   }
 
   fn dye(&self, style:PaintStyle) -> &Dye{
@@ -490,6 +512,7 @@ impl Context2D{
       self.state.font_variant = spec.variant.to_string();
       self.state.font_width = spec.width;
       self.state.char_style = new_style;
+      self.state.line_height = spec.line_height;
     }
   }
 
