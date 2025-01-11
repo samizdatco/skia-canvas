@@ -42,9 +42,6 @@ impl Typesetter{
       false => text.replace("\n", " ")
     };
 
-    // add a vertical offset if non-alphabetic textBaseline was selected
-    char_style.set_baseline_shift(get_baseline_offset(&char_style, baseline));
-
     Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration}
   }
 
@@ -79,10 +76,10 @@ impl Typesetter{
   pub fn metrics(&self) -> Vec<Vec<f32>>{
     let (mut paragraph, origin) = self.layout(&Paint::default());
 
-    let offset = get_baseline_offset(&self.char_style, self.baseline);
-    let hang = get_baseline_offset(&self.char_style, Baseline::Hanging) - offset;
-    let norm = get_baseline_offset(&self.char_style, Baseline::Alphabetic) - offset;
-    let ideo = get_baseline_offset(&self.char_style, Baseline::Ideographic) - offset;
+    let shift = self.char_style.baseline_shift();
+    let hang = Baseline::Hanging.get_offset(&self.char_style) - shift;
+    let norm = Baseline::Alphabetic.get_offset(&self.char_style) - shift;
+    let ideo = Baseline::Ideographic.get_offset(&self.char_style) - shift;
 
     let font_metrics = self.char_style.font_metrics();
     let ascent = norm - font_metrics.ascent;
@@ -93,26 +90,21 @@ impl Typesetter{
 
     // shift glyph-path metrics to account for distance between lineHeight and ascender
     let headroom = font_metrics.ascent + paragraph.alphabetic_baseline();
-    let rect_origin = (origin.x, origin.y - headroom + self.char_style.baseline_shift());
+    let rect_origin = Point::new(origin.x, origin.y + shift - headroom);
 
-    // find the bounds and text-range for each individual line (and, separately, the text within it)
+    // find the bounds and text-range for each individual line
     let lines:Vec<(Rect, Range<usize>, f32)> = (0..paragraph.line_number()).filter_map(|i|{
       // measure the glyph bounds
       let (skipped, path) = paragraph.get_path_at(i);
       let text_rect = path.bounds().with_offset(rect_origin);
-      paragraph.get_line_metrics_at(i).map(|line| {
-        // find the character range in the source string for the line's content
-        let range = string_idx_range(&self.text, line.start_index,
-          if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces }
-        );
 
-        (text_rect, range, line.baseline as f32 + origin.y - half_leading)
-      })
+      // find the character range of the line's content in the source string
+      let line = paragraph.get_line_metrics_at(i)?;
+      let line_end = if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces };
+      let range = string_idx_range(&self.text, line.start_index, line_end);
+
+      Some((text_rect, range, line.baseline as f32 + origin.y - half_leading))
     }).collect();
-
-    if paragraph.line_number() == 0 {
-      return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, hang, norm, ideo]]
-    }
 
     // take the union of the glyph rects to find the bounds for the whole text run
     let (bounds, chars) = lines.iter().fold((Rect::new_empty(), 0), |(full_bounds, indices), (rect, range, _)|
@@ -135,7 +127,7 @@ impl Typesetter{
   pub fn path(&mut self) -> SkPath {
     let (mut paragraph, mut offset) = self.layout(&Paint::default());
     let headroom = self.char_style.font_metrics().ascent + paragraph.alphabetic_baseline();
-    offset.y -= headroom - get_baseline_offset(&self.char_style, self.baseline);
+    offset.y -= headroom - self.baseline.get_offset(&self.char_style);
 
     let mut path = SkPath::new();
     for idx in 0..paragraph.line_number(){
@@ -365,19 +357,21 @@ pub fn from_text_baseline(mode:Baseline) -> String{
   }.to_string()
 }
 
-pub fn get_baseline_offset(style:&TextStyle, mode:Baseline) -> f32 {
-  // see TextMetrics::GetFontBaseline from Chromium for reference:
-  // https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/html/canvas/text_metrics.cc#L34
-  //
-  // Note that `ascent` is typically a negative value and `descent` positive whereas the calculated baseline-offset
-  // value will push text down for positive values and up for negative ones (thus all the negation happening below…)
-  let FontMetrics{ascent, descent, ..} = style.clone().set_baseline_shift(0.0).font_metrics();
-  match mode{
-    Baseline::Top => -ascent,
-    Baseline::Hanging => -ascent * 0.8, // fonts can define this in their metrics but skia doesn't parse it, so use same approximation as Chrome
-    Baseline::Middle => -(ascent + descent) / 2.0, // NB: actually *subtracting* descent from ascent but signs confuse matters
-    Baseline::Alphabetic => 0.0,
-    Baseline::Bottom | Baseline::Ideographic => -descent,
+impl Baseline{
+  pub fn get_offset(&self, style:&TextStyle) -> f32 {
+    let FontMetrics{mut ascent, mut descent, ..} = style.font_metrics();
+    ascent -= style.baseline_shift();  // offsets are defined relative to the alphabetic baseline, so
+    descent -= style.baseline_shift(); // compensate for any other textBaseline setting
+
+    // see TextMetrics::GetFontBaseline from Chromium for reference:
+    // https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/html/canvas/text_metrics.cc#L34
+    match self {
+      Baseline::Top => -ascent,
+      Baseline::Hanging => -ascent * 0.8,
+      Baseline::Middle => -(ascent + descent) / 2.0,
+      Baseline::Alphabetic => 0.0,
+      Baseline::Bottom | Baseline::Ideographic => -descent,
+    }
   }
 }
 

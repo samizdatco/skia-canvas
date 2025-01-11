@@ -144,6 +144,7 @@ impl State{
     let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
     char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
     char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));
+    char_style.set_baseline_shift(self.text_baseline.get_offset(&char_style));
 
     let mut graf_style = self.graf_style.clone(); // inherit align & ltr/rtl settings
     let font_families = char_style.font_families(); // consult proper metrics for height & leading defaults
