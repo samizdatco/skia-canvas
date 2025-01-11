@@ -87,7 +87,7 @@ impl Typesetter{
     let descent = font_metrics.descent - norm;
 
     if paragraph.line_number() == 0 {
-      return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, ascent, descent, hang, norm, ideo]]
+      return vec![vec![0.0, 0.0, 0.0, 0.0, 0.0, ascent, descent, hang, norm, ideo]]
     }
 
     // find the bounds and text-range for each individual line
@@ -111,7 +111,7 @@ impl Typesetter{
     // line-rect/range values (with the js side responsible for restructuring the whole bundle)
     let mut results = vec![vec![
       bounds.width(), bounds.left, bounds.right, -bounds.top, bounds.bottom,
-      ascent, descent, ascent, descent, hang, norm, ideo
+      ascent, descent, hang, norm, ideo
     ]];
     line_rects.iter().for_each(|(rect, range, baseline)|{
       results.push(vec![rect.left, rect.top, rect.width(), rect.height(),
