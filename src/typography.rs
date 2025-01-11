@@ -87,38 +87,51 @@ impl Typesetter{
 
     // shift line metrics to correct for additional top-leading provided by strut (if any)
     let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
+    let line_origin = (origin.x, origin.y - half_leading);
 
     // shift glyph-path metrics to account for distance between lineHeight and ascender
     let headroom = font_metrics.ascent + paragraph.alphabetic_baseline();
     let rect_origin = Point::new(origin.x, origin.y + shift - headroom);
 
     // find the bounds and text-range for each individual line
-    let lines:Vec<(Rect, Range<usize>, f32)> = (0..paragraph.line_number()).filter_map(|i|{
+    let lines:Vec<(Rect, Rect, Range<usize>, f32)> = (0..paragraph.line_number()).filter_map(|i|{
       // measure the glyph bounds
       let (skipped, path) = paragraph.get_path_at(i);
-      let text_rect = path.bounds().with_offset(rect_origin);
+      let mut used_rect = path.bounds().with_offset(rect_origin);
+
+      // measure the full line (including ascent & descent whether occupied or not)
+      let line = paragraph.get_line_metrics_at(i)?;
+      let mut line_rect = Rect::new(
+        line.left as f32,
+        (line.baseline - line.ascent) as f32,
+        (line.left + line.width) as f32,
+        (line.baseline + line.descent) as f32
+      ).with_offset(line_origin);
+
+      // use horizontal bounds from line_rect and vertical from used_rect
+      line_rect.top = used_rect.top;
+      line_rect.bottom = used_rect.bottom;
 
       // find the character range of the line's content in the source string
-      let line = paragraph.get_line_metrics_at(i)?;
       let line_end = if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces };
       let range = string_idx_range(&self.text, line.start_index, line_end);
 
-      Some((text_rect, range, line.baseline as f32 + origin.y - half_leading))
+      Some((line_rect, used_rect, range, line.baseline as f32 + origin.y - half_leading))
     }).collect();
 
     // take the union of the glyph rects to find the bounds for the whole text run
-    let (bounds, chars) = lines.iter().fold((Rect::new_empty(), 0), |(full_bounds, indices), (rect, range, _)|
-      (Rect::join2(full_bounds, rect), range.end)
+    let (bounds, chars) = lines.iter().fold((Rect::new_empty(), 0), |(full_bounds, indices), (line_rect, _, range, _)|
+      (Rect::join2(full_bounds, line_rect), range.end)
     );
 
     // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
-    // line-rect/range values (with the js side responsible for restructuring the whole bundle)
+    // per-line used_rect/range values (with the js side responsible for restructuring the whole bundle)
     let mut results = vec![vec![
       -bounds.left, bounds.right, -bounds.top, bounds.bottom,
       ascent, descent, hang, norm, ideo
     ]];
-    lines.iter().for_each(|(rect, range, baseline)|{
-      results.push(vec![rect.left, rect.top, rect.width(), rect.height(),
+    lines.iter().for_each(|(_, used_rect, range, baseline)|{
+      results.push(vec![used_rect.left, used_rect.top, used_rect.width(), used_rect.height(),
                         *baseline, range.start as f32, range.end as f32])
     });
     results
