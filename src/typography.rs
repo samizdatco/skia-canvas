@@ -90,33 +90,23 @@ impl Typesetter{
 
     // shift line metrics to correct for additional top-leading provided by strut (if any)
     let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
-    let line_origin = (origin.x, origin.y - half_leading);
 
-    // shift glyph metrics to account for distance between lineHeight and ascender
+    // shift glyph-path metrics to account for distance between lineHeight and ascender
     let headroom = font_metrics.ascent + paragraph.alphabetic_baseline();
     let rect_origin = (origin.x, origin.y - headroom + self.char_style.baseline_shift());
 
     // find the bounds and text-range for each individual line (and, separately, the text within it)
-    let lines:Vec<(Rect, Rect, Range<usize>, f32)> = (0..paragraph.line_number()).filter_map(|i|{
+    let lines:Vec<(Rect, Range<usize>, f32)> = (0..paragraph.line_number()).filter_map(|i|{
       // measure the glyph bounds
       let (skipped, path) = paragraph.get_path_at(i);
       let text_rect = path.bounds().with_offset(rect_origin);
-
-      // measure the whole line (using the font's ascent/descent metrics for height)
       paragraph.get_line_metrics_at(i).map(|line| {
-        let line_rect = Rect::new(
-          line.left as f32,
-          (line.baseline - line.ascent) as f32,
-          (line.left + line.width) as f32,
-          (line.baseline + line.descent) as f32
-        ).with_offset(line_origin);
-
         // find the character range in the source string for the line's content
         let range = string_idx_range(&self.text, line.start_index,
           if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces }
         );
 
-        (line_rect, text_rect, range, (line.baseline as f32 + line_origin.1))
+        (text_rect, range, line.baseline as f32 + origin.y - half_leading)
       })
     }).collect();
 
@@ -125,8 +115,8 @@ impl Typesetter{
     }
 
     // take the union of the glyph rects to find the bounds for the whole text run
-    let (bounds, chars) = lines.iter().fold((Rect::new_empty(), 0), |(full_bounds, indices), (_, glyphs, range, _)|
-      (Rect::join2(full_bounds, glyphs), range.end)
+    let (bounds, chars) = lines.iter().fold((Rect::new_empty(), 0), |(full_bounds, indices), (rect, range, _)|
+      (Rect::join2(full_bounds, rect), range.end)
     );
 
     // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
@@ -135,8 +125,8 @@ impl Typesetter{
       bounds.width(), -bounds.left, bounds.right, -bounds.top, bounds.bottom,
       ascent, descent, hang, norm, ideo
     ]];
-    lines.iter().for_each(|(_, glyphs, range, baseline)|{
-      results.push(vec![glyphs.left, glyphs.top, glyphs.width(), glyphs.height(),
+    lines.iter().for_each(|(rect, range, baseline)|{
+      results.push(vec![rect.left, rect.top, rect.width(), rect.height(),
                         *baseline, range.start as f32, range.end as f32])
     });
     results
