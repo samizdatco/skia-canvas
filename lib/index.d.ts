@@ -630,6 +630,7 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/canvas) */
   readonly canvas: Canvas
   fontVariant: FontVariantSetting
+  fontHinting: boolean
   textWrap: boolean
   textDecoration: string
   lineDashMarker: Path2D | null

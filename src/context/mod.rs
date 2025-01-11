@@ -75,6 +75,7 @@ pub struct State{
   font_variant: String,
   font_features: Vec<String>,
   font_width: Width,
+  font_hinting: bool,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
   text_baseline: Baseline,
@@ -125,6 +126,7 @@ impl Default for State {
       font_variant: "normal".to_string(),
       font_features:vec![],
       font_width: Width::NORMAL,
+      font_hinting: false,
       char_style,
       graf_style,
       text_baseline: Baseline::Alphabetic,
@@ -147,6 +149,7 @@ impl State{
     let font_families = char_style.font_families(); // consult proper metrics for height & leading defaults
 
     if self.text_wrap{
+      // handle multi-line spacing
       let mut strut_style = StrutStyle::new();
       strut_style
         .set_font_families(&font_families.iter().collect::<Vec<_>>())
@@ -166,9 +169,13 @@ impl State{
 
       graf_style.set_strut_style(strut_style);
     }else{
+      // omit anything that doesn't fit on a single line
       graf_style.set_max_lines(Some(1));
     }
 
+    if !self.font_hinting{
+      graf_style.turn_hinting_off();
+    }
 
     ( char_style, graf_style, self.text_decoration.clone(), self.text_baseline, self.text_wrap )
   }

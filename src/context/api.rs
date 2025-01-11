@@ -1068,6 +1068,20 @@ pub fn set_wordSpacing(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 // -- non-standard typography extensions --------------------------------------------
 
+pub fn get_fontHinting(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow_mut();
+  Ok(cx.boolean(this.state.font_hinting))
+}
+
+pub fn set_fontHinting(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let flag = bool_arg(&mut cx, 1, "fontHinting")?;
+  this.state.font_hinting = flag;
+  Ok(cx.undefined())
+}
+
 pub fn get_fontVariant(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();
