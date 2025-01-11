@@ -122,7 +122,7 @@ impl Typesetter{
     // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
     // line-rect/range values (with the js side responsible for restructuring the whole bundle)
     let mut results = vec![vec![
-      bounds.width(), -bounds.left, bounds.right, -bounds.top, bounds.bottom,
+      -bounds.left, bounds.right, -bounds.top, bounds.bottom,
       ascent, descent, hang, norm, ideo
     ]];
     lines.iter().for_each(|(rect, range, baseline)|{
