@@ -44,5 +44,5 @@ cocoa = { version = "0.26.0", optional = true }
 objc = { version = "0.2.7", optional = true }
 
 # window
-winit = { version = '0.30.7', features = ["serde"], optional = true }
+winit = { version = '0.30.8', features = ["serde"], optional = true }
 spin_sleep = {version = "1.2.1", optional = true }
