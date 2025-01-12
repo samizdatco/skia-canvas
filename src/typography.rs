@@ -93,8 +93,10 @@ impl Typesetter{
     let headroom = font_metrics.ascent + paragraph.alphabetic_baseline();
     let rect_origin = Point::new(origin.x, origin.y + shift - headroom);
 
-    // find the bounds and text-range for each individual line
-    let lines:Vec<(Rect, Rect, Range<usize>, f32)> = (0..paragraph.line_number()).filter_map(|i|{
+    // find the bounds, text-range, and baseline offset for each individual line and
+    // accumulate the whole run's bounds
+    let mut bounds = Rect::new_empty();
+    let lines:Vec<(Rect, Range<usize>, f32)> = (0..paragraph.line_number()).filter_map(|i|{
       // measure the glyph bounds
       let (skipped, path) = paragraph.get_path_at(i);
       let mut used_rect = path.bounds().with_offset(rect_origin);
@@ -112,17 +114,15 @@ impl Typesetter{
       line_rect.top = used_rect.top;
       line_rect.bottom = used_rect.bottom;
 
+      // build up union of line_rects to find the bounds for the whole text run
+      bounds.join_possibly_empty_rect(line_rect);
+
       // find the character range of the line's content in the source string
       let line_end = if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces };
       let range = string_idx_range(&self.text, line.start_index, line_end);
 
-      Some((line_rect, used_rect, range, line.baseline as f32 + origin.y - half_leading))
+      Some((used_rect, range, line.baseline as f32 + origin.y - half_leading))
     }).collect();
-
-    // take the union of the glyph rects to find the bounds for the whole text run
-    let (bounds, chars) = lines.iter().fold((Rect::new_empty(), 0), |(full_bounds, indices), (line_rect, _, range, _)|
-      (Rect::join2(full_bounds, line_rect), range.end)
-    );
 
     // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
     // per-line used_rect/range values (with the js side responsible for restructuring the whole bundle)
@@ -130,10 +130,10 @@ impl Typesetter{
       -bounds.left, bounds.right, -bounds.top, bounds.bottom,
       ascent, descent, hang, norm, ideo
     ]];
-    lines.iter().for_each(|(_, used_rect, range, baseline)|{
+    for (used_rect, range, baseline) in lines{
       results.push(vec![used_rect.left, used_rect.top, used_rect.width(), used_rect.height(),
-                        *baseline, range.start as f32, range.end as f32])
-    });
+                        baseline, range.start as f32, range.end as f32])
+    }
     results
   }
 
