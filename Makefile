@@ -15,10 +15,8 @@ NPM_VERSION = $(shell npm view skia-canvas version)
 OS=$(shell sh -c 'uname -s 2>/dev/null')
 ifeq ($(OS),Darwin)
 	FEATURES = metal,window
-else ifeq ($(OS),Linux)
-	FEATURES = vulkan,window,skia-safe/embed-freetype,skia-safe/freetype-woff2
-else # Windows
-	FEATURES = vulkan,window
+else # Linux & Windows
+	FEATURES = vulkan,window,freetype
 endif
 
 $(NPM):
