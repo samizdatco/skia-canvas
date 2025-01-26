@@ -28,7 +28,7 @@ once_cell = "1.13"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 allsorts = { version = "0.15", features = ["flate2_zlib"], default-features = false}
-skia-safe = { git = "https://github.com/rust-skia/rust-skia", rev = "18cb1fa", features = ["textlayout", "webp", "svg"] }
+skia-safe = { version = "0.81.0", features = ["textlayout", "webp", "svg"] }
 
 # vulkan
 ash = { version = "0.37.3", optional = true }

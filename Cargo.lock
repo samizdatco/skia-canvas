@@ -1708,7 +1708,8 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "skia-bindings"
 version = "0.81.0"
-source = "git+https://github.com/rust-skia/rust-skia?rev=18cb1fa#18cb1fa1a545a9940a69a2edd6c09a836af58412"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0974d1fad6818b1c84390a8cd26b48a4f48f1dfd2658e130fb0db5ebbb50aa1c"
 dependencies = [
  "bindgen",
  "cc",
@@ -1748,7 +1749,8 @@ dependencies = [
 [[package]]
 name = "skia-safe"
 version = "0.81.0"
-source = "git+https://github.com/rust-skia/rust-skia?rev=18cb1fa#18cb1fa1a545a9940a69a2edd6c09a836af58412"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cade7bc92e092138e3b726ce57162b3e0f4f3099c616b32af740a13ca18cb2a"
 dependencies = [
  "base64",
  "bitflags 2.6.0",
@@ -1761,7 +1763,8 @@ dependencies = [
 [[package]]
 name = "skia-svg-macros"
 version = "0.1.0"
-source = "git+https://github.com/rust-skia/rust-skia?rev=18cb1fa#18cb1fa1a545a9940a69a2edd6c09a836af58412"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "044dd2233c9717a74f75197f3e7f0a966db2127c0ffb5e05013b480a9b75b2c7"
 dependencies = [
  "proc-macro2",
  "quote",
