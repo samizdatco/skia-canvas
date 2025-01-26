@@ -173,6 +173,8 @@ describe("Image", () => {
   })
 
   describe("can decode format", () => {
+    const asBuffer = path => fs.readFileSync(path)
+
     const asDataURI = path => {
       let ext = path.split('.').at(-1),
           mime = `image/${ext.replace('jpg', 'jpeg')}`,
@@ -180,59 +182,32 @@ describe("Image", () => {
       return `data:${mime};base64,${content}`
     }
 
-    test("PNG", async () => {
-      img.src = FORMAT + '.png'
-      await img.decode()
-      expect(img).toMatchObject(PARSED)
-      img.src = asDataURI(img.src)
-      expect(img).toMatchObject(PARSED)
-    })
+    async function testFormat(ext){
+      let path = `${FORMAT}.${ext}`
 
-    test("JPEG", async () => {
-      img.src = FORMAT + '.jpg'
+      let img = new Image()
+      img.src = path
       await img.decode()
       expect(img).toMatchObject(PARSED)
-      img.src = asDataURI(img.src)
-      expect(img).toMatchObject(PARSED)
-    })
 
-    test("GIF", async () => {
-      img.src = FORMAT + '.gif'
+      img = new Image()
+      img.src = asDataURI(path)
       await img.decode()
       expect(img).toMatchObject(PARSED)
-      img.src = asDataURI(img.src)
-      expect(img).toMatchObject(PARSED)
-    })
 
-    test("BMP", async () => {
-      img.src = FORMAT + '.bmp'
+      img = new Image()
+      img.src = asBuffer(path)
       await img.decode()
       expect(img).toMatchObject(PARSED)
-      img.src = asDataURI(img.src)
-      expect(img).toMatchObject(PARSED)
-    })
+    }
 
-    test("ICO", async () => {
-      img.src = FORMAT + '.ico'
-      await img.decode()
-      expect(img).toMatchObject(PARSED)
-      img.src = asDataURI(img.src)
-      expect(img).toMatchObject(PARSED)
-    })
-
-    test("WEBP", async () => {
-      img.src = FORMAT + '.webp'
-      await img.decode()
-      expect(img).toMatchObject(PARSED)
-      img.src = asDataURI(img.src)
-      expect(img).toMatchObject(PARSED)
-    })
-
-    test("SVG", async () => {
-      img.src = FORMAT + '.svg'
-      await img.decode()
-      expect(img).toMatchObject(PARSED)
-    })
+    test("PNG", async () => await testFormat("png") )
+    test("JPEG", async () => await testFormat("jpg") )
+    test("GIF", async () => await testFormat("gif") )
+    test("BMP", async () => await testFormat("bmp") )
+    test("ICO", async () => await testFormat("ico") )
+    test("WEBP", async () => await testFormat("webp") )
+    test("SVG", async () => await testFormat("svg") )
   })
 })
 
