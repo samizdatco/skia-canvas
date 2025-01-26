@@ -15,6 +15,7 @@
   - the `actualBoundingBox*` & `lines[].x/y/width/height` rectangles are now just the glyph-occupied area, not whole lineHeight & width of the textblock
   - Fixed the sign on `actualBoundingBoxLeft` (+ values now mean left of origin)
   - lines[].baseline now corresponds to the selected ctx.textBaseline, previously it was always the alphabetic baseline
+- TypeScript type definitions no longer include the entire DOM library (which had been pulling in definitions for tons of non-Canvas-related object types that this library doesn't emulate)
 
 ## 📦 ⟩ [v2.0.1] ⟩ Dec 8, 2024
 
