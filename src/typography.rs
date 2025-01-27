@@ -115,7 +115,10 @@ impl Typesetter{
       line_rect.bottom = used_rect.bottom;
 
       // build up union of line_rects to find the bounds for the whole text run
-      bounds.join_possibly_empty_rect(line_rect);
+      bounds = match bounds.is_empty(){
+        false => Rect::join2(bounds, line_rect),
+        true => line_rect,
+      };
 
       // find the character range of the line's content in the source string
       let line_end = if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces };
