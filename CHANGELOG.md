@@ -1,7 +1,9 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!-- ## 🥚 ⟩ [Unreleased] -->
 
+
+## 🥚 ⟩ [v2.0.2] ⟩ Jan 28, 2025
 ### New Features
 - Added `fontHinting` attribute (off by default to better match font weights in browser rendering). Setting it to `true` may result in crisper edges but adds some weight to the font.
 
@@ -13,9 +15,9 @@
   - Now uses font metrics' default leading when the line-height is left unspecified in the `ctx.font` string (NB: this is likely to cause vertical shifts for non-`alphabetic` baselines)
   - Updated baseline offset calculations for `middle` & `hanging` to better match browsers
   - The `actualBoundingBox*` & `lines[].x/y/width/height` rectangles returned by measureText() are now just the glyph-occupied area, not the whole line-height of the textblock
-  - Fixed the sign on `actualBoundingBoxLeft` (+ values now mean left of origin)
+  - Fixed the sign on `actualBoundingBoxLeft` (positive values now mean *left* of the origin)
   - `lines[].baseline` now corresponds to the selected `ctx.textBaseline`, previously it was always the alphabetic baseline
-- TypeScript type definitions no longer include the entire DOM library (which had been pulling in definitions for tons of non-Canvas-related object types that this library doesn't emulate)
+- TypeScript definitions no longer include the entire DOM library (which had been pulling in tons of non-Canvas-related object types that this library doesn't emulate)
 
 ## 📦 ⟩ [v2.0.1] ⟩ Dec 8, 2024
 
@@ -411,7 +413,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v2.0.1...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v2.0.2...HEAD
+[v2.0.2]: https://github.com/samizdatco/skia-canvas/compare/v2.0.1...v2.0.2
 [v2.0.1]: https://github.com/samizdatco/skia-canvas/compare/v2.0.0...v2.0.1
 [v2.0.0]: https://github.com/samizdatco/skia-canvas/compare/v1.0.2...v2.0.0
 [v1.0.2]: https://github.com/samizdatco/skia-canvas/compare/v1.0.1...v1.0.2
