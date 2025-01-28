@@ -3,7 +3,7 @@
 "use strict"
 
 const _ = require('lodash'),
-      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, loadImage} = require('../lib'),
+      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../lib'),
       css = require('../lib/classes/css');
 
 const BLACK = [0,0,0,255],
@@ -570,7 +570,7 @@ describe("Context2D", ()=>{
       })
     })
 
-    test("roundRect", () => {
+    test("roundRect()", () => {
       let dim = WIDTH/2
       let radii = [50, 25, 15, new DOMPoint(20, 10)]
       ctx.beginPath()
@@ -680,6 +680,26 @@ describe("Context2D", ()=>{
 
       expect(ctx.isPointInPath(path, ...inBoth)).toBe(true)
       expect(ctx.isPointInStroke(path, ...inBoth)).toBe(true)
+    })
+
+    test("letterSpacing", () => {
+        FontLibrary.use(`${__dirname}/assets/Monoton-Regular.woff`)
+
+        let [x, y] = [40, 100]
+        let size = 32
+        ctx.font = `${size}px Monoton`
+        ctx.letterSpacing = '20px'
+        ctx.fillStyle = 'black'
+        ctx.fillText("RR", x, y)
+
+        // there should be no initial added space indenting the beginning of the line
+        expect(ctx.getImageData(x, y-size, 10, size).data.some(a => a)).toBe(true)
+
+        // there should be whitespace between the first and second characters
+        expect(ctx.getImageData(x+28, y-size, 18, size).data.some(a => a)).toBe(false)
+
+        // check whether upstream has fixed the indent bug and our compensation is now outdenting
+        expect(ctx.getImageData(x-20, y-size, 18, size).data.some(a => a)).toBe(false)
     })
 
     test("measureText()", () => {
