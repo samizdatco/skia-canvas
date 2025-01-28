@@ -3,7 +3,7 @@
 <!-- ## 🥚 ⟩ [Unreleased] -->
 
 
-## 🥚 ⟩ [v2.0.2] ⟩ Jan 28, 2025
+## 🥚 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
 - Added `fontHinting` attribute (off by default to better match font weights in browser rendering). Setting it to `true` may result in crisper edges but adds some weight to the font.
 
