@@ -13,7 +13,6 @@ use vulkano::{
     sync::{self, GpuFuture},
     Validated, VulkanError, VulkanLibrary, VulkanObject,
 };
-use super::{VK_FORMATS, to_sk_format};
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
     Color, Matrix,
@@ -23,7 +22,6 @@ use winit::{
     event_loop::ActiveEventLoop,
     window::Window,
 };
-
 use crate::context::page::Page;
 use super::{VK_FORMATS, to_sk_format};
 
