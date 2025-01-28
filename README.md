@@ -211,7 +211,7 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 - [@meihuanyu](https://github.com/meihuanyu) contributed filter & path rendering fixes
 
 ## Copyright
-© 2020–2024 [Samizdat Drafting Co.](https://samizdat.co)
+© 2020–2025 [Samizdat Drafting Co.](https://samizdat.co)
 
 [bool-ops]: https://skia-canvas.org/api/path2d#complement-difference-intersect-union-and-xor
 [c2d_font]: https://skia-canvas.org/api/context#font
