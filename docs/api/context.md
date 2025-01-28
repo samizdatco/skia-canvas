@@ -5,20 +5,18 @@ description: The drawing API for a particular Canvas
 
 > Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
-| Canvas State                           | Drawing                                      | Pattern & Color                                  | Line Style                              | Transform                                         | Bezier Paths                             | Typography                                           | Images                                                       | Compositing & Effects                                    |
-|----------------------------------------|----------------------------------------------|--------------------------------------------------|-----------------------------------------|---------------------------------------------------|------------------------------------------|------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------|
-| [**canvas**][canvas_attr] [🧪][canvas] | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**direction**][direction]                           | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
-| [beginPath()][beginPath()]             | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                   | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]       | [lineTo()][lineTo()]                     | [**font**][font] [🧪][c2d_font]                      | [**imageSmoothingQuality**][imageSmoothingQuality]           | [**globalAlpha**][globalAlpha]                           |
-| [closePath()][closePath()]             | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]   | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontVariant** 🧪][fontvariant]                    | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
-| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[🧪][drawText]     | [createLinearGradient()][createLinearGradient()] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]⧸[🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontStretch**][fontStretch]                       | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
-| [isPointInStroke()][isPointInStroke()] | [strokeText()][strokeText()] ⧸[🧪][drawText] | [createRadialGradient()][createRadialGradient()] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**letterSpacing**][letterSpacing]                   | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
-| [save()][save()]                       | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**wordSpacing**][wordSpacing]                       | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
-| [restore()][restore()]                 | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**textAlign**][textAlign]                           | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
-| [reset()][reset()]                     |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**textBaseline**][textBaseline]                     |                                                              |                                                          |
-| [clip()][clip()]                       |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**textDecoration** 🧪][textDecoration]              |                                                              |                                                          |
-|                                        |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [**textWrap** 🧪][textwrap]                          |                                                              |                                                          |
-|                                        |                                              |                                                  |                                         |                                                   |                                          | [measureText()][measureText()] [🧪][c2d_measuretext] |                                                              |                                                          |
-|                                        |                                              |                                                  |                                         |                                                   |                                          | [outlineText() 🧪][outlineText()]                    |                                                              |                                                          |
+| Canvas State                           | Drawing                                      | Pattern & Color                                  | Line Style                              | Transform                                         | Bezier Paths                             | Font Style                         | Text Layout                                             | Images                                                       | Compositing & Effects                                    |
+|----------------------------------------|----------------------------------------------|--------------------------------------------------|-----------------------------------------|---------------------------------------------------|------------------------------------------|------------------------------------|---------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------|
+| [**canvas**][canvas_attr] [🧪][canvas] | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**font**][font] [🧪][c2d_font]    | [**direction**][direction]                              | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
+| [beginPath()][beginPath()]             | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                   | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]       | [lineTo()][lineTo()]                     | [**fontHinting** 🧪][fonthinting]  | [**textAlign**][textAlign]                              | [**imageSmoothingQuality**][imageSmoothingQuality]           | [**globalAlpha**][globalAlpha]                           |
+| [closePath()][closePath()]             | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]   | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontStretch**][fontStretch]     | [**textBaseline**][textBaseline]                        | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
+| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[🧪][drawText]     | [createLinearGradient()][createLinearGradient()] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]⧸[🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** 🧪][fontvariant]  | [**textDecoration** 🧪][textDecoration]                 | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
+| [isPointInStroke()][isPointInStroke()] | [strokeText()][strokeText()] ⧸[🧪][drawText] | [createRadialGradient()][createRadialGradient()] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**letterSpacing**][letterSpacing] | [**textWrap** 🧪][textwrap]                             | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
+| [save()][save()]                       | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**wordSpacing**][wordSpacing]     | [measureText()][measureText()] [🧪][c2d_measuretext]    | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
+| [restore()][restore()]                 | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           |                                    | [outlineText() 🧪][outlineText()]                       | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
+| [reset()][reset()]                     |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   |                                    |                                                         |                                                              |                                                          |
+| [clip()][clip()]                       |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         |                                    |                                                         |                                                              |                                                          |
+|                                        |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               |                                    |                                                         |                                                              |                                                          |
 
 
 ## Properties
@@ -26,6 +24,17 @@ description: The drawing API for a particular Canvas
 ### `.font`
 
 By default any [`line-height`][lineHeight] value included in a font specification (separated from the font size by a `/`) will be preserved but ignored. If the `textWrap` property is set to `true`, the line-height will control the vertical spacing between lines.
+
+For example:
+```js
+ctx.textWrap = true
+ctx.font = "24px Avenir" // uses the default leading in the font metrics
+ctx.font = "24px/1.5 Avenir" // sets the line height to 1.5 ems
+```
+
+### `.fontHinting`
+
+By default the canvas disables Skia’s [font hinting](https://en.wikipedia.org/wiki/Font_hinting) when rendering text in order to better match the text rendering produced by browsers. To enable hinting, set the context's `.fontHinting` property to `true`. When enabled the results will likely look heavier than the default, but may appear more smoothly antialiased.
 
 ### `.fontVariant`
 
@@ -314,6 +323,230 @@ The `baseline` value is a y-axis offset from the text origin to that particular 
 
 The `startIndex` and `endIndex` values are the indices into the string of the first and last character that were typeset on that line.
 
+
+<details>
+  <summary>
+    Sample Code: TextMetrics
+
+    ![example using measureText to draw bounds of individual lines of text](../assets/measureText@2x.png)
+
+  </summary>
+
+
+```js
+import {Canvas} from 'skia-canvas'
+const canvas = new Canvas(750, 300),
+      ctx = canvas.getContext("2d")
+
+async function metricsDemo(){
+  // try customizing these and seeing what does (or doesn't) change in the graphic
+  let msg = "Twas brillig and the slithy toves did gyre and gimble in the wabe"
+  let [x, y] = [40, 75] // set the location of the text
+  let maxWidth = 680 // set the point at which the text will wrap
+  ctx.font = 'italic 64px/1.4 serif' // try adjusting lineHeight and note dotted lines
+  ctx.textBaseline = 'alphabetic' // the red line will correspond to this selection
+  ctx.textAlign = 'left'
+  ctx.textWrap = true
+
+  // print the font metrics to the console
+  let m = ctx.measureText(msg, maxWidth)
+  console.log(m)
+
+  // set the origin point for the drawing the text to screen
+  ctx.translate(x, y)
+
+  // use the `actualBoundingBox` to draw a white rectangle behind the entire multi-line run
+  let left   = -m.actualBoundingBoxLeft
+  let top    = -m.actualBoundingBoxAscent
+  let right  =  m.actualBoundingBoxRight
+  let bottom =  m.actualBoundingBoxDescent
+  ctx.fillStyle = 'white'
+  ctx.fillRect(left, top, right - left, bottom - top)
+
+  // draw a red circle at the origin point (i.e., the position passed to fillText)
+  ctx.fillStyle = 'red'
+  ctx.beginPath()
+  ctx.ellipse(0, 0, 2.5, 2.5, 0, 0, 2*Math.PI)
+  ctx.fill()
+
+  // step through each object in the `lines` array
+  for (const [i, line] of m.lines.entries()) {
+    // print out the substring that's typeset on this line
+    console.log(`line ${i+1}: "${msg.slice(line.startIndex, line.endIndex)}"`)
+
+    // use the line's rect dimensions to enclose just the area occupied by glyphs
+    ctx.fillStyle = 'rgba(0,204,255, 0.3)'
+    ctx.fillRect(line.x, line.y, line.width, line.height)
+
+    // draw the baseline chosen as `textBaseline` as a red line
+    ctx.fillStyle = 'red'
+    ctx.strokeStyle = 'red'
+    ctx.beginPath()
+    ctx.moveTo(left, line.baseline)
+    ctx.lineTo(right, line.baseline)
+    ctx.stroke()
+
+    // draw dotted lines around the 1em tall text block (i.e., the non-leading portions of the lineHeight)
+    let textTop    = line.baseline + m.alphabeticBaseline - m.fontBoundingBoxAscent
+    let textBottom = line.baseline + m.alphabeticBaseline + m.fontBoundingBoxDescent
+    ctx.beginPath()
+    ctx.setLineDash([2])
+    ctx.strokeStyle = 'rgba(0,50,50, 0.4)'
+    ctx.moveTo(left, textTop)
+    ctx.lineTo(right, textTop)
+    ctx.moveTo(left, textBottom)
+    ctx.lineTo(right, textBottom)
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+
+  // typeset the text itself
+  ctx.fillStyle = 'black'
+  ctx.fillText(msg, 0, 0, maxWidth)
+
+  await canvas.saveAs('out.png', {density:2, matte:'#d9d9d9'})
+}
+
+metricsDemo()
+```
+
+----
+Output:
+```
+TextMetrics {
+  width: 667.3400268554688,
+  actualBoundingBoxLeft: -0,
+  actualBoundingBoxRight: 667.3400268554688,
+  actualBoundingBoxAscent: 43.243751525878906,
+  actualBoundingBoxDescent: 181.38125610351562,
+  fontBoundingBoxAscent: 48,
+  fontBoundingBoxDescent: 16,
+  emHeightAscent: 48,
+  emHeightDescent: 16,
+  hangingBaseline: 38.400001525878906,
+  alphabeticBaseline: 0,
+  ideographicBaseline: -16,
+  lines: [
+    {
+      x: 3.46875,
+      y: -43.243751525878906,
+      width: 662.71875,
+      height: 57.125,
+      baseline: 0.40000152587890625,
+      startIndex: 0,
+      endIndex: 27
+    },
+    {
+      x: 2.40625,
+      y: 46.756248474121094,
+      width: 654.375,
+      height: 57.125,
+      baseline: 90.39999389648438,
+      startIndex: 28,
+      endIndex: 53
+    },
+    {
+      x: 3.03125,
+      y: 136.75625610351562,
+      width: 289.96875,
+      height: 44.625,
+      baseline: 180.39999389648438,
+      startIndex: 54,
+      endIndex: 65
+    }
+  ]
+}
+line 1: "Twas brillig and the slithy"
+line 2: "toves did gyre and gimble"
+line 3: "in the wabe"
+```
+
+</details>
+
+
+<details>
+  <summary>
+    Sample Code: Baselines
+
+    ![example demonstrating text baseline offset calculations](../assets/measureTextBaselines@2x.png)
+
+  </summary>
+
+
+```js
+import {Canvas} from 'skia-canvas'
+const canvas = new Canvas(750, 120),
+      ctx = canvas.getContext("2d")
+
+async function baselinesDemo(){
+  const BASELINES = ["top", "hanging", "middle", "alphabetic", "ideographic", "bottom"]
+  let [x, y] = [20, 60] // set the location of the first column
+  let spacing = 25 // space between columns
+  let padding = 7 // amount to outdent the gray lines for hanging & alphabetical
+  ctx.font = 'italic 30px serif'
+  ctx.textWrap = true
+
+  ctx.translate(x, y)
+
+  for (const baseline of BASELINES){
+    ctx.textBaseline = baseline
+
+    let msg = baseline // single-line example
+
+    // uncomment to try adding an additional line of text:
+    // msg = baseline + "\nbaseline"
+
+    let m = ctx.measureText(msg)
+
+    // use the `actualBoundingBox` to draw a white rectangle behind the text run
+    let left   = -m.actualBoundingBoxLeft
+    let top    = -m.actualBoundingBoxAscent
+    let right  =  m.actualBoundingBoxRight
+    let bottom =  m.actualBoundingBoxDescent
+    ctx.fillStyle = 'white'
+    ctx.fillRect(left, top, right - left, bottom - top)
+
+    for (const line of m.lines){
+      // draw selected `textBaseline` in red
+      ctx.beginPath()
+      ctx.moveTo(left, line.baseline)
+      ctx.lineTo(right, line.baseline)
+      ctx.strokeStyle = 'red'
+      ctx.stroke()
+
+      // draw alphabetic baseline as a solid gray line
+      ctx.beginPath()
+      ctx.moveTo(left-padding, line.baseline - m.alphabeticBaseline)
+      ctx.lineTo(right+padding, line.baseline - m.alphabeticBaseline)
+      ctx.strokeStyle = 'rgba(0,0,0, 0.3)'
+      ctx.stroke()
+
+      // draw hanging baseline as a dotted line
+      ctx.beginPath()
+      ctx.moveTo(left-padding, line.baseline - m.hangingBaseline)
+      ctx.lineTo(right+padding, line.baseline - m.hangingBaseline)
+      ctx.setLineDash([1])
+      ctx.stroke()
+      ctx.setLineDash([])
+
+      // NB: you can also use the m.ideographicBaseline offset
+    }
+
+    // typeset the text itself
+    ctx.fillStyle = 'black'
+    ctx.fillText(msg, 0, 0)
+
+    // move to next column
+    ctx.translate(right - left + spacing, 0)
+  }
+
+  await canvas.saveAs('out.png', {density:2, matte:'#d9d9d9'})
+}
+
+baselinesDemo()
+```
+</details>
+
 ### `outlineText()`
 ```js returns="Path2D"
 outlineText(str, [width])
@@ -348,6 +581,7 @@ for (let i=0; i<8000; i++){
 [drawcanvas]: #drawcanvas
 [drawimage]: #drawimage
 [fontvariant]: #fontvariant
+[fonthinting]: #fonthinting
 [lineDashFit]: #linedashfit
 [lineDashMarker]: #linedashmarker
 [newPage]: canvas.md#newpage
