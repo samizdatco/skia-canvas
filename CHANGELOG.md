@@ -3,18 +3,18 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### New Features
-- Added `fontHinting` attribute (off by default, matching the weights of fonts to browser rendering). Setting it to `true` may result in crisper edges but adds some weight to the font.
+- Added `fontHinting` attribute (off by default to better match font weights in browser rendering). Setting it to `true` may result in crisper edges but adds some weight to the font.
 
 ### Bugfixes
 - Text spacing
   - Setting `letterSpacing` no longer indents text at beginning of line
   - `letterSpacing` now properly handles negative values
-- Improved accuracy of measureText()
-  - Now uses font metrics' default leading when a lineHeight is left unspecified in the `ctx.font` string (NB: this is likely to cause vertical shifts for non-`alphabetic` baselines)
+- Improved accuracy of [`measureText()`][measureText()]
+  - Now uses font metrics' default leading when the line-height is left unspecified in the `ctx.font` string (NB: this is likely to cause vertical shifts for non-`alphabetic` baselines)
   - Updated baseline offset calculations for `middle` & `hanging` to better match browsers
-  - the `actualBoundingBox*` & `lines[].x/y/width/height` rectangles are now just the glyph-occupied area, not whole lineHeight & width of the textblock
+  - The `actualBoundingBox*` & `lines[].x/y/width/height` rectangles returned by measureText() are now just the glyph-occupied area, not the whole line-height of the textblock
   - Fixed the sign on `actualBoundingBoxLeft` (+ values now mean left of origin)
-  - lines[].baseline now corresponds to the selected ctx.textBaseline, previously it was always the alphabetic baseline
+  - `lines[].baseline` now corresponds to the selected `ctx.textBaseline`, previously it was always the alphabetic baseline
 - TypeScript type definitions no longer include the entire DOM library (which had been pulling in definitions for tons of non-Canvas-related object types that this library doesn't emulate)
 
 ## 📦 ⟩ [v2.0.1] ⟩ Dec 8, 2024
