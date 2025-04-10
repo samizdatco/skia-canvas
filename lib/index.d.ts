@@ -249,7 +249,7 @@ declare var DOMMatrix: {
 // Canvas
 //
 
-export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "pdf" | "svg";
+export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "pdf" | "svg" | "raw";
 
 export interface RenderOptions {
   /** Page to export: Defaults to 1 (i.e., first page) */
