@@ -885,6 +885,7 @@ export class Window extends EventEmitter<{
   canvas: Canvas
   visible: boolean
   fullscreen: boolean
+  decorations: boolean
   title: string
   cursor: CursorStyle
   fit: FitStyle
