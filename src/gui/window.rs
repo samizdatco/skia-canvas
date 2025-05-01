@@ -24,6 +24,7 @@ pub struct WindowSpec {
     pub visible: bool,
     pub resizable: bool,
     pub fullscreen: bool,
+    pub decorations: bool,
     pub background: String,
     pub page: u32,
     pub width: f32,
@@ -74,6 +75,7 @@ impl Window {
             .with_fullscreen(if spec.fullscreen{ Some(Fullscreen::Borderless(None)) }else{ None })
             .with_inner_size(size)
             .with_transparent(background.a() < 255)
+            .with_decorations(spec.decorations)
             .with_title(spec.title.clone())
             .with_visible(false)
             .with_resizable(spec.resizable);
@@ -198,6 +200,9 @@ impl Window {
                     true => self.handle.set_fullscreen( Some(Fullscreen::Borderless(None)) ),
                     false => self.handle.set_fullscreen( None )
                 }
+            }
+            CanvasEvent::Decorations(flag) => {
+                self.handle.set_decorations(flag);
             }
             CanvasEvent::WindowResized(size) => {
                 self.resize(size);

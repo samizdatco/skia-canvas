@@ -115,6 +115,10 @@ impl WindowManager {
                 updates.push(CanvasEvent::Visible(spec.visible));
             }
 
+            if spec.decorations != win.spec.decorations {
+                updates.push(CanvasEvent::Decorations(spec.decorations));
+            }
+
             if spec.fullscreen != win.spec.fullscreen {
                 updates.push(CanvasEvent::Fullscreen(spec.fullscreen));
             }

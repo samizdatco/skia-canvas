@@ -5,12 +5,12 @@ description: Display a canvas in a window and handle UI events
 
 > The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and update them in response to user input.
 
-| Dimensions               | Content                          | Interface            | Mode                         | Methods            |
-| --                       | --                               | --                   | --                           | --                 |
-| [**left**][win_layout]   | [**background**][win_background] | [**title**][title]   | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind]  |
-| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor] | [**resizable**][resizable]   | [off()][win_bind]  |
-| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]       | [**fullscreen**][fullscreen] | [close()][close]   |
-| [**height**][win_layout] | [**page**][win_page]             |                      |                              |                    |
+| Dimensions               | Content                          | Interface                      | Mode                         | Methods            |
+| --                       | --                               | --                             | --                           | --                 |
+| [**left**][win_layout]   | [**background**][win_background] | [**title**][title]             | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind]  |
+| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor]           | [**resizable**][resizable]   | [off()][win_bind]  |
+| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]                 | [**fullscreen**][fullscreen] | [close()][close]   |
+| [**height**][win_layout] | [**page**][win_page]             | [**decorations**](decorations) |                              |                              |                    |
 
 ##  Creating new `Window` objects
 
@@ -205,6 +205,10 @@ The current location and size of the window as specified in resolution-independe
 ###  `.title`
 The string that is displayed in the window's title bar.
 
+### `.decorations`
+
+Indicates whether to turn window decorations (including border and title bar) on or off.
+
 ###  `.cursor`
 The icon used for the mouse pointer. By default an arrow cursor is used, but other styles can be selected by setting the property to one of the standard [CSS cursor][mdn_cursor] values.
 
@@ -282,6 +286,7 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 [resizable]: #resizable
 [setup]: #setup
 [title]: #title
+[decorations]: #decorations
 [visible]: #visible
 [win_background]: #background
 [win_bind]: #on--off--once
