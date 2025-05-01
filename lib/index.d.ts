@@ -821,6 +821,7 @@ export type WindowOptions = {
   page?: number
   background?: string
   fullscreen?: boolean
+  decorations?: boolean
   visible?: boolean
   cursor?: CursorStyle
   canvas?: Canvas
