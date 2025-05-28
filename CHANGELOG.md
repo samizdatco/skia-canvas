@@ -1,9 +1,26 @@
 # Changelog
 
-<!-- ## 🥚 ⟩ [Unreleased] -->
+## 🥚 ⟩ [Unreleased]
 
+### New Features
+- The `App` global now has an `eventLoop` property which can be set to:
+  - `"native"` (the default) in which case the Node event loop is suspended while the OS handles displaying GUI windows
+  - `"node"` where the Node event loop maintains control (allowing `setInterval` and `setTimeout` to run) and handles GUI events manually every few milliseconds (though note some of the [caveats][winit_caveats] associated with the Winit feature this uses).
 
-## 🥚 ⟩ [v2.0.2] ⟩ Jan 27, 2025
+### Misc. Improvements
+- [`App.launch()`][App.launch()] now returns a Promise that resolves when the final window is closed, allowing you to schedule code to run before the process would otherwise exit.
+- The `App` global now emits `open` and `close` events when windows are created or closed.
+- `input` event objects now contain an `inputType` property to distinguish between insertion, deletion, and IME composition
+- Mouse events are no longer coalesced down to a single instance per frame (most relevant for `mousemove` events)
+
+### Bugfixes
+- Setting a window's `cursor` property to "none" now hides the cursor
+- Spurious `moved` window events are no longer emitted during resizes
+
+[App.launch()]: /docs/api/app.md#launch
+[winit_caveats]: https://docs.rs/winit/latest/winit/platform/pump_events/trait.EventLoopExtPumpEvents.html#platform-specific
+
+## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
 - Added `fontHinting` attribute (off by default to better match font weights in browser rendering). Setting it to `true` may result in crisper edges but adds some weight to the font.
 
