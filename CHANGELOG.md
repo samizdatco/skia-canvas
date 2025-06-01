@@ -3,13 +3,13 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### New Features
-- The `App` global now has an `eventLoop` property which can be set to:
+- The `App` global now has an [`eventLoop`][app_eventLoop] property which can be set to:
   - `"native"` (the default) in which case the Node event loop is suspended while the OS handles displaying GUI windows
   - `"node"` where the Node event loop maintains control (allowing `setInterval` and `setTimeout` to run) and handles GUI events manually every few milliseconds (though note some of the [caveats][winit_caveats] associated with the Winit feature this uses).
+- [**Window**][window] objects now have a read-only [`closed`][win_closed] property and emit a [`close`][win_close] event when they are closed. Closed windows can later be re-opened by calling the new [`open()`][win_open()] method.
 
 ### Misc. Improvements
 - [`App.launch()`][App.launch()] now returns a Promise that resolves when the final window is closed, allowing you to schedule code to run before the process would otherwise exit.
-- The `App` global now emits `open` and `close` events when windows are created or closed.
 - `input` event objects now contain an `inputType` property to distinguish between insertion, deletion, and IME composition
 - Mouse events are no longer coalesced down to a single instance per frame (most relevant for `mousemove` events)
 
@@ -18,6 +18,10 @@
 - Spurious `moved` window events are no longer emitted during resizes
 
 [App.launch()]: /docs/api/app.md#launch
+[app_eventLoop]: /docs/api/app.md#eventLoop
+[win_close]: /docs/api/window.md#close
+[win_closed]: /docs/api/window.md#closed
+[win_open()]: /docs/api/window.md#open
 [winit_caveats]: https://docs.rs/winit/latest/winit/platform/pump_events/trait.EventLoopExtPumpEvents.html#platform-specific
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
