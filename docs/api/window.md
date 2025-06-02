@@ -222,7 +222,7 @@ When the window is resized, it is likely that it will not perfectly match the as
 When set to `false`, the window will become invisible but will not be permanently ‘closed’. It can be made visible again by setting the property back to `true`.
 
 ###  `.resizable`
-When set to `false`, the window’s size will become fixed and the zoom button in the title bar will be disabled. It can be made user-resizable again by setting the property back to `true`. Note that if the window is set to `fullscreen` its dimensions may still change. If you want to prevent that as well be sure to set up a `keydown` event listener that calls the event’s `preventDefault` on **⌘F** and **Alt-F4** presses so the user can’t switch to fullscreen mode.
+When set to `false`, the window’s size will become fixed and the zoom button in the title bar will be disabled. It can be made user-resizable again by setting the property back to `true`. Note that if the window is set to `fullscreen` its dimensions may still change. If you want to prevent that as well be sure to set up a `keydown` event listener that calls the event’s `preventDefault` on **⌘F** and **Alt-F8** presses so the user can’t switch to fullscreen mode.
 
 ###  `.fullscreen`
 A boolean flag determining whether the window should expand to fill the screen.
