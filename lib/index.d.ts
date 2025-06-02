@@ -894,6 +894,7 @@ type WindowEvents = {
   blur: {}
   focus: {}
   setup: {}
+  close: {}
 }
 
 export class Window extends EventEmitter<{
@@ -920,13 +921,14 @@ export class Window extends EventEmitter<{
   height: number
   page: number
   background: string
+  closed: boolean
 
+  open(): void
   close(): void
 }
 
 export interface App extends EventEmitter<{
-  "open": {type: "open", target: Window},
-  "close": {type: "close", target: Window},
+  "idle": {type: "idle", target: App}
 }>{
   readonly windows: Window[]
   readonly running: boolean
