@@ -59,6 +59,13 @@ interface DOMRect extends DOMRectReadOnly {
   y: number;
 }
 
+interface DOMRectInit {
+  height?: number;
+  width?: number;
+  x?: number;
+  y?: number;
+}
+
 declare var DOMRect: {
   prototype: DOMRect;
   new(x?: number, y?: number, width?: number, height?: number): DOMRect;
