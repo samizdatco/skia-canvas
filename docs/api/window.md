@@ -5,12 +5,12 @@ description: Display a canvas in a window and handle UI events
 
 > The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and update them in response to user input.
 
-| Dimensions               | Content                          | Interface            | Mode                         | Methods            |
-| --                       | --                               | --                   | --                           | --                 |
-| [**left**][win_layout]   | [**background**][win_background] | [**title**][title]   | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind] / [off()][win_bind] |
-| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor] | [**resizable**][resizable]   | [open()][open]     |
-| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]       | [**fullscreen**][fullscreen] | [close()][close]   |
-| [**height**][win_layout] | [**page**][win_page]             |                      | [**closed**][closed]         |                    |
+| Dimensions               | Content                          | Interface                    | Mode                         | Methods            |
+| --                       | --                               | --                           | --                           | --                 |
+| [**left**][win_layout]   | [**background**][win_background] | [**borderless**][borderless] | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind] / [off()][win_bind] |
+| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor]         | [**resizable**][resizable]   | [open()][open]     |
+| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]               | [**fullscreen**][fullscreen] | [close()][close]   |
+| [**height**][win_layout] | [**page**][win_page]             | [**title**][title]           | [**closed**][closed]         |                    |
 
 ##  Creating new `Window` objects
 
@@ -217,6 +217,8 @@ When the window is resized, it is likely that it will not perfectly match the as
   - `contain-x` and `contain-y` extend the `contain` mode to choose which axis to use when fitting the canvas
   - `resize` will modify the window's canvas to match the new window size (you'll probably also want to define an `.on("resize")` handler to update the contents)
 
+###  `.borderless`
+When set to `true`, the window will be drawn without a title bar or other controls (e.g., close buttons, resize handles, rounded corners, etc.). As a result its size and placement can only be set [programmatically][win_layout].
 
 ###  `.visible`
 When set to `false`, the window will become invisible but will not be permanently ‘closed’. It can be made visible again by setting the property back to `true`.
@@ -286,6 +288,7 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 [closed]: #closed
 [open]: #open
 [cursor]: #cursor
+[borderless]: #borderless
 [draw]: #draw
 [fit]: #fit
 [fps]: app.md#fps

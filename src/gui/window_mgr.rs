@@ -85,6 +85,10 @@ impl WindowManager {
                 win.set_resizable(spec.resizable);
             }
 
+            if spec.borderless != win.spec.borderless {
+                win.set_borderless(spec.borderless);
+            }
+
             if spec.cursor != win.spec.cursor {
                 win.set_cursor(&spec.cursor);
             }

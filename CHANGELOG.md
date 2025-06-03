@@ -7,6 +7,7 @@
   - `"native"` (the default) in which case the Node event loop is suspended while the OS handles displaying GUI windows
   - `"node"` where the Node event loop maintains control (allowing `setInterval` and `setTimeout` to run) and handles GUI events manually every few milliseconds (though note some of the [caveats][winit_caveats] associated with the Winit feature this uses).
 - [**Window**][window] objects now have a read-only [`closed`][win_closed] property and emit a [`close`][win_close] event when they are closed. Closed windows can later be re-opened by calling the new [`open()`][win_open()] method.
+- The new [`borderless`][win_borderless] attribute allows **Window** titlebars and borders to be hidden (thanks to @hydroperx #230)
 
 ### Misc. Improvements
 - [`App.launch()`][App.launch()] now returns a Promise that resolves when the final window is closed, allowing you to schedule code to run before the process would otherwise exit (see also the new [`idle`][app_idle] event which fires under the same circumstances).
@@ -23,6 +24,7 @@
 [win_close]: /docs/api/window.md#close
 [win_closed]: /docs/api/window.md#closed
 [win_open()]: /docs/api/window.md#open
+[win_borderless]: /docs/api/window.md#borderless
 [winit_caveats]: https://docs.rs/winit/latest/winit/platform/pump_events/trait.EventLoopExtPumpEvents.html#platform-specific
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025

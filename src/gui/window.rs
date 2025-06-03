@@ -21,6 +21,7 @@ pub struct WindowSpec {
     pub title: String,
     pub visible: bool,
     pub resizable: bool,
+    pub borderless: bool,
     pub fullscreen: bool,
     pub background: String,
     pub page: u32,
@@ -73,7 +74,8 @@ impl Window {
             .with_transparent(background.a() < 255)
             .with_title(spec.title.clone())
             .with_visible(false)
-            .with_resizable(spec.resizable);
+            .with_resizable(spec.resizable)
+            .with_decorations(!spec.borderless);
 
         let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
         let renderer = Renderer::for_window(&event_loop, handle.clone());
@@ -186,6 +188,10 @@ impl Window {
 
     pub fn set_resizable(&mut self, flag:bool){
         self.handle.set_resizable(flag);
+    }
+
+    pub fn set_borderless(&mut self, flag:bool){
+        self.handle.set_decorations(!flag);
     }
 
     pub fn set_title(&mut self, title:&str){
