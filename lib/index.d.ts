@@ -912,6 +912,7 @@ export class Window extends EventEmitter<{
   canvas: Canvas
   visible: boolean
   fullscreen: boolean
+  borderless: boolean
   title: string
   cursor: CursorStyle
   fit: FitStyle
@@ -921,7 +922,7 @@ export class Window extends EventEmitter<{
   height: number
   page: number
   background: string
-  closed: boolean
+  readonly closed: boolean
 
   open(): void
   close(): void
