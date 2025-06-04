@@ -1,198 +1,325 @@
 use neon::prelude::*;
-use std::time::{Duration, Instant};
 use serde_json::Value;
+use std::{
+    sync::{Arc, OnceLock},
+    iter::zip,
+    cell::RefCell,
+    time::{Duration, Instant},
+};
 use winit::{
-    application::ApplicationHandler,
-    event::{ElementState, KeyEvent, StartCause, WindowEvent},
-    event_loop::{ActiveEventLoop, ControlFlow},
+    platform::pump_events::EventLoopExtPumpEvents,
+    platform::run_on_demand::EventLoopExtRunOnDemand,
+    event::{ElementState, KeyEvent, Event, WindowEvent},
+    event_loop::{EventLoop, EventLoopProxy, ActiveEventLoop, ControlFlow},
     keyboard::{PhysicalKey, KeyCode},
-    window::WindowId
 };
 
-use super::event::CanvasEvent;
-use super::window_mgr::WindowManager;
-use super::{add_event, new_proxy};
+use crate::context::{page::Page, BoxedContext2D};
+use super::{
+    event::AppEvent,
+    window_mgr::WindowManager,
+    window::WindowSpec,
+};
 
-pub trait Roundtrip: FnMut(Value, &mut WindowManager) -> NeonResult<()>{}
-impl<T:FnMut(Value, &mut WindowManager) -> NeonResult<()>> Roundtrip for T {}
+thread_local!(
+    static APP: RefCell<App> = RefCell::new(App::default());
+    static EVENT_LOOP: RefCell<EventLoop<AppEvent>> = RefCell::new(EventLoop::with_user_event().build().unwrap());
+    static PROXY: RefCell<EventLoopProxy<AppEvent>> = RefCell::new(EVENT_LOOP.with_borrow(|event_loop|
+        event_loop.create_proxy()
+    ));
+);
 
-pub struct App<F:Roundtrip>{
+static RENDER_CALLBACK: OnceLock<Arc<Root<JsFunction>>> = OnceLock::new();
+
+#[derive(Copy, Clone)]
+pub enum LoopMode{
+    Native, Node
+}
+
+pub struct App{
+    pub mode: LoopMode,
     windows: WindowManager,
     cadence: Cadence,
-    callback: F,
 }
 
-impl<F:Roundtrip> App<F>{
-    pub fn with_callback(callback:F) -> Self{
-        let windows = WindowManager::default();
-        let cadence = Cadence::default();
-        Self{windows, cadence, callback}
-    }
-
-    fn initial_sync(&mut self){
-        let payload = self.windows.get_geometry();
-        let _ = (self.callback)(payload, &mut self.windows);
-    }
-
-    fn roundtrip(&mut self){
-        let payload = self.windows.get_ui_changes();
-        let _ = (self.callback)(payload, &mut self.windows);
-    }
-}
-
-impl<F:Roundtrip> ApplicationHandler<CanvasEvent> for App<F> {
-    fn resumed(&mut self, event_loop:&ActiveEventLoop){
-
-    }
-
-    fn new_events(&mut self, event_loop:&ActiveEventLoop, cause:StartCause) {
-        if cause == StartCause::Init{
-            // on initial pass, do a roundtrip to sync up the Window object's state attrs:
-            // send just the initial window positions then read back all state
-            self.initial_sync();
+impl Default for App{
+    fn default() -> Self {
+        Self{
+            windows: WindowManager::default(),
+            cadence: Cadence::default(),
+            mode: LoopMode::Native,
         }
     }
+}
 
-    fn window_event( &mut self, event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
-        // route UI events to the relevant window
-        self.windows.capture_ui_event(&window_id, &event);
+fn add_event(event: AppEvent){
+    PROXY.with_borrow_mut(|proxy| proxy.send_event(event).ok() );
+}
 
-        // handle window lifecycle events
-        match event {
-            WindowEvent::Destroyed | WindowEvent::CloseRequested => {
-                self.windows.remove(&window_id);
-                if self.windows.is_empty() {
-                    // quit after the last window is closed
-                    event_loop.exit();
+impl App{
+    pub fn register(callback:Root<JsFunction>){
+        RENDER_CALLBACK.get_or_init(|| Arc::new(callback));
+    }
+
+    pub fn set_mode(mode:LoopMode){
+        APP.with_borrow_mut(|app| app.mode = mode );
+    }
+
+    pub fn set_fps(fps:f32){
+        add_event(AppEvent::FrameRate(fps as u64));
+    }
+
+    pub fn open_window(spec:WindowSpec, page:Page){
+        add_event(AppEvent::Open(spec, page));
+    }
+
+    pub fn close_window(token:u32){
+        add_event(AppEvent::Close(token));
+    }
+
+    pub fn quit(){
+        APP.with_borrow_mut(|app| app.windows.remove_all() );
+        add_event(AppEvent::Quit);
+    }
+
+    #[allow(deprecated)]
+    pub fn activate(channel:Channel, deferred:neon::types::Deferred){
+        std::thread::spawn(move || {
+            loop{
+                // schedule a callback on the node event loop
+                let keep_running = channel.send(move |mut cx| {
+
+                    // define closure to relay events to js and receive canvas updates in return
+                    let dispatch = |payload:Value, windows:Option<&mut WindowManager>| -> NeonResult<()>{
+                        App::dispatch_events(&mut cx, payload, windows)
+                    };
+
+                    // run the winit event loop (either once or until all windows are closed depending on mode)
+                    APP.with_borrow_mut(|app| {
+                        EVENT_LOOP.with_borrow_mut(|event_loop|{
+                            match app.mode{
+                                LoopMode::Native => {
+                                    let handler = app.event_handler(dispatch);
+                                    event_loop.set_control_flow(ControlFlow::Wait);
+                                    event_loop.run_on_demand(handler).ok();
+                                    Ok(false) // final window was closed
+                                }
+                                LoopMode::Node => {
+                                    let poll_time = app.cadence.next_wakeup() - Instant::now();
+                                    let handler = app.event_handler(dispatch);
+                                    event_loop.pump_events(Some(poll_time), handler);
+                                    Ok(app.cadence.should_continue() || !app.windows.is_empty())
+                                }
+                            }
+                        })
+                    })
+                }).join();
+
+                match keep_running{
+                    Ok(true) => continue,
+                    _ => break
                 }
             }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                        state: ElementState::Pressed,
-                        repeat: false,
+
+            // resolve the promise
+            deferred.settle_with(&channel, move |mut cx| Ok(cx.undefined()) );
+        });
+    }
+
+    fn dispatch_events(cx:&mut TaskContext, events:Value, window_mgr:Option<&mut WindowManager>) -> NeonResult<()>{
+        // window_mgr is only present if it's time to collect updated canvas contents from js
+        let is_render = window_mgr.is_some();
+
+        // js callback is passed render flag & json-encoded event queue
+        let mut call = match RENDER_CALLBACK.get(){
+            None => return Ok(()),
+            Some(callback)=> callback.to_inner(cx).call_with(cx),
+        };
+        call.arg(cx.boolean(is_render))
+            .arg(cx.string(events.to_string()));
+
+        match window_mgr{
+            None => call.exec(cx)?, // if this is just a UI-event delivery, fire & forget
+
+            Some(window_mgr) => {
+                // for a full roundtrip, first pass events to js
+                let response = call.apply::<JsValue, _>(cx)?
+                    .downcast::<JsArray, _>(cx).or_throw(cx)?
+                    .to_vec(cx)?;
+
+                // then unpack the returned window specs & contexts
+                let specs_json = response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
+                let specs:Vec<WindowSpec> = serde_json::from_str(&specs_json)
+                    .or_else(|err| cx.throw_error(format!("Malformed response from window event handler: {}", err)) )?;
+
+                let contexts = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
+                let pages = contexts.iter().map(|boxed|
+                    boxed.downcast::<BoxedContext2D, _>(cx).ok()
+                        .map(|ctx| ctx.borrow().get_page())
+                );
+
+                // update each window with its new state & content
+                zip(specs, pages)
+                    .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
+                    .for_each(|(spec, page)| window_mgr.update_window(spec, page) );
+            }
+        };
+
+        Ok(())
+    }
+
+    fn event_handler<F>(&mut self, mut dispatch:F) -> impl FnMut(Event<AppEvent>, &ActiveEventLoop) + use<'_, F>
+        where F:FnMut(Value, Option<&mut WindowManager>) -> NeonResult<()>
+    {
+        move |event, event_loop| match event {
+            Event::WindowEvent { event:ref win_event, window_id } => {
+                self.windows.find(&window_id, |win| win.sieve.capture(win_event) );
+
+                match win_event {
+                    WindowEvent::Destroyed | WindowEvent::CloseRequested => {
+                        self.windows.remove(&window_id);
+
+                        // after the last window is closed, either exit (in run_on_demand mode)
+                        // or wait for the window destructor to run (in pump_events mode)
+                        if self.windows.is_empty(){ match self.mode{
+                            LoopMode::Native => event_loop.exit(),
+                            LoopMode::Node => self.cadence.loop_again(),
+                        }}
+                    }
+
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                state: ElementState::Pressed,
+                                repeat: false,
+                                ..
+                            },
                         ..
-                    },
-                ..
-            } => {
-                self.windows.set_fullscreen_state(&window_id, false);
-            }
+                    } => {
+                        self.windows.find(&window_id, |win| win.set_fullscreen(false) );
+                    }
 
-            #[cfg(target_os = "macos")]
-            WindowEvent::Occluded(is_hidden) => {
-                self.windows.send_event(&window_id, CanvasEvent::RedrawingSuspended(is_hidden));
-            }
+                    WindowEvent::Moved(loc) => {
+                        self.windows.find(&window_id, |win| win.did_move(*loc) );
+                    }
 
-            WindowEvent::RedrawRequested => {
-                self.windows.send_event(&window_id, CanvasEvent::RedrawRequested);
-            }
+                    WindowEvent::Resized(size) => {
+                        self.windows.find(&window_id, |win| win.did_resize(*size) );
+                    }
 
-            WindowEvent::Resized(size) => {
-                self.windows.send_event(&window_id, CanvasEvent::WindowResized(size));
-            }
-            _ => {}
-        }
-    }
+                    #[cfg(target_os = "macos")]
+                    WindowEvent::Occluded(is_hidden) => {
+                        self.windows.find(&window_id, |win| win.set_redrawing_suspended(*is_hidden) );
+                    }
 
-    fn user_event(&mut self, event_loop:&ActiveEventLoop, event:CanvasEvent) {
-        match event{
-            CanvasEvent::Open(spec, page) => {
-                self.windows.add(event_loop, new_proxy(), spec, page);
-            }
-            CanvasEvent::Close(token) => {
-                self.windows.remove_by_token(&token);
-            }
-            CanvasEvent::Quit => {
-                event_loop.exit();
-            }
-            CanvasEvent::Render => {
-                // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                self.roundtrip();
-            }
-            CanvasEvent::Transform(window_id, matrix) => {
-                self.windows.use_ui_transform(&window_id, &matrix);
+                    WindowEvent::RedrawRequested => {
+                        self.windows.find(&window_id, |win| win.redraw() );
+                    }
+
+                    _ => {}
+                }
             },
-            CanvasEvent::InFullscreen(window_id, is_fullscreen) => {
-                self.windows.use_fullscreen_state(&window_id, is_fullscreen);
-            }
-            CanvasEvent::FrameRate(fps) => {
-                self.cadence.set_frame_rate(fps)
+
+
+            Event::UserEvent(app_event) => match app_event{
+                AppEvent::Open(spec, page) => {
+                    self.windows.add(event_loop, spec, page);
+                    dispatch(self.windows.get_geometry(), Some(&mut self.windows)).ok();
+                }
+                AppEvent::Close(token) => {
+                    self.windows.remove_by_token(token);
+                }
+                AppEvent::FrameRate(fps) => {
+                    self.cadence.set_frame_rate(fps)
+                }
+                AppEvent::Quit => {
+                    event_loop.exit();
+                }
+            },
+
+
+            Event::AboutToWait => {
+                event_loop.set_control_flow(
+                    // let the cadence decide when to switch to poll-mode or sleep the thread
+                    self.cadence.on_next_frame(self.mode, || {
+                        // relay UI-driven state changes to js and render the next frame in the (active) cadence
+                        dispatch(self.windows.get_ui_changes(), Some(&mut self.windows)).ok();
+                    })
+                );
             }
             _ => {}
         }
     }
-
-    fn about_to_wait(&mut self, event_loop:&ActiveEventLoop) {
-        // when no windows have frame/draw handlers, the (inactive) cadence will never trigger
-        // a Render event, so only do a roundtrip if there are new UI events to be relayed
-        if !self.cadence.active() && self.windows.has_ui_changes() {
-            self.roundtrip();
-        }
-
-        // delegate timing to the cadence if active, otherwise wait for ui events
-        event_loop.set_control_flow(
-            match self.cadence.active(){
-                true => self.cadence.on_next_frame(|| add_event(CanvasEvent::Render) ),
-                false => ControlFlow::Wait
-            }
-        );
-    }
-
 }
 
 
 struct Cadence{
     rate: u64,
     last: Instant,
-    interval: Duration,
-    begun: bool,
+    needs_cleanup: Option<bool>,
 }
 
 impl Default for Cadence {
     fn default() -> Self {
         Self{
-            rate: 0,
+            rate: 60,
             last: Instant::now(),
-            interval: Duration::new(0, 0),
-            begun: false,
+            needs_cleanup: Some(true), // ensure at least one post-Init loop
         }
     }
 }
 
 impl Cadence{
-    fn at_startup(&mut self) -> bool{
-        if self.begun{ false }
-        else{
-            self.begun = true;
-            true // only return true on first call
-        }
+    fn loop_again(&mut self){
+        // flag that a clean-up event-loop pass is necessary (e.g., for reflecting window closures)
+        self.needs_cleanup = Some(true)
+    }
+
+    fn should_continue(&mut self) -> bool{
+        self.needs_cleanup.take().is_some()
     }
 
     fn set_frame_rate(&mut self, rate:u64){
-        if rate == self.rate{ return }
-        let frame_time = 1_000_000_000/rate.max(1);
-        self.interval = Duration::from_nanos(frame_time);
         self.rate = rate;
     }
 
-    fn on_next_frame<F:Fn()>(&mut self, draw:F) -> ControlFlow{
-        match self.active() {
-            true => {
-                if self.last.elapsed() >= self.interval{
-                    while self.last < Instant::now() - self.interval{
-                        self.last += self.interval
-                    }
-                    draw();
-                }
-                ControlFlow::WaitUntil(self.last + self.interval)
-            },
-            false => ControlFlow::Wait,
+    pub fn next_wakeup(&self) -> Instant{
+        let frame_time = 1_000_000_000/self.rate.max(1);
+        let watch_interval = 1_500_000.min(frame_time/10);
+        let wakeup = Duration::from_nanos(frame_time - watch_interval);
+        self.last + wakeup
+    }
+
+    pub fn on_next_frame<F:FnMut()>(&mut self, mode:LoopMode, mut draw:F) -> ControlFlow{
+        // determine the upcoming deadlines for actually rendering and for spinning in preparation
+        let frame_time = 1_000_000_000/self.rate.max(1);
+        let watch_interval = 1_500_000.min(frame_time/10);
+        let render = Duration::from_nanos(frame_time);
+        let wakeup = Duration::from_nanos(frame_time - watch_interval);
+
+        // if node is handling the event loop, we can't use polling to wait for the render
+        // deadline. so instead we'll pause the thread for the last 10% of the inter-frame
+        // time (up to 1.5ms), making sure we can then draw immediately after
+        let dt = self.last.elapsed();
+        if matches!(mode, LoopMode::Node) && dt >= wakeup && dt < render{
+            if let Some(sleep_time) = render.checked_sub(self.last.elapsed()){
+                spin_sleep::sleep(sleep_time);
+            }
+        }
+
+        // call the draw callback if it's time & make sure the next deadline is in the future
+        if self.last.elapsed() >= render{
+            draw();
+            while self.last < Instant::now() - render{
+                self.last += render
+            }
+        }
+
+        // if winit is in control, we can use waiting & polling to hit the deadline
+        match self.last.elapsed() < wakeup {
+            true => ControlFlow::WaitUntil(self.last + wakeup),
+            false => ControlFlow::Poll,
         }
     }
-
-    fn active(&self) -> bool{
-        self.rate > 0
-    }
 }
-

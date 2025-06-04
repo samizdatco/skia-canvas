@@ -5,12 +5,12 @@ description: Display a canvas in a window and handle UI events
 
 > The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and update them in response to user input.
 
-| Dimensions               | Content                          | Interface            | Mode                         | Methods            |
-| --                       | --                               | --                   | --                           | --                 |
-| [**left**][win_layout]   | [**background**][win_background] | [**title**][title]   | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind]  |
-| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor] | [**resizable**][resizable]   | [off()][win_bind]  |
-| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]       | [**fullscreen**][fullscreen] | [close()][close]   |
-| [**height**][win_layout] | [**page**][win_page]             |                      |                              |                    |
+| Dimensions               | Content                          | Interface                    | Mode                         | Methods            |
+| --                       | --                               | --                           | --                           | --                 |
+| [**left**][win_layout]   | [**background**][win_background] | [**borderless**][borderless] | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind] / [off()][win_bind] |
+| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor]         | [**resizable**][resizable]   | [open()][open]     |
+| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]               | [**fullscreen**][fullscreen] | [close()][close]   |
+| [**height**][win_layout] | [**page**][win_page]             | [**title**][title]           | [**closed**][closed]         |                    |
 
 ##  Creating new `Window` objects
 
@@ -193,6 +193,10 @@ This specifies the color of the window's background which is drawn behind your c
 ###  `.canvas`
 The `Canvas` object associated with the window. By default the window will create a canvas with the same size as the window dimensions, but the canvas can also be replaced at any time by assigning a new one to this property.
 
+### `.closed`
+
+A read-only boolean indicating whether the Window has been closed (either programmatically or via its title-bar close button). A closed window can be re-opened by calling its [`open()`][open] method.
+
 ###  `.ctx`
 The rendering context of the window's canvas. This is a shortcut to calling `win.canvas.getContext("2d")`. If the canvas has multiple pages, this will point to the most recent (i.e., the ‘topmost’ page in the stack).
 
@@ -213,12 +217,14 @@ When the window is resized, it is likely that it will not perfectly match the as
   - `contain-x` and `contain-y` extend the `contain` mode to choose which axis to use when fitting the canvas
   - `resize` will modify the window's canvas to match the new window size (you'll probably also want to define an `.on("resize")` handler to update the contents)
 
+###  `.borderless`
+When set to `true`, the window will be drawn without a title bar or other controls (e.g., close buttons, resize handles, rounded corners, etc.). As a result its size and placement can only be set [programmatically][win_layout].
 
 ###  `.visible`
 When set to `false`, the window will become invisible but will not be permanently ‘closed’. It can be made visible again by setting the property back to `true`.
 
 ###  `.resizable`
-When set to `false`, the window’s size will become fixed and the zoom button in the title bar will be disabled. It can be made user-resizable again by setting the property back to `true`. Note that if the window is set to `fullscreen` its dimensions may still change. If you want to prevent that as well be sure to set up a `keydown` event listener that calls the event’s `preventDefault` on **⌘F** and **Alt-F4** presses so the user can’t switch to fullscreen mode.
+When set to `false`, the window’s size will become fixed and the zoom button in the title bar will be disabled. It can be made user-resizable again by setting the property back to `true`. Note that if the window is set to `fullscreen` its dimensions may still change. If you want to prevent that as well be sure to set up a `keydown` event listener that calls the event’s `preventDefault` on **⌘F** and **Alt-F8** presses so the user can’t switch to fullscreen mode.
 
 ###  `.fullscreen`
 A boolean flag determining whether the window should expand to fill the screen.
@@ -228,7 +234,12 @@ A boolean flag determining whether the window should expand to fill the screen.
 ## Methods
 
 ###  `close()`
-Removes the window from the screen permanently. Note that the `Window` object **will** remain valid after it is closed and its `.canvas` can still be used to export images to file, be inserted into other windows, etc.
+
+Removes the window from the screen and prepares it to be garbage collected (once any references to it in your code leave scope). Note that the `Window` object **will** remain valid after it is closed and its `.canvas` can still be used to export images to file, be inserted into other windows, etc. It can also be re-opened by calling [`open()`][open]
+
+### `open()`
+
+After a window has been [`.closed`][closed], it can be re-opened with this method. Calling it on an already open window will have no effect. Likewise, it is unnecessary on newly created windows since they are open by default.
 
 ###  `on()` / `off()` / `once()`
 ```js returns="Window"
@@ -243,13 +254,16 @@ The `Window` object is an [Event Emitter][event_emitter] subclass and supports a
 
 The events emitted by the `Window` object are mostly consistent with browser-based DOM events, but include some non-standard additions (🧪) specific to Skia Canvas:
 
-| Mouse                        | Keyboard                | Window                               | Focus                | Animation          |
-| --                           | --                      | --                                   | --                   | --                 |
-| [mousedown][mousedown]       | [keydown][keydown]      |[fullscreen][fullscreen-event] 🧪  | [blur][blur]         | [setup][setup] 🧪|
-| [mouseup][mouseup]           | [keyup][keyup]          |[move][move-event] 🧪              | [focus][focus]       | [frame][frame] 🧪|
-| [mousemove][mousemove]       | [input][input]          | [resize][resize]                    |                      | [draw][draw] 🧪  |
-| [wheel][wheel]               | [compositionstart][compositionstart] <br/> [compositionupdate][compositionupdate] <br/> [compositionend][compositionend] |
+| Mouse                        | Keyboard                | Window                            | Animation          | Focus                |
+| --                           | --                      | --                                | --                 | --                   |
+| [mousedown][mousedown]       | [keydown][keydown]      | [close][close-event] 🧪           | [setup][setup] 🧪   | [blur][blur]         |
+| [mouseup][mouseup]           | [keyup][keyup]          | [fullscreen][fullscreen-event] 🧪 | [frame][frame] 🧪   | [focus][focus]       |
+| [mousemove][mousemove]       | [input][input]          | [move][move-event] 🧪             | [draw][draw] 🧪     |                      |
+| [wheel][wheel]               | [compositionstart][compositionstart] <br/> [compositionupdate][compositionupdate] <br/> [compositionend][compositionend] | [resize][resize] |
 
+### `close`
+
+Emitted when a window is closed via a user interface click on its close widget or by a programmatic call to the window's [`close()`][close] method.
 
 ### `fullscreen`
 Emitted when the a window switches into or out of full-screen mode. The event object includes a boolean `enabled` property flagging the new state.
@@ -270,7 +284,11 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 
 <!-- references_begin -->
 [close]: #close
+[close-event]: #close-1
+[closed]: #closed
+[open]: #open
 [cursor]: #cursor
+[borderless]: #borderless
 [draw]: #draw
 [fit]: #fit
 [fps]: app.md#fps

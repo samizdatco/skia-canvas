@@ -96,6 +96,9 @@ The method’s return value is a `CanvasRenderingContext2D` object which you can
 ```js returns="Promise<void>"
 saveAs(filename, {page, format, matte, density=1, msaa=4, quality=0.92, outline=false, colorType='rgba'})
 ```
+```js returns="void"
+saveAsSync(filename, {page, format, matte, density=1, msaa=4, quality=0.92, outline=false, colorType='rgba'})
+```
 
 The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
 
@@ -143,12 +146,18 @@ Specifies the color type to use when exporting pixel data in `"raw"` format (for
 ```js returns="Promise<Buffer>"
 toBuffer(format, {page, format, matte, density, msaa, quality, outline, colorType})
 ```
+```js returns="Buffer"
+toBufferSync(format, {page, format, matte, density, msaa, quality, outline, colorType})
+```
 
 Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the [`saveAs`][saveAs] method.
 
 ### `toDataURL()`
 ```js returns="Promise<String>"
 toDataURL(format, {page, format, matte, density, msaa, quality, outline, colorType})
+```
+```js returns="String"
+toDataURLSync(format, {page, format, matte, density, msaa, quality, outline, colorType})
 ```
 
 This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.

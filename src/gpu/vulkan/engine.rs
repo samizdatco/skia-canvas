@@ -1,4 +1,3 @@
-#![allow(unused_imports)]
 use std::{cell::RefCell, sync::{Arc, OnceLock}, time::{Instant, Duration}, ptr};
 use serde_json::{json, Value};
 use vulkano::{
@@ -9,11 +8,13 @@ use vulkano::{
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     Handle, VulkanLibrary, VulkanObject,
 };
-
-use skia_safe::gpu::vk::{BackendContext, GetProcOf};
-use skia_safe::gpu::{direct_contexts, surfaces, Budgeted, DirectContext, SurfaceOrigin};
-use skia_safe::{ColorSpace, ISize, ImageInfo, Surface};
-
+use skia_safe::{
+    gpu::{
+        vk::{BackendContext, GetProcOf},
+        direct_contexts, surfaces, Budgeted, DirectContext, SurfaceOrigin
+    },
+    ColorSpace, ISize, ImageInfo, Surface,
+};
 
 thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );
 static VK_STATUS: OnceLock<Value> = OnceLock::new();

@@ -1,38 +1,29 @@
-use std::thread;
 use serde_json::json;
-use skia_safe::Matrix;
-use crossbeam::channel::{self, Sender};
 use serde_json::{Map, Value};
 use winit::{
     dpi::{LogicalSize, LogicalPosition},
+    event_loop::ActiveEventLoop,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, EventLoopProxy},
     window::WindowId,
 };
 
 use crate::utils::css_to_color;
 use crate::context::page::Page;
-use super::event::{CanvasEvent, Sieve};
 use super::window::{Window, WindowSpec};
-
-struct WindowRef { tx: Sender<CanvasEvent>, id: WindowId, spec: WindowSpec, sieve:Sieve }
 
 #[derive(Default)]
 pub struct WindowManager {
-    windows: Vec<WindowRef>,
+    windows: Vec<Window>,
     last: Option<LogicalPosition<f32>>,
 }
 
 impl WindowManager {
 
-    pub fn add(&mut self, event_loop:&ActiveEventLoop, proxy:EventLoopProxy<CanvasEvent>, mut spec: WindowSpec, page: Page) {
-        let mut window = Window::new(event_loop, proxy, &mut spec, &page);
-        let id = window.handle.id();
-        let (tx, rx) = channel::bounded(50);
-        let mut sieve = Sieve::new(window.handle.scale_factor());
-        if let Some(fit) = window.fitting_matrix().invert(){
-            sieve.use_transform(fit);
-        }
+    pub fn add(&mut self, event_loop:&ActiveEventLoop, spec:WindowSpec, page:Page) {
+        let mut window = Window::new(event_loop, spec, &page);
+
+        // make sure mouse events use canvas-relative coordinates (in case win size doesn't match)
+        window.update_fit();
 
         // cascade the windows based on the position of the most recently opened
         let dpr = window.handle.scale_factor();
@@ -40,146 +31,88 @@ impl WindowManager {
             if let Ok(inset) = window.handle.inner_position().map(|pt| pt.to_logical::<f32>(dpr)){
                 let delta = inset.y - auto_loc.y;
                 let reference = self.last.unwrap_or(auto_loc);
-                let (left, top) = ( spec.left.unwrap_or(reference.x), spec.top.unwrap_or(reference.y) );
+                let (left, top) = ( window.spec.left.unwrap_or(reference.x), window.spec.top.unwrap_or(reference.y) );
 
                 window.handle.set_outer_position(LogicalPosition::new(left, top));
                 window.handle.set_visible(true);
 
-                spec.left = Some(left);
-                spec.top = Some(top);
+                window.spec.left = Some(left);
+                window.spec.top = Some(top);
                 self.last = Some(LogicalPosition::new(left + delta, top + delta));
             }
         }
 
-        // hold a reference to the window on the main thread…
-        self.windows.push( WindowRef{ id, spec, tx, sieve } );
-
-        // …but let the window's event handler & renderer run on a background thread
-        thread::spawn(move || {
-            while let Ok(event) = rx.recv() {
-                let mut queue = vec![event];
-                while !rx.is_empty(){
-                    queue.push(rx.recv().unwrap());
-                }
-
-                let mut needs_redraw = None;
-                queue.drain(..).for_each(|event|{
-                    match event {
-                        CanvasEvent::RedrawRequested => needs_redraw = Some(event),
-                        _ => window.handle_event(event)
-                    }
-                });
-
-                // deduplicate and defer redraw requests until all other events were handled
-                if let Some(event) = needs_redraw {
-                    window.handle_event(event)
-                }
-            }
-        });
-
+        self.windows.push( window );
     }
 
     pub fn remove(&mut self, window_id:&WindowId){
-        self.windows.retain(|win| win.id != *window_id);
+        self.windows.retain(|win| win.id() != *window_id);
     }
 
-    pub fn remove_by_token(&mut self, token:&str){
+    pub fn remove_by_token(&mut self, token:u32){
         self.windows.retain(|win| win.spec.id != token);
     }
 
-    pub fn send_event(&self, window_id:&WindowId, event:CanvasEvent){
-        if let Some(tx) = self.windows.iter().find(|win| win.id == *window_id).map(|win| &win.tx){
-            tx.send(event).ok();
-        }
+    pub fn remove_all(&mut self){
+        self.windows.clear();
     }
-
     pub fn update_window(&mut self, mut spec:WindowSpec, page:Page){
-        let mut updates:Vec<CanvasEvent> = vec![];
-
-        if let Some(mut win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
+        if let Some(win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
             if spec.width != win.spec.width || spec.height != win.spec.height {
-                updates.push(CanvasEvent::Size(LogicalSize::new(spec.width as u32, spec.height as u32)));
+                win.set_size(LogicalSize::new(spec.width as u32, spec.height as u32));
             }
 
             if let (Some(left), Some(top)) = (spec.left, spec.top){
                 if spec.left != win.spec.left || spec.top != win.spec.top {
-                    updates.push(CanvasEvent::Position(LogicalPosition::new(left as i32, top as i32)));
+                    win.set_position(LogicalPosition::new(left as i32, top as i32));
                 }
             }
 
             if spec.title != win.spec.title {
-                updates.push(CanvasEvent::Title(spec.title.clone()));
+                win.set_title(&spec.title);
             }
 
             if spec.visible != win.spec.visible {
-                updates.push(CanvasEvent::Visible(spec.visible));
+                win.set_visible(spec.visible);
             }
 
             if spec.fullscreen != win.spec.fullscreen {
-                updates.push(CanvasEvent::Fullscreen(spec.fullscreen));
+                win.set_fullscreen(spec.fullscreen);
+                win.sieve.go_fullscreen(spec.fullscreen);
             }
 
             if spec.resizable != win.spec.resizable {
-                updates.push(CanvasEvent::Resizable(spec.resizable));
+                win.set_resizable(spec.resizable);
             }
 
-            if spec.cursor != win.spec.cursor || spec.cursor_hidden != win.spec.cursor_hidden {
-                let icon = if spec.cursor_hidden{ None }else{ Some(spec.cursor) };
-                updates.push(CanvasEvent::Cursor(icon));
+            if spec.borderless != win.spec.borderless {
+                win.set_borderless(spec.borderless);
+            }
+
+            if spec.cursor != win.spec.cursor {
+                win.set_cursor(&spec.cursor);
             }
 
             if spec.fit != win.spec.fit {
-                updates.push(CanvasEvent::Fit(spec.fit));
+                win.set_fit(spec.fit);
             }
 
             if spec.background != win.spec.background {
                 if let Some(color) = css_to_color(&spec.background) {
-                    updates.push(CanvasEvent::Background(color));
+                    win.set_background(color);
                 }else{
                     spec.background = win.spec.background.clone();
                 }
             }
 
-            updates.push(CanvasEvent::Page(page));
-
-            updates.drain(..).for_each(|event| {
-                win.tx.send(event).ok();
-            });
+            win.set_page(page);
 
             win.spec = spec;
         }
     }
 
-    pub fn capture_ui_event(&mut self, window_id:&WindowId, event:&WindowEvent){
-        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
-            win.sieve.capture(event);
-        }
-    }
-
-    pub fn use_ui_transform(&mut self, window_id:&WindowId, matrix:&Option<Matrix>){
-        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
-            if let Some(matrix) = matrix {
-                win.sieve.use_transform(*matrix);
-            }
-        }
-    }
-
-    pub fn set_fullscreen_state(&mut self, window_id:&WindowId, is_fullscreen:bool){
-        if let Some(win) = self.windows.iter_mut().find(|win| win.id == *window_id){
-            // tell the window to change state
-            win.tx.send(CanvasEvent::Fullscreen(is_fullscreen)).ok();
-        }
-        // and make sure the change is reflected in local state
-        self.use_fullscreen_state(window_id, is_fullscreen);
-    }
-
-    pub fn use_fullscreen_state(&mut self, window_id:&WindowId, is_fullscreen:bool){
-        if let Some(mut win) = self.windows.iter_mut().find(|win| win.id == *window_id){
-            if win.spec.fullscreen != is_fullscreen{
-                win.sieve.go_fullscreen(is_fullscreen);
-                win.spec.fullscreen = is_fullscreen;
-            }
-        }
+    pub fn find<F>(&mut self, id:&WindowId, f:F) where F:FnMut(&mut Window){
+        self.windows.iter_mut().find(|win| win.id() == *id).map(f);
     }
 
     pub fn has_ui_changes(&self) -> bool {
@@ -190,10 +123,10 @@ impl WindowManager {
         let mut ui = Map::new();
         let mut state = Map::new();
         self.windows.iter_mut().for_each(|win|{
-            if let Some(payload) = win.sieve.serialize(){
-                ui.insert(win.spec.id.clone(), payload);
+            if !win.sieve.is_empty(){
+                ui.insert(win.spec.id.to_string(), win.sieve.collect());
             }
-            state.insert(win.spec.id.clone(), json!(win.spec));
+            state.insert(win.spec.id.to_string(), json!(win.spec));
         });
         json!({ "ui": ui, "state": state })
     }
@@ -201,13 +134,9 @@ impl WindowManager {
     pub fn get_geometry(&mut self) -> Value {
         let mut positions = Map::new();
         self.windows.iter_mut().for_each(|win|{
-            positions.insert(win.spec.id.clone(), json!({"left":win.spec.left, "top":win.spec.top}));
+            positions.insert(win.spec.id.to_string(), json!({"left":win.spec.left, "top":win.spec.top}));
         });
         json!({"geom":positions})
-    }
-
-    pub fn len(&self) -> usize {
-        self.windows.len()
     }
 
     pub fn is_empty(&self) -> bool {

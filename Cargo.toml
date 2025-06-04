@@ -15,9 +15,9 @@ lto = "fat"
 
 [features]
 freetype = ["skia-safe/embed-freetype", "skia-safe/freetype-woff2"]
-metal = ["skia-safe/metal", "dep:metal", "dep:raw-window-handle", "dep:core-graphics-types", "dep:cocoa", "dep:objc"]
+metal = ["skia-safe/metal", "dep:metal", "dep:raw-window-handle", "dep:raw-window-metal", "dep:core-graphics-types", "dep:cocoa", "dep:objc"]
 vulkan = ["skia-safe/vulkan", "winit/rwh_05", "dep:ash", "dep:vulkano"]
-window = ["dep:winit"]
+window = ["dep:winit", "dep:spin_sleep"]
 
 [dependencies]
 neon = "1.0"
@@ -38,9 +38,11 @@ vulkano = { version = "0.34.1", optional = true }
 # metal
 metal = { version = "0.29", optional = true }
 raw-window-handle = { version = "0.6", optional = true }
+raw-window-metal = { version = "1.0.0", optional = true }
 core-graphics-types = { version = "0.1.1", optional = true }
 cocoa = { version = "0.26.0", optional = true }
 objc = { version = "0.2.7", optional = true }
 
 # window
-winit = { version = '0.30.5', features = ["serde"], optional = true }
+winit = { version = '0.30.11', features = ["serde"], optional = true }
+spin_sleep = {version = "1.2.1", optional = true }
