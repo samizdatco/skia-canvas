@@ -157,7 +157,7 @@ describe("Context2D", ()=>{
     })
 
     test('textAlign', () => {
-      let vals = ["start", "end", "left", "center", "right"]
+      let vals = ["start", "end", "left", "center", "right", "justify"]
 
       expect(ctx.textAlign).toBe('start')
       ctx.textAlign = 'invalid'

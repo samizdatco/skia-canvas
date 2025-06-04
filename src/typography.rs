@@ -327,7 +327,7 @@ pub fn to_text_align(mode_name:&str) -> Option<TextAlign>{
     "left" => TextAlign::Left,
     "right" => TextAlign::Right,
     "center" => TextAlign::Center,
-    // "justify" => TextAlign::Justify,
+    "justify" => TextAlign::Justify,
     "start" => TextAlign::Start,
     "end" => TextAlign::End,
     _ => return None
