@@ -13,6 +13,7 @@
 - [`App.launch()`][App.launch()] now returns a Promise that resolves when the final window is closed, allowing you to schedule code to run before the process would otherwise exit (see also the new [`idle`][app_idle] event which fires under the same circumstances).
 - `input` event objects now contain an `inputType` property to distinguish between insertion, deletion, and IME composition
 - Mouse events are no longer coalesced down to a single instance per frame (most relevant for `mousemove` events)
+- Mouse events now include a standard [`buttons`][mdn_buttons] attribute
 
 ### Bugfixes
 - Setting a window's `cursor` property to "none" now hides the cursor
@@ -26,6 +27,7 @@
 [win_open()]: /docs/api/window.md#open
 [win_borderless]: /docs/api/window.md#borderless
 [winit_caveats]: https://docs.rs/winit/latest/winit/platform/pump_events/trait.EventLoopExtPumpEvents.html#platform-specific
+[mdn_buttons]: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
