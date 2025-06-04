@@ -302,7 +302,6 @@ let unwound = orig.unwind()
 [p2d_trim]: #trim
 [p2d_unwind]: #unwind
 [transforms]: context.md#transform--settransform
-[roundRect()]: https://developer.chrome.com/blog/canvas2d/#round-rect
 [nonzero]: https://en.wikipedia.org/wiki/Nonzero-rule
 [evenodd]: https://en.wikipedia.org/wiki/Even–odd_rule
 [SVG_path_commands]: https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d#path_commands
@@ -323,5 +322,6 @@ let unwound = orig.unwind()
 [clip()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clip
 [fill()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fill
 [lineTo()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/lineTo
+[roundRect()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/roundRect
 [stroke()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/stroke
 <!-- references_end -->

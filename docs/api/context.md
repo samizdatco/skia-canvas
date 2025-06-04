@@ -599,8 +599,6 @@ for (let i=0; i<8000; i++){
 [textDecoration]: #textdecoration
 [textwrap]: #textwrap
 [transforms]: #transform--settransform
-[reset()]: https://developer.chrome.com/blog/canvas2d/#context-reset
-[roundRect()]: https://developer.chrome.com/blog/canvas2d/#round-rect
 [p2d_closePath]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
 [css_transform]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform
 [css_transform_fns]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform-function
@@ -661,9 +659,11 @@ for (let i=0; i<8000; i++){
 [putImageData()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/putImageData
 [quadraticCurveTo()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/quadraticCurveTo
 [rect()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rect
+[reset()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/reset
 [resetTransform()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/resetTransform
 [restore()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/restore
 [rotate()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rotate
+[roundRect()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/roundRect
 [save()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/save
 [scale()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/scale
 [setLineDash()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/setLineDash
