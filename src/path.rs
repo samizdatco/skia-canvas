@@ -448,10 +448,7 @@ pub fn bounds(mut cx: FunctionContext) -> JsResult<JsObject> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let this = this.borrow();
 
-  let b = match this.path.tight_bounds(){
-    Some(rect) => rect,
-    None => this.path.compute_tight_bounds()
-  };
+  let b = this.path.compute_tight_bounds();
 
   let js_object: Handle<JsObject> = cx.empty_object();
   let left = cx.number(b.left);
