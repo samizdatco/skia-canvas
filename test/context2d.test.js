@@ -572,7 +572,7 @@ describe("Context2D", ()=>{
 
     test("roundRect()", () => {
       let dim = WIDTH/2
-      let radii = [50, 25, 15, new DOMPoint(20, 10)]
+      let radii = [50, 25, {x:15, y:15}, new DOMPoint(20, 10)]
       ctx.beginPath()
       ctx.roundRect(dim, dim, dim, dim, radii)
       ctx.roundRect(dim, dim, -dim, -dim, radii)
