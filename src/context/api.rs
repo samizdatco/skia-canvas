@@ -247,7 +247,10 @@ pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
     let rrect = RRect::new_rect_radii(rect, &[radii[0], radii[1], radii[2], radii[3]]);
     let direction = if w.signum() == h.signum(){ CW }else{ CCW };
-    this.path.add_rrect(rrect, Some((direction, 0)));
+
+    let matrix = this.state.matrix;
+    let path = Path::rrect(rrect, Some(direction));
+    this.path.add_path(&path.with_transform(&matrix), (0,0), Extend);
   }
 
   Ok(cx.undefined())

@@ -19,6 +19,7 @@
 ### Bugfixes
 - Setting a window's `cursor` property to "none" now hides the cursor
 - Spurious `moved` window events are no longer emitted during resizes
+- [`roundRect()`][roundRect] now reflects context's current transform state and accepts plain `{x, y}` objects for corner-radii in addition to Numbers and DOMPoints (thanks to @mpaperno #223)
 
 [App.launch()]: /docs/api/app.md#launch
 [app_eventLoop]: /docs/api/app.md#eventLoop
@@ -30,6 +31,7 @@
 [winit_caveats]: https://docs.rs/winit/latest/winit/platform/pump_events/trait.EventLoopExtPumpEvents.html#platform-specific
 [mdn_buttons]: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
 [textAlign]: /docs/api/context.md#textalign
+[roundRect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/roundRect
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
