@@ -1866,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "skia-canvas"
-version = "2.0.2"
+version = "2.0.3"
 dependencies = [
  "allsorts",
  "ash",
