@@ -168,7 +168,7 @@ use {
     skia_safe::{Matrix, Color},
     raw_window_metal::Layer,
     core_graphics_types::geometry::CGSize,
-    objc::{msg_send, sel, sel_impl, runtime::{YES, NO, Object}},
+    objc::{msg_send, sel, sel_impl, runtime::{self, Object}},
     winit::{
         dpi::PhysicalSize,
         window::Window,
@@ -212,8 +212,8 @@ impl MetalRenderer{
         let layer = unsafe{
             let mtl_layer = MetalLayer::from_ptr(raw_layer.into_raw().as_ptr().cast());
             let gravity = match msg_send![mtl_layer.as_ptr(), contentsAreFlipped] {
-                YES => kCAGravityBottomLeft,
-                NO => kCAGravityTopLeft,
+                runtime::YES => kCAGravityBottomLeft,
+                _ => kCAGravityTopLeft,
             };
             let _: () = msg_send![mtl_layer.as_ptr(), setContentsGravity: gravity];
             mtl_layer
