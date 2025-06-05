@@ -134,8 +134,10 @@ impl Sieve{
       }
 
       WindowEvent::CursorMoved{position, ..} => {
-        self.mouse_point = *position;
-        self.add_mouse_event("mousemove");
+        if *position != self.mouse_point{
+          self.mouse_point = *position;
+          self.add_mouse_event("mousemove");
+        }
       }
 
       WindowEvent::MouseWheel{delta, ..} => {
