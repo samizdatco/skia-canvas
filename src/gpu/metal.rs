@@ -1,3 +1,4 @@
+#![allow(unexpected_cfgs)]
 use std::cell::RefCell;
 use std::sync::{Arc, OnceLock};
 use std::time::{Instant, Duration};
