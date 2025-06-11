@@ -3,22 +3,25 @@
 const _ = require('lodash'),
       fs = require('fs'),
       path = require('path'),
-      {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib'),
-      simple = require('simple-get')
+      {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
 
-jest.mock('simple-get', () => {
+jest.mock("cross-fetch", () => {
   const fs = require('fs')
   return {
-    concat:function(src, callback){
+    fetch: function(src){
       let path = src.replace(/^https?:\//, process.cwd())
-      try{
-        var [statusCode, data] = [200, fs.readFileSync(path)]
-      }catch(e){
-        var [statusCode, err] = [404, 'HTTP_ERROR_404']
-      }
 
-      setTimeout(() => callback(err, {statusCode}, data) )
-    }
+      try{
+        let buf = new Uint8Array(fs.readFileSync(path)).buffer
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          arrayBuffer:() => Promise.resolve(buf)
+        })
+      }catch(e){
+        return Promise.resolve({ok: false, status: 404})
+      }
+    },
   }
 })
 
@@ -88,7 +91,7 @@ describe("Image", () => {
       img = await loadImage(SVG_PATH)
       expect(img).toMatchObject(PARSED)
 
-      expect(async () => { await loadImage('http://nonesuch') }).rejects.toEqual("HTTP_ERROR_404")
+      expect(loadImage("http://nonesuch")).rejects.toThrow("HTTP error 404")
     })
   })
 
@@ -149,7 +152,7 @@ describe("Image", () => {
 
     test(".onerror callback", done => {
       img.onerror = err => {
-        expect(err).toEqual("HTTP_ERROR_404")
+        expect(err.message).toMatch("HTTP error 404")
         done()
       }
       img.src = 'http://nonesuch'
