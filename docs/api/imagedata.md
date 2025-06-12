@@ -142,18 +142,34 @@ A writeable buffer with the pixel contents of the image presented as an [array o
 ```js returns="Promise<ImageData>"
 loadImageData(src, width)
 loadImageData(src, width, height)
-loadImageData(src, width, height, {colorType='rgba'})
+loadImageData(src, width, height, {colorType='rgba', …requestOptions})
 ```
 
 Similar to the [loadImage()][loadimage] utility, `loadImageData()` will asynchronously fetch a URL or local file path and package it into a usable object for you. In this case, you will need to provide slightly more information about the nature of the data since you will be loading ‘raw’ binary data lacking an internal representation of its dimensions or color type. If the file you are loading is stored in `rgba` format, you need only specify the row-width of the image.
 
-If the data uses a non-standard color type you'll need to fully specify the dimensions and `colorType`:
+If the data uses a non-standard color type you'll need to fully specify the dimensions and include a `colorType`:
 
 
 ```js
 import {loadImageData} from 'skia-canvas'
 
-let id = await loadImageData('https://skia-canvas.org/icon.raw', 64, 64, {colorType:'bgra'})
+let id = await loadImageData('https://skia-canvas.org/icon.raw', 64, 64, {
+  colorType: "bgra"
+})
+```
+
+You can also include any [request options][fetch_opts] supported by [`fetch`][fetch] in the final argument:
+```js
+let id = await loadImageData('https://skia-canvas.org/customized.raw', 64, 64, {
+  colorType: "rgb",
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    additionalInfo: "data-used-by-the-backend"
+  })
+})
 ```
 
 Note that in addition to HTTP URLs you may also call `loadImageData()` using Data URLs. Just make sure you use the mime type `application/octet-stream` in the header:
@@ -169,6 +185,8 @@ await loadImageData('data:application/octet-stream;base64,//8A////AP///...')
 [imgdata_colortype]: #colortype
 [imgdata_bpp]: #bytesperpixel
 [skia_colortype]: https://rust-skia.github.io/doc/skia_safe/enum.ColorType.html
+[fetch]: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
+[fetch_opts]: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit
 [ImageData]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData
 [mdn_ImageData_data]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData/data
 [mdn_ImageData_colorspace]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData/colorSpace

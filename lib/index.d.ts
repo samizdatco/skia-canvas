@@ -117,9 +117,9 @@ declare var DOMRectReadOnly: {
 // Images
 //
 
-export function loadImage(src: string | Buffer): Promise<Image>
+export function loadImage(src: string | Buffer, options?: RequestInit): Promise<Image>
 export function loadImageData(src: string | Buffer, width: number, height?:number): Promise<ImageData>
-export function loadImageData(src: string | Buffer, width: number, height:number, settings?:ImageDataSettings): Promise<ImageData>
+export function loadImageData(src: string | Buffer, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
 
 export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
 export type ColorType = "Alpha8" | "Gray8" | "R8UNorm" | // 1 byte/px

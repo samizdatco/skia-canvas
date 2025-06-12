@@ -149,6 +149,7 @@ Emitted if loading was unsuccessful for any reason. An **Error** object with det
 
 ```js returns="Promise<Image>"
 loadImage(src)
+loadImage(src, requestOptions)
 ```
 
 The `loadImage` utility function is included to avoid the fiddly, callback-heavy verbosity of the normal Image-loading dance. It combines image creation, loading, and decoding and gives you a single call to `await` before making use of an image:
@@ -159,7 +160,33 @@ import {loadImage} from 'skia-canvas'
 let img = await loadImage('https://skia-canvas.org/icon.png')
 ```
 
-Note that you are not limited to web URLs when calling `loadImage`, but can include any of the path, URL, or buffer types listed above for the [**src** property][img_src].
+When loading a URL over HTTP(S) you may also include a second argument containing [request options][fetch_opts] to be used when the library calls [`fetch`][fetch] behind the scenes. This can be useful for accessing resources requiring authentication…
+
+```js
+let img = await loadImage('https://example.com/protected.png', {
+  headers: {"Authorization": 'Bearer <secret-token-value>'}
+})
+```
+
+…or for cases where you must provide additional data for the backend server to use when handling the request:
+
+```js
+let img = await loadImage('https://example.com/customized.svg', {
+  method: 'POST',
+  headers: {
+    "Content-Type": 'application/json'
+  },
+  body: JSON.stringify({
+    additionalInfo: "data-used-by-the-backend"
+  })
+})
+```
+
+:::info[Note]
+Note that you are not limited to web URLs when calling `loadImage`: the `src` argument can be any of the file-path, URL, or buffer types listed above for the [**src** property][img_src].
+:::
+
+
 <!-- references_begin -->
 [loadimage]: #loadimage
 [img_bind]: #on--off--once
@@ -171,6 +198,8 @@ Note that you are not limited to web URLs when calling `loadImage`, but can incl
 [img_decode]: #decode
 [event_emitter]: https://nodejs.org/api/events.html#class-eventemitter
 [Buffer]: https://nodejs.org/api/buffer.html
+[fetch]: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
+[fetch_opts]: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit
 [Promise]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
 [DataURL]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs
 [img_element]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement

@@ -9,6 +9,7 @@
 - [**Window**][window] objects now have a read-only [`closed`][win_closed] property and emit a [`close`][win_close] event when they are closed. Closed windows can later be re-opened by calling the new [`open()`][win_open()] method.
 - The new [`borderless`][win_borderless] attribute allows **Window** titlebars and borders to be hidden (thanks to @hydroperx #230)
 - The [`textAlign`][textAlign] attribute can now be set to `"justify"`
+- The [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] helpers now use `node-fetch` to handle web requests and can accept a [fetch options][fetch_opts] object as the final argument.
 
 ### Misc. Improvements
 - [`App.launch()`][App.launch()] now returns a Promise that resolves when the final window is closed, allowing you to schedule code to run before the process would otherwise exit (see also the new [`idle`][app_idle] event which fires under the same circumstances).
@@ -32,6 +33,8 @@
 [mdn_buttons]: https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
 [textAlign]: /docs/api/context.md#textalign
 [roundRect]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/roundRect
+[loadImageData()]: /docs/api/imagedata.md#loadimagedata
+[fetch_opts]: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
