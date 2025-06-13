@@ -4,7 +4,7 @@ const _ = require('lodash'),
       fs = require('fs'),
       tmp = require('tmp'),
       glob = require('glob').sync,
-      {Canvas, Image} = require('../lib');
+      {Canvas, Image, ImageBitmap} = require('../lib');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -542,4 +542,10 @@ describe("Canvas", ()=>{
     })
   })
 
+  test('transferToImageBitmap', () => {
+    const imageBitmap = canvas.transferToImageBitmap()
+    expect(imageBitmap).toBeInstanceOf(ImageBitmap)
+    expect(imageBitmap.width).toBe(canvas.width)
+    expect(imageBitmap.height).toBe(canvas.height)
+  })
 })
