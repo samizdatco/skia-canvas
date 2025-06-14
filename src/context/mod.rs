@@ -73,7 +73,6 @@ pub struct State{
 
   font: String,
   font_variant: String,
-  font_features: Vec<String>,
   font_width: Width,
   font_hinting: bool,
   char_style: TextStyle,
@@ -124,7 +123,6 @@ impl Default for State {
 
       font: "10px sans-serif".to_string(),
       font_variant: "normal".to_string(),
-      font_features:vec![],
       font_width: Width::NORMAL,
       font_hinting: false,
       char_style,
@@ -555,12 +553,6 @@ impl Context2D{
 
   pub fn outline_text(&self, text:&str, width:Option<f32>) -> Path{
     Typesetter::new(&self.state, text, width).path()
-  }
-
-  pub fn color_with_alpha(&self, src:&Color) -> Color{
-    let mut color:Color4f = (*src).into();
-    color.a *= self.state.global_alpha;
-    color.to_color()
   }
 
   pub fn paint_for_drawing(&mut self, style:PaintStyle) -> Paint{
