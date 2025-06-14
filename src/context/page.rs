@@ -4,8 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
-  image::BitDepth, images, pdf,
   svg::{self, canvas::Flags},
+  image::{BitDepth, CachingHint}, images, pdf,
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document,
   Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, Size,
   IPoint, jpeg_encoder, png_encoder, webp_encoder
@@ -25,10 +25,11 @@ use crate::gpu::RenderingEngine;
 pub struct PageRecorder{
   current: PictureRecorder,
   layers: Vec<Picture>,
-  cache: Option<SkImage>,
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
+  cache: Option<SkImage>,
+  cache_depth: usize,
   changed: bool,
   rev: usize,
   id: usize,
@@ -43,7 +44,7 @@ impl PageRecorder{
     rec.recording_canvas().unwrap().save(); // start at depth 2
 
     PageRecorder{
-      current:rec, layers:vec![], changed:false, cache:None,
+      current:rec, layers:vec![], changed:false, cache:None, cache_depth:0,
       matrix:Matrix::default(), clip:None, bounds, id, rev:0
     }
   }
@@ -92,17 +93,37 @@ impl PageRecorder{
 
   pub fn get_pixels(&mut self, origin: impl Into<IPoint>, dst_info:&ImageInfo, engine:RenderingEngine) -> Result<Vec<u8>, String>{
     let src_info = ImageInfo::new_n32_premul(self.bounds.size().to_floor(), dst_info.color_space());
-    let image = self.get_image().ok_or("Could not render bitmap")?; // use the cached bitmap if available
+    let page = self.get_page();
 
-    engine.with_surface(&src_info, Some(0), |surface|{
-      surface // draw to (potentially gpu-backed) rasterizer
-        .canvas()
-        .draw_image(image, -origin.into(), None);
+    engine.with_surface(&src_info, Some(0), |surface| {
+      let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
 
-      // copy pixels into buffer (and convert to requested color_type)
-      let mut buffer: Vec<u8> = vec![0; dst_info.bytes_per_pixel() * (dst_info.width() * dst_info.height()) as usize];
-      match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
-        true => Ok(buffer),
+      let got_pixels = if self.cache_depth == page.layers.len() && self.cache.is_some() {
+        // use cached image (reading just the pixels in the requested rect)
+        self.cache
+          .as_ref().unwrap()
+          .read_pixels_with_context(
+            &mut surface.direct_context(), &dst_info, &mut dst_buffer,
+            dst_info.min_row_bytes(), origin, CachingHint::Allow
+          )
+      }else{
+        // update the full-canvas cache image using (potentially gpu-backed) rasterizer
+        let canvas = surface.canvas();
+        if let Some(image) = &self.cache{
+          canvas.draw_image(image, (0,0), None);
+        }
+        for pict in page.layers.iter().skip(self.cache_depth){
+          pict.playback(canvas);
+          self.cache_depth += 1;
+        }
+        self.cache = Some(surface.image_snapshot());
+
+        // copy subset of pixels into buffer (and convert to requested color_type)
+        surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), origin)
+      };
+
+      match got_pixels {
+        true => Ok(dst_buffer),
         false => Err(format!("Could get pixels in format: {:?}", dst_info.color_type()))
       }
     })
@@ -116,7 +137,6 @@ impl PageRecorder{
       }
       self.current.begin_recording(self.bounds, None);
       self.changed = false;
-      self.cache = None;
       self.restore();
     }
 
@@ -129,14 +149,15 @@ impl PageRecorder{
   }
 
   pub fn get_image(&mut self) -> Option<SkImage>{
-    let page = self.get_page();
-    if self.cache.is_none(){
-      if let Some(pict) = page.get_picture(None){
-        let size = page.bounds.size().to_floor();
-        self.cache = images::deferred_from_picture(pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()), None);
-      }
-    }
-    self.cache.clone()
+    let size = self.bounds.size().to_floor();
+    self
+      .get_page()
+      .get_picture(None)
+      .and_then(|pict| {
+        images::deferred_from_picture(
+          pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()), None
+        )
+      })
   }
 }
 
@@ -218,7 +239,7 @@ impl Page{
         match format.as_str(){
           "raw" => {
             let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
-            let mut buffer: Vec<u8> = vec![0; dst_info.bytes_per_pixel() * (img_dims.width * img_dims.height) as usize];
+            let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
             match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
               true => Some(buffer),
               false => return Err(format!("Could not encode as {} ({:?})", format, color_type))
