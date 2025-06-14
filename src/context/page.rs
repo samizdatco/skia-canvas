@@ -10,7 +10,7 @@ use skia_safe::{
   Image as SkImage, ImageInfo, EncodedImageFormat, Matrix, Path, Picture, PictureRecorder, Rect, Size,
   IPoint, Surface, jpeg_encoder, png_encoder, webp_encoder
 };
-
+use little_exif::{metadata::Metadata, exif_tag::ExifTag, filetype::FileExtension};
 use crc::{Crc, CRC_32_ISO_HDLC};
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 
@@ -389,6 +389,23 @@ fn encode_bitmap<'a>(surface:&mut Surface, format:EncodedImageFormat, quality:f3
 
       webp_encoder::encode_image(context, &image, &opts).map(|data|{
         let mut img_bytes = data.as_bytes().to_vec();
+
+        // toggle EXIF flag in VP8X chunk
+        img_bytes[20] |= 1 << 3;
+
+        // append EXIF chunk with DPI
+        let dpi = (72.0 * density) as f64;
+        let mut exif = Metadata::new();
+        exif.set_tag( ExifTag::XResolution(vec![dpi.into()]) );
+        exif.set_tag( ExifTag::YResolution(vec![dpi.into()]) );
+        if let Ok(mut exif_bytes) = exif.as_u8_vec(FileExtension::WEBP){
+          img_bytes.append(&mut exif_bytes);
+        }
+
+        // update file-length field in RIFF header
+        let webp_len = ((img_bytes.len() - 8) as u32).to_le_bytes();
+        img_bytes.splice(4..8, webp_len.iter().cloned());
+
         img_bytes
       })
     }

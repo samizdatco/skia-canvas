@@ -934,6 +934,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
+name = "little_exif"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf29e378e34c822eb1ab9b6be287c53741b59fa88e809d5c4489627f19d06b2"
+dependencies = [
+ "crc",
+ "log",
+ "miniz_oxide",
+ "paste",
+ "quick-xml",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1875,6 +1888,7 @@ dependencies = [
  "crc",
  "crossbeam",
  "css-color",
+ "little_exif",
  "metal",
  "neon",
  "objc",
