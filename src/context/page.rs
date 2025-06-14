@@ -83,7 +83,7 @@ impl PageRecorder{
     }
   }
 
-  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, dst_info:&ImageInfo, engine:RenderingEngine) -> Result<Data, String>{
+  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, dst_info:&ImageInfo, engine:RenderingEngine) -> Result<Vec<u8>, String>{
     let src_info = ImageInfo::new_n32_premul(self.bounds.size().to_floor(), dst_info.color_space());
     let image = self.get_image().ok_or("Could not render bitmap")?; // use the cached bitmap if available
 
@@ -95,7 +95,7 @@ impl PageRecorder{
       // copy pixels into buffer (and convert to requested color_type)
       let mut buffer: Vec<u8> = vec![0; dst_info.bytes_per_pixel() * (dst_info.width() * dst_info.height()) as usize];
       match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
-        true => Ok(Data::new_copy(&buffer)),
+        true => Ok(buffer),
         false => Err(format!("Could get pixels in format: {:?}", dst_info.color_type()))
       }
     })

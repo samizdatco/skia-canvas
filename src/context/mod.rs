@@ -491,7 +491,7 @@ impl Context2D{
     self.recorder.lock().unwrap().get_page().get_picture(None)
   }
 
-  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, info:ImageInfo, engine:RenderingEngine) -> Result<Data, String>{
+  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, info:ImageInfo, engine:RenderingEngine) -> Result<Vec<u8>, String>{
     self.recorder.lock().unwrap().get_pixels(origin, &info, engine)
   }
 

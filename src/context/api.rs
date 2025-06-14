@@ -815,7 +815,7 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
 
   let info = ImageInfo::new((width as _, height as _), color_type, AlphaType::Unpremul, color_space);
   let data = this.borrow_mut().get_pixels((x, y), info, engine).or_else(|e| cx.throw_error(format!("get_pixels failed: {}", e)))?;
-  let buffer = JsBuffer::from_slice(&mut cx, data.as_bytes())?;
+  let buffer = JsBuffer::from_slice(&mut cx, &data)?;
 
   Ok(buffer)
 }
