@@ -4,11 +4,10 @@ use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
   image::BitDepth, images, pdf,
-  gpu::DirectContext,
   svg::{self, canvas::Flags},
-  Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Data, Document,
-  Image as SkImage, ImageInfo, EncodedImageFormat, Matrix, Path, Picture, PictureRecorder, Rect, Size,
-  IPoint, Surface, jpeg_encoder, png_encoder, webp_encoder
+  Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document,
+  Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, Size,
+  IPoint, jpeg_encoder, png_encoder, webp_encoder
 };
 use little_exif::{metadata::Metadata, exif_tag::ExifTag, filetype::FileExtension};
 use crc::{Crc, CRC_32_ISO_HDLC};
