@@ -4,10 +4,11 @@ use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
   image::BitDepth, images, pdf,
+  gpu::DirectContext,
   svg::{self, canvas::Flags},
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Data, Document,
   Image as SkImage, ImageInfo, EncodedImageFormat, Matrix, Path, Picture, PictureRecorder, Rect, Size,
-  IPoint,
+  IPoint, Surface, jpeg_encoder, png_encoder, webp_encoder
 };
 
 use crc::{Crc, CRC_32_ISO_HDLC};
@@ -162,7 +163,7 @@ impl Page{
     compositor.finish_recording_as_picture(Some(&self.bounds))
   }
 
-  pub fn encoded_as(&self, options:ExportOptions, engine:RenderingEngine) -> Result<Data, String> {
+  pub fn encoded_as(&self, options:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String> {
     let ExportOptions{ format, quality, density, outline, matte, msaa, color_type } = options;
 
     let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
@@ -194,14 +195,12 @@ impl Page{
             let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
             let mut buffer: Vec<u8> = vec![0; dst_info.bytes_per_pixel() * (img_dims.width * img_dims.height) as usize];
             match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
-              true => Ok(Data::new_copy(&buffer)),
+              true => Ok(buffer),
               false => Err(format!("Could not encode as {} ({:?})", format, color_type))
             }
           }else{
-            surface // generate bitmap in specified format
-              .image_snapshot()
-              .encode(&mut surface.direct_context(), img_format, (quality*100.0) as u32)
-              .map(|data| with_dpi(data, img_format, density))
+            // generate bitmap in specified format
+            encode_bitmap(surface, img_format, quality, density)
               .ok_or(format!("Could not encode as {}", format))
           }
         })
@@ -211,12 +210,12 @@ impl Page{
         let canvas = document.canvas();
         canvas.draw_picture(&picture, None, None);
         document.end_page().close();
-        Ok(Data::new_copy(&pdf_bytes))
+        Ok(pdf_bytes)
       }else if format == "svg"{
         let flags = outline.then_some(Flags::CONVERT_TEXT_TO_PATHS);
         let canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
         canvas.draw_picture(&picture, None, None);
-        Ok(canvas.end())
+        Ok(canvas.end().as_bytes().to_vec())
       }else{
         Err(format!("Unsupported file format {}", format))
       }
@@ -226,7 +225,7 @@ impl Page{
   pub fn write(&self, filename: &str, options:ExportOptions, engine:RenderingEngine) -> Result<(), String> {
     let path = FilePath::new(&filename);
     let data = self.encoded_as(options, engine)?;
-    fs::write(path, data.as_bytes()).map_err(|why|
+    fs::write(path, data).map_err(|why|
       format!("{}: \"{}\"", why, path.display())
     )
   }
@@ -268,14 +267,14 @@ impl PageSequence{
     self.pages.len()
   }
 
-  pub fn as_pdf(&self, options:ExportOptions) -> Result<Data, String>{
+  pub fn as_pdf(&self, options:ExportOptions) -> Result<Vec<u8>, String>{
     let ExportOptions{ quality, density, matte, .. } = options;
     let mut pdf_bytes = Vec::new();
     self.pages
       .iter()
       .try_fold(pdf_document(&mut pdf_bytes, quality, density), |doc, page| page.append_to(doc, matte))
       .map(|doc| doc.close())?;
-    Ok(Data::new_copy(&pdf_bytes))
+    Ok(pdf_bytes)
   }
 
   pub fn write_image(&self, pattern:&str, options:ExportOptions) -> Result<(), String>{
@@ -302,7 +301,7 @@ impl PageSequence{
   pub fn write_pdf(&self, path:&str, options:ExportOptions) -> Result<(), String>{
     let path = FilePath::new(&path);
     match self.as_pdf(options){
-      Ok(document) => fs::write(path, document.as_bytes()).map_err(|why|
+      Ok(document) => fs::write(path, document).map_err(|why|
         format!("{}: \"{}\"", why, path.display())
       ),
       Err(msg) => Err(msg)
@@ -336,33 +335,64 @@ fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Do
   }))
 }
 
-fn with_dpi(data:Data, format:EncodedImageFormat, density:f32) -> Data{
-  if density as u32 == 1 { return data }
+fn encode_bitmap<'a>(surface:&mut Surface, format:EncodedImageFormat, quality:f32, density:f32) -> Option<Vec<u8>>{
+  let quality = ((quality*100.0) as u32).clamp(0, 100);
+  let image = surface.image_snapshot();
+  let context = &mut surface.direct_context();
 
-  let mut bytes = data.as_bytes().to_vec();
-  match format{
+  match format {
     EncodedImageFormat::JPEG => {
-      let [l, r] = (72 * density as u16).to_be_bytes();
-      bytes.splice(13..18, [1, l, r, l, r].iter().cloned());
-      Data::new_copy(&bytes)
-    }
-    EncodedImageFormat::PNG => {
-      let mut digest = CRC32.digest();
-      let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
-      let phys = vec![
-        b'p', b'H', b'Y', b's',
-        a, b, c, d, // x-dpi
-        a, b, c, d, // y-dpi
-        1, // dots per meter
-      ];
-      digest.update(&phys);
+      let opts = jpeg_encoder::Options {
+          quality,
+          ..jpeg_encoder::Options::default()
+      };
 
-      let length = 9u32.to_be_bytes().to_vec();
-      let checksum = digest.finalize().to_be_bytes().to_vec();
-      bytes.splice(33..33, [length, phys, checksum].concat());
-      Data::new_copy(&bytes)
+      jpeg_encoder::encode_image(context, &image, &opts).map(|data|{
+        let mut bytes = data.as_bytes().to_vec();
+        let [l, r] = (72 * density as u16).to_be_bytes();
+        bytes.splice(13..18, [1, l, r, l, r].iter().cloned());
+        bytes
+      })
     }
-    _ => data
+
+    EncodedImageFormat::PNG => {
+      let opts = png_encoder::Options::default();
+
+      png_encoder::encode_image(context, &image, &opts).map(|data|{
+        let mut bytes = data.as_bytes().to_vec();
+        let mut digest = CRC32.digest();
+        let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
+        let phys = vec![
+          b'p', b'H', b'Y', b's',
+          a, b, c, d, // x-dpi
+          a, b, c, d, // y-dpi
+          1, // dots per meter
+        ];
+        digest.update(&phys);
+
+        let length = 9u32.to_be_bytes().to_vec();
+        let checksum = digest.finalize().to_be_bytes().to_vec();
+        bytes.splice(33..33, [length, phys, checksum].concat());
+        bytes
+      })
+    }
+
+    EncodedImageFormat::WEBP => {
+      let mut opts = webp_encoder::Options::default();
+      if quality == 100 {
+          opts.compression = webp_encoder::Compression::Lossless;
+          opts.quality = 75.0;
+      } else {
+          opts.compression = webp_encoder::Compression::Lossy;
+          opts.quality = quality as _;
+      }
+
+      webp_encoder::encode_image(context, &image, &opts).map(|data|{
+        let mut img_bytes = data.as_bytes().to_vec();
+        img_bytes
+      })
+    }
+    _ => None,
   }
 }
 

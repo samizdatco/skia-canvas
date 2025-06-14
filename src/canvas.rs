@@ -107,7 +107,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
 
     deferred.settle_with(&channel, move |mut cx| {
       let data = result.or_else(|err| cx.throw_error(err))?;
-      let buffer = JsBuffer::from_slice(&mut cx, data.as_bytes())?;
+      let buffer = JsBuffer::from_slice(&mut cx, &data)?;
       Ok(buffer)
     });
   });
@@ -130,7 +130,7 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 
   match encoded{
     Ok(data) => {
-      let buffer = JsBuffer::from_slice(&mut cx, data.as_bytes())?;
+      let buffer = JsBuffer::from_slice(&mut cx, &data)?;
       Ok(buffer.upcast::<JsValue>())
     },
     Err(msg) => cx.throw_error(msg)
