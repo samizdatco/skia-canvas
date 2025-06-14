@@ -164,61 +164,127 @@ impl Page{
   }
 
   pub fn encoded_as(&self, options:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String> {
-    let ExportOptions{ format, quality, density, outline, matte, msaa, color_type } = options;
-
-    let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
     if self.bounds.is_empty(){
-      Err("Width and height must be non-zero to generate an image".to_string())
-    }else{
-      let img_dims = self.bounds.size();
-      let img_format = match format.as_str() {
-        "jpg" | "jpeg" => Some(EncodedImageFormat::JPEG),
-        "png"          => Some(EncodedImageFormat::PNG),
-        "webp"         => Some(EncodedImageFormat::WEBP),
-        "raw"          => Some(EncodedImageFormat::BMP), // just use BMP as a flag, don't actually encode
-        _ => None
-      };
+      return Err("Width and height must be non-zero to generate an image".to_string())
+    }
 
-      if let Some(img_format) = img_format{
-        let img_scale = Matrix::scale((density, density));
-        let img_dims = Size::new(img_dims.width * density, img_dims.height * density).to_floor();
-        let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
+    let ExportOptions{ format, quality, density, outline, matte, msaa, color_type } = options;
+    let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
+    let size = self.bounds.size();
 
-        engine.with_surface(&img_info, msaa, |surface|{
-          surface // draw to (potentially gpu-backed) rasterizer
-            .canvas()
-            .set_matrix(&img_scale.into())
-            .draw_picture(&picture, None, None);
+    let img_dims = Size::new(size.width * density, size.height * density).to_floor();
+    let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
+    let img_quality = ((quality*100.0) as u32).clamp(0, 100);
+    let img_scale = Matrix::scale((density, density)).into();
 
-          if format=="raw"{
-            // copy raw pixels to buffer, then copy again to Data (waiting for skia_safe to implement Data.writable_data)
-            let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
-            let mut buffer: Vec<u8> = vec![0; dst_info.bytes_per_pixel() * (img_dims.width * img_dims.height) as usize];
-            match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
-              true => Ok(buffer),
-              false => Err(format!("Could not encode as {} ({:?})", format, color_type))
-            }
-          }else{
-            // generate bitmap in specified format
-            encode_bitmap(surface, img_format, quality, density)
-              .ok_or(format!("Could not encode as {}", format))
-          }
-        })
-      }else if format == "pdf"{
+    match format.as_str(){
+      "pdf" => {
         let mut pdf_bytes = Vec::new();
-        let mut document = pdf_document(&mut pdf_bytes, quality, density).begin_page(img_dims, None);
+        let mut document = pdf_document(&mut pdf_bytes, quality, density).begin_page(size, None);
         let canvas = document.canvas();
         canvas.draw_picture(&picture, None, None);
         document.end_page().close();
         Ok(pdf_bytes)
-      }else if format == "svg"{
+      }
+
+      "svg" => {
         let flags = outline.then_some(Flags::CONVERT_TEXT_TO_PATHS);
-        let canvas = svg::Canvas::new(Rect::from_size(img_dims), flags);
+        let canvas = svg::Canvas::new(Rect::from_size(size), flags);
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end().as_bytes().to_vec())
-      }else{
-        Err(format!("Unsupported file format {}", format))
       }
+
+      // handle bitmap formats using (potentially gpu-backed) rasterizer
+      _ => engine.with_surface(&img_info, msaa, |surface|{
+        surface
+          .canvas()
+          .set_matrix(&img_scale)
+          .draw_picture(&picture, None, None);
+
+        let image = surface.image_snapshot();
+        let context = &mut surface.direct_context();
+
+        match format.as_str(){
+          "raw" => {
+            let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
+            let mut buffer: Vec<u8> = vec![0; dst_info.bytes_per_pixel() * (img_dims.width * img_dims.height) as usize];
+            match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
+              true => Some(buffer),
+              false => return Err(format!("Could not encode as {} ({:?})", format, color_type))
+            }
+          }
+
+          "jpg" | "jpeg" => {
+            let opts = jpeg_encoder::Options {
+                quality: img_quality,
+                ..jpeg_encoder::Options::default()
+            };
+
+            jpeg_encoder::encode_image(context, &image, &opts).map(|data|{
+              let mut bytes = data.as_bytes().to_vec();
+              let [l, r] = (72 * density as u16).to_be_bytes();
+              bytes.splice(13..18, [1, l, r, l, r].iter().cloned());
+              bytes
+            })
+          }
+
+          "png" => {
+            let opts = png_encoder::Options::default();
+
+            png_encoder::encode_image(context, &image, &opts).map(|data|{
+              let mut bytes = data.as_bytes().to_vec();
+              let mut digest = CRC32.digest();
+              let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
+              let phys = vec![
+                b'p', b'H', b'Y', b's',
+                a, b, c, d, // x-dpi
+                a, b, c, d, // y-dpi
+                1, // dots per meter
+              ];
+              digest.update(&phys);
+
+              let length = 9u32.to_be_bytes().to_vec();
+              let checksum = digest.finalize().to_be_bytes().to_vec();
+              bytes.splice(33..33, [length, phys, checksum].concat());
+              bytes
+            })
+          }
+
+          "webp" => {
+            let mut opts = webp_encoder::Options::default();
+            if img_quality == 100 {
+                opts.compression = webp_encoder::Compression::Lossless;
+                opts.quality = 75.0;
+            } else {
+                opts.compression = webp_encoder::Compression::Lossy;
+                opts.quality = quality as _;
+            }
+
+            webp_encoder::encode_image(context, &image, &opts).map(|data|{
+              let mut bytes = data.as_bytes().to_vec();
+
+              // toggle EXIF flag in VP8X chunk
+              bytes[20] |= 1 << 3;
+
+              // append EXIF chunk with DPI
+              let dpi = (72.0 * density) as f64;
+              let mut exif = Metadata::new();
+              exif.set_tag( ExifTag::XResolution(vec![dpi.into()]) );
+              exif.set_tag( ExifTag::YResolution(vec![dpi.into()]) );
+              if let Ok(mut exif_bytes) = exif.as_u8_vec(FileExtension::WEBP){
+                bytes.append(&mut exif_bytes);
+              }
+
+              // update file-length field in RIFF header
+              let file_size = ((bytes.len() - 8) as u32).to_le_bytes();
+              bytes.splice(4..8, file_size.iter().cloned());
+
+              bytes
+            })
+          }
+          _ => return Err(format!("Unsupported file format {}", format))
+        }.ok_or(format!("Could not encode as {}", format))
+      })
     }
   }
 
@@ -328,89 +394,11 @@ pub fn pages_arg(cx: &mut FunctionContext, idx:usize, canvas:&BoxedCanvas) -> Ne
 
 fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Document{
   pdf::new_document(buffer, Some(&pdf::Metadata {
-    producer: "Skia Canvas <https://github.com/samizdatco/skia-canvas>".to_string(),
+    producer: "Skia Canvas <https://skia-canvas.org>".to_string(),
     encoding_quality: Some((quality*100.0) as i32),
     raster_dpi: Some(density * 72.0),
     ..Default::default()
   }))
-}
-
-fn encode_bitmap<'a>(surface:&mut Surface, format:EncodedImageFormat, quality:f32, density:f32) -> Option<Vec<u8>>{
-  let quality = ((quality*100.0) as u32).clamp(0, 100);
-  let image = surface.image_snapshot();
-  let context = &mut surface.direct_context();
-
-  match format {
-    EncodedImageFormat::JPEG => {
-      let opts = jpeg_encoder::Options {
-          quality,
-          ..jpeg_encoder::Options::default()
-      };
-
-      jpeg_encoder::encode_image(context, &image, &opts).map(|data|{
-        let mut bytes = data.as_bytes().to_vec();
-        let [l, r] = (72 * density as u16).to_be_bytes();
-        bytes.splice(13..18, [1, l, r, l, r].iter().cloned());
-        bytes
-      })
-    }
-
-    EncodedImageFormat::PNG => {
-      let opts = png_encoder::Options::default();
-
-      png_encoder::encode_image(context, &image, &opts).map(|data|{
-        let mut bytes = data.as_bytes().to_vec();
-        let mut digest = CRC32.digest();
-        let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
-        let phys = vec![
-          b'p', b'H', b'Y', b's',
-          a, b, c, d, // x-dpi
-          a, b, c, d, // y-dpi
-          1, // dots per meter
-        ];
-        digest.update(&phys);
-
-        let length = 9u32.to_be_bytes().to_vec();
-        let checksum = digest.finalize().to_be_bytes().to_vec();
-        bytes.splice(33..33, [length, phys, checksum].concat());
-        bytes
-      })
-    }
-
-    EncodedImageFormat::WEBP => {
-      let mut opts = webp_encoder::Options::default();
-      if quality == 100 {
-          opts.compression = webp_encoder::Compression::Lossless;
-          opts.quality = 75.0;
-      } else {
-          opts.compression = webp_encoder::Compression::Lossy;
-          opts.quality = quality as _;
-      }
-
-      webp_encoder::encode_image(context, &image, &opts).map(|data|{
-        let mut img_bytes = data.as_bytes().to_vec();
-
-        // toggle EXIF flag in VP8X chunk
-        img_bytes[20] |= 1 << 3;
-
-        // append EXIF chunk with DPI
-        let dpi = (72.0 * density) as f64;
-        let mut exif = Metadata::new();
-        exif.set_tag( ExifTag::XResolution(vec![dpi.into()]) );
-        exif.set_tag( ExifTag::YResolution(vec![dpi.into()]) );
-        if let Ok(mut exif_bytes) = exif.as_u8_vec(FileExtension::WEBP){
-          img_bytes.append(&mut exif_bytes);
-        }
-
-        // update file-length field in RIFF header
-        let webp_len = ((img_bytes.len() - 8) as u32).to_le_bytes();
-        img_bytes.splice(4..8, webp_len.iter().cloned());
-
-        img_bytes
-      })
-    }
-    _ => None,
-  }
 }
 
 #[derive(Clone)]
