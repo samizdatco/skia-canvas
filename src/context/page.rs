@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path as FilePath;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
@@ -30,14 +31,21 @@ pub struct PageRecorder{
   clip: Option<Path>,
   changed: bool,
   rev: usize,
+  id: usize,
 }
 
 impl PageRecorder{
   pub fn new(bounds:Rect) -> Self {
+    static COUNTER:AtomicUsize = AtomicUsize::new(1);
+    let id = COUNTER.fetch_add(1, Ordering::Relaxed);
     let mut rec = PictureRecorder::new();
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
-    PageRecorder{ current:rec, changed:false, layers:vec![], cache:None, matrix:Matrix::default(), clip:None, bounds, rev:0 }
+
+    PageRecorder{
+      current:rec, layers:vec![], changed:false, cache:None,
+      matrix:Matrix::default(), clip:None, bounds, id, rev:0
+    }
   }
 
   pub fn append<F>(&mut self, f:F)
@@ -116,6 +124,7 @@ impl PageRecorder{
       layers: self.layers.clone(),
       bounds: self.bounds,
       rev: self.rev,
+      id: self.id,
     }
   }
 
@@ -137,14 +146,17 @@ impl PageRecorder{
 
 #[derive(Debug, Clone)]
 pub struct Page{
-  pub layers: Vec<Picture>,
+  pub id: usize,
+  pub rev: usize,
   pub bounds: Rect,
-  pub rev: usize
+  pub layers: Vec<Picture>,
 }
 
 impl PartialEq for Page {
   fn eq(&self, other: &Self) -> bool {
-      self.rev == other.rev && self.layers.len() == other.layers.len()
+      self.id == other.id &&
+      self.rev == other.rev &&
+      self.layers.len() == other.layers.len()
   }
 }
 
