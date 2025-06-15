@@ -98,28 +98,30 @@ impl PageRecorder{
     engine.with_surface(&src_info, Some(0), |surface| {
       let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
 
-      let got_pixels = if self.cache_depth == page.layers.len() && self.cache.is_some() {
-        // use cached image (reading just the pixels in the requested rect)
-        self.cache
-          .as_ref().unwrap()
-          .read_pixels_with_context(
-            &mut surface.direct_context(), &dst_info, &mut dst_buffer,
-            dst_info.min_row_bytes(), origin, CachingHint::Allow
-          )
-      }else{
-        // update the full-canvas cache image using (potentially gpu-backed) rasterizer
-        let canvas = surface.canvas();
-        if let Some(image) = &self.cache{
-          canvas.draw_image(image, (0,0), None);
-        }
-        for pict in page.layers.iter().skip(self.cache_depth){
-          pict.playback(canvas);
-          self.cache_depth += 1;
-        }
-        self.cache = Some(surface.image_snapshot());
+      let got_pixels = {
+        if self.cache.is_some() && self.cache_depth == page.layers.len() {
+          // use cached image (reading just the pixels in the requested rect)
+          self.cache
+            .as_ref().unwrap()
+            .read_pixels_with_context(
+              &mut surface.direct_context(), &dst_info, &mut dst_buffer,
+              dst_info.min_row_bytes(), origin, CachingHint::Allow
+            )
+        }else{
+          // update the full-canvas cache image using (potentially gpu-backed) rasterizer
+          let canvas = surface.canvas();
+          if let Some(image) = &self.cache{
+            canvas.draw_image(image, (0,0), None);
+          }
+          for pict in page.layers.iter().skip(self.cache_depth){
+            pict.playback(canvas);
+            self.cache_depth += 1;
+          }
+          self.cache = Some(surface.image_snapshot());
 
-        // copy subset of pixels into buffer (and convert to requested color_type)
-        surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), origin)
+          // copy subset of pixels into buffer (and convert to requested color_type)
+          surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), origin)
+        }
       };
 
       match got_pixels {
