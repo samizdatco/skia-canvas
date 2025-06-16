@@ -260,7 +260,7 @@ impl MetalRenderer{
             // draw newly added vector layers
             canvas.scale((dpr, dpr))
                 .clip_rect(clip, None, Some(true));
-            for pict in page.layers.iter().skip(self.cache.depth){
+            for pict in page.layers.iter().skip(self.cache.depth()){
                 canvas.draw_picture(pict, Some(&matrix), None);
             }
         }).unwrap();

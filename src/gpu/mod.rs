@@ -95,24 +95,22 @@ impl RenderingEngine{
 
 pub struct RenderCache {
     image: Option<Image>,
-    id: usize,
-    rev: usize,
-    depth: usize,
+    page: Page,
     matte: Color,
     dpr: f32,
 }
 
 impl Default for RenderCache{
     fn default() -> Self {
-        Self{image:None, id:0, rev:0, depth:0, dpr:0.0, matte:Color::TRANSPARENT}
+        Self{image:None, page:Page::default(), dpr:0.0, matte:Color::TRANSPARENT}
     }
 }
 
 impl RenderCache{
     pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32) -> Option<&Image>{
         let is_valid =
-            self.id == page.id &&
-            self.rev == page.rev &&
+            self.page.id == page.id &&
+            self.page.rev == page.rev &&
             self.matte == matte &&
             self.dpr == dpr;
 
@@ -122,10 +120,12 @@ impl RenderCache{
         }
     }
 
+    pub fn depth(&self) -> usize {
+        self.page.layers.len()
+    }
+
     pub fn update(&mut self, image:Image, page:&Page, matte:Color, dpr:f32){
-        let Page{id, rev, ..} = page.clone();
-        let depth = page.layers.len();
-        *self = Self{image: Some(image), id, rev, depth, matte, dpr};
+        *self = Self{image: Some(image), page:page.clone(), matte, dpr};
     }
 
     pub fn clear(&mut self){

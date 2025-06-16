@@ -183,6 +183,12 @@ impl PartialEq for Page {
   }
 }
 
+impl Default for Page {
+  fn default() -> Self {
+      Self{ id:0, rev:0, bounds: skia_safe::Rect::new_empty(), layers:vec![]}
+  }
+}
+
 impl Page{
 
   pub fn get_picture(&self, matte:Option<Color>) -> Option<Picture> {
