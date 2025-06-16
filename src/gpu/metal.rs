@@ -6,12 +6,14 @@ use metal::{
     foreign_types::{ForeignType, ForeignTypeRef},
     CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
 };
-use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
+use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface, Image};
 use skia_safe::gpu::{
     mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
 use objc::rc::autoreleasepool;
 use serde_json::{json, Value};
+
+use super::RenderCache;
 
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
 static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
@@ -191,6 +193,7 @@ pub struct MetalRenderer {
     window: Arc<Window>,
     backend: MetalBackend,
     layer: MetalLayer,
+    cache: RenderCache,
     resized: bool,
 }
 
@@ -230,23 +233,39 @@ impl MetalRenderer{
         layer.set_drawable_size(CGSize::new(draw_size.width as f64, draw_size.height as f64));
 
         let backend = MetalBackend::for_layer(&layer);
+        let cache = RenderCache::default();
 
-        Self{window, layer, backend, resized:false}
+        Self{window, layer, backend, cache, resized:false}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         let cg_size = CGSize::new(size.width as f64, size.height as f64);
         self.layer.set_drawable_size(cg_size);
+        self.cache.clear();
         self.resized = true;
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
-        self.backend.render_to_layer(&self.layer, &self.window, self.resized, |canvas|{
-            canvas.clear(matte)
-                .clip_rect(clip, None, Some(true))
-                .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
+        let dpr = self.window.scale_factor() as f32;
+
+        let frame = self.backend.render_to_layer(&self.layer, &self.window, self.resized, |canvas|{
+            // draw raster background
+            if let Some(image) = self.cache.validate(&page, matte, dpr){
+                canvas.draw_image(image, (0,0), None);
+            }else{
+                canvas.clear(matte);
+            }
+
+            // draw newly added vector layers
+            canvas.scale((dpr, dpr))
+                .clip_rect(clip, None, Some(true));
+            for pict in page.layers.iter().skip(self.cache.depth){
+                canvas.draw_picture(pict, Some(&matrix), None);
+            }
         }).unwrap();
+
+        self.cache.update(frame, &page, matte, dpr);
 
         self.resized = false; // only the first render after a resize needs to be synchronous
     }
@@ -276,7 +295,7 @@ impl MetalBackend {
         Self { skia_ctx, queue }
     }
 
-    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, f:F) -> Result<(), String>
+    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, f:F) -> Result<Image, String>
         where F:FnOnce(&skia_safe::Canvas)
     {
         let drawable = layer
@@ -306,9 +325,8 @@ impl MetalBackend {
             None,
         ).ok_or("MetalBackend: could not create render target")?;
 
-        let dpr = window.scale_factor();
-        let scale = Matrix::scale((dpr as f32, dpr as f32));
-        f(surface.canvas().set_matrix(&scale.into()));
+        // pass the suface's canvas to the user-provided callback
+        f(surface.canvas());
 
         self.skia_ctx.flush_and_submit();
         self.skia_ctx.free_gpu_resources();
@@ -321,7 +339,7 @@ impl MetalBackend {
         // during resizes, ensure drawing is complete before returning
         if sync{ command_buffer.wait_until_completed(); }
 
-        Ok(())
+        Ok(surface.image_snapshot())
     }
 
 }

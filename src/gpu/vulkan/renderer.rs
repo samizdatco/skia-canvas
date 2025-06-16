@@ -15,7 +15,7 @@ use vulkano::{
 };
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
-    Color, Matrix,
+    Color, Matrix, Image
 };
 use winit::{
     dpi::PhysicalSize,
@@ -23,12 +23,13 @@ use winit::{
     window::Window,
 };
 use crate::context::page::Page;
+use crate::gpu::RenderCache;
 use super::{VK_FORMATS, to_sk_format};
-
 
 pub struct VulkanRenderer{
     window: Arc<Window>,
     backend: VulkanBackend,
+    cache: RenderCache,
 }
 
 impl VulkanRenderer {
@@ -155,21 +156,36 @@ impl VulkanRenderer {
             .unwrap()
         };
 
-        Self{window, backend:VulkanBackend::new(queue, swapchain)}
+        Self{window, backend:VulkanBackend::new(queue, swapchain), cache:RenderCache::default()}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        self.cache.clear();
         self.backend.swapchain_is_valid = false;
         self.backend.prepare_swapchain(size.into());
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
+        let dpr = self.window.scale_factor() as f32;
         self.backend.render_frame(&self.window, |canvas|{
-            canvas.clear(matte)
-                .clip_rect(clip, None, Some(true))
-                .draw_picture(page.get_picture(None).unwrap(), Some(&matrix), None);
-        }).unwrap();
+            // draw raster background
+            if let Some(image) = self.cache.validate(&page, matte, dpr){
+                canvas.draw_image(image, (0,0), None);
+            }else{
+                canvas.clear(matte);
+            }
+
+            // draw newly added vector layers
+            canvas.scale((dpr, dpr))
+                .clip_rect(clip, None, Some(true));
+            for pict in page.layers.iter().skip(self.cache.depth){
+                canvas.draw_picture(pict, Some(&matrix), None);
+            }
+        }).map(|frame| {
+            // cache the frame contents for reuse in next render pass
+            self.cache.update(frame, &page, matte, dpr)
+        });
     }
 }
 
@@ -294,27 +310,24 @@ impl VulkanBackend{
         }
     }
 
-    fn render_frame<F>(&mut self, window:&Window, f:F) -> Result<(), String>
+    fn render_frame<F>(&mut self, window:&Window, f:F) -> Option<Image>
         where F:FnOnce(&skia_safe::Canvas)
     {
         // make sure the framebuffers match the current window size
         self.prepare_swapchain(self.swapchain.image_extent().into());
 
-        if let Some((image_index, acquire_future)) = self.get_next_frame() {
+        self.get_next_frame().map(|(image_index, acquire_future)| {
             // pull the appropriate framebuffer and create a skia Surface that renders to it
             let framebuffer = self.framebuffers[image_index as usize].clone();
             let mut surface = self.surface_for_framebuffer(framebuffer.clone());
 
             // pass the suface's canvas to the user-provided callback
-            let dpr = window.scale_factor();
-            let scale = Matrix::scale((dpr as f32, dpr as f32));
-            f(surface.canvas().set_matrix(&scale.into()));
+            f(surface.canvas());
 
-            // display the result
+            // display the result and return a bitmap copy for the cache
             self.flush_framebuffer(window, image_index, acquire_future);
-        }
-
-        Ok(())
+            surface.image_snapshot()
+        })
     }
 
     fn get_next_frame(&mut self) -> Option<(u32, SwapchainAcquireFuture)> {

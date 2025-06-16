@@ -1,6 +1,7 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{ImageInfo, Surface, surfaces};
+use skia_safe::{ImageInfo, Image, Color, Surface, surfaces};
 use serde_json::Value;
+use crate::context::page::Page;
 
 #[cfg(feature = "metal")]
 mod metal;
@@ -89,5 +90,45 @@ impl RenderingEngine{
                 Some(msg.join(": "))
             }
         }
+    }
+}
+
+pub struct RenderCache {
+    image: Option<Image>,
+    id: usize,
+    rev: usize,
+    depth: usize,
+    matte: Color,
+    dpr: f32,
+}
+
+impl Default for RenderCache{
+    fn default() -> Self {
+        Self{image:None, id:0, rev:0, depth:0, dpr:0.0, matte:Color::TRANSPARENT}
+    }
+}
+
+impl RenderCache{
+    pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32) -> Option<&Image>{
+        let is_valid =
+            self.id == page.id &&
+            self.rev == page.rev &&
+            self.matte == matte &&
+            self.dpr == dpr;
+
+        match is_valid{
+            true => self.image.as_ref(),
+            false => None
+        }
+    }
+
+    pub fn update(&mut self, image:Image, page:&Page, matte:Color, dpr:f32){
+        let Page{id, rev, ..} = page.clone();
+        let depth = page.layers.len();
+        *self = Self{image: Some(image), id, rev, depth, matte, dpr};
+    }
+
+    pub fn clear(&mut self){
+        *self = Self::default();
     }
 }
