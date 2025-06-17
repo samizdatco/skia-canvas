@@ -24,14 +24,13 @@ use winit::{
     window::Window,
 };
 use crate::context::page::Page;
-use crate::gpu::{RenderCache, RenderState};
+use crate::gpu::{RenderCache, RenderState::Resizing};
 use super::{VK_FORMATS, to_sk_format};
 
 pub struct VulkanRenderer{
     window: Arc<Window>,
     backend: VulkanBackend,
     cache: RenderCache,
-    state: RenderState,
 }
 
 impl VulkanRenderer {
@@ -158,15 +157,11 @@ impl VulkanRenderer {
             .unwrap()
         };
 
-        Self{window,
-            backend:VulkanBackend::new(queue, swapchain),
-            cache:RenderCache::default(),
-            state:RenderState::Clean
-        }
+        Self{window, backend:VulkanBackend::new(queue, swapchain), cache:RenderCache::default()}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.state = RenderState::Resizing;
+        self.cache.state = Resizing;
         self.backend.swapchain_is_valid = false;
         self.backend.prepare_swapchain(size.into());
     }
@@ -178,7 +173,7 @@ impl VulkanRenderer {
         self.backend.render_frame(&self.window, |canvas|{
             // draw raster background
             canvas.clear(matte);
-            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip, self.state){
+            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
                 canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
             }
 
@@ -189,16 +184,8 @@ impl VulkanRenderer {
                 canvas.draw_picture(pict, Some(&matrix), None);
             }
         }).map(|frame| {
-            self.state = match self.state{
-                // mark the framebuffer as needing a full redraw and skip updating the cache during resize
-                RenderState::Resizing => RenderState::Dirty,
-
-                // cache frame contents for use as background of next render pass
-                _ => {
-                    self.cache.update(frame, &page, matte, dpr, clip);
-                    RenderState::Clean
-                }
-            }
+            // cache frame contents for use as background of next render pass
+            self.cache.update(frame, &page, matte, dpr, clip);
         });
     }
 }

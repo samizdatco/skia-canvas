@@ -99,17 +99,18 @@ pub struct RenderCache {
     page: Page,
     matte: Color,
     dpr: f32,
+    state: RenderState,
 }
 
 impl Default for RenderCache{
     fn default() -> Self {
-        Self{image:None, content:Rect::new_empty(), page:Page::default(), dpr:0.0, matte:Color::TRANSPARENT}
+        Self{image:None, content:Rect::new_empty(), page:Page::default(), dpr:0.0, matte:Color::TRANSPARENT, state:RenderState::Clean}
     }
 }
 
 impl RenderCache{
-    pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32, clip:Rect, state:RenderState) -> Option<(&Image, &Rect, Rect)>{
-        if state == RenderState::Dirty{
+    pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32, clip:Rect) -> Option<(&Image, &Rect, Rect)>{
+        if self.state == RenderState::Dirty{
             self.clear();
         }
 
@@ -133,8 +134,14 @@ impl RenderCache{
     }
 
     pub fn update(&mut self, image:Image, page:&Page, matte:Color, dpr:f32, content:Rect){
-        let (content, _) = skia_safe::Matrix::scale((dpr, dpr)).map_rect(content);
-        *self = Self{image: Some(image), page:page.clone(), matte, dpr, content};
+        if self.state==RenderState::Resizing{
+            // mark the framebuffer as needing a full redraw and skip updating cached image during resize
+            self.state = RenderState::Dirty;
+        }else{
+            let state = RenderState::Clean;
+            let (content, _) = skia_safe::Matrix::scale((dpr, dpr)).map_rect(content);
+            *self = Self{image: Some(image), page:page.clone(), matte, dpr, content, state};
+        }
     }
 
     pub fn clear(&mut self){

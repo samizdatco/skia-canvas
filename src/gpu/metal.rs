@@ -177,7 +177,7 @@ use {
         event_loop::ActiveEventLoop,
     },
     crate::context::page::Page,
-    super::{RenderCache, RenderState},
+    super::{RenderCache, RenderState::Resizing},
 };
 
 #[allow(non_upper_case_globals)]
@@ -193,7 +193,6 @@ pub struct MetalRenderer {
     backend: MetalBackend,
     layer: MetalLayer,
     cache: RenderCache,
-    state: RenderState,
 }
 
 #[cfg(feature = "window")]
@@ -234,26 +233,24 @@ impl MetalRenderer{
         let backend = MetalBackend::for_layer(&layer);
         let cache = RenderCache::default();
 
-        Self{
-            window, layer, backend, cache, state:RenderState::Clean,
-        }
+        Self{window, layer, backend, cache}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.state = RenderState::Resizing;
         let cg_size = CGSize::new(size.width as f64, size.height as f64);
         self.layer.set_drawable_size(cg_size);
+        self.cache.state = Resizing;
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
-        let sync = self.state == RenderState::Resizing;
+        let sync = self.cache.state == Resizing;
 
         let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, |canvas| {
             // draw raster background
             canvas.clear(matte);
-            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip, self.state){
+            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
                 canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
             }
 
@@ -265,16 +262,8 @@ impl MetalRenderer{
             }
         }).unwrap();
 
-        self.state = match self.state{
-            // mark the framebuffer as needing a full redraw and skip updating the cache during resize
-            RenderState::Resizing => RenderState::Dirty,
-
-            // cache frame contents for use as background of next render pass
-            _ => {
-                self.cache.update(frame, &page, matte, dpr, clip);
-                RenderState::Clean
-            }
-        }
+        // cache frame contents for use as background of next render pass
+        self.cache.update(frame, &page, matte, dpr, clip);
     }
 }
 
