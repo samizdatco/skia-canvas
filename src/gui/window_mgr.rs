@@ -123,10 +123,14 @@ impl WindowManager {
         let mut ui = Map::new();
         let mut state = Map::new();
         self.windows.iter_mut().for_each(|win|{
+            // collect new UI events
             if !win.sieve.is_empty(){
                 ui.insert(win.spec.id.to_string(), win.sieve.collect());
             }
             state.insert(win.spec.id.to_string(), json!(win.spec));
+
+            // rerender frame from vector sources after using bitmap cache during resize
+            win.redraw_if_resized();
         });
         json!({ "ui": ui, "state": state })
     }

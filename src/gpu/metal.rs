@@ -13,8 +13,6 @@ use skia_safe::gpu::{
 use objc::rc::autoreleasepool;
 use serde_json::{json, Value};
 
-use super::RenderCache;
-
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
 static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
 static MTL_STATUS: OnceLock<Value> = OnceLock::new();
@@ -168,7 +166,7 @@ impl MetalContext{
 
 #[cfg(feature = "window")]
 use {
-    skia_safe::{Matrix, Color},
+    skia_safe::{Matrix, Color, Paint, canvas::SrcRectConstraint},
     raw_window_metal::Layer,
     core_graphics_types::geometry::CGSize,
     objc::{msg_send, sel, sel_impl, runtime::{self, Object}},
@@ -179,6 +177,7 @@ use {
         event_loop::ActiveEventLoop,
     },
     crate::context::page::Page,
+    super::{RenderCache, RenderState},
 };
 
 #[allow(non_upper_case_globals)]
@@ -194,7 +193,7 @@ pub struct MetalRenderer {
     backend: MetalBackend,
     layer: MetalLayer,
     cache: RenderCache,
-    resized: bool,
+    state: RenderState,
 }
 
 #[cfg(feature = "window")]
@@ -235,26 +234,27 @@ impl MetalRenderer{
         let backend = MetalBackend::for_layer(&layer);
         let cache = RenderCache::default();
 
-        Self{window, layer, backend, cache, resized:false}
+        Self{
+            window, layer, backend, cache, state:RenderState::Clean,
+        }
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
+        self.state = RenderState::Resizing;
         let cg_size = CGSize::new(size.width as f64, size.height as f64);
         self.layer.set_drawable_size(cg_size);
-        self.cache.clear();
-        self.resized = true;
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
+        let sync = self.state == RenderState::Resizing;
 
-        let frame = self.backend.render_to_layer(&self.layer, &self.window, self.resized, |canvas|{
+        let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, |canvas| {
             // draw raster background
-            if let Some(image) = self.cache.validate(&page, matte, dpr){
-                canvas.draw_image(image, (0,0), None);
-            }else{
-                canvas.clear(matte);
+            canvas.clear(matte);
+            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip, self.state){
+                canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
             }
 
             // draw newly added vector layers
@@ -265,9 +265,16 @@ impl MetalRenderer{
             }
         }).unwrap();
 
-        self.cache.update(frame, &page, matte, dpr);
+        self.state = match self.state{
+            // mark the framebuffer as needing a full redraw and skip updating the cache during resize
+            RenderState::Resizing => RenderState::Dirty,
 
-        self.resized = false; // only the first render after a resize needs to be synchronous
+            // cache frame contents for use as background of next render pass
+            _ => {
+                self.cache.update(frame, &page, matte, dpr, clip);
+                RenderState::Clean
+            }
+        }
     }
 }
 

@@ -15,7 +15,8 @@ use vulkano::{
 };
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
-    Color, Matrix, Image
+    canvas::SrcRectConstraint,
+    Color, Matrix, Image, Paint
 };
 use winit::{
     dpi::PhysicalSize,
@@ -23,13 +24,14 @@ use winit::{
     window::Window,
 };
 use crate::context::page::Page;
-use crate::gpu::RenderCache;
+use crate::gpu::{RenderCache, RenderState};
 use super::{VK_FORMATS, to_sk_format};
 
 pub struct VulkanRenderer{
     window: Arc<Window>,
     backend: VulkanBackend,
     cache: RenderCache,
+    state: RenderState,
 }
 
 impl VulkanRenderer {
@@ -156,11 +158,15 @@ impl VulkanRenderer {
             .unwrap()
         };
 
-        Self{window, backend:VulkanBackend::new(queue, swapchain), cache:RenderCache::default()}
+        Self{window,
+            backend:VulkanBackend::new(queue, swapchain),
+            cache:RenderCache::default(),
+            state:RenderState::Clean
+        }
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.cache.clear();
+        self.state = RenderState::Resizing;
         self.backend.swapchain_is_valid = false;
         self.backend.prepare_swapchain(size.into());
     }
@@ -168,12 +174,12 @@ impl VulkanRenderer {
     pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
+
         self.backend.render_frame(&self.window, |canvas|{
             // draw raster background
-            if let Some(image) = self.cache.validate(&page, matte, dpr){
-                canvas.draw_image(image, (0,0), None);
-            }else{
-                canvas.clear(matte);
+            canvas.clear(matte);
+            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip, self.state){
+                canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
             }
 
             // draw newly added vector layers
@@ -183,8 +189,16 @@ impl VulkanRenderer {
                 canvas.draw_picture(pict, Some(&matrix), None);
             }
         }).map(|frame| {
-            // cache the frame contents for reuse in next render pass
-            self.cache.update(frame, &page, matte, dpr)
+            self.state = match self.state{
+                // mark the framebuffer as needing a full redraw and skip updating the cache during resize
+                RenderState::Resizing => RenderState::Dirty,
+
+                // cache frame contents for use as background of next render pass
+                _ => {
+                    self.cache.update(frame, &page, matte, dpr, clip);
+                    RenderState::Clean
+                }
+            }
         });
     }
 }
@@ -342,12 +356,15 @@ impl VulkanBackend{
                 Err(e) => panic!("failed to acquire next image: {e}"),
             };
 
-        // If the request was successful but suboptimal, schedule a swapchain recreation
-        if suboptimal {
-            self.swapchain_is_valid = false;
+        match suboptimal{
+            // If the request was successful but suboptimal, schedule a swapchain recreation
+            true => {
+                self.swapchain_is_valid = false;
+                None
+            }
+            // otherwise proceed with this frame
+            false => Some((image_index, acquire_future))
         }
-
-        Some((image_index, acquire_future))
     }
 
     fn surface_for_framebuffer(
