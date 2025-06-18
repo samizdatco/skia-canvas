@@ -125,8 +125,12 @@ jobs:
       run: |
         npm run upload
 
-  windows-x86:
-    runs-on: windows-latest
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86] # when supported, add 'arm64'
+    runs-on: ${{ matrix.arch == 'x86' && 'windows-latest' || 'windows-11-arm' }}
 
     steps:
     - name: Enable long paths
@@ -138,15 +142,15 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 16
+        node-version: 19 # the minimum version that supports arm64
 
     - name: Use Rust
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
 
-    - name: Use Ninja
-      uses: seanmiddleditch/gha-setup-ninja@master
+    - name: Install Ninja
+      run: choco install ninja
 
     - name: Build module
       run: make optimized
