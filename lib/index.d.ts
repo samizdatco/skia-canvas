@@ -160,6 +160,13 @@ export class Image extends EventEmitter {
   decode(): Promise<Image>
 }
 
+export class ImageBitmap {
+  constructor(buffer: Buffer)
+  get width(): number
+  get height(): number
+  close(): void
+}
+
 //
 // DOMMatrix
 //
