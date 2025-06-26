@@ -303,7 +303,7 @@ pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let xy = float_args_or_bail(&mut cx, &["x", "y"])?;
   if let Some(dst) = this.map_points(&xy).first(){
-    if this.path.is_empty(){ this.path.move_to(*dst); }
+    this.scoot(*dst);
     this.path.line_to(*dst);
   }
   Ok(cx.undefined())
@@ -320,7 +320,7 @@ pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   }
 
   if let [src, dst] = this.map_points(&coords)[..2]{
-    if this.path.is_empty(){ this.path.move_to(src); }
+    this.scoot(src);
     this.path.arc_to_tangent(src, dst, radius);
   }
   Ok(cx.undefined())
@@ -332,7 +332,7 @@ pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let coords = float_args_or_bail(&mut cx, &["cp1x", "cp1y", "cp2x", "cp2y", "x", "y"])?;
   if let [cp1, cp2, dst] = this.map_points(&coords)[..3]{
-    if this.path.is_empty(){ this.path.move_to(cp1); }
+    this.scoot(cp1);
     this.path.cubic_to(cp1, cp2, dst);
   }
   Ok(cx.undefined())
@@ -344,7 +344,7 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let coords = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y"])?;
   if let [cp, dst] = this.map_points(&coords)[..2]{
-    if this.path.is_empty(){ this.path.move_to(cp); }
+    this.scoot(cp);
     this.path.quad_to(cp, dst);
   }
   Ok(cx.undefined())
@@ -357,7 +357,7 @@ pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let args = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y", "weight"])?;
   if let [src, dst] = this.map_points(&args[..4]).as_slice(){
-    if this.path.is_empty(){ this.path.move_to((src.x, src.y)); }
+    this.scoot(*src);
     this.path.conic_to((src.x, src.y), (dst.x, dst.y), args[4]);
   }
   Ok(cx.undefined())
