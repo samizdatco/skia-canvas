@@ -55,9 +55,8 @@ pub fn get_size(mut cx: FunctionContext) -> JsResult<JsArray> {
 
 pub fn set_size(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let xy = opt_float_args(&mut cx, 1..3);
 
-  if let [width, height] = xy.as_slice(){
+  if let [width, height] = opt_float_args(&mut cx, 1..3).as_slice(){
     this.borrow_mut().resize((*width, *height));
   }
   Ok(cx.undefined())
@@ -234,7 +233,10 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..13)?;
+
+  let nums = float_args(&mut cx, &[
+    "x", "y", "width", "height", "r1x", "r1y", "r2x", "r2y", "r3x", "r3y", "r4x", "r4y"
+  ])?;
   if let [x, y, w, h] = &nums[..4]{
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
@@ -397,8 +399,7 @@ fn _is_in(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsBoolean> {
     _ => Some(fill_rule_arg_or(&mut cx, rule_idx, "nonzero")?)
   };
 
-  let xy = opt_float_args(&mut cx, 1..4);
-  if let [x, y] = xy.as_slice(){
+  if let [x, y] = opt_float_args(&mut cx, 1..4).as_slice(){
     Ok(cx.boolean(this.hit_test_path(&mut target, (*x, *y), rule, style)))
   }else{
     check_argc(&mut cx, 3)?;
@@ -834,10 +835,10 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let img_data = image_data_arg(&mut cx, 1)?;
 
   // determine geometry
-  let x = float_arg(&mut cx, 2, "x")?;
-  let y = float_arg(&mut cx, 3, "y")?;
+  let x = float_arg(&mut cx, 2, "dx")?;
+  let y = float_arg(&mut cx, 3, "dy")?;
   let mut dirty = match cx.len(){
-    5.. => float_args(&mut cx, 4..8)?,
+    5.. => float_args_at(&mut cx, 4, &["dirtyX", "dirtyY", "dirtyWidth", "dirtyHeight"])?,
     _ => [].to_vec()
   };
   let (src, dst) = match dirty.as_mut_slice(){

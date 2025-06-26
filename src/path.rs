@@ -274,7 +274,9 @@ pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
 
-  let nums = float_args(&mut cx, 1..13)?;
+  let nums = float_args(&mut cx, &[
+    "x", "y", "width", "height", "r1x", "r1y", "r2x", "r2y", "r3x", "r3y", "r4x", "r4y"
+  ])?;
   if let [x, y, w, h] = &nums[..4]{
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();

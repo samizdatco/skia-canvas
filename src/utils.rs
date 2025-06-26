@@ -278,6 +278,28 @@ fn _as_float(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f32>{
   })
 }
 
+pub fn _float_args_at(cx: &mut FunctionContext, start:usize, names:&[&str], or_bail:bool) -> NeonResult<Vec<f32>>{
+  let argc = cx.len() - start; // args start after the `this` reference
+  if argc < names.len() {
+    return cx.throw_type_error(format!("not enough arguments (missing: {})", names[argc..].join(", ")));
+  }
+
+  // emoji indicates that it will only throw in strict mode
+  let prefix = if or_bail{ "⚠️" }else{ "" };
+
+  let mut args:Vec<f32> = Vec::new();
+  for (i, name) in names.iter().enumerate(){
+    match opt_float_arg(cx, i+start){
+      Some(v) => args.push(v),
+      None => return cx.throw_type_error(
+        format!("{}Expected a number for `{}` as {} arg", prefix, name, arg_num(i+start))
+      )
+    }
+  }
+
+  Ok(args)
+}
+
 pub fn opt_float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<f32>{
   obj.get(cx, attr).ok().and_then(|val| _as_float(cx, &val))
 }
@@ -305,30 +327,14 @@ pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default:f32) -> f32{
 }
 
 pub fn float_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<f32>{
-  if cx.len() <= idx {
-    return cx.throw_type_error(format!("not enough arguments (missing: {} as {} arg)", attr, arg_num(idx)));
-  }
-
-  match opt_float_arg(cx, idx){
-    Some(v) => Ok(v),
-    None => cx.throw_type_error(
-      format!("Expected a number for `{}` as {} arg", attr, arg_num(idx))
-    )
-  }
+  _float_args_at(cx, idx, &[attr], false)
+    .map(|vec| vec.into_iter().nth(0).unwrap())
 }
 
-pub fn float_arg_or_bail(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<f32>{
-  if cx.len() <= idx {
-    return cx.throw_type_error(format!("not enough arguments (missing: {} as {} arg)", attr, arg_num(idx)));
-  }
 
-  match opt_float_arg(cx, idx){
-    Some(v) => Ok(v),
-    None => cx.throw_type_error(
-      // emoji indicates that it will only throw in strict mode
-      format!("⚠️Expected a number for `{}` as {} arg", attr, arg_num(idx))
-    )
-  }
+pub fn float_arg_or_bail(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<f32>{
+  _float_args_at(cx, idx, &[attr], true)
+    .map(|vec| vec.into_iter().nth(0).unwrap())
 }
 
 pub fn floats_to_array<'a>(cx: &mut FunctionContext<'a>, nums: &[f32]) -> JsResult<'a, JsValue> {
@@ -357,48 +363,21 @@ pub fn opt_float_args(cx: &mut FunctionContext, rng: Range<usize>) -> Vec<f32>{
   args
 }
 
-pub fn float_args(cx: &mut FunctionContext, rng: Range<usize>) -> NeonResult<Vec<f32>>{
-  if cx.len() < rng.end {
-    return cx.throw_type_error("not enough arguments");
-  }
+pub fn float_args(cx: &mut FunctionContext, names:&[&str]) -> NeonResult<Vec<f32>>{
+  _float_args_at(cx, 1, names, false)
+}
 
-  let mut args:Vec<f32> = Vec::new();
-  for i in rng{
-    match opt_float_arg(cx, i){
-      Some(v) => args.push(v),
-      None => return cx.throw_type_error(
-        format!("Expected a number for {} arg", arg_num(i))
-      )
-    }
-  }
-
-  Ok(args)
+pub fn float_args_at(cx: &mut FunctionContext, start:usize, names:&[&str]) -> NeonResult<Vec<f32>>{
+  _float_args_at(cx, start, names, false)
 }
 
 pub fn float_args_or_bail(cx: &mut FunctionContext, names:&[&str]) -> NeonResult<Vec<f32>>{
-  float_args_or_bail_at(cx, 1, names)
+  _float_args_at(cx, 1, names, true)
 }
 
 pub fn float_args_or_bail_at(cx: &mut FunctionContext, start:usize, names:&[&str]) -> NeonResult<Vec<f32>>{
-  let argc = cx.len() - start; // args start after the `this` reference
-  if argc < names.len() {
-    return cx.throw_type_error(format!("not enough arguments (missing: {})", names[argc..].join(", ")));
-  }
-
-  let mut args:Vec<f32> = Vec::new();
-  for (i, name) in names.iter().enumerate(){
-    match opt_float_arg(cx, i+start){
-      Some(v) => args.push(v),
-      None => return cx.throw_type_error(
-        // emoji indicates that it will only throw in strict mode
-        format!("⚠️Expected a number for `{}` as {} arg", name, arg_num(i+start))
-      )
-    }
-  }
-
-  Ok(args)
+  _float_args_at(cx, start, names, true)
 }
-
 
 //
 // Colors
