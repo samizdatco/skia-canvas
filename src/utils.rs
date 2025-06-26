@@ -235,7 +235,7 @@ pub fn bool_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str)
 //
 
 
-fn _float_val(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f32>{
+fn _as_float(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f32>{
   // emulate (some of) javascript's wildly permissive type coercion <https://www.w3schools.com/js/js_type_conversion.asp>
   val.downcast::<JsNumber, _>(cx).ok().map(|num|{
     num.value(cx) as f32
@@ -269,7 +269,7 @@ fn _float_val(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f32>{
     val.downcast::<JsArray, _>(cx).ok().and_then(|array|
       match array.len(cx) {
         0 => Some(0.0),
-        1 => array.to_vec(cx).ok().and_then(|nums| _float_val(cx, &nums[0])),
+        1 => array.to_vec(cx).ok().and_then(|nums| _as_float(cx, &nums[0])),
         _ => None
       })
   }).and_then(|num| match num.is_finite(){
@@ -279,7 +279,7 @@ fn _float_val(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f32>{
 }
 
 pub fn opt_float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<f32>{
-  obj.get(cx, attr).ok().and_then(|val| _float_val(cx, &val))
+  obj.get(cx, attr).ok().and_then(|val| _as_float(cx, &val))
 }
 
 pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<f32>{
@@ -290,11 +290,11 @@ pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str
 }
 
 pub fn floats_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<f32>{
-  vals.iter().filter_map(|val| _float_val(cx, val)).collect::<Vec<f32>>()
+  vals.iter().filter_map(|val| _as_float(cx, val)).collect::<Vec<f32>>()
 }
 
 pub fn opt_float_arg(cx: &mut FunctionContext, idx: usize) -> Option<f32>{
-  cx.argument_opt(idx).and_then(|val| _float_val(cx, &val))
+  cx.argument_opt(idx).and_then(|val| _as_float(cx, &val))
 }
 
 pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default:f32) -> f32{
