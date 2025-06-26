@@ -55,8 +55,8 @@ impl CanvasPattern{
 
 pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let src = cx.argument::<BoxedImage>(1)?;
-  let canvas_width = float_arg(&mut cx, 2, "width")?;
-  let canvas_height = float_arg(&mut cx, 3, "height")?;
+  let canvas_width = float_arg_or_bail(&mut cx, 2, "width")?;
+  let canvas_height = float_arg_or_bail(&mut cx, 3, "height")?;
   let repetition = if cx.len() > 4 && cx.argument::<JsValue>(4)?.is_a::<JsNull, _>(&mut cx){
     "".to_string() // null is a valid synonym for "repeat" (as is "")
   }else{
@@ -82,7 +82,7 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
     }));
     Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
   }else{
-    cx.throw_error("Unknown pattern repeat style")
+    cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
   }
 }
 
@@ -103,7 +103,7 @@ pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> 
     }));
     Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
   }else{
-    cx.throw_error("Unknown pattern repeat style")
+    cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
   }
 }
 
@@ -131,7 +131,7 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
     let stamp = Arc::new(Mutex::new(stamp));
     Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
   }else{
-    cx.throw_error("Unknown pattern repeat style")
+    cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
   }
 }
 
