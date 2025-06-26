@@ -817,6 +817,9 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let parent = cx.argument::<BoxedCanvas>(6)?;
   let engine = parent.borrow_mut().engine();
 
+  // negative dimensions are valid, just shift the origin and absify
+  if w < 0 { x += w; w *= -1; }
+  if h < 0 { y += h; h *= -1; }
 
   let info = ImageInfo::new((w as _, h as _), color_type, AlphaType::Unpremul, color_space);
   let data = this.borrow_mut().get_pixels((x, y), info, engine).or_else(|e| cx.throw_error(format!("get_pixels failed: {}", e)))?;
@@ -839,6 +842,7 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   };
   let (src, dst) = match dirty.as_mut_slice(){
     [dx, dy, dw, dh] => {
+      // negative dimensions are valid, just shift the origin and absify
       if *dw < 0.0 { *dw *= -1.0; *dx -= *dw; }
       if *dh < 0.0 { *dh *= -1.0; *dy -= *dh; }
       (Rect::from_xywh(*dx, *dy, *dw, *dh), Rect::from_xywh(*dx + x, *dy + y, *dw, *dh))
