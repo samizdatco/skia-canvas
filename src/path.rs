@@ -160,6 +160,7 @@ pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let nums = float_args_or_bail(&mut cx, &["x", "y"])?;
   if let [x, y] = nums.as_slice(){
+    this.scoot(*x, *y);
     this.path.line_to((*x, *y));
   }
 
