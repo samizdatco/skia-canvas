@@ -347,6 +347,13 @@ impl Context2D{
     }
   }
 
+  pub fn scoot(&mut self, point:Point){
+    // update initial point if first drawing command isn't a moveTo
+    if self.path.is_empty(){
+      self.path.move_to(point);
+    }
+  }
+
   pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<FillType>){
     let mut path = path.unwrap_or_else(|| {
       // the current path has already incorporated its transform state

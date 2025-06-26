@@ -55,9 +55,8 @@ pub fn get_size(mut cx: FunctionContext) -> JsResult<JsArray> {
 
 pub fn set_size(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let xy = opt_float_args(&mut cx, 1..3);
 
-  if let [width, height] = xy.as_slice(){
+  if let [width, height] = opt_float_args(&mut cx, 1..3).as_slice(){
     this.borrow_mut().resize((*width, *height));
   }
   Ok(cx.undefined())
@@ -103,9 +102,8 @@ pub fn transform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn translate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 3)?;
 
-  let xy = opt_float_args(&mut cx, 1..3);
+  let xy = float_args_or_bail(&mut cx, &["x", "y"])?;
   if let [dx, dy] = xy.as_slice(){
     this.with_matrix(|ctm| ctm.pre_translate((*dx, *dy)) );
   }
@@ -115,9 +113,8 @@ pub fn translate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn scale(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 3)?;
 
-  let xy = opt_float_args(&mut cx, 1..3);
+  let xy = float_args_or_bail(&mut cx, &["x", "y"])?;
   if let [m11, m22] = xy.as_slice(){
     this.with_matrix(|ctm| ctm.pre_scale((*m11, *m22), None) );
   }
@@ -127,12 +124,10 @@ pub fn scale(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn rotate(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 2)?;
 
-  if let Some(radians) = opt_float_arg(&mut cx, 1){
-    let degrees = radians / PI * 180.0;
-    this.with_matrix(|ctm| ctm.pre_rotate(degrees, None) );
-  }
+  let radians = float_arg_or_bail(&mut cx, 1, "angle")?;
+  let degrees = radians / PI * 180.0;
+  this.with_matrix(|ctm| ctm.pre_rotate(degrees, None) );
   Ok(cx.undefined())
 }
 
@@ -221,9 +216,8 @@ pub fn beginPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 5)?;
 
-  let nums = opt_float_args(&mut cx, 1..5);
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "width", "height"])?;
   if let [x, y, w, h] = nums.as_slice(){
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let quad = this.state.matrix.map_rect_to_quad(rect);
@@ -239,9 +233,10 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 13)?;
 
-  let nums = opt_float_args(&mut cx, 1..13);
+  let nums = float_args(&mut cx, &[
+    "x", "y", "width", "height", "r1x", "r1y", "r2x", "r2y", "r3x", "r3y", "r4x", "r4y"
+  ])?;
   if let [x, y, w, h] = &nums[..4]{
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
@@ -259,9 +254,8 @@ pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 6)?;
 
-  let nums = opt_float_args(&mut cx, 1..6);
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "radius", "startAngle", "endAngle"])?;
   let ccw = bool_arg_or(&mut cx, 6, false);
   if let [x, y, radius, start_angle, end_angle] = nums.as_slice(){
     let matrix = this.state.matrix;
@@ -275,13 +269,12 @@ pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 8)?;
 
-  let nums = opt_float_args(&mut cx, 1..8);
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "xRadius", "yRadius", "rotation", "startAngle", "endAngle"])?;
   let ccw = bool_arg_or(&mut cx, 8, false);
   if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
     if *x_radius < 0.0 || *y_radius < 0.0 {
-      return cx.throw_error("radii cannot be negative")
+      return cx.throw_range_error("Radius value must be positive")
     }
     let matrix = this.state.matrix;
     let mut arc = Path2D::default();
@@ -296,9 +289,8 @@ pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 3)?;
 
-  let xy = opt_float_args(&mut cx, 1..3);
+  let xy = float_args_or_bail(&mut cx, &["x", "y"])?;
   if let Some(dst) = this.map_points(&xy).first(){
     this.path.move_to(*dst);
   }
@@ -308,11 +300,10 @@ pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 3)?;
 
-  let xy = opt_float_args(&mut cx, 1..3);
+  let xy = float_args_or_bail(&mut cx, &["x", "y"])?;
   if let Some(dst) = this.map_points(&xy).first(){
-    if this.path.is_empty(){ this.path.move_to(*dst); }
+    this.scoot(*dst);
     this.path.line_to(*dst);
   }
   Ok(cx.undefined())
@@ -321,15 +312,16 @@ pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 6)?;
 
-  let coords = opt_float_args(&mut cx, 1..5);
-  let radius = opt_float_arg(&mut cx, 5);
-  if let Some(radius) = radius {
-    if let [src, dst] = this.map_points(&coords).as_slice(){
-      if this.path.is_empty(){ this.path.move_to(*src); }
-      this.path.arc_to_tangent(*src, *dst, radius);
-    }
+  let coords = float_args_or_bail(&mut cx, &["x1", "y1", "x2", "y2"])?;
+  let radius = float_arg_or_bail(&mut cx, 5, "radius")?;
+  if radius < 0.0 {
+    return cx.throw_range_error("Radius value must be positive")
+  }
+
+  if let [src, dst] = this.map_points(&coords)[..2]{
+    this.scoot(src);
+    this.path.arc_to_tangent(src, dst, radius);
   }
   Ok(cx.undefined())
 }
@@ -337,12 +329,11 @@ pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 7)?;
 
-  let coords = opt_float_args(&mut cx, 1..7);
-  if let [cp1, cp2, dst] = this.map_points(&coords).as_slice(){
-    if this.path.is_empty(){ this.path.move_to(*cp1); }
-    this.path.cubic_to(*cp1, *cp2, *dst);
+  let coords = float_args_or_bail(&mut cx, &["cp1x", "cp1y", "cp2x", "cp2y", "x", "y"])?;
+  if let [cp1, cp2, dst] = this.map_points(&coords)[..3]{
+    this.scoot(cp1);
+    this.path.cubic_to(cp1, cp2, dst);
   }
   Ok(cx.undefined())
 }
@@ -350,12 +341,11 @@ pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 5)?;
 
-  let coords = opt_float_args(&mut cx, 1..5);
-  if let [cp, dst] = this.map_points(&coords).as_slice(){
-    if this.path.is_empty(){ this.path.move_to(*cp); }
-    this.path.quad_to(*cp, *dst);
+  let coords = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y"])?;
+  if let [cp, dst] = this.map_points(&coords)[..2]{
+    this.scoot(cp);
+    this.path.quad_to(cp, dst);
   }
   Ok(cx.undefined())
 }
@@ -364,15 +354,11 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 6)?;
 
-  let coords = opt_float_args(&mut cx, 1..5);
-  let weight = opt_float_arg(&mut cx, 5);
-  if let Some(weight) = weight {
-    if let [src, dst] = this.map_points(&coords).as_slice(){
-      if this.path.is_empty(){ this.path.move_to((src.x, src.y)); }
-      this.path.conic_to((src.x, src.y), (dst.x, dst.y), weight);
-    }
+  let args = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y", "weight"])?;
+  if let [src, dst] = this.map_points(&args[..4]).as_slice(){
+    this.scoot(*src);
+    this.path.conic_to((src.x, src.y), (dst.x, dst.y), args[4]);
   }
   Ok(cx.undefined())
 }
@@ -395,23 +381,31 @@ pub fn isPointInStroke(cx: FunctionContext) -> JsResult<JsBoolean> {
   _is_in(cx, Stroke)
 }
 
-fn _is_in(mut cx: FunctionContext, ink:PaintStyle) -> JsResult<JsBoolean> {
+fn _is_in(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let (shift, mut target) = match cx.argument::<JsValue>(1)?.is_a::<BoxedPath2D, _>(&mut cx){
-    true => (2, cx.argument::<BoxedPath2D>(1)?.borrow_mut().path.clone()),
-    false => (1, this.borrow_mut().path.clone())
-  };
-
-  let x = float_arg(&mut cx, shift, "x")?;
-  let y = float_arg(&mut cx, shift+1, "y")?;
-  let rule = fill_rule_arg_or(&mut cx, shift+2, "nonzero")?;
-
   let mut this = this.borrow_mut();
-  let is_in = match ink{
-    Stroke => this.hit_test_path(&mut target, (x, y), None, Stroke),
-    _ => this.hit_test_path(&mut target, (x, y), Some(rule), Fill)
+
+  let path = opt_skpath_arg(&mut cx, 1);
+  let (rule_idx, mut target) = match path{
+    Some(path) => (4, path),
+    None => match cx.len(){
+      5 => cx.throw_type_error("Expected a Path2D for 1st arg")?,
+      _ => (3, this.path.clone())
+    }
   };
-  Ok(cx.boolean(is_in))
+
+  let rule = match style{
+    Stroke => None,
+    _ => Some(fill_rule_arg_or(&mut cx, rule_idx, "nonzero")?)
+  };
+
+  if let [x, y] = opt_float_args(&mut cx, 1..4).as_slice(){
+    Ok(cx.boolean(this.hit_test_path(&mut target, (*x, *y), rule, style)))
+  }else{
+    check_argc(&mut cx, 3)?;
+    Ok(cx.boolean(false))
+  }
+
 }
 
 // masking ------------------------------------------------------------------------------
@@ -421,12 +415,14 @@ pub fn clip(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
 
   let mut shift = 1;
-  let clip = opt_path2d_arg(&mut cx, 1);
-  if clip.is_some() { shift += 1; }
-
+  let path = opt_skpath_arg(&mut cx, 1);
+  if path.is_some() { shift += 1; }
+  else if cx.len() > 2{
+    return cx.throw_type_error("Expected a Path2D for 1st arg")
+  }
   let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
-  this.clip_path(clip, rule);
 
+  this.clip_path(path, rule);
   Ok(cx.undefined())
 }
 
@@ -437,23 +433,36 @@ pub fn clip(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn fill(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let path = opt_path2d_arg(&mut cx, 1);
-  let rule_idx = if path.is_some(){ 2 }else{ 1 };
-  let rule = fill_rule_arg_or(&mut cx, rule_idx, "nonzero")?;
-  this.borrow_mut().draw_path(path, PaintStyle::Fill, Some(rule));
+  let mut this = this.borrow_mut();
+
+  let mut shift = 1;
+  let path = opt_skpath_arg(&mut cx, 1);
+  if path.is_some() { shift += 1; }
+  else if cx.len() > 2{
+    return cx.throw_type_error("Expected a Path2D for 1st arg")
+  }
+  let rule = fill_rule_arg_or(&mut cx, shift, "nonzero")?;
+
+  this.draw_path(path, PaintStyle::Fill, Some(rule));
   Ok(cx.undefined())
 }
 
 pub fn stroke(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let path = opt_path2d_arg(&mut cx, 1);
+  let path = opt_skpath_arg(&mut cx, 1);
+
+  if path.is_none() && cx.len() >= 2{
+    return cx.throw_type_error(format!("Expected a Path2D for 1st arg"))
+  }
+
   this.borrow_mut().draw_path(path, PaintStyle::Stroke, None);
   Ok(cx.undefined())
 }
 
 pub fn fillRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let nums = float_args(&mut cx, 1..5)?;
+
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "width", "height"])?;
   if let [x, y, w, h] = nums.as_slice() {
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let path = Path::rect(rect, None);
@@ -464,7 +473,8 @@ pub fn fillRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn strokeRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let nums = float_args(&mut cx, 1..5)?;
+
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "width", "height"])?;
   if let [x, y, w, h] = nums.as_slice() {
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let path = Path::rect(rect, None);
@@ -476,7 +486,8 @@ pub fn strokeRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn clearRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let nums = float_args(&mut cx, 1..5)?;
+
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "width", "height"])?;
   if let [x, y, w, h] = nums.as_slice() {
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     this.clear_rect(&rect);
@@ -529,7 +540,7 @@ pub fn set_strokeStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn set_lineDashMarker(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let marker = opt_path2d_arg(&mut cx, 1);
+  let marker = opt_skpath_arg(&mut cx, 1);
 
   if marker.is_none(){
     let val = cx.argument::<JsValue>(1)?;
@@ -586,6 +597,7 @@ pub fn setLineDash(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       .filter(|n| *n >= 0.0 && n.is_finite())
       .collect::<Vec<f32>>();
 
+    // only apply if all elements were actually numbers
     if list.len() == intervals.len(){
       if intervals.len() % 2 == 1{
         intervals.append(&mut intervals.clone());
@@ -593,6 +605,8 @@ pub fn setLineDash(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
       this.state.line_dash_list = intervals
     }
+  }else{
+    cx.throw_type_error("Value is not a sequence")?
   }
 
   Ok(cx.undefined())
@@ -633,9 +647,7 @@ pub fn set_lineDashOffset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
 
-  if let Some(num) = opt_float_arg(&mut cx, 1){
-    this.state.line_dash_offset = num;
-  }
+  this.state.line_dash_offset = float_arg_or_bail(&mut cx, 1, "lineDashOffset")?;
   Ok(cx.undefined())
 }
 
@@ -703,19 +715,20 @@ pub fn set_miterLimit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 // Imagery
 //
 
-fn _layout_rects(intrinsic:Size, nums:&[f32]) -> Result<(Rect, Rect), String> {
+fn _layout_rects(cx: &mut FunctionContext, intrinsic:Size, nums:&[f32]) -> NeonResult<(Rect, Rect)> {
   let (src, dst) = match nums.len() {
     2 => ( Rect::from_xywh(0.0, 0.0, intrinsic.width, intrinsic.height),
-            Rect::from_xywh(nums[0], nums[1], intrinsic.width, intrinsic.height) ),
+           Rect::from_xywh(nums[0], nums[1], intrinsic.width, intrinsic.height) ),
     4 => ( Rect::from_xywh(0.0, 0.0, intrinsic.width, intrinsic.height),
-            Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
+           Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
     8 => ( Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]),
-            Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
-    _ => return Err(format!("Expected 2, 4, or 8 coordinates (got {})", nums.len()))
+           Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
+    9.. => cx.throw_type_error(format!("⚠️Expected 2, 4, or 8 coordinates (got {})", nums.len()))?,
+    _ => cx.throw_type_error(format!("not enough arguments: Expected 2, 4, or 8 coordinates (got {})", nums.len()))?
   };
 
   match intrinsic.is_empty(){
-    true => Err(format!("Cannot draw dimensionless image ({}×{})", intrinsic.width, intrinsic.height)),
+    true => cx.throw_range_error(format!("Dimensions must be non-zero (got {}×{})", intrinsic.width, intrinsic.height)),
     false => Ok((src, dst))
   }
 }
@@ -724,7 +737,8 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let argc = cx.len() as usize;
   let source = cx.argument::<JsValue>(1)?;
-  let nums = float_args(&mut cx, 2..argc)?;
+  let arg_names = ["srcX", "srcY", "srcWidth", "srcHeight", "dstX", "dstY", "dstWidth", "dstHeight"];
+  let nums = float_args_or_bail_at(&mut cx, 2, &arg_names[..argc-2])?;
 
   let content = {
     if let Ok(img) = source.downcast::<BoxedImage, _>(&mut cx){
@@ -740,8 +754,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   if let Content::Bitmap(img) = &content {
     let bounds_size = content.size();
-    let (src, dst) = _layout_rects(bounds_size, &nums)
-      .or_else(|err| cx.throw_error(err))?;
+    let (src, dst) = _layout_rects(&mut cx, bounds_size, &nums)?;
 
     content.snap_rects_to_bounds(src, dst);
     let mut this = this.borrow_mut();
@@ -750,9 +763,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let image = source.downcast::<BoxedImage, _>(&mut cx).unwrap();
     let fit_to_canvas = image.borrow().autosized;
     let pict_size = content.size();
-
-    let (mut src, mut dst) = _layout_rects(pict_size, &nums)
-      .or_else(|err| cx.throw_error(err))?;
+    let (mut src, mut dst) = _layout_rects(&mut cx, pict_size, &nums)?;
 
     // for SVG images with no intrinsic size, use the canvas size as a default scale
     if fit_to_canvas && nums.len() != 4 {
@@ -783,20 +794,15 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let argc = cx.len() as usize;
   let this = cx.argument::<BoxedContext2D>(0)?;
   let context = cx.argument::<BoxedContext2D>(1)?;
-  let nums = float_args(&mut cx, 2..argc)?;
+  let arg_names = ["srcX", "srcY", "srcWidth", "srcHeight", "dstX", "dstY", "dstWidth", "dstHeight"];
+  let nums = float_args_or_bail_at(&mut cx, 2, &arg_names[..argc-2])?;
 
   let content = Content::from_context(&mut context.borrow_mut(), true);
-
   if let Content::Vector(pict) = &content{
-    _layout_rects(content.size(), &nums)
-      .map(|(src, dst)|{
-        let (src, dst) = content.snap_rects_to_bounds(src, dst);
-        let mut this = this.borrow_mut();
-        this.draw_picture(&pict, &src, &dst);
-        cx.undefined()
-      }).or_else(|err|
-        cx.throw_error(err)
-      )
+    let (src, dst) = _layout_rects(&mut cx, content.size(), &nums)?;
+    let (src, dst) = content.snap_rects_to_bounds(src, dst);
+    this.borrow_mut().draw_picture(&pict, &src, &dst);
+    Ok(cx.undefined())
   }else{
     cx.throw_error("Canvas's PictureRecorder failed to generate an image")
   }
@@ -804,16 +810,19 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let parent = cx.argument::<BoxedCanvas>(1)?;
+  let mut x = float_arg(&mut cx, 1, "x")?.floor() as i32;
+  let mut y = float_arg(&mut cx, 2, "y")?.floor() as i32;
+  let mut w = float_arg(&mut cx, 3, "width")?.floor() as i32;
+  let mut h = float_arg(&mut cx, 4, "height")?.floor() as i32;
+  let (color_type, color_space) = image_data_settings_arg(&mut cx, 5);
+  let parent = cx.argument::<BoxedCanvas>(6)?;
   let engine = parent.borrow_mut().engine();
 
-  let x = float_arg(&mut cx, 2, "x")? as i32;
-  let y = float_arg(&mut cx, 3, "y")? as i32;
-  let width = float_arg(&mut cx, 4, "width")? as i32;
-  let height = float_arg(&mut cx, 5, "height")? as i32;
-  let (color_type, color_space) = image_data_settings_arg(&mut cx, 6);
+  // negative dimensions are valid, just shift the origin and absify
+  if w < 0 { x += w; w *= -1; }
+  if h < 0 { y += h; h *= -1; }
 
-  let info = ImageInfo::new((width as _, height as _), color_type, AlphaType::Unpremul, color_space);
+  let info = ImageInfo::new((w as _, h as _), color_type, AlphaType::Unpremul, color_space);
   let data = this.borrow_mut().get_pixels((x, y), info, engine).or_else(|e| cx.throw_error(format!("get_pixels failed: {}", e)))?;
   let buffer = JsBuffer::from_slice(&mut cx, &data)?;
 
@@ -826,14 +835,15 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let img_data = image_data_arg(&mut cx, 1)?;
 
   // determine geometry
-  let x = float_arg(&mut cx, 2, "x")?;
-  let y = float_arg(&mut cx, 3, "y")?;
-  let mut dirty = opt_float_args(&mut cx, 4..8);
-  if !dirty.is_empty() && dirty.len() != 4 {
-    return cx.throw_type_error("expected either 2 or 6 numbers")
-  }
+  let x = float_arg(&mut cx, 2, "dx")?;
+  let y = float_arg(&mut cx, 3, "dy")?;
+  let mut dirty = match cx.len(){
+    5.. => float_args_at(&mut cx, 4, &["dirtyX", "dirtyY", "dirtyWidth", "dirtyHeight"])?,
+    _ => [].to_vec()
+  };
   let (src, dst) = match dirty.as_mut_slice(){
     [dx, dy, dw, dh] => {
+      // negative dimensions are valid, just shift the origin and absify
       if *dw < 0.0 { *dw *= -1.0; *dx -= *dw; }
       if *dh < 0.0 { *dh *= -1.0; *dy -= *dh; }
       (Rect::from_xywh(*dx, *dy, *dw, *dh), Rect::from_xywh(*dx + x, *dy + y, *dw, *dh))
@@ -900,13 +910,14 @@ fn _draw_text(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsUndefined
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
   let text = string_arg(&mut cx, 1, "text")?;
-  let x = float_arg(&mut cx, 2, "x")?;
-  let y = float_arg(&mut cx, 3, "y")?;
+  let x = float_arg_or_bail(&mut cx, 2, "x")?;
+  let y = float_arg_or_bail(&mut cx, 3, "y")?;
   let width = opt_float_arg(&mut cx, 4);
 
+  // it's fine to include an ignored `undefined` but anything else is invalid
   if width.is_none() && cx.len() > 4 && !cx.argument::<JsValue>(4)?.is_a::<JsUndefined, _>(&mut cx){
-    // it's fine to include an ignored `undefined` but anything else is invalid
-    return Ok(cx.undefined())
+    // emoji indicates that it will only throw in strict mode
+    cx.throw_type_error("⚠️Expected a number for `width` as 4th arg")?
   }
 
   this.draw_text(&text, x, y, width, style);
@@ -931,9 +942,13 @@ pub fn measureText(mut cx: FunctionContext) -> JsResult<JsArray> {
 
 pub fn outlineText(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let text = string_arg(&mut cx, 1, "text")?;
-  let width = opt_float_arg(&mut cx, 2);
   let this = this.borrow_mut();
+
+  let text = string_arg(&mut cx, 1, "text")?;
+  let width = match cx.len(){
+    3 => Some(float_arg_or_bail(&mut cx, 2, "width")?),
+    _ => None
+  };
   let path = this.outline_text(&text, width);
   Ok(cx.boxed(RefCell::new(Path2D{path})).upcast())
 }
@@ -1150,7 +1165,7 @@ pub fn get_globalAlpha(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn set_globalAlpha(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let num = float_arg(&mut cx, 1, "globalAlpha")?;
+  let num = float_arg_or_bail(&mut cx, 1, "globalAlpha")?;
 
   if (0.0..=1.0).contains(&num){
     this.state.global_alpha = num;
@@ -1208,10 +1223,9 @@ pub fn get_shadowBlur(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn set_shadowBlur(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(num) = opt_float_arg(&mut cx, 1){
-    if num >= 0.0 {
-      this.state.shadow_blur = num;
-    }
+  let num = float_arg_or_bail(&mut cx, 1, "shadowBlur")?;
+  if num >= 0.0{
+    this.state.shadow_blur = num;
   }
   Ok(cx.undefined())
 }
@@ -1226,7 +1240,7 @@ pub fn get_shadowColor(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn set_shadowColor(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(color) = color_arg(&mut cx, 1){
+  if let Some(color) = opt_color_arg(&mut cx, 1){
     this.state.shadow_color = color;
   }
   Ok(cx.undefined())
@@ -1247,17 +1261,13 @@ pub fn get_shadowOffsetY(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn set_shadowOffsetX(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(num) = opt_float_arg(&mut cx, 1){
-    this.state.shadow_offset.x = num;
-  }
+  this.state.shadow_offset.x = float_arg_or_bail(&mut cx, 1, "shadowOffsetX")?;
   Ok(cx.undefined())
 }
 
 pub fn set_shadowOffsetY(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(num) = opt_float_arg(&mut cx, 1){
-    this.state.shadow_offset.y = num;
-  }
+  this.state.shadow_offset.y = float_arg_or_bail(&mut cx, 1, "shadowOffsetY")?;
   Ok(cx.undefined())
 }

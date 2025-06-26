@@ -79,7 +79,6 @@ impl CanvasGradient{
   }
 
   pub fn add_color_stop(&mut self, offset: f32, color:Color){
-    // let gradient = &mut *self.gradient.borrow_mut();
     let gradient = Arc::clone(&self.gradient);
     let mut gradient = gradient.lock().unwrap();
 
@@ -112,8 +111,10 @@ pub fn linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
     let this = RefCell::new(canvas_gradient);
     Ok(cx.boxed(this))
   }else{
-    let msg = format!("Expected 4 arguments (x1, y1, x2, y2), received {}", cx.len() - 1);
-    cx.throw_type_error(msg)
+    cx.throw_type_error(match cx.len(){
+      5.. => "The provided value is non-finite",
+      _ => "not enough arguments"
+    })
   }
 }
 
@@ -126,8 +127,11 @@ pub fn radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
     let this = RefCell::new(canvas_gradient);
     Ok(cx.boxed(this))
   }else{
-    let msg = format!("Expected 6 arguments (x1, y1, r1, x2, y2, r2), received {}", cx.len() - 1);
-    cx.throw_type_error(msg)
+    cx.throw_type_error(match cx.len(){
+      7.. => "The provided value is non-finite",
+      _ => "not enough arguments"
+    })
+
   }
 }
 
@@ -140,19 +144,29 @@ pub fn conic(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
     let this = RefCell::new(canvas_gradient);
     Ok(cx.boxed(this))
   }else{
-    let msg = format!("Expected 3 arguments (startAngle, x, y), received {}", cx.len() - 1);
-    cx.throw_type_error(msg)
+    cx.throw_type_error(match cx.len(){
+      4.. => "The provided value is non-finite",
+      _ => "not enough arguments"
+    })
   }
 }
 
 pub fn addColorStop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvasGradient>(0)?;
-  let offset = float_arg(&mut cx, 1, "offset")?;
-  let color = color_arg(&mut cx, 2);
-
   let mut this = this.borrow_mut();
-  if let Some(color) = color {
+
+  let offset = float_arg(&mut cx, 1, "offset")?;
+  if offset < 0.0 || offset > 1.0{
+    return cx.throw_range_error("Color stop offsets must be between 0.0 and 1.0");
+  }
+
+  if let Some(color) = opt_color_arg(&mut cx, 2) {
     this.add_color_stop(offset, color);
+  }else{
+    return cx.throw_type_error(match cx.len(){
+      3 => "Could not be parsed as a color",
+      _ => "not enough arguments"
+    })
   }
 
   Ok(cx.undefined())

@@ -126,7 +126,7 @@ describe("Context2D", ()=>{
       expect(ctx.getLineDash()).toEqual([])
       ctx.setLineDash([1,2,3,4])
       expect(ctx.getLineDash()).toEqual([1,2,3,4])
-      ctx.setLineDash(null)
+      ctx.setLineDash([NaN])
       expect(ctx.getLineDash()).toEqual([1,2,3,4])
     })
 
@@ -609,19 +609,21 @@ describe("Context2D", ()=>{
       ctx.fillRect(2,0,1,6)
 
       let [width, height] = [3, 6],
-          bmp = ctx.getImageData(0,0, width,height);
-      expect(bmp.width).toBe(width)
-      expect(bmp.height).toBe(height)
-      expect(bmp.data.length).toBe(width * height * 4)
-      expect(Array.from(bmp.data.slice(0,4))).toEqual([255,0,0,64])
-      expect(Array.from(bmp.data.slice(4,8))).toEqual([0,255,0,128])
-      expect(Array.from(bmp.data.slice(8,12))).toEqual([0,0,255,191])
-
-      for(var x=0; x<width; x++){
-        for(var y=0; y<height; y++){
-          let i = 4 * (y*width + x)
-          let px = Array.from(bmp.data.slice(i,i+4))
-          expect(pixel(x,y)).toEqual(px)
+          bmp1 = ctx.getImageData(0,0, width,height),
+          bmp2 = ctx.getImageData(width,height,-width,-height) // negative dimensions shift origin
+      for (const bmp of [bmp1, bmp2]){
+        expect(bmp.width).toBe(width)
+        expect(bmp.height).toBe(height)
+        expect(bmp.data.length).toBe(width * height * 4)
+        expect(Array.from(bmp.data.slice(0,4))).toEqual([255,0,0,64])
+        expect(Array.from(bmp.data.slice(4,8))).toEqual([0,255,0,128])
+        expect(Array.from(bmp.data.slice(8,12))).toEqual([0,0,255,191])
+        for(var x=0; x<width; x++){
+          for(var y=0; y<height; y++){
+            let i = 4 * (y*width + x)
+            let px = Array.from(bmp.data.slice(i,i+4))
+            expect(pixel(x,y)).toEqual(px)
+          }
         }
       }
     })
@@ -637,10 +639,27 @@ describe("Context2D", ()=>{
       ], 0)
 
       ctx.putImageData(srcImageData, -1, -1);
-
       var resImageData = ctx.getImageData(0, 0, 2, 2);
       expect(Array.from(resImageData.data)).toEqual([
         4,5,6,255, 0,0,0,0,
+        0,0,0,0,   0,0,0,0
+      ])
+
+      // try mask rect
+      ctx.reset()
+      ctx.putImageData(srcImageData, 0, 0, 1, 1, 1, 1);
+      resImageData = ctx.getImageData(0, 0, 2, 2);
+      expect(Array.from(resImageData.data)).toEqual([
+        0,0,0,0, 0,0,0,0,
+        0,0,0,0, 4,5,6,255
+      ])
+
+      // try negative dimensions
+      ctx.reset()
+      ctx.putImageData(srcImageData, 0, 0, 1, 1, -1, -1);
+      resImageData = ctx.getImageData(0, 0, 2, 2);
+      expect(Array.from(resImageData.data)).toEqual([
+        1,2,3,255, 0,0,0,0,
         0,0,0,0,   0,0,0,0
       ])
     })
@@ -977,14 +996,14 @@ describe("Context2D", ()=>{
       })
 
       test('rejects invalid args', () => {
-        expect( () => ctx.transform(0, 0, 0)).toThrow("Invalid transform matrix")
         expect( () => ctx.transform("nonesuch")).toThrow("Invalid transform matrix")
+        expect( () => ctx.transform(0, 0, 0)).toThrow("not enough arguments")
+        expect( () => ctx.transform(0, 0, 0, NaN, 0, 0)).not.toThrow()
       })
 
     })
 
   })
-
 
   describe("parses", () => {
     test('fonts', () => {
@@ -1177,5 +1196,152 @@ describe("Context2D", ()=>{
     });
   })
 
+  describe("validates", () => {
+    let g, id, img, p2d
+    beforeEach(async () => {
+      g = ctx.createLinearGradient(0,0,10,10)
+      id = ctx.getImageData(0,0,10,10)
+      img = await loadAsset("checkers.png")
+      p2d = new Path2D()
+      p2d.rect(0,0,100,100)
+      ctx.rect(0,0,100,100)
+    })
+
+    test('not enough arguments', async () => {
+      let ERR = "not enough arguments"
+      expect(() => ctx.transform()).toThrow(ERR)
+      expect(() => ctx.transform(0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.setTransform(0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.translate(0)).toThrow(ERR)
+      expect(() => ctx.scale(0)).toThrow(ERR)
+      expect(() => ctx.rotate()).toThrow(ERR)
+      expect(() => ctx.rect(0,0,0)).toThrow(ERR)
+      expect(() => ctx.arc(0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.arcTo(0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.ellipse(0,0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.moveTo(0)).toThrow(ERR)
+      expect(() => ctx.lineTo(0)).toThrow(ERR)
+      expect(() => ctx.bezierCurveTo(0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.quadraticCurveTo(0,0,0)).toThrow(ERR)
+      expect(() => ctx.conicCurveTo(0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.roundRect(0,0,0)).toThrow(ERR)
+      expect(() => ctx.fillRect(0,0,0)).toThrow(ERR)
+      expect(() => ctx.strokeRect(0,0,0)).toThrow(ERR)
+      expect(() => ctx.clearRect(0,0,0)).toThrow(ERR)
+      expect(() => ctx.fillText("text",0)).toThrow(ERR)
+      expect(() => ctx.isPointInPath(10)).toThrow(ERR)
+      expect(() => ctx.isPointInStroke(10)).toThrow(ERR)
+      expect(() => ctx.createLinearGradient(0,0,1)).toThrow(ERR)
+      expect(() => ctx.createRadialGradient(0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.createConicGradient(0,0)).toThrow(ERR)
+      expect(() => ctx.setLineDash()).toThrow(ERR)
+      expect(() => ctx.createImageData()).toThrow(ERR)
+      expect(() => ctx.createPattern(img)).toThrow(ERR)
+      expect(() => ctx.createTexture()).toThrow(ERR)
+      expect(() => ctx.getImageData(1,1,10)).toThrow(ERR)
+      expect(() => ctx.putImageData({},0)).toThrow(ERR)
+      expect(() => ctx.putImageData(id,0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.drawImage(img)).toThrow(ERR)
+      expect(() => ctx.drawImage(img,0)).toThrow(ERR)
+      expect(() => ctx.drawImage(img,0,0,0)).toThrow(ERR)
+      expect(() => ctx.drawImage(img,0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.drawImage(img,0,0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.drawImage(img,0,0,0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.drawCanvas(canvas)).toThrow(ERR)
+      expect(() => ctx.drawCanvas(canvas,0)).toThrow(ERR)
+      expect(() => ctx.drawCanvas(canvas,0,0,0)).toThrow(ERR)
+      expect(() => ctx.drawCanvas(canvas,0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.drawCanvas(canvas,0,0,0,0,0,0)).toThrow(ERR)
+      expect(() => ctx.drawCanvas(canvas,0,0,0,0,0,0,0)).toThrow(ERR)
+      expect(() => g.addColorStop(0)).toThrow(ERR)
+    })
+
+    test('value errors', async () => {
+      expect(() => ctx.ellipse(0,0,-10,-10,0,0,0,false)).toThrow("Radius value must be positive")
+      expect(() => ctx.arcTo(0,0,0,0,-10)).toThrow("Radius value must be positive")
+      expect(() => ctx.roundRect(0,0,0,0,-10)).toThrow("Corner radius cannot be negative")
+      expect(() => ctx.createImageData(1,0)).toThrow("Dimensions must be non-zero")
+      expect(() => ctx.getImageData(1,1,NaN,10)).toThrow("Expected a number")
+      expect(() => ctx.getImageData(1,NaN,10,10)).toThrow("Expected a number")
+      expect(() => ctx.createImageData(1,{})).toThrow("Dimensions must be non-zero")
+      expect(() => ctx.createImageData(1,NaN)).toThrow("Dimensions must be non-zero")
+      expect(() => ctx.putImageData(id,NaN,0)).toThrow("Expected a number")
+      expect(() => ctx.putImageData(id,0,0,0,0,NaN,0)).toThrow("Expected a number for `dirtyWidth`")
+      expect(() => ctx.putImageData({},0,0)).toThrow("Expected an ImageData as 1st arg")
+      expect(() => ctx.drawImage()).toThrow("Expected an Image or a Canvas")
+      expect(() => ctx.drawCanvas()).toThrow("Expected an Image or a Canvas")
+      expect(() => ctx.fill(NaN)).toThrow("Expected `fillRule`")
+      expect(() => ctx.clip(NaN)).toThrow("Expected `fillRule`")
+      expect(() => ctx.stroke(NaN)).toThrow("Expected a Path2D")
+      expect(() => ctx.fill(NaN, "evenodd")).toThrow("Expected a Path2D")
+      expect(() => ctx.clip(NaN, "evenodd")).toThrow("Expected a Path2D")
+      expect(() => ctx.fill(p2d, {})).toThrow("Expected `fillRule`")
+      expect(() => ctx.createTexture([1, NaN])).toThrow("Expected a number or array")
+      expect(() => ctx.createTexture(1, {path:null})).toThrow("Expected a Path2D")
+      expect(() => ctx.createTexture(20, {line:{}})).toThrow("Expected a number for `line`")
+      expect(() => ctx.createTexture(20, {angle:{}})).toThrow("Expected a number for `angle`")
+      expect(() => ctx.createTexture(20, {offset:{}})).toThrow("Expected a number or array")
+      expect(() => ctx.createTexture(20, {offset:[1, NaN]})).toThrow("Expected a number or array")
+      expect(() => ctx.isPointInPath(0, 10, 10)).toThrow("Expected `fillRule`")
+      expect(() => ctx.isPointInPath(false, 10, 10)).toThrow("Expected `fillRule`")
+      expect(() => ctx.isPointInPath({}, 10, 10)).toThrow("Expected `fillRule`")
+      expect(() => ctx.isPointInPath({}, 10, 10, "___")).toThrow("Expected a Path2D")
+      expect(() => ctx.isPointInPath({}, 10, 10, "evenodd")).toThrow("Expected a Path2D")
+      expect(() => ctx.isPointInPath(10, 10, "___")).toThrow("Expected `fillRule`")
+      expect(() => ctx.isPointInPath(p2d, 10, 10, "")).toThrow("Expected `fillRule`")
+      expect(() => ctx.createLinearGradient(0,0,NaN,1)).toThrow("The provided value is non-finite")
+      expect(() => ctx.createRadialGradient(0,0,NaN,0,0,0)).toThrow("The provided value is non-finite")
+      expect(() => ctx.createConicGradient(0,NaN,0)).toThrow("The provided value is non-finite")
+      expect(() => ctx.createPattern(img, "___")).toThrow("Expected `repetition`")
+      expect(() => g.addColorStop(NaN, '#000')).toThrow("Expected a number")
+      expect(() => g.addColorStop(0, {})).toThrow("Could not be parsed as a color")
+      expect(() => ctx.setLineDash(NaN)).toThrow("Value is not a sequence")
+    })
+
+    test('NaN arguments', async () => {
+      // silently fail
+      expect(() => ctx.setTransform({})).not.toThrow()
+      expect(() => ctx.setTransform(0,0,0,NaN,0,0)).not.toThrow()
+      expect(() => ctx.translate(NaN,0)).not.toThrow()
+      expect(() => ctx.scale(NaN,0)).not.toThrow()
+      expect(() => ctx.rotate(NaN)).not.toThrow()
+      expect(() => ctx.rect(0,0,NaN,0)).not.toThrow()
+      expect(() => ctx.arc(0,0,NaN,0,0)).not.toThrow()
+      expect(() => ctx.arc(0,0,NaN,0,0,false)).not.toThrow()
+      expect(() => ctx.arc(0,0,NaN,0,0,new Date())).not.toThrow()
+      expect(() => ctx.ellipse(0,0,0,NaN,0,0,0)).not.toThrow()
+      expect(() => ctx.moveTo(NaN,0)).not.toThrow()
+      expect(() => ctx.lineTo(NaN,0)).not.toThrow()
+      expect(() => ctx.arcTo(0,0,0,0,NaN)).not.toThrow()
+      expect(() => ctx.bezierCurveTo(0,0,0,0,NaN,0)).not.toThrow()
+      expect(() => ctx.quadraticCurveTo(0,0,NaN,0)).not.toThrow()
+      expect(() => ctx.conicCurveTo(0,0,NaN,0,1)).not.toThrow()
+      expect(() => ctx.roundRect(0,0,0,0,NaN)).not.toThrow()
+      expect(() => ctx.fillRect(0,0,NaN,0)).not.toThrow()
+      expect(() => ctx.strokeRect(0,0,NaN,0)).not.toThrow()
+      expect(() => ctx.clearRect(0,0,NaN,0)).not.toThrow()
+      expect(() => ctx.fillText("text", 0, NaN)).not.toThrow()
+      expect(() => ctx.fillText("text", 0, 0, NaN)).not.toThrow()
+      expect(() => ctx.strokeText("text", 0, NaN)).not.toThrow()
+      expect(() => ctx.strokeText("text", 0, 0, NaN)).not.toThrow()
+      expect(() => ctx.setLineDash([NaN, 0, 0])).not.toThrow()
+      expect(() => ctx.outlineText("text", NaN)).not.toThrow()
+      expect(() => ctx.drawImage(img,NaN,0)).not.toThrow()
+      expect(() => ctx.drawImage(img,0,0,NaN,0)).not.toThrow()
+      expect(() => ctx.drawImage(img,0,0,0,0,NaN,0,0,0)).not.toThrow()
+      expect(() => ctx.drawCanvas(canvas,NaN,0)).not.toThrow()
+      expect(() => ctx.drawCanvas(canvas,0,0,NaN,0)).not.toThrow()
+      expect(() => ctx.drawCanvas(canvas,0,0,0,0,NaN,0,0,0)).not.toThrow()
+
+      // no error, returns false
+      expect(ctx.isPointInPath(10, NaN, "evenodd")).toEqual(false)
+      expect(ctx.isPointInPath(p2d, 10, NaN, "evenodd")).toEqual(false)
+      expect(ctx.isPointInPath(p2d, 10)).toEqual(false)
+      expect(ctx.isPointInStroke(10, NaN)).toEqual(false)
+      expect(ctx.isPointInStroke(p2d, 10, NaN)).toEqual(false)
+      expect(ctx.isPointInStroke(p2d, 10)).toEqual(false)
+    })
+
+  })
 
 })

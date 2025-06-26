@@ -50,14 +50,20 @@ pub fn get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
 
 pub fn set_width(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let width = float_arg(&mut cx, 1, "size")?;
+  let width = float_arg_or_bail(&mut cx, 1, "size")?;
+  if width < 0.0{
+    cx.throw_range_error("⚠️Dimensions must be non-zero")?
+  }
   this.borrow_mut().width = width;
   Ok(cx.undefined())
 }
 
 pub fn set_height(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let height = float_arg(&mut cx, 1, "size")?;
+  let height = float_arg_or_bail(&mut cx, 1, "size")?;
+  if height < 0.0{
+    cx.throw_range_error("⚠️Dimensions must be non-zero")?
+  }
   this.borrow_mut().height = height;
   Ok(cx.undefined())
 }

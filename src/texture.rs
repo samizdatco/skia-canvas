@@ -92,21 +92,30 @@ impl CanvasTexture{
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvasTexture> {
-  let path = opt_path2d_arg(&mut cx, 1);
-  let color = color_arg(&mut cx, 2).unwrap_or(Color::BLACK);
-  let line = float_arg(&mut cx, 3, "line")?;
-  let nums = float_args(&mut cx, 4..9)?;
+  let path = opt_skpath_arg(&mut cx, 1);
+  let color = opt_color_arg(&mut cx, 2).unwrap_or(Color::BLACK);
 
-  let texture = match nums.as_slice(){
-    [angle, h, v, x, y] => {
-      let angle = *angle;
-      let scale = (*h, *v);
-      let shift = (*x, *y);
-      Texture{path, color, line, angle, scale, shift}
-    },
-    _ => Texture::default()
+  let line = match opt_float_arg(&mut cx, 3){
+    Some(weight) => weight,
+    None => cx.throw_type_error("Expected a number for `line`")?
   };
 
+  let angle = match opt_float_arg(&mut cx, 4){
+    Some(theta) => theta,
+    None => cx.throw_type_error("Expected a number for `angle`")?
+  };
+
+  let scale = match opt_float_args(&mut cx, 5..7).as_slice(){
+    [h, v] => (*h, *v),
+    _ => cx.throw_type_error("Expected a number or array with 2 numbers for `spacing`")?
+  };
+
+  let shift = match opt_float_args(&mut cx, 7..9).as_slice(){
+    [h, v] => (*h, *v),
+    _ => cx.throw_type_error("Expected a number or array with 2 numbers for `offset`")?
+  };
+
+  let texture = Texture{path, color, line, angle, scale, shift};
   let canvas_texture = CanvasTexture{ texture:Arc::new(Mutex::new(texture)) };
   let this = RefCell::new(canvas_texture);
   Ok(cx.boxed(this))

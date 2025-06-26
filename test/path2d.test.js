@@ -83,7 +83,7 @@ describe("Path2D", ()=>{
       let [left, top] = [20, 30]
       p.moveTo(left, top)
       expect(p.bounds).toMatchObject({left, top})
-      expect(() => p.moveTo(120) ).toThrowError("Not enough arguments")
+      expect(() => p.moveTo(120) ).toThrow("not enough arguments")
     })
 
     test("lineTo", () => {
@@ -94,7 +94,7 @@ describe("Path2D", ()=>{
       ctx.stroke(p)
       expect(p.bounds).toMatchObject({left, top, width, height})
       expect(pixel(left+width/2, top+height/2)).toEqual(BLACK)
-      expect(() => p.lineTo(120) ).toThrowError("Not enough arguments")
+      expect(() => p.lineTo(120) ).toThrow("not enough arguments")
     })
 
     test("bezierCurveTo", () => {
@@ -106,7 +106,7 @@ describe("Path2D", ()=>{
 
       expect(pixel(71, 42)).toEqual(BLACK)
       expect(pixel(168, 157)).toEqual(BLACK)
-      expect(() => p.bezierCurveTo(120, 300, 400, 400) ).toThrowError("Not enough arguments")
+      expect(() => p.bezierCurveTo(120, 300, 400, 400) ).toThrow("not enough arguments")
       expect(() => p.bezierCurveTo(120, 300, null, 'foo', NaN, 400) ).not.toThrow()
     })
 
@@ -118,7 +118,7 @@ describe("Path2D", ()=>{
       ctx.stroke(p)
 
       expect(pixel(120, 199)).toEqual(BLACK)
-      expect(() => p.quadraticCurveTo(120, 300) ).toThrowError("Not enough arguments")
+      expect(() => p.quadraticCurveTo(120, 300) ).toThrow("not enough arguments")
       expect(() => p.quadraticCurveTo(NaN, 300, null, 'foo') ).not.toThrow()
     })
 
@@ -166,7 +166,7 @@ describe("Path2D", ()=>{
 
       expect(pixel(150, 137)).toEqual(BLACK)
       expect(pixel(150, 33)).toEqual(BLACK)
-      expect(() => p.arcTo(0,0, 20,20) ).toThrowError("Not enough arguments")
+      expect(() => p.arcTo(0,0, 20,20) ).toThrow("not enough arguments")
       expect(() => p.arcTo(150, 5, null, 'foo', NaN) ).not.toThrow()
     })
 
@@ -177,7 +177,7 @@ describe("Path2D", ()=>{
       ctx.stroke(p)
 
       expect(pixel(150, 150)).toEqual(BLACK)
-      expect(() => p.rect(0,0, 20) ).toThrowError("Not enough arguments")
+      expect(() => p.rect(0,0, 20) ).toThrow("not enough arguments")
     })
 
     test("roundRect", () => {
@@ -219,7 +219,7 @@ describe("Path2D", ()=>{
 
       expect(pixel(196, 112)).toEqual(BLACK)
       expect(pixel(150, 150)).toEqual(WHITE)
-      expect(() => p.arc(150, 150, 75, Math.PI/8) ).toThrowError("Not enough arguments")
+      expect(() => p.arc(150, 150, 75, Math.PI/8) ).toThrow("not enough arguments")
       expect(() => p.arc(150, 150, 75, Math.PI/8, Math.PI*1.5) ).not.toThrow()
     })
 
@@ -658,6 +658,54 @@ describe("Path2D", ()=>{
       expect(mid()).toEqual(BLACK)
       expect(right()).toEqual(BLACK)
       scrub()
+    })
+  })
+
+  describe("validates", () => {
+    test('not enough arguments', async () => {
+      let ERR = "not enough arguments"
+      expect(() => p.transform()).toThrow(ERR)
+      expect(() => p.transform(0,0,0,0,0)).toThrow(ERR)
+      expect(() => p.rect(0,0,0)).toThrow(ERR)
+      expect(() => p.roundRect(0,0,0)).toThrow(ERR)
+      expect(() => p.arc(0,0,0,0)).toThrow(ERR)
+      expect(() => p.arcTo(0,0,0,0)).toThrow(ERR)
+      expect(() => p.ellipse(0,0,0,0,0,0)).toThrow(ERR)
+      expect(() => p.moveTo(0)).toThrow(ERR)
+      expect(() => p.lineTo(0)).toThrow(ERR)
+      expect(() => p.bezierCurveTo(0,0,0,0,0)).toThrow(ERR)
+      expect(() => p.quadraticCurveTo(0,0,0)).toThrow(ERR)
+      expect(() => p.conicCurveTo(0,0,0,0)).toThrow(ERR)
+      expect(() => p.complement()).toThrow(ERR)
+      expect(() => p.interpolate()).toThrow(ERR)
+      expect(() => p.offset(0)).toThrow(ERR)
+      expect(() => p.round()).toThrow(ERR)
+      expect(() => p.contains(0)).toThrow(ERR)
+      expect(() => p.addPath()).toThrow(ERR)
+    })
+
+    test('value errors', async () => {
+      expect(() => p.transform(0,0,0,NaN,0,0)).toThrow("Expected a DOMMatrix")
+      expect(() => p.complement({})).toThrow("Expected a Path2D")
+      expect(() => p.interpolate(p)).toThrow("Expected a number")
+      expect(() => p.roundRect(0,0,0,0,-10)).toThrow("Corner radius cannot be negative")
+      expect(() => p.addPath(p, [])).toThrow("Invalid transform matrix")
+    })
+
+    test('NaN arguments', async () => {
+      expect(() => p.rect(0,0,NaN,0)).not.toThrow()
+      expect(() => p.arc(0,0,NaN,0,0)).not.toThrow()
+      expect(() => p.arc(0,0,NaN,0,0,false)).not.toThrow()
+      expect(() => p.arc(0,0,NaN,0,0,new Date())).not.toThrow()
+      expect(() => p.ellipse(0,0,0,NaN,0,0,0)).not.toThrow()
+      expect(() => p.moveTo(NaN,0)).not.toThrow()
+      expect(() => p.lineTo(NaN,0)).not.toThrow()
+      expect(() => p.arcTo(0,0,0,0,NaN)).not.toThrow()
+      expect(() => p.bezierCurveTo(0,0,0,0,NaN,0)).not.toThrow()
+      expect(() => p.quadraticCurveTo(0,0,NaN,0)).not.toThrow()
+      expect(() => p.conicCurveTo(0,0,NaN,0,1)).not.toThrow()
+      expect(() => p.roundRect(0,0,0,0,NaN)).not.toThrow()
+      expect(() => p.transform({})).not.toThrow()
     })
   })
 })

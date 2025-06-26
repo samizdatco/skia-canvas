@@ -99,7 +99,7 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 }
 
 pub fn from_path(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
-  let other_path = cx.argument::<BoxedPath2D>(1)?;
+  let other_path = path2d_arg(&mut cx, 1)?;
   let path = other_path.borrow().path.clone();
   Ok(cx.boxed(RefCell::new(Path2D{path})))
 }
@@ -113,7 +113,7 @@ pub fn from_svg(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 // Adds a path to the current path.
 pub fn addPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let other = cx.argument::<BoxedPath2D>(1)?;
+  let other = path2d_arg(&mut cx, 1)?;
   let matrix = opt_matrix_arg(&mut cx, 2).unwrap_or_else(
     Matrix::new_identity
   );
@@ -144,10 +144,9 @@ pub fn closePath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 3)?;
 
-  let xy = opt_float_args(&mut cx, 1..3);
-  if let [x, y] = xy.as_slice(){
+  let nums = float_args_or_bail(&mut cx, &["x", "y"])?;
+  if let [x, y] = nums.as_slice(){
     this.path.move_to((*x, *y));
   }
 
@@ -158,12 +157,13 @@ pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 3)?;
 
-  let xy = opt_float_args(&mut cx, 1..3);
-  if let [x, y] = xy.as_slice(){
+  let nums = float_args_or_bail(&mut cx, &["x", "y"])?;
+  if let [x, y] = nums.as_slice(){
+    this.scoot(*x, *y);
     this.path.line_to((*x, *y));
   }
+
   Ok(cx.undefined())
 }
 
@@ -171,9 +171,8 @@ pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 7)?;
 
-  let nums = opt_float_args(&mut cx, 1..7);
+  let nums = float_args_or_bail(&mut cx, &["cp1x", "cp1y", "cp2x", "cp2y", "x", "y"])?;
   if let [cp1x, cp1y, cp2x, cp2y, x, y] = nums.as_slice(){
     this.scoot(*cp1x, *cp1y);
     this.path.cubic_to((*cp1x, *cp1y), (*cp2x, *cp2y), (*x, *y));
@@ -186,9 +185,8 @@ pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 5)?;
 
-  let nums = opt_float_args(&mut cx, 1..5);
+  let nums = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y"])?;
   if let [cpx, cpy, x, y] = nums.as_slice(){
     this.scoot(*cpx, *cpy);
     this.path.quad_to((*cpx, *cpy), (*x, *y));
@@ -201,9 +199,8 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 6)?;
 
-  let nums = opt_float_args(&mut cx, 1..6);
+  let nums = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y", "weight"])?;
   if let [p1x, p1y, p2x, p2y, weight] = nums.as_slice(){
     this.scoot(*p1x, *p1y);
     this.path.conic_to((*p1x, *p1y), (*p2x, *p2y), *weight);
@@ -216,9 +213,8 @@ pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 6)?;
 
-  let nums = opt_float_args(&mut cx, 1..6);
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "radius", "startAngle", "endAngle"])?;
   let ccw = bool_arg_or(&mut cx, 6, false);
   if let [x, y, radius, start_angle, end_angle] = nums.as_slice(){
     this.add_ellipse((*x, *y), (*radius, *radius), 0.0, *start_angle, *end_angle, ccw);
@@ -231,9 +227,8 @@ pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 6)?;
 
-  let nums = opt_float_args(&mut cx, 1..6);
+  let nums = float_args_or_bail(&mut cx, &["x1", "y1", "x2", "y2", "radius"])?;
   if let [x1, y1, x2, y2, radius] = nums.as_slice(){
     this.scoot(*x1, *y1);
     this.path.arc_to_tangent((*x1, *y1), (*x2, *y2), *radius);
@@ -246,13 +241,12 @@ pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 8)?;
 
-  let nums = opt_float_args(&mut cx, 1..8);
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "xRadius", "yRadius", "rotation", "startAngle", "endAngle"])?;
   let ccw = bool_arg_or(&mut cx, 8, false);
   if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
     if *x_radius < 0.0 || *y_radius < 0.0 {
-      return cx.throw_error("radii cannot be negative")
+      return cx.throw_range_error("Radius value must be positive")
     }
     this.add_ellipse((*x, *y), (*x_radius, *y_radius), *rotation, *start_angle, *end_angle, ccw);
   }
@@ -264,9 +258,8 @@ pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 5)?;
 
-  let nums = opt_float_args(&mut cx, 1..5);
+  let nums = float_args_or_bail(&mut cx, &["x", "y", "width", "height"])?;
   if let [x, y, w, h] = nums.as_slice(){
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let direction = if w.signum() == h.signum(){ CW }else{ CCW };
@@ -281,9 +274,10 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
-  check_argc(&mut cx, 13)?;
 
-  let nums = opt_float_args(&mut cx, 1..13);
+  let nums = float_args(&mut cx, &[
+    "x", "y", "width", "height", "r1x", "r1y", "r2x", "r2y", "r3x", "r3y", "r4x", "r4y"
+  ])?;
   if let [x, y, w, h] = &nums[..4]{
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
@@ -298,7 +292,7 @@ pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 // Applies a boolean operator to this and a second path, returning a new Path2D with their combination
 pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let other_path = cx.argument::<BoxedPath2D>(1)?;
+  let other_path = path2d_arg(&mut cx, 1)?;
   let op_name = string_arg(&mut cx, 2, "pathOp")?;
 
   if let Some(path_op) = to_path_op(&op_name){
@@ -315,7 +309,7 @@ pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 
 pub fn interpolate(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let other = cx.argument::<BoxedPath2D>(1)?;
+  let other = path2d_arg(&mut cx, 1)?;
   let weight = float_arg(&mut cx, 2, "weight")?;
 
   let this = this.borrow();
@@ -405,8 +399,8 @@ pub fn round(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 // Clips a proportional segment out of the middle of the path (or the edges if invert=true)
 pub fn trim(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let begin = float_arg(&mut cx, 1, "begin")?;
-  let end = float_arg(&mut cx, 2, "end")?;
+  let begin = float_arg_or_bail(&mut cx, 1, "begin")?;
+  let end = float_arg_or_bail(&mut cx, 2, "end")?;
   let invert = bool_arg_or(&mut cx, 3, false);
 
   let this = this.borrow();
@@ -426,8 +420,8 @@ pub fn trim(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 // Discretizes the path at a fixed segment length then randomly offsets the points
 pub fn jitter(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let seg_len = float_arg(&mut cx, 1, "segmentLength")?;
-  let std_dev = float_arg(&mut cx, 2, "variance")?;
+  let seg_len = float_arg_or_bail(&mut cx, 1, "segmentLength")?;
+  let std_dev = float_arg_or_bail(&mut cx, 2, "variance")?;
   let seed = float_arg_or(&mut cx, 3, 0.0) as u32;
 
   let this = this.borrow();

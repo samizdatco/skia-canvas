@@ -82,6 +82,11 @@ describe("Canvas", ()=>{
       expect(c.width).toBe(456)
       expect(c.height).toBe(H)
 
+      // @ts-expect-error
+      c = new Canvas("0xff")
+      expect(c.width).toBe(255)
+      expect(c.height).toBe(H)
+
       c = new Canvas(undefined, 789)
       expect(c.width).toBe(W)
       expect(c.height).toBe(789)
@@ -92,8 +97,8 @@ describe("Canvas", ()=>{
       expect(c.height).toBe(H)
 
       // @ts-expect-error
-      c = new Canvas(false, {})
-      expect(c.width).toBe(W)
+      c = new Canvas(true, {})
+      expect(c.width).toBe(1)
       expect(c.height).toBe(H)
     })
 
@@ -133,10 +138,10 @@ describe("Canvas", ()=>{
     })
 
     test("export file formats", async () => {
-      expect(() => canvas.saveAs(`${TMP}/output.gif`) ).toThrowError('Unsupported file format');
-      expect(() => canvas.saveAs(`${TMP}/output.targa`) ).toThrowError('Unsupported file format');
-      expect(() => canvas.saveAs(`${TMP}/output`) ).toThrowError('Cannot determine image format');
-      expect(() => canvas.saveAs(`${TMP}/`) ).toThrowError('Cannot determine image format');
+      expect(() => canvas.saveAs(`${TMP}/output.gif`) ).toThrow('Unsupported file format');
+      expect(() => canvas.saveAs(`${TMP}/output.targa`) ).toThrow('Unsupported file format');
+      expect(() => canvas.saveAs(`${TMP}/output`) ).toThrow('Cannot determine image format');
+      expect(() => canvas.saveAs(`${TMP}/`) ).toThrow('Cannot determine image format');
       await expect(canvas.saveAs(`${TMP}/output`, {format:'png'}) ).resolves.not.toThrow();
     })
 
@@ -357,7 +362,7 @@ describe("Canvas", ()=>{
       let width = 0, height = 128
       Object.assign(canvas, {width, height})
       expect(canvas).toMatchObject({width, height})
-      await expect(canvas.saveAs(`${TMP}/zeroed.png`)).rejects.toThrowError("must be non-zero")
+      await expect(canvas.saveAs(`${TMP}/zeroed.png`)).rejects.toThrow("must be non-zero")
     })
   })
 
@@ -538,7 +543,7 @@ describe("Canvas", ()=>{
       let width = 0, height = 128
       Object.assign(canvas, {width, height})
       expect(canvas).toMatchObject({width, height})
-      expect( () => canvas.saveAsSync(`${TMP}/zeroed.png`)).toThrowError("must be non-zero")
+      expect( () => canvas.saveAsSync(`${TMP}/zeroed.png`)).toThrow("must be non-zero")
     })
   })
 
