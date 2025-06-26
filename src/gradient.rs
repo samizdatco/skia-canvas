@@ -138,7 +138,7 @@ pub fn radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
 pub fn conic(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
   if let [theta, x, y] = opt_float_args(&mut cx, 1..4).as_slice(){
     let center = Point::new(*x, *y);
-    let angle = to_degrees(*theta) - 90.0;
+    let angle = to_degrees(*theta);
     let sweep = Gradient::Conic{ center, angle, stops:vec![], colors:vec![] };
     let canvas_gradient = CanvasGradient{ gradient:Arc::new(Mutex::new(sweep)) };
     let this = RefCell::new(canvas_gradient);
