@@ -388,8 +388,8 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'#fff');
         ctx.fillRect(0,0,512,512);
 
-        expect(pixel(256,5)).toEqual(WHITE)
-        expect(pixel(256,500)).toEqual(BLACK)
+        expect(pixel(5, 256)).toEqual(BLACK)
+        expect(pixel(500, 256)).toEqual(WHITE)
 
         // rotate 90° so black is left and white is right
         gradient = ctx.createConicGradient(Math.PI/2, 256, 256);
@@ -399,8 +399,8 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'#fff');
         ctx.fillRect(0,0,512,512);
 
-        expect(pixel(500,256)).toEqual(WHITE)
-        expect(pixel(5,256)).toEqual(BLACK)
+        expect(pixel(256, 500)).toEqual(WHITE)
+        expect(pixel(256, 5)).toEqual(BLACK)
       })
     })
   })
