@@ -325,9 +325,13 @@ impl VulkanBackend{
             // pass the suface's canvas to the user-provided callback
             f(surface.canvas());
 
-            // display the result and return a bitmap copy for the cache
+            // save a copy of the bitmap for the cache
+            let image = surface.image_snapshot();
+
+            // display the result
             self.flush_framebuffer(window, image_index, acquire_future);
-            surface.image_snapshot()
+
+            image
         })
     }
 
