@@ -628,6 +628,7 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let format = string_for_key(cx, &opts, "format")?;
   let quality = float_for_key(cx, &opts, "quality")?;
   let density = float_for_key(cx, &opts, "density")?;
+  let jpeg_downsample = bool_for_key(cx, &opts, "downsample")?;
   let matte = opt_color_for_key(cx, &opts, "matte");
   let msaa = opt_float_for_key(cx, &opts, "msaa")
     .map(|num| num.floor() as usize);
@@ -654,7 +655,9 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
     _ => return cx.throw_type_error("Expected `fonts` to be \"outline\" or \"device-independent\"")
   };
 
-  Ok(ExportOptions{format, quality, density, fonts, matte, msaa, color_type, text_contrast, text_gamma})
+  Ok(ExportOptions{
+    format, quality, density, fonts, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma
+  })
 }
 
 //

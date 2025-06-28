@@ -256,6 +256,10 @@ impl Page{
           "jpg" | "jpeg" => {
             let jpg_opts = jpeg_encoder::Options {
                 quality: img_quality,
+                downsample: match options.jpeg_downsample{
+                  true => jpeg_encoder::Downsample::BothDirections,
+                  false => jpeg_encoder::Downsample::No,
+                },
                 ..jpeg_encoder::Options::default()
             };
 
@@ -456,6 +460,7 @@ pub struct ExportOptions{
   pub matte: Option<Color>,
   pub msaa: Option<usize>,
   pub color_type: ColorType,
+  pub jpeg_downsample: bool,
   pub text_contrast: f32,
   pub text_gamma: f32,
 }
@@ -463,9 +468,9 @@ pub struct ExportOptions{
 impl Default for ExportOptions{
   fn default() -> Self {
     Self{
-      format:"raw".to_string(), quality:0.92, density:1.0,
-      matte:None, msaa:None, color_type:ColorType::RGBA8888,
-      fonts:FontOptions::Default, text_contrast:0.0, text_gamma:1.4
+      format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
+      jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
+      color_type:ColorType::RGBA8888, fonts:FontOptions::Default,
     }
   }
 }
