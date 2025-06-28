@@ -218,7 +218,10 @@ pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontS
   let feat_obj:Handle<JsObject> = font_desc.get(cx, "features")?;
   let features = font_features(cx, &feat_obj)?;
 
-  Ok(Some(FontSpec{ families, size, line_height, weight, slant, width, features, variant, canonical}))
+  Ok(match families[0] == ""{
+    true => None, // silently fail if a family name was omitted (e.g., "bold 50px")
+    false => Some(FontSpec{ families, size, line_height, weight, slant, width, features, variant, canonical})
+  })
 }
 
 pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
