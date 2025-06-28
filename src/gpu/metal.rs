@@ -78,7 +78,7 @@ impl MetalEngine {
         });
     }
 
-    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:ExportOptions, f:F) -> Result<T, String>
+    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match MetalEngine::supported() {
@@ -132,7 +132,7 @@ impl MetalContext{
         })
     }
 
-    fn surface(&mut self, image_info: &ImageInfo, opts:ExportOptions) -> Result<Surface, String> {
+    fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
         self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,

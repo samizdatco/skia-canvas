@@ -57,7 +57,7 @@ impl RenderingEngine{
         }
     }
 
-    pub fn with_surface<T,F>(&self, image_info: &ImageInfo, opts:ExportOptions, f:F) -> Result<T, String>
+    pub fn with_surface<T,F>(&self, image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match self {

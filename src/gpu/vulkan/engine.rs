@@ -101,7 +101,7 @@ impl VulkanEngine {
         });
     }
 
-    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:ExportOptions, f:F) -> Result<T, String>
+    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match VulkanEngine::supported() {
@@ -251,10 +251,10 @@ impl VulkanContext{
         self.surface(&ImageInfo::new_n32_premul(
             ISize::new(100, 100),
             Some(ColorSpace::new_srgb()),
-        ), ExportOptions::default()).is_ok()
+        ), &ExportOptions::default()).is_ok()
     }
 
-    pub fn surface(&mut self, image_info: &ImageInfo, opts:ExportOptions) -> Result<Surface, String> {
+    pub fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
         self.last_use = Instant::now();
         surfaces::render_target(
             &mut self.context,

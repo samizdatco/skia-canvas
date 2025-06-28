@@ -96,7 +96,7 @@ impl PageRecorder{
     let page = self.get_page();
 
     let opts = ExportOptions{msaa:Some(0), ..Default::default()};
-    engine.with_surface(&src_info, opts, |surface| {
+    engine.with_surface(&src_info, &opts, |surface| {
       let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
 
       let got_pixels = {
@@ -209,7 +209,7 @@ impl Page{
       return Err("Width and height must be non-zero to generate an image".to_string())
     }
 
-    let ExportOptions{ format, quality, density, matte, color_type, .. } = options.clone();
+    let ExportOptions{ ref format, quality, density, matte, color_type, .. } = options;
     let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
     let size = self.bounds.size();
     let img_dims = Size::new(size.width * density, size.height * density).to_floor();
@@ -234,7 +234,7 @@ impl Page{
       }
 
       // handle bitmap formats using (potentially gpu-backed) rasterizer
-      _ => engine.with_surface(&img_info, options, |surface|{
+      _ => engine.with_surface(&img_info, &options, |surface|{
         surface
           .canvas()
           .set_matrix(&img_scale)
