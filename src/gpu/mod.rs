@@ -1,7 +1,7 @@
 #![allow(clippy::upper_case_acronyms)]
 use skia_safe::{ImageInfo, Image, Rect, Matrix, Color, Surface, surfaces};
 use serde_json::Value;
-use crate::context::page::Page;
+use crate::context::page::{Page, ExportOptions};
 
 #[cfg(feature = "metal")]
 mod metal;
@@ -57,12 +57,12 @@ impl RenderingEngine{
         }
     }
 
-    pub fn with_surface<T,F>(&self, image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<T, String>
+    pub fn with_surface<T,F>(&self, image_info: &ImageInfo, opts:ExportOptions, f:F) -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match self {
-            Self::GPU => Engine::with_surface(image_info, msaa, f),
-            Self::CPU => surfaces::raster(image_info, None, None)
+            Self::GPU => Engine::with_surface(image_info, opts, f),
+            Self::CPU => surfaces::raster(image_info, None, Some(&opts.surface_props()))
                 .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
                 .and_then(|mut surface|f(&mut surface))
         }

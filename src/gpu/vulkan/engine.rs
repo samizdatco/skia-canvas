@@ -16,6 +16,8 @@ use skia_safe::{
     ColorSpace, ISize, ImageInfo, Surface,
 };
 
+use crate::context::page::ExportOptions;
+
 thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );
 static VK_STATUS: OnceLock<Value> = OnceLock::new();
 static VK_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
@@ -99,7 +101,7 @@ impl VulkanEngine {
         });
     }
 
-    pub fn with_surface<T, F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<T, String>
+    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:ExportOptions, f:F) -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match VulkanEngine::supported() {
@@ -113,7 +115,7 @@ impl VulkanEngine {
                     .and_then(|ctx|{
                         let ctx = local_ctx.insert(ctx);
                         // ...then create the surface with it...
-                        ctx.surface(image_info, msaa)
+                        ctx.surface(image_info, opts)
                     })
                     .and_then(|mut surface|
                         // ... finally let the callback use it
@@ -249,11 +251,11 @@ impl VulkanContext{
         self.surface(&ImageInfo::new_n32_premul(
             ISize::new(100, 100),
             Some(ColorSpace::new_srgb()),
-        ), None).is_ok()
+        ), ExportOptions::default()).is_ok()
     }
 
-    pub fn surface(&mut self, image_info: &ImageInfo, msaa:Option<usize>) -> Result<Surface, String> {
-        let samples = msaa.unwrap_or_else(||
+    pub fn surface(&mut self, image_info: &ImageInfo, opts:ExportOptions) -> Result<Surface, String> {
+        let samples = opts.msaa.unwrap_or_else(||
             if self.msaa.contains(&4){ 4 } // 4x is a good default if available
             else{ *self.msaa.last().unwrap() }
         );
@@ -268,7 +270,7 @@ impl VulkanContext{
             image_info,
             Some(samples),
             SurfaceOrigin::BottomLeft,
-            None,
+            Some(&opts.surface_props()),
             false,
             None,
         ).ok_or(

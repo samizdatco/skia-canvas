@@ -13,6 +13,8 @@ use skia_safe::gpu::{
 use objc::rc::autoreleasepool;
 use serde_json::{json, Value};
 
+use crate::context::page::ExportOptions;
+
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
 static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
 static MTL_STATUS: OnceLock<Value> = OnceLock::new();
@@ -76,7 +78,7 @@ impl MetalEngine {
         });
     }
 
-    pub fn with_surface<T, F>(image_info: &ImageInfo, msaa:Option<usize>, f:F) -> Result<T, String>
+    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:ExportOptions, f:F) -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match MetalEngine::supported() {
@@ -91,7 +93,7 @@ impl MetalEngine {
                         .and_then(|ctx|{
                             let ctx = local_ctx.insert(ctx);
                             // ...then create the surface with it...
-                            ctx.surface(image_info, msaa)
+                            ctx.surface(image_info, opts)
                         })
                         .and_then(|mut surface|
                             // ... finally let the callback use it
@@ -130,8 +132,8 @@ impl MetalContext{
         })
     }
 
-    fn surface(&mut self, image_info: &ImageInfo, msaa:Option<usize>) -> Result<Surface, String> {
-        let samples = msaa.unwrap_or_else(||
+    fn surface(&mut self, image_info: &ImageInfo, opts:ExportOptions) -> Result<Surface, String> {
+        let samples = opts.msaa.unwrap_or_else(||
             if self.msaa.contains(&4){ 4 } // 4x is a good default if available
             else{ *self.msaa.last().unwrap() }
         );
@@ -146,7 +148,7 @@ impl MetalContext{
             image_info,
             Some(samples),
             SurfaceOrigin::BottomLeft,
-            None,
+            Some(&opts.surface_props()),
             false,
             None
         ).ok_or(

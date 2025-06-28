@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
 use css_color::Rgba;
-use skia_safe::{ Path, Matrix, Point, Color, RGB, Data };
+use skia_safe::{ Path, Matrix, Point, Color, RGB, Data, SurfaceProps };
 
 //
 // meta-helpers
@@ -635,7 +635,20 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let color_type = opt_string_for_key(cx, &opts, "colorType")
     .map(|mode| to_color_type(&mode)).unwrap_or(ColorType::RGBA8888);
 
-  Ok(ExportOptions{ format, quality, density, outline, matte, msaa, color_type})
+  let text_contrast = opt_float_for_key(cx, &opts, "textContrast").unwrap_or(0.0);
+  let (min_c, max_c) = (SurfaceProps::MIN_CONTRAST_INCLUSIVE, SurfaceProps::MAX_CONTRAST_INCLUSIVE);
+  if text_contrast < min_c || text_contrast > max_c{
+    return cx.throw_range_error(format!("Expected a number between {} and {} for `textContrast`", min_c, max_c))
+  }
+
+  let mut text_gamma = opt_float_for_key(cx, &opts, "textGamma").unwrap_or(1.4);
+  let (min_g, max_g) = (SurfaceProps::MIN_GAMMA_INCLUSIVE, SurfaceProps::MAX_GAMMA_EXCLUSIVE);
+  if text_gamma == max_g{ text_gamma -= f32::EPSILON }; // nudge down values right at the max
+  if text_gamma < min_g || text_contrast > max_g{
+    return cx.throw_range_error(format!("Expected a number between {} and {} for `textGamma`", min_g, max_g))
+  }
+
+  Ok(ExportOptions{ format, quality, density, outline, matte, msaa, color_type, text_contrast, text_gamma})
 }
 
 //

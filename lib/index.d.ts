@@ -279,6 +279,12 @@ export interface RenderOptions {
 
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType
+
+  /** Amount of additional contrast to add when rendering text (defaults to 0) */
+  textContrast?: number
+
+  /** Gamma value for blending the edges of letterforms (defaults to 1.4) */
+  textGamma?: number
 }
 
 export interface SaveOptions extends RenderOptions {

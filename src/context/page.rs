@@ -8,7 +8,7 @@ use skia_safe::{
   image::{BitDepth, CachingHint}, images, pdf,
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document,
   Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, Size,
-  IPoint, jpeg_encoder, png_encoder, webp_encoder
+  SurfaceProps, SurfacePropsFlags, PixelGeometry, IPoint, jpeg_encoder, png_encoder, webp_encoder
 };
 use little_exif::{metadata::Metadata, exif_tag::ExifTag, filetype::FileExtension};
 use crc::{Crc, CRC_32_ISO_HDLC};
@@ -95,7 +95,8 @@ impl PageRecorder{
     let src_info = ImageInfo::new_n32_premul(self.bounds.size().to_floor(), dst_info.color_space());
     let page = self.get_page();
 
-    engine.with_surface(&src_info, Some(0), |surface| {
+    let opts = ExportOptions{msaa:Some(0), ..Default::default()};
+    engine.with_surface(&src_info, opts, |surface| {
       let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
 
       let got_pixels = {
@@ -208,7 +209,7 @@ impl Page{
       return Err("Width and height must be non-zero to generate an image".to_string())
     }
 
-    let ExportOptions{ format, quality, density, outline, matte, msaa, color_type } = options;
+    let ExportOptions{ format, quality, density, outline, matte, color_type, .. } = options.clone();
     let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
     let size = self.bounds.size();
 
@@ -235,7 +236,7 @@ impl Page{
       }
 
       // handle bitmap formats using (potentially gpu-backed) rasterizer
-      _ => engine.with_surface(&img_info, msaa, |surface|{
+      _ => engine.with_surface(&img_info, options, |surface|{
         surface
           .canvas()
           .set_matrix(&img_scale)
@@ -441,7 +442,7 @@ fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Do
   }))
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExportOptions{
   pub format: String,
   pub quality: f32,
@@ -449,5 +450,28 @@ pub struct ExportOptions{
   pub outline: bool,
   pub matte: Option<Color>,
   pub msaa: Option<usize>,
-  pub color_type: ColorType
+  pub color_type: ColorType,
+  pub text_contrast: f32,
+  pub text_gamma: f32,
+}
+
+impl Default for ExportOptions{
+  fn default() -> Self {
+      Self{
+        format:"raw".to_string(), quality:0.92, density:1.0,
+        matte:None, msaa:None, color_type:ColorType::RGBA8888,
+        outline:false, text_contrast:0.0, text_gamma:1.4
+      }
+  }
+}
+
+impl ExportOptions{
+  pub fn surface_props(&self) -> SurfaceProps{
+    SurfaceProps::new_with_text_properties(
+      SurfacePropsFlags::default(),
+      PixelGeometry::Unknown,
+      self.text_contrast,
+      self.text_gamma,
+    )
+  }
 }
