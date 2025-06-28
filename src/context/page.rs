@@ -254,12 +254,12 @@ impl Page{
           }
 
           "jpg" | "jpeg" => {
-            let opts = jpeg_encoder::Options {
+            let jpg_opts = jpeg_encoder::Options {
                 quality: img_quality,
                 ..jpeg_encoder::Options::default()
             };
 
-            jpeg_encoder::encode_image(context, &image, &opts).map(|data|{
+            jpeg_encoder::encode_image(context, &image, &jpg_opts).map(|data|{
               let mut bytes = data.as_bytes().to_vec();
               let [l, r] = (72 * density as u16).to_be_bytes();
               bytes.splice(13..18, [1, l, r, l, r].iter().cloned());
@@ -268,9 +268,9 @@ impl Page{
           }
 
           "png" => {
-            let opts = png_encoder::Options::default();
+            let png_opts = png_encoder::Options::default();
 
-            png_encoder::encode_image(context, &image, &opts).map(|data|{
+            png_encoder::encode_image(context, &image, &png_opts).map(|data|{
               let mut bytes = data.as_bytes().to_vec();
               let mut digest = CRC32.digest();
               let [a, b, c, d] = ((72.0 * density * 39.3701) as u32).to_be_bytes();
@@ -290,16 +290,16 @@ impl Page{
           }
 
           "webp" => {
-            let mut opts = webp_encoder::Options::default();
+            let mut webp_opts = webp_encoder::Options::default();
             if img_quality == 100 {
-                opts.compression = webp_encoder::Compression::Lossless;
-                opts.quality = 75.0;
+                webp_opts.compression = webp_encoder::Compression::Lossless;
+                webp_opts.quality = 75.0;
             } else {
-                opts.compression = webp_encoder::Compression::Lossy;
-                opts.quality = img_quality as _;
+                webp_opts.compression = webp_encoder::Compression::Lossy;
+                webp_opts.quality = img_quality as _;
             }
 
-            webp_encoder::encode_image(context, &image, &opts).map(|data|{
+            webp_encoder::encode_image(context, &image, &webp_opts).map(|data|{
               let mut bytes = data.as_bytes().to_vec();
 
               // toggle EXIF flag in VP8X chunk
