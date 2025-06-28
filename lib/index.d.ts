@@ -257,6 +257,7 @@ declare var DOMMatrix: {
 //
 
 export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "raw" | "pdf" | "svg";
+export type FontOptions = "outline" | "device-independent"
 
 export interface RenderOptions {
   /** Page to export: Defaults to 1 (i.e., first page) */
@@ -271,8 +272,8 @@ export interface RenderOptions {
   /** Quality for lossy encodings like JPEG (0.0–1.0) */
   quality?: number
 
-  /** Convert text to paths for SVG exports */
-  outline?: boolean
+  /** Optionally "outline" text as paths (SVG only) or use "device-independent" rendering (bitmaps only) */
+  fonts?: FontOptions
 
   /** Number of samples used for antialising each pixel */
   msaa?: number | false

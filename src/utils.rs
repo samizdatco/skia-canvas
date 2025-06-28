@@ -621,14 +621,13 @@ pub fn from_color_type(color_type: ColorType) -> String {
 // ExportOptions
 //
 
-use crate::context::page::ExportOptions;
+use crate::context::page::{ExportOptions, FontOptions};
 
 pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<ExportOptions>{
   let opts = opt_object_arg(cx, idx).unwrap();
   let format = string_for_key(cx, &opts, "format")?;
   let quality = float_for_key(cx, &opts, "quality")?;
   let density = float_for_key(cx, &opts, "density")?;
-  let outline = bool_for_key(cx, &opts, "outline")?;
   let matte = opt_color_for_key(cx, &opts, "matte");
   let msaa = opt_float_for_key(cx, &opts, "msaa")
     .map(|num| num.floor() as usize);
@@ -648,7 +647,14 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
     return cx.throw_range_error(format!("Expected a number between {} and {} for `textGamma`", min_g, max_g))
   }
 
-  Ok(ExportOptions{ format, quality, density, outline, matte, msaa, color_type, text_contrast, text_gamma})
+  let fonts = match opt_string_for_key(cx, &opts, "fonts").as_deref(){
+    Some("outline") => FontOptions::Outline,
+    Some("device-independent") => FontOptions::DeviceIndependent,
+    None => FontOptions::Default,
+    _ => return cx.throw_type_error("Expected `fonts` to be \"outline\" or \"device-independent\"")
+  };
+
+  Ok(ExportOptions{format, quality, density, fonts, matte, msaa, color_type, text_contrast, text_gamma})
 }
 
 //

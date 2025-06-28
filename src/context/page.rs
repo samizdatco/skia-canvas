@@ -209,10 +209,9 @@ impl Page{
       return Err("Width and height must be non-zero to generate an image".to_string())
     }
 
-    let ExportOptions{ format, quality, density, outline, matte, color_type, .. } = options.clone();
+    let ExportOptions{ format, quality, density, matte, color_type, .. } = options.clone();
     let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
     let size = self.bounds.size();
-
     let img_dims = Size::new(size.width * density, size.height * density).to_floor();
     let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
     let img_quality = ((quality*100.0) as u32).clamp(0, 100);
@@ -229,8 +228,7 @@ impl Page{
       }
 
       "svg" => {
-        let flags = outline.then_some(Flags::CONVERT_TEXT_TO_PATHS);
-        let canvas = svg::Canvas::new(Rect::from_size(size), flags);
+        let canvas = svg::Canvas::new(Rect::from_size(size), options.svg_flags());
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end().as_bytes().to_vec())
       }
@@ -443,11 +441,18 @@ fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Do
 }
 
 #[derive(Clone, Debug)]
+pub enum FontOptions{
+  Default,
+  DeviceIndependent,
+  Outline,
+}
+
+#[derive(Clone, Debug)]
 pub struct ExportOptions{
   pub format: String,
   pub quality: f32,
   pub density: f32,
-  pub outline: bool,
+  pub fonts: FontOptions,
   pub matte: Option<Color>,
   pub msaa: Option<usize>,
   pub color_type: ColorType,
@@ -457,21 +462,31 @@ pub struct ExportOptions{
 
 impl Default for ExportOptions{
   fn default() -> Self {
-      Self{
-        format:"raw".to_string(), quality:0.92, density:1.0,
-        matte:None, msaa:None, color_type:ColorType::RGBA8888,
-        outline:false, text_contrast:0.0, text_gamma:1.4
-      }
+    Self{
+      format:"raw".to_string(), quality:0.92, density:1.0,
+      matte:None, msaa:None, color_type:ColorType::RGBA8888,
+      fonts:FontOptions::Default, text_contrast:0.0, text_gamma:1.4
+    }
   }
 }
 
 impl ExportOptions{
   pub fn surface_props(&self) -> SurfaceProps{
     SurfaceProps::new_with_text_properties(
-      SurfacePropsFlags::default(),
+      match self.fonts{
+        FontOptions::DeviceIndependent => SurfacePropsFlags::USE_DEVICE_INDEPENDENT_FONTS,
+        _ => SurfacePropsFlags::default(),
+      },
       PixelGeometry::Unknown,
       self.text_contrast,
       self.text_gamma,
     )
+  }
+
+  pub fn svg_flags(&self) -> Option<skia_safe::svg::canvas::Flags>{
+    match self.fonts{
+      FontOptions::Outline => Some(Flags::CONVERT_TEXT_TO_PATHS),
+      _ => None
+    }
   }
 }
