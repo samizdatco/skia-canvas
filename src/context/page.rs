@@ -296,7 +296,7 @@ impl Page{
                 opts.quality = 75.0;
             } else {
                 opts.compression = webp_encoder::Compression::Lossy;
-                opts.quality = quality as _;
+                opts.quality = img_quality as _;
             }
 
             webp_encoder::encode_image(context, &image, &opts).map(|data|{
