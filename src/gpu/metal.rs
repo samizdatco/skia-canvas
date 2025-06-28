@@ -133,20 +133,12 @@ impl MetalContext{
     }
 
     fn surface(&mut self, image_info: &ImageInfo, opts:ExportOptions) -> Result<Surface, String> {
-        let samples = opts.msaa.unwrap_or_else(||
-            if self.msaa.contains(&4){ 4 } // 4x is a good default if available
-            else{ *self.msaa.last().unwrap() }
-        );
-        if !self.msaa.contains(&samples){
-            return Err(format!("{}x MSAA not supported by GPU (options: {:?})", samples, self.msaa));
-        }
-
         self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,
             Budgeted::Yes,
             image_info,
-            Some(samples),
+            Some(opts.msaa_from(&self.msaa)?),
             SurfaceOrigin::BottomLeft,
             Some(&opts.surface_props()),
             false,
