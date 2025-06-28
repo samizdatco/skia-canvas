@@ -365,6 +365,24 @@ impl Context2D{
     let paint = self.paint_for_drawing(style);
     let texture = self.state.texture(style);
 
+    // if path will fill the canvas and paint+blend is fully opaque...
+    if [PaintStyle::Fill, PaintStyle::StrokeAndFill].contains(&style) &&
+      [BlendMode::SrcOver, BlendMode::Src, BlendMode::Clear].contains(
+        &self.state.global_composite_operation
+      ) &&
+      matches!(self.state.fill_style, Dye::Color{..}) &&
+      self.state.clip.is_none() &&
+      paint.alpha() == 255 &&
+      path.conservatively_contains_rect(self.bounds)
+    {
+      // ...erase existing vector content layers (but preserve CTM & clip path)
+      self.with_recorder(|mut recorder|{
+        recorder.set_bounds(self.bounds);
+        recorder.set_matrix(self.state.matrix);
+        recorder.set_clip(&self.state.clip);
+      });
+    }
+
     self.render_to_canvas(&paint, |canvas, paint| {
       if let Some(tile) = texture{
         canvas.save();
@@ -437,7 +455,7 @@ impl Context2D{
   pub fn clear_rect(&mut self, rect:&Rect){
     match self.state.matrix.map_rect(rect).0.contains(self.bounds){
 
-      // if rect fully encloses canvas, erase existing content (but preserve CTM, path, etc.)
+      // if rect fully encloses canvas, erase existing content (but preserve CTM & clip path)
       true =>  self.with_recorder(|mut recorder|{
         recorder.set_bounds(self.bounds);
         recorder.set_matrix(self.state.matrix);
