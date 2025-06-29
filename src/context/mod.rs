@@ -411,12 +411,15 @@ impl Context2D{
     };
     clip.set_fill_type(rule);
 
-    self.state.clip = match &self.state.clip {
-      Some(old_clip) => old_clip.op(&clip, PathOp::Intersect),
-      None => Some(clip.clone())
-    };
-
-    // TODO: reset to None if ≥ self.bounds
+    // update the clip with the intersection of the new path, unless it's larger than
+    // the canvas itself in which case the whole clip is discarded
+    self.state.clip = self.state.clip.as_ref()
+      .unwrap_or(&Path::rect(self.bounds, None))
+      .op(&clip, PathOp::Intersect)
+      .and_then(|path| match path.conservatively_contains_rect(self.bounds){
+        true => None,
+        false => Some(path),
+      });
 
     self.with_recorder(|mut recorder|{
       recorder.set_clip(&self.state.clip);
