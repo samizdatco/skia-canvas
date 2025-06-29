@@ -47,6 +47,16 @@ impl CanvasPattern{
       _ => None
     }
   }
+
+  pub fn is_opaque(&self) -> bool{
+    let stamp = Arc::clone(&self.stamp);
+    let stamp = stamp.lock().unwrap();
+
+    match &stamp.content{
+      Content::Bitmap(image) => image.is_opaque(),
+      _ => false
+    }
+  }
 }
 
 //

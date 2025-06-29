@@ -96,6 +96,20 @@ impl CanvasGradient{
       Gradient::Conic{colors, stops, ..} => { colors.insert(idx, color); stops.insert(idx, offset); },
     };
   }
+
+  pub fn is_opaque(&self) -> bool{
+    let gradient = Arc::clone(&self.gradient);
+    let gradient = gradient.lock().unwrap();
+
+    let colors = match &*gradient{
+      Gradient::Linear{colors, ..} => colors,
+      Gradient::Radial{colors, ..} => colors,
+      Gradient::Conic{colors, ..} => colors,
+    };
+
+    // true if all colors are 100% opaque
+    !colors.iter().any(|c| c.a() < 255)
+  }
 }
 
 //

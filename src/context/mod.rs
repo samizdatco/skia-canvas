@@ -362,17 +362,12 @@ impl Context2D{
     });
     path.set_fill_type(rule.unwrap_or(FillType::Winding));
 
-    let paint = self.paint_for_drawing(style);
-    let texture = self.state.texture(style);
-
-    // if path will fill the canvas and paint+blend is fully opaque...
-    if [PaintStyle::Fill, PaintStyle::StrokeAndFill].contains(&style) &&
-      [BlendMode::SrcOver, BlendMode::Src, BlendMode::Clear].contains(
-        &self.state.global_composite_operation
-      ) &&
-      matches!(self.state.fill_style, Dye::Color{..}) &&
+    // if path will fill the whole canvas and paint/blend are fully opaque...
+    if matches!(style, PaintStyle::Fill | PaintStyle::StrokeAndFill) &&
+      matches!(&self.state.global_composite_operation, BlendMode::SrcOver | BlendMode::Src | BlendMode::Clear) &&
+      self.state.fill_style.is_opaque() &&
+      self.state.global_alpha == 1.0 &&
       self.state.clip.is_none() &&
-      paint.alpha() == 255 &&
       path.conservatively_contains_rect(self.bounds)
     {
       // ...erase existing vector content layers (but preserve CTM & clip path)
@@ -383,8 +378,9 @@ impl Context2D{
       });
     }
 
+    let paint = self.paint_for_drawing(style);
     self.render_to_canvas(&paint, |canvas, paint| {
-      if let Some(tile) = texture{
+      if let Some(tile) = self.state.texture(style){
         canvas.save();
         let spacing = tile.spacing();
         let offset = (-spacing.0/2.0, -spacing.1/2.0);
@@ -419,6 +415,8 @@ impl Context2D{
       Some(old_clip) => old_clip.op(&clip, PathOp::Intersect),
       None => Some(clip.clone())
     };
+
+    // TODO: reset to None if ≥ self.bounds
 
     self.with_recorder(|mut recorder|{
       recorder.set_clip(&self.state.clip);
@@ -686,10 +684,19 @@ impl Dye{
     }
   }
 
+  pub fn is_opaque(&self) -> bool{
+    match self {
+      Dye::Color(color) => Color4f::from(*color).is_opaque(),
+      Dye::Gradient(gradient) => gradient.is_opaque(),
+      Dye::Pattern(pattern) => pattern.is_opaque(),
+      Dye::Texture(texture) => false,
+    }
+  }
+
   pub fn mix_into(&self, paint: &mut Paint, alpha: f32, image_filter: ImageFilter){
     match self {
       Dye::Color(color) => {
-        let mut color:Color4f = (*color).into();
+        let mut color = Color4f::from(*color);
         color.a *= alpha;
         paint.set_color(color.to_color());
       },
