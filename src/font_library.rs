@@ -15,7 +15,7 @@ use neon::prelude::*;
 use skia_safe::{FontMgr, FontArguments, Typeface};
 use skia_safe::font_style::{FontStyle, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
-use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
+use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle, ParagraphStyle};
 use skia_safe::utils::OrderedFontMgr;
 
 use crate::FONT_LIBRARY;
@@ -50,6 +50,7 @@ pub struct FontLibrary{
     pub generics: Vec<(Typeface, Option<String>)>,
     pub collection: Option<FontCollection>,
     collection_cache: HashMap<CollectionKey, FontCollection>,
+    collection_hinted: bool,
   }
 
   unsafe impl Send for FontLibrary {
@@ -60,7 +61,7 @@ pub struct FontLibrary{
     pub fn shared() -> Mutex<Self>{
       Mutex::new(
         FontLibrary{
-          mgr:FontMgr::default(), collection:None, collection_cache:HashMap::new(), fonts:vec![], generics:vec![]
+          mgr:FontMgr::default(), collection:None, collection_cache:HashMap::new(), collection_hinted:false, fonts:vec![], generics:vec![]
         }
       )
     }
@@ -247,6 +248,16 @@ pub struct FontLibrary{
           }
           style
         })
+    }
+
+    pub fn set_hinting(&mut self, hinting:bool) -> &mut Self{
+      // skia's rasterizer cache doesn't take hinting into account, so manually invalidate if changed
+      if hinting != self.collection_hinted{
+        self.collection_hinted = hinting;
+        self.collection_cache.iter_mut().for_each(|(_, fc)| fc.clear_caches());
+        self.font_collection().clear_caches();
+      }
+      self
     }
 
     pub fn collect_fonts(&mut self, style: &TextStyle) -> FontCollection {

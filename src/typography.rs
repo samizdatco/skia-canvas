@@ -35,7 +35,7 @@ impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
     let mut library = FONT_LIBRARY.lock().unwrap();
     let (mut char_style, graf_style, text_decoration, baseline, wrap) = state.typography();
-    let typefaces = library.collect_fonts(&char_style);
+    let typefaces = library.set_hinting(graf_style.hinting_is_on()).collect_fonts(&char_style);
     let width = width.unwrap_or(GALLEY);
     let text = match wrap{
       true => text.to_string(),
