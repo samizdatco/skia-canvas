@@ -235,24 +235,24 @@ pub fn bool_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str)
 //
 
 
-fn _as_float(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f32>{
+fn _as_double(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f64>{
   // emulate (some of) javascript's wildly permissive type coercion <https://www.w3schools.com/js/js_type_conversion.asp>
   val.downcast::<JsNumber, _>(cx).ok().map(|num|{
-    num.value(cx) as f32
+    num.value(cx) as f64
   }).or_else(||{
     // strings
     val.downcast::<JsString, _>(cx).ok().and_then(|txt|{
       let s = txt.value(cx);
       if let Some(s) = s.strip_prefix("0x"){
-        u64::from_str_radix(s, 16).map(|i| i as f32).ok()
+        u64::from_str_radix(s, 16).map(|i| i as f64).ok()
       }else if let Some(s) = s.strip_prefix("0o"){
-        u64::from_str_radix(s, 8).map(|i| i as f32).ok()
+        u64::from_str_radix(s, 8).map(|i| i as f64).ok()
       }else if let Some(s) = s.strip_prefix("0b"){
-        u64::from_str_radix(s, 2).map(|i| i as f32).ok()
+        u64::from_str_radix(s, 2).map(|i| i as f64).ok()
       }else if s.is_empty(){
         Some(0.0)
       }else{
-        s.parse::<f32>().ok()
+        s.parse::<f64>().ok()
       }
     })
   }).or_else(||{
@@ -269,13 +269,17 @@ fn _as_float(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f32>{
     val.downcast::<JsArray, _>(cx).ok().and_then(|array|
       match array.len(cx) {
         0 => Some(0.0),
-        1 => array.to_vec(cx).ok().and_then(|nums| _as_float(cx, &nums[0])),
+        1 => array.to_vec(cx).ok().and_then(|nums| _as_double(cx, &nums[0])),
         _ => None
       })
   }).and_then(|num| match num.is_finite(){
     true => Some(num),
     false => None
   })
+}
+
+fn _as_float(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f32>{
+  _as_double(cx, val).map(|num| num as f32)
 }
 
 pub fn _float_args_at(cx: &mut FunctionContext, start:usize, names:&[&str], or_bail:bool) -> NeonResult<Vec<f32>>{
@@ -298,6 +302,10 @@ pub fn _float_args_at(cx: &mut FunctionContext, start:usize, names:&[&str], or_b
   }
 
   Ok(args)
+}
+
+pub fn opt_double_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<f64>{
+  obj.get(cx, attr).ok().and_then(|val| _as_double(cx, &val))
 }
 
 pub fn opt_float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<f32>{

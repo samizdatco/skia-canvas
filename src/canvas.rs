@@ -1,7 +1,8 @@
 #![allow(non_snake_case)]
 use std::cell::RefCell;
 use neon::prelude::*;
-
+use skia_safe::SurfaceProps;
+use serde_json::json;
 use crate::utils::*;
 use crate::context::page::pages_arg;
 use crate::gpu;
@@ -12,12 +13,14 @@ impl Finalize for Canvas {}
 pub struct Canvas{
   pub width: f32,
   pub height: f32,
+  pub text_contrast: f64,
+  pub text_gamma: f64,
   engine: Option<gpu::RenderingEngine>,
 }
 
 impl Canvas{
-  pub fn new() -> Self{
-    Canvas{width:300.0, height:150.0, engine:None}
+  pub fn new(text_contrast:f64, text_gamma:f64) -> Self{
+    Canvas{width:300.0, height:150.0, text_contrast, text_gamma, engine:None}
   }
 
   pub fn engine(&mut self) -> gpu::RenderingEngine{
@@ -32,7 +35,21 @@ impl Canvas{
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
-  let this = RefCell::new(Canvas::new());
+  let opts = cx.argument::<JsObject>(1)?;
+  let text_contrast = opt_double_for_key(&mut cx, &opts, "textContrast").unwrap_or(0.0);
+  let (min_c, max_c) = (SurfaceProps::MIN_CONTRAST_INCLUSIVE as _, SurfaceProps::MAX_CONTRAST_INCLUSIVE as _);
+  if text_contrast < min_c || text_contrast > max_c{
+    return cx.throw_range_error(format!("Expected a number between {} and {} for `textContrast`", min_c, max_c))
+  }
+
+  let mut text_gamma = opt_double_for_key(&mut cx, &opts, "textGamma").unwrap_or(1.4);
+  let (min_g, max_g) = (SurfaceProps::MIN_GAMMA_INCLUSIVE as _, SurfaceProps::MAX_GAMMA_EXCLUSIVE as _);
+  if text_gamma == max_g{ text_gamma -= f32::EPSILON as f64 }; // nudge down values right at the max
+  if text_gamma < min_g || text_contrast > max_g{
+    return cx.throw_range_error(format!("Expected a number between {} and {} for `textGamma`", min_g, max_g))
+  }
+
+  let this = RefCell::new(Canvas::new(text_contrast as f64, text_gamma as f64));
   Ok(cx.boxed(this))
 }
 
@@ -91,7 +108,9 @@ pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let mut this = this.borrow_mut();
 
-  let details = this.engine().status();
+  let mut details = this.engine().status();
+  details["textContrast"] = json!(this.text_contrast);
+  details["textGamma"] = json!(this.text_gamma);
   Ok(cx.string(details.to_string()))
 }
 
