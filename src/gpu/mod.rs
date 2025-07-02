@@ -1,6 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 use skia_safe::{ImageInfo, Image, Rect, Matrix, Color, Surface, surfaces};
-use serde_json::Value;
+use serde_json::{json, Value};
 use crate::context::page::{Page, ExportOptions};
 
 #[cfg(feature = "metal")]
@@ -72,8 +72,8 @@ impl RenderingEngine{
         let mut status = Engine::status();
         if let Self::CPU = self{
             if Engine::supported(){
-                status["renderer"] = Value::String("CPU".to_string());
-                status["device"] = Value::String("CPU-based renderer (GPU manually disabled)".to_string())
+                status["renderer"] = json!("CPU");
+                status["device"] = json!("CPU-based renderer (GPU manually disabled)")
             }
         }
         status
