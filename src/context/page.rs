@@ -445,18 +445,11 @@ fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Do
 }
 
 #[derive(Clone, Debug)]
-pub enum FontOptions{
-  Default,
-  DeviceIndependent,
-  Outline,
-}
-
-#[derive(Clone, Debug)]
 pub struct ExportOptions{
   pub format: String,
   pub quality: f32,
   pub density: f32,
-  pub fonts: FontOptions,
+  pub outline: bool,
   pub matte: Option<Color>,
   pub msaa: Option<usize>,
   pub color_type: ColorType,
@@ -470,7 +463,7 @@ impl Default for ExportOptions{
     Self{
       format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
       jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
-      color_type:ColorType::RGBA8888, fonts:FontOptions::Default,
+      color_type:ColorType::RGBA8888, outline:true,
     }
   }
 }
@@ -478,10 +471,7 @@ impl Default for ExportOptions{
 impl ExportOptions{
   pub fn surface_props(&self) -> SurfaceProps{
     SurfaceProps::new_with_text_properties(
-      match self.fonts{
-        FontOptions::DeviceIndependent => SurfacePropsFlags::USE_DEVICE_INDEPENDENT_FONTS,
-        _ => SurfacePropsFlags::default(),
-      },
+      SurfacePropsFlags::default(),
       PixelGeometry::Unknown,
       self.text_contrast,
       self.text_gamma,
@@ -489,8 +479,8 @@ impl ExportOptions{
   }
 
   pub fn svg_flags(&self) -> Option<skia_safe::svg::canvas::Flags>{
-    match self.fonts{
-      FontOptions::Outline => Some(Flags::CONVERT_TEXT_TO_PATHS),
+    match self.outline{
+      true => Some(Flags::CONVERT_TEXT_TO_PATHS),
       _ => None
     }
   }

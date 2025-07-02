@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
 use css_color::Rgba;
-use skia_safe::{ Path, Matrix, Point, Color, RGB, Data, SurfaceProps };
+use skia_safe::{ Path, Matrix, Point, Color, RGB, Data };
 
 //
 // meta-helpers
@@ -629,7 +629,7 @@ pub fn from_color_type(color_type: ColorType) -> String {
 // ExportOptions
 //
 
-use crate::context::page::{ExportOptions, FontOptions};
+use crate::context::page::ExportOptions;
 
 pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<ExportOptions>{
   let opts = opt_object_arg(cx, idx).unwrap();
@@ -642,29 +642,12 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
     .map(|num| num.floor() as usize);
   let color_type = opt_string_for_key(cx, &opts, "colorType")
     .map(|mode| to_color_type(&mode)).unwrap_or(ColorType::RGBA8888);
-
-  let text_contrast = opt_float_for_key(cx, &opts, "textContrast").unwrap_or(0.0);
-  let (min_c, max_c) = (SurfaceProps::MIN_CONTRAST_INCLUSIVE, SurfaceProps::MAX_CONTRAST_INCLUSIVE);
-  if text_contrast < min_c || text_contrast > max_c{
-    return cx.throw_range_error(format!("Expected a number between {} and {} for `textContrast`", min_c, max_c))
-  }
-
-  let mut text_gamma = opt_float_for_key(cx, &opts, "textGamma").unwrap_or(1.4);
-  let (min_g, max_g) = (SurfaceProps::MIN_GAMMA_INCLUSIVE, SurfaceProps::MAX_GAMMA_EXCLUSIVE);
-  if text_gamma == max_g{ text_gamma -= f32::EPSILON }; // nudge down values right at the max
-  if text_gamma < min_g || text_contrast > max_g{
-    return cx.throw_range_error(format!("Expected a number between {} and {} for `textGamma`", min_g, max_g))
-  }
-
-  let fonts = match opt_string_for_key(cx, &opts, "fonts").as_deref(){
-    Some("outline") => FontOptions::Outline,
-    Some("device-independent") => FontOptions::DeviceIndependent,
-    None => FontOptions::Default,
-    _ => return cx.throw_type_error("Expected `fonts` to be \"outline\" or \"device-independent\"")
-  };
+  let text_contrast = float_for_key(cx, &opts, "textContrast")?;
+  let text_gamma = float_for_key(cx, &opts, "textGamma")?;
+  let outline = bool_for_key(cx, &opts, "outline")?;
 
   Ok(ExportOptions{
-    format, quality, density, fonts, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma
+    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma
   })
 }
 
