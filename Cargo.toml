@@ -30,7 +30,7 @@ serde_json = "1.0"
 little_exif = "0.6.8"
 serde = { version = "1.0", features = ["derive"] }
 allsorts = { version = "0.15", features = ["flate2_zlib"], default-features = false}
-skia-safe = { version = "0.86.0", features = ["textlayout", "webp", "svg"] }
+skia-safe = { version = "0.87.0", features = ["textlayout", "webp", "svg"] }
 
 # vulkan
 ash = { version = "0.37.3", optional = true }
