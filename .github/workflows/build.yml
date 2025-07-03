@@ -129,7 +129,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86] # when supported, add 'arm64'
+        arch: [x86, arm64]
     runs-on: ${{ matrix.arch == 'x86' && 'windows-latest' || 'windows-11-arm' }}
 
     steps:
