@@ -16,7 +16,7 @@ use vulkano::{
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
     canvas::SrcRectConstraint,
-    Color, Matrix, Image, Paint
+    Color, Matrix, Image, Paint, SurfaceProps
 };
 use winit::{
     dpi::PhysicalSize,
@@ -166,11 +166,11 @@ impl VulkanRenderer {
         self.backend.prepare_swapchain(size.into());
     }
 
-    pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
+    pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
 
-        self.backend.render_frame(&self.window, |canvas|{
+        self.backend.render_frame(&self.window, &props, |canvas|{
             // draw raster background
             canvas.clear(matte);
             if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
@@ -311,7 +311,7 @@ impl VulkanBackend{
         }
     }
 
-    fn render_frame<F>(&mut self, window:&Window, f:F) -> Option<Image>
+    fn render_frame<F>(&mut self, window:&Window, props:&SurfaceProps, f:F) -> Option<Image>
         where F:FnOnce(&skia_safe::Canvas)
     {
         // make sure the framebuffers match the current window size
@@ -320,7 +320,7 @@ impl VulkanBackend{
         self.get_next_frame().map(|(image_index, acquire_future)| {
             // pull the appropriate framebuffer and create a skia Surface that renders to it
             let framebuffer = self.framebuffers[image_index as usize].clone();
-            let mut surface = self.surface_for_framebuffer(framebuffer.clone());
+            let mut surface = self.surface_for_framebuffer(framebuffer.clone(), props);
 
             // pass the suface's canvas to the user-provided callback
             f(surface.canvas());
@@ -358,10 +358,7 @@ impl VulkanBackend{
         }
     }
 
-    fn surface_for_framebuffer(
-        &mut self,
-        framebuffer: Arc<Framebuffer>,
-    ) -> skia_safe::Surface {
+    fn surface_for_framebuffer( &mut self, framebuffer: Arc<Framebuffer>, props: &SurfaceProps) -> skia_safe::Surface {
         let [width, height] = framebuffer.extent();
         let image_access = &framebuffer.attachments()[0];
         let image_object = image_access.image().handle().as_raw();
@@ -396,7 +393,7 @@ impl VulkanBackend{
             gpu::SurfaceOrigin::TopLeft,
             color_type,
             None,
-            None,
+            Some(props),
         )
         .unwrap()
     }

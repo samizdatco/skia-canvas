@@ -1,5 +1,5 @@
 use std::{str::FromStr, sync::Arc, time::{Instant, Duration}};
-use skia_safe::{Matrix, Color};
+use skia_safe::{Matrix, Color, SurfaceProps, SurfacePropsFlags, PixelGeometry};
 use serde::{Serialize, Deserialize};
 use winit::{
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
@@ -29,6 +29,8 @@ pub struct WindowSpec {
     pub height: f32,
     pub cursor: String,
     pub fit: Fit,
+    pub text_contrast: f32,
+    pub text_gamma: f32,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -177,9 +179,18 @@ impl Window {
         matrix
     }
 
+    pub fn suface_props(&self) -> SurfaceProps{
+        SurfaceProps::new_with_text_properties(
+            SurfacePropsFlags::default(),
+            PixelGeometry::Unknown,
+            self.spec.text_contrast,
+            self.spec.text_gamma,
+        )
+    }
+
     pub fn redraw(&mut self){
         if !self.suspended{
-            self.renderer.draw(self.page.clone(), self.fitting_matrix(), self.background);
+            self.renderer.draw(self.page.clone(), self.fitting_matrix(), self.suface_props(), self.background);
         }
     }
 

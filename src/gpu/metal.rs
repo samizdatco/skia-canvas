@@ -160,7 +160,7 @@ impl MetalContext{
 
 #[cfg(feature = "window")]
 use {
-    skia_safe::{Matrix, Color, Paint, canvas::SrcRectConstraint},
+    skia_safe::{Matrix, Color, Paint, SurfaceProps, canvas::SrcRectConstraint},
     raw_window_metal::Layer,
     core_graphics_types::geometry::CGSize,
     objc::{msg_send, sel, sel_impl, runtime::{self, Object}},
@@ -236,12 +236,12 @@ impl MetalRenderer{
         self.cache.state = Resizing;
     }
 
-    pub fn draw(&mut self, page:Page, matrix:Matrix, matte:Color){
+    pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
         let sync = self.cache.state == Resizing;
 
-        let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, |canvas| {
+        let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, &props, |canvas| {
             // draw raster background
             canvas.clear(matte);
             if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
@@ -285,7 +285,7 @@ impl MetalBackend {
         Self { skia_ctx, queue }
     }
 
-    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, f:F) -> Result<Image, String>
+    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, props:&SurfaceProps, f:F) -> Result<Image, String>
         where F:FnOnce(&skia_safe::Canvas)
     {
         let drawable = layer
@@ -312,7 +312,7 @@ impl MetalBackend {
             SurfaceOrigin::TopLeft,
             ColorType::BGRA8888,
             None,
-            None,
+            Some(props),
         ).ok_or("MetalBackend: could not create render target")?;
 
         // pass the suface's canvas to the user-provided callback
