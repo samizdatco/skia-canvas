@@ -7,7 +7,7 @@ use skia_safe::path::{AddPathMode::{Append,Extend}, Direction::{CCW, CW}, Path};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
-use super::{Context2D, BoxedContext2D, Dye};
+use super::{Context2D, BoxedContext2D, Dye, page::ExportOptions};
 use crate::canvas::BoxedCanvas;
 use crate::path::{Path2D, BoxedPath2D};
 use crate::image::{BoxedImage, Content};
@@ -810,20 +810,23 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut x = float_arg(&mut cx, 1, "x")?.floor() as i32;
-  let mut y = float_arg(&mut cx, 2, "y")?.floor() as i32;
-  let mut w = float_arg(&mut cx, 3, "width")?.floor() as i32;
-  let mut h = float_arg(&mut cx, 4, "height")?.floor() as i32;
-  let (color_type, color_space) = image_data_settings_arg(&mut cx, 5);
+  let mut x = float_arg(&mut cx, 1, "x")?.floor();
+  let mut y = float_arg(&mut cx, 2, "y")?.floor();
+  let mut w = float_arg(&mut cx, 3, "width")?.floor();
+  let mut h = float_arg(&mut cx, 4, "height")?.floor();
+  let (color_type, color_space, matte, density, msaa) = image_data_export_arg(&mut cx, 5);
   let parent = cx.argument::<BoxedCanvas>(6)?;
-  let engine = parent.borrow_mut().engine();
+  let canvas = &mut parent.borrow_mut();
 
   // negative dimensions are valid, just shift the origin and absify
-  if w < 0 { x += w; w *= -1; }
-  if h < 0 { y += h; h *= -1; }
+  if w < 0.0 { x += w; w *= -1.0; }
+  if h < 0.0 { y += h; h *= -1.0; }
 
-  let info = ImageInfo::new((w as _, h as _), color_type, AlphaType::Unpremul, color_space);
-  let data = this.borrow_mut().get_pixels((x, y), info, engine).or_else(|e| cx.throw_error(format!("get_pixels failed: {}", e)))?;
+  let opts = ExportOptions{matte, density, msaa, color_type, color_space, ..canvas.export_options()};
+  let crop = Rect::from_point_and_size((x*density, y*density), (w*density, h*density)).round();
+  let engine = canvas.engine();
+
+  let data = this.borrow_mut().get_pixels(crop, opts, engine).or_else(|e| cx.throw_error(e))?;
   let buffer = JsBuffer::from_slice(&mut cx, &data)?;
 
   Ok(buffer)

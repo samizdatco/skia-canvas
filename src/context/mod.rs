@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
 use skia_safe::{
   Canvas as SkCanvas, Paint, Path, PathOp, Image, ImageInfo, Contains,
-  Rect, Point, IPoint, Size, Color, Color4f, ColorSpace, Data,
+  Rect, IRect, Point, IPoint, Size, Color, Color4f, ColorSpace, Data,
   PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture,
   images, image_filters, dash_path_effect, path_1d_path_effect,
   matrix::{ Matrix, TypeMask },
@@ -29,7 +29,7 @@ use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
 use crate::image::ImageData;
 use crate::gpu::RenderingEngine;
-use page::{PageRecorder, Page};
+use page::{PageRecorder, Page, ExportOptions};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;
@@ -515,8 +515,8 @@ impl Context2D{
     self.recorder.lock().unwrap().get_page().get_picture(None)
   }
 
-  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, info:ImageInfo, engine:RenderingEngine) -> Result<Vec<u8>, String>{
-    self.recorder.lock().unwrap().get_pixels(origin, &info, engine)
+  pub fn get_pixels(&mut self, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String>{
+    self.recorder.lock().unwrap().get_pixels(crop, opts, engine)
   }
 
   pub fn blit_pixels(&mut self, image_data:ImageData, src_rect:&Rect, dst_rect:&Rect){

@@ -556,6 +556,21 @@ pub fn image_data_settings_arg(cx: &mut FunctionContext, idx:usize) -> (ColorTyp
   }
 }
 
+pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace, Option<Color>, f32, Option<usize>){
+  match opt_object_arg(cx, idx){
+    Some(obj) => {
+      let color_type = opt_string_for_key(cx, &obj, "colorType").unwrap_or("rgba".to_string());
+      let color_space = opt_string_for_key(cx, &obj, "colorSpace").unwrap_or("srgb".to_string());
+      let matte = opt_color_for_key(cx, &obj, "matte");
+      let density = opt_float_for_key(cx, &obj, "density").unwrap_or(1.0);
+      let msaa = opt_float_for_key(cx, &obj, "msaa").map(|n| n as usize);
+      (to_color_type(&color_type), to_color_space(&color_space), matte, density, msaa)
+    }
+    None => (ColorType::RGBA8888, ColorSpace::new_srgb(), None, 1.0, None)
+  }
+}
+
+
 pub fn to_color_space(mode_name:&str) -> ColorSpace{
   match mode_name{
     // TODO: add display-p3 support
@@ -646,8 +661,10 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let text_gamma = float_for_key(cx, &opts, "textGamma")?;
   let outline = bool_for_key(cx, &opts, "outline")?;
 
+  let color_space = ColorSpace::new_srgb();
+
   Ok(ExportOptions{
-    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma
+    format, quality, density, outline, matte, msaa, color_type, color_space, jpeg_downsample, text_contrast, text_gamma
   })
 }
 

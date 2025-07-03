@@ -7,7 +7,7 @@ use skia_safe::{
   svg::{self, canvas::Flags},
   image::{BitDepth, CachingHint}, images, pdf,
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document,
-  Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, Size,
+  Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size,
   SurfaceProps, SurfacePropsFlags, PixelGeometry, IPoint, jpeg_encoder, png_encoder, webp_encoder
 };
 use little_exif::{metadata::Metadata, exif_tag::ExifTag, filetype::FileExtension};
@@ -29,6 +29,7 @@ pub struct PageRecorder{
   matrix: Matrix,
   clip: Option<Path>,
   cache: Option<SkImage>,
+  cache_opts: Option<ExportOptions>,
   cache_depth: usize,
   changed: bool,
   rev: usize,
@@ -44,7 +45,7 @@ impl PageRecorder{
     rec.recording_canvas().unwrap().save(); // start at depth 2
 
     PageRecorder{
-      current:rec, layers:vec![], changed:false, cache:None, cache_depth:0,
+      current:rec, layers:vec![], changed:false, cache:None, cache_opts:None, cache_depth:0,
       matrix:Matrix::default(), clip:None, bounds, id, rev:0
     }
   }
@@ -91,12 +92,19 @@ impl PageRecorder{
     }
   }
 
-  pub fn get_pixels(&mut self, origin: impl Into<IPoint>, dst_info:&ImageInfo, engine:RenderingEngine) -> Result<Vec<u8>, String>{
+  pub fn get_pixels(&mut self, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String>{
+    let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), AlphaType::Unpremul, opts.color_space.clone());
     let src_info = ImageInfo::new_n32_premul(self.bounds.size().to_floor(), dst_info.color_space());
     let page = self.get_page();
 
-    let opts = ExportOptions{msaa:Some(0), ..Default::default()};
-    engine.with_surface(&src_info, &opts, |surface| {
+    // invalidate the cache if any of the export options have changed since last run
+    if self.cache_opts != Some(opts.clone()){
+      self.cache = None;
+      self.cache_opts = None;
+      self.cache_depth = 0;
+    }
+
+    engine.with_surface(&src_info, &opts.clone(), |surface| {
       let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
 
       let got_pixels = {
@@ -106,22 +114,29 @@ impl PageRecorder{
             .as_ref().unwrap()
             .read_pixels_with_context(
               &mut surface.direct_context(), &dst_info, &mut dst_buffer,
-              dst_info.min_row_bytes(), origin, CachingHint::Allow
+              dst_info.min_row_bytes(), (crop.x(), crop.y()), CachingHint::Allow
             )
         }else{
-          // update the full-canvas cache image using (potentially gpu-backed) rasterizer
           let canvas = surface.canvas();
           if let Some(image) = &self.cache{
+            // update the full-canvas cache image using (potentially gpu-backed) rasterizer
             canvas.draw_image(image, (0,0), None);
+          }else if let Some(color) = opts.matte{
+            // start from scratch, filling the canvas if requested
+            canvas.clear(color);
           }
+
+          // draw newly added layers and cache the full-canvas bitmap
+          canvas.scale((opts.density, opts.density));
           for pict in page.layers.iter().skip(self.cache_depth){
             pict.playback(canvas);
             self.cache_depth += 1;
           }
           self.cache = Some(surface.image_snapshot());
+          self.cache_opts = Some(opts);
 
           // copy subset of pixels into buffer (and convert to requested color_type)
-          surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), origin)
+          surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), (crop.x(), crop.y()))
         }
       };
 
@@ -444,7 +459,7 @@ fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Do
   }))
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ExportOptions{
   pub format: String,
   pub quality: f32,
@@ -453,6 +468,7 @@ pub struct ExportOptions{
   pub matte: Option<Color>,
   pub msaa: Option<usize>,
   pub color_type: ColorType,
+  pub color_space: ColorSpace,
   pub jpeg_downsample: bool,
   pub text_contrast: f32,
   pub text_gamma: f32,
@@ -463,7 +479,7 @@ impl Default for ExportOptions{
     Self{
       format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
       jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
-      color_type:ColorType::RGBA8888, outline:true,
+      color_type:ColorType::RGBA8888, color_space:ColorSpace::new_srgb(), outline:true,
     }
   }
 }

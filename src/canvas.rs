@@ -4,7 +4,7 @@ use neon::prelude::*;
 use skia_safe::SurfaceProps;
 use serde_json::json;
 use crate::utils::*;
-use crate::context::page::pages_arg;
+use crate::context::page::{ExportOptions, pages_arg};
 use crate::gpu;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
@@ -27,6 +27,10 @@ impl Canvas{
     self.engine.get_or_insert_with(||
       gpu::RenderingEngine::default()
     ).clone()
+  }
+
+  pub fn export_options(&self) -> ExportOptions{
+    ExportOptions{text_contrast:self.text_contrast as _, text_gamma:self.text_gamma as _, ..Default::default()}
   }
 }
 
