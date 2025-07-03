@@ -29,8 +29,8 @@
   - `textGamma` — a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to `1.4`)
 - The [`textAlign`][textAlign] attribute can now be set to `"justify"`
 
-
 ### Misc. Improvements
+- Added support for Arm-based processors on Windows
 - [`App.launch()`][App.launch()] now returns a Promise that resolves when the final window is closed, allowing you to schedule code to run before the process would otherwise exit (see also the new [`idle`][app_idle] event which fires under the same circumstances).
 - `input` event objects now contain an `inputType` property to distinguish between insertion, deletion, and IME composition
 - Mouse events are no longer coalesced down to a single instance per frame (most relevant for `mousemove` events)
