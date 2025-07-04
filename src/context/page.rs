@@ -94,7 +94,8 @@ impl PageRecorder{
 
   pub fn get_pixels(&mut self, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String>{
     let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), AlphaType::Unpremul, opts.color_space.clone());
-    let src_info = ImageInfo::new_n32_premul(self.bounds.size().to_floor(), dst_info.color_space());
+    let src_size = Size::new(self.bounds.width()*opts.density, self.bounds.height()*opts.density);
+    let src_info = ImageInfo::new_n32_premul(src_size.to_floor(), dst_info.color_space());
     let page = self.get_page();
 
     // invalidate the cache if any of the export options have changed since last run
