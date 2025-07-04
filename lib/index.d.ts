@@ -965,7 +965,7 @@ export class Window extends EventEmitter<{
 }
 
 export interface App extends EventEmitter<{
-  "idle": {type: "idle", target: App}
+  "idle": [{type: "idle", target: App}]
 }>{
   readonly windows: Window[]
   readonly running: boolean
