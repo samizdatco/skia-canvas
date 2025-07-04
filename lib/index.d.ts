@@ -306,6 +306,14 @@ export interface EngineDetails {
   error?: string
 }
 
+export interface TextOptions{
+  /** Amount of additional contrast to add when rendering text (defaults to 0) */
+  textContrast?: number
+
+  /** Gamma value for blending the edges of letterforms (defaults to 1.4) */
+  textGamma?: number
+}
+
 /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas) */
 export class Canvas {
   static contexts: WeakMap<Canvas, readonly CanvasRenderingContext2D[]>
@@ -323,7 +331,7 @@ export class Canvas {
   width: number;
 
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#creating-new-canvas-objects) */
-  constructor(width?: number, height?: number)
+  constructor(width?: number, height?: number, options?: TextOptions)
 
   /**
    * Returns an object that provides methods and properties for drawing and manipulating images and graphics on a canvas element in a document. A context object includes information about colors, line widths, fonts, and other graphic parameters that can be drawn on a canvas.
@@ -873,10 +881,11 @@ export type WindowOptions = {
   page?: number
   background?: string
   fullscreen?: boolean
+  borderless?: boolean
   visible?: boolean
   cursor?: CursorStyle
   canvas?: Canvas
-}
+} & TextOptions
 
 type MouseEventProps = {
   x: number;
