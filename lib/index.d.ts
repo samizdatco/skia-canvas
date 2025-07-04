@@ -139,6 +139,24 @@ interface ImageDataSettings {
   colorType?: ColorType
 }
 
+interface ImageDataExportSettings {
+  /** Background color to draw beneath transparent parts of the canvas */
+  matte?: string
+
+  /** Number of pixels per grid ‘point’ (defaults to 1) */
+  density?: number
+
+  /** Number of samples used for antialising each pixel */
+  msaa?: number | boolean
+
+  /** Color space (must be "srgb") */
+  colorSpace?: ColorSpace
+
+  /** Color type to use when exporting in "raw" format */
+  colorType?: ColorType
+}
+
+
 export class ImageData {
   prototype: ImageData
   constructor(sw: number, sh: number, settings?: ImageDataSettings)
@@ -528,7 +546,7 @@ interface CanvasImageData {
   createImageData(imagedata: ImageData): ImageData;
 
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/getImageData) */
-  getImageData(x: number, y: number, width: number, height: number, settings?: ImageDataSettings): ImageData;
+  getImageData(x: number, y: number, width: number, height: number, settings?: ImageDataExportSettings): ImageData;
 
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/putImageData) */
   putImageData(imagedata: ImageData, dx: number, dy: number): void;
