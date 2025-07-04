@@ -169,6 +169,7 @@ export class ImageData {
   readonly data: Uint8ClampedArray
   readonly height: number
   readonly width: number
+  toSharp(): Sharp
 }
 
 export class Image extends EventEmitter {
@@ -367,15 +368,12 @@ export class Canvas {
 
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#saveas) */
   saveAs(filename: string, options?: SaveOptions): Promise<void>
-
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
   toBuffer(format: ExportFormat, options?: ExportOptions): Promise<Buffer>
-
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#todataurl) */
   toDataURL(format: ExportFormat, options?: ExportOptions): Promise<string>
-
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
-  toSharp(options?: RenderOptions): Promise<Sharp>
+  toSharp(options?: RenderOptions): Sharp
 
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#saveas) */
   saveAsSync(filename: string, options?: SaveOptions): void
@@ -551,9 +549,6 @@ interface CanvasImageData {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/putImageData) */
   putImageData(imagedata: ImageData, dx: number, dy: number): void;
   putImageData(imagedata: ImageData, dx: number, dy: number, dirtyX: number, dirtyY: number, dirtyWidth: number, dirtyHeight: number): void;
-
-  /** [Skia Canvas Docs](https://skia-canvas.org/api/imagedata#tosharp) */
-  toSharp(): Sharp
 }
 
 interface CanvasImageSmoothing {
