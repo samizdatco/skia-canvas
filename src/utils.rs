@@ -526,12 +526,31 @@ pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Vec<Point>
 
 
 //
-// ImageData
+// Image & ImageData
 //
 
 use crate::image::ImageData;
 use neon::types::buffer::TypedArray;
-use skia_safe::{ColorType, ColorSpace};
+use skia_safe::{ColorType, ColorSpace, ImageInfo, AlphaType};
+
+pub fn opt_image_info_arg(cx: &mut FunctionContext, idx:usize) -> NeonResult<Option<ImageInfo>>{
+  if let Some(raw_info) = opt_object_arg(cx, idx){
+     Ok(Some(ImageInfo::new(
+        (
+          float_for_key(cx, &raw_info, "width")? as _,
+          float_for_key(cx, &raw_info, "height")? as _
+        ),
+        ColorType::RGBA8888,
+        match bool_for_key(cx, &raw_info, "premultiplied")?{
+          false => AlphaType::Unpremul,
+          true => AlphaType::Premul
+        },
+        ColorSpace::new_srgb(),
+      )))
+  }else{
+    Ok(None)
+  }
+}
 
 pub fn image_data_arg(cx: &mut FunctionContext, idx:usize) -> NeonResult<ImageData>{
   let obj = object_arg(cx, idx, "imageData")?;

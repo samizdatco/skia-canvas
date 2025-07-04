@@ -175,16 +175,23 @@ pub fn set_src(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn set_data(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBoolean>> {
   let this = cx.argument::<BoxedImage>(0)?;
   let mut this = this.borrow_mut();
   let buffer = cx.argument::<JsBuffer>(1)?;
   let data = Data::new_copy(buffer.as_slice(&cx));
 
-  // First try decoding the data as a bitmap, if invalid try parsing as SVG
-  if let Some(image) = images::deferred_from_encoded_data(&data, None){
+  if let Some(raw_info) = opt_image_info_arg(&mut cx, 2)?{
+    // First, check for an optional dims argument and interpret the buffer as raw rgba if present
+    this.content = match images::raster_from_data(&raw_info, data, raw_info.min_row_bytes()){
+      Some(image) => Content::Bitmap(image),
+      None => Content::Broken
+    }
+  }else if let Some(image) = images::deferred_from_encoded_data(&data, None){
+    // Next, try interpreting the data as an encoded bitmap
     this.content = Content::Bitmap(image);
   }else if let Ok(mut dom) = svg::Dom::from_bytes(&data, FONT_LIBRARY.lock().unwrap().font_mgr()){
+    // Finally, try parsing as SVG
     let mut root = dom.root();
 
     let mut size = root.intrinsic_size();

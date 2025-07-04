@@ -13,7 +13,10 @@
 
 #### Imagery
 - The [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] helpers now use `node-fetch` to handle web requests and can accept a [fetch options][fetch_opts] object as the final argument.
-- The new Canvas[.toSharp()][canvas_toSharp] & ImageData[.toSharp()][id_toSharp] convenience methods convert their contents to a [Sharp][sharp] bitmap object  (if the `sharp` npm module is installed)
+- Added support for integrating the [Sharp][sharp] image processor into canvas workflows (if the `sharp` npm module has been installed):
+  - The new Canvas[.toSharp()][canvas_toSharp] & ImageData[.toSharp()][id_toSharp] convenience methods convert their contents to a Sharp bitmap object
+  - `loadImage()` & `loadImageData()` can now be called with a Sharp object as their sole argument
+  - The `src` property on a new Image object can be set to a Sharp object and it will begin asynchronously loading
 
 #### Rendering
 - Significant speed-ups for deeply layered drawing in which the canvas isn't cleared or reset (potentially resulting in numerous vector objects being re-drawn despite being hidden by shapes drawn on top):

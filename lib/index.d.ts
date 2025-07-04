@@ -1,3 +1,5 @@
+import {Sharp} from "sharp"
+
 //
 // Geometry
 //
@@ -118,8 +120,11 @@ declare var DOMRectReadOnly: {
 //
 
 export function loadImage(src: string | Buffer, options?: RequestInit): Promise<Image>
+export function loadImage(src: Sharp): Promise<Image>
+
 export function loadImageData(src: string | Buffer, width: number, height?:number): Promise<ImageData>
 export function loadImageData(src: string | Buffer, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
+export function loadImageData(src: Sharp): Promise<ImageData>
 
 export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
 export type ColorType = "Alpha8" | "Gray8" | "R8UNorm" | // 1 byte/px
@@ -269,26 +274,25 @@ export interface RenderOptions {
   /** Number of pixels per grid ‘point’ (defaults to 1) */
   density?: number
 
-  /** Quality for lossy encodings like JPEG (0.0–1.0) */
+  /** Number of samples used for antialising each pixel */
+  msaa?: number | boolean
+}
+
+export interface ExportOptions extends RenderOptions {
+  /** Quality for lossy encodings like JPEG & WEBP (0.0–1.0) */
   quality?: number
 
-  /** Optionally "outline" text as paths (SVG only) or use "device-independent" rendering (bitmaps only) */
-  fonts?: FontOptions
+  /** Optionally convert text to bézier paths (SVG only) */
+  outline?: boolean
 
-  /** Number of samples used for antialising each pixel */
-  msaa?: number | false
+  /** Optionally use 4:2:0 chroma subsampling (JPEG only) */
+  downsample?: boolean
 
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType
-
-  /** Amount of additional contrast to add when rendering text (defaults to 0) */
-  textContrast?: number
-
-  /** Gamma value for blending the edges of letterforms (defaults to 1.4) */
-  textGamma?: number
 }
 
-export interface SaveOptions extends RenderOptions {
+export interface SaveOptions extends ExportOptions {
   /** Image format to use */
   format?: ExportFormat
 }
@@ -335,13 +339,26 @@ export class Canvas {
   set gpu(enabled: boolean)
   readonly engine: EngineDetails
 
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#saveas) */
   saveAs(filename: string, options?: SaveOptions): Promise<void>
-  toBuffer(format: ExportFormat, options?: RenderOptions): Promise<Buffer>
-  toDataURL(format: ExportFormat, options?: RenderOptions): Promise<string>
 
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
+  toBuffer(format: ExportFormat, options?: ExportOptions): Promise<Buffer>
+
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#todataurl) */
+  toDataURL(format: ExportFormat, options?: ExportOptions): Promise<string>
+
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
+  toSharp(options?: RenderOptions): Promise<Sharp>
+
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#saveas) */
   saveAsSync(filename: string, options?: SaveOptions): void
-  toBufferSync(format: ExportFormat, options?: RenderOptions): Buffer
-  toDataURLSync(format: ExportFormat, options?: RenderOptions): string
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
+  toBufferSync(format: ExportFormat, options?: ExportOptions): Buffer
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#todataurl) */
+  toDataURLSync(format: ExportFormat, options?: ExportOptions): string
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
+  toSharpSync(options?: RenderOptions): Sharp
 
   get pdf(): Promise<Buffer>
   get svg(): Promise<Buffer>
@@ -508,6 +525,9 @@ interface CanvasImageData {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/putImageData) */
   putImageData(imagedata: ImageData, dx: number, dy: number): void;
   putImageData(imagedata: ImageData, dx: number, dy: number, dirtyX: number, dirtyY: number, dirtyWidth: number, dirtyHeight: number): void;
+
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/imagedata#tosharp) */
+  toSharp(): Sharp
 }
 
 interface CanvasImageSmoothing {
