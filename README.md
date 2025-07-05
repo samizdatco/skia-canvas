@@ -215,6 +215,37 @@ win.on("draw", e => {
   ctx.fill()
 })
 ```
+
+### Integrating with [Sharp.js](https://sharp.pixelplumbing.com)
+
+```js
+import sharp from 'sharp'
+import {Canvas, loadImage} from 'skia-canvas'
+
+let canvas = new Canvas(400, 400),
+    ctx = canvas.getContext("2d"),
+    {width, height} = canvas,
+    [x, y] = [width/2, height/2]
+
+ctx.fillStyle = 'red'
+ctx.fillRect(0, 0, x, y)
+ctx.fillStyle = 'orange'
+ctx.fillRect(x, y, x, y)
+
+// Render the canvas to a Sharp object on a background thread then desaturate
+await canvas.toSharp().modulate({saturation:.25}).jpeg().toFile("faded.jpg")
+
+// Convert an ImageData to a Sharp object and save a grayscale version
+let imgData = ctx.getImageData(0, 0, width, height, {matte:'white', density:2})
+await imgData.toSharp().grayscale().png().toFile("black-and-white.png")
+
+// Create an image using Sharp then draw it to the canvas as an Image object
+let sharpImage = sharp({create:{ width:x, height:y, channels:4, background:"skyblue" }})
+let canvasImage = await loadImage(sharpImage)
+ctx.drawImage(canvasImage, x, 0)
+await canvas.saveAs('mosaic.png')
+```
+
 ## Acknowledgements
 
 This project is deeply indebted to the work of the [Rust Skia project](https://github.com/rust-skia/rust-skia) whose Skia bindings provide a safe and idiomatic interface to the mess of C++ that lies underneath. Many thanks to the developers of [node-canvas](https://github.com/Automattic/node-canvas) for their terrific set of unit tests. In the absence of an [Acid Test](https://www.acidtests.org) for canvas, these routines were invaluable.
