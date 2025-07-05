@@ -120,6 +120,37 @@ win.on("draw", e => {
   ctx.fill()
 })
 ```
+
+### Integrating with [Sharp.js](https://sharp.pixelplumbing.com)
+
+```js
+import sharp from 'sharp'
+import {Canvas, loadImage} from 'skia-canvas'
+
+let canvas = new Canvas(400, 400),
+    ctx = canvas.getContext("2d"),
+    {width, height} = canvas,
+    [x, y] = [width/2, height/2]
+
+ctx.fillStyle = 'red'
+ctx.fillRect(0, 0, x, y)
+ctx.fillStyle = 'orange'
+ctx.fillRect(x, y, x, y)
+
+// Render the canvas to a Sharp object on a background thread then desaturate
+await canvas.toSharp().modulate({saturation:.25}).jpeg().toFile("faded.jpg")
+
+// Convert an ImageData to a Sharp object and save a grayscale version
+let imgData = ctx.getImageData(0, 0, width, height, {matte:'white', density:2})
+await imgData.toSharp().grayscale().png().toFile("black-and-white.png")
+
+// Create an image using Sharp then draw it to the canvas as an Image object
+let sharpImage = sharp({create:{ width:x, height:y, channels:4, background:"skyblue" }})
+let canvasImage = await loadImage(sharpImage)
+ctx.drawImage(canvasImage, x, 0)
+await canvas.saveAs('mosaic.png')
+```
+
 <!-- references_begin -->
 [bool-ops]: api/path2d.md#complement-difference-intersect-union-and-xor
 [c2d_font]: api/context.md#font
