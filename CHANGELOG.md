@@ -27,7 +27,7 @@
 - The getImageData() method now accepts additional rendering arguments ([`density`][density], [`matte`][matte], and [`msaa`][msaa]) which behave the same as their equivalents in the [saveAs()][Canvas.saveAs] method.
 
 #### Typography
-- Text lightness can now be fine-tuned through a pair of optional arguments that can be passed to the Canvas or Window constructors:
+- Text lightness can now be fine-tuned through a pair of optional arguments that can be passed to the [Canvas][canvas_text_rendering] or [Window][window_text_rendering] constructors:
   - `textContrast` — a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to `0.0`)
   - `textGamma` — a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to `1.4`)
 - The [`textAlign`][textAlign] attribute can now be set to `"justify"`
@@ -67,6 +67,8 @@
 [canvas_toSharp]: /docs/api/canvas.md#tosharp
 [id_toSharp]: /docs/api/imagedata.md#tosharp
 [downsample]: /docs/api/canvas.md#downsample
+[canvas_text_rendering]: /docs/api/canvas.md#controlling-font-rendering
+[window_text_rendering]: /docs/api/window.md#controlling-font-rendering
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
