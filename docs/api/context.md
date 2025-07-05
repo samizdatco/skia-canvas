@@ -266,12 +266,14 @@ createImageData(width, height, {colorType="rgba", colorSpace="srgb"})
 createImageData(imagedata)
 
 getImageData(sx, sy, sw, sh)
-getImageData(sx, sy, sw, sh, {colorType="rgba", colorSpace="srgb"})
+getImageData(sx, sy, sw, sh, {colorType="rgba", colorSpace="srgb", density, matte, msaa})
 ```
 
 These methods behave identically to the standard [createImageData()][createImageData()] and [getImageData()][getImageData()] methods but have been extended to also accept an optional `colorType` value in their settings argument. The `colorType` defines the arrangement of individual color components in the ImageData's pixel array. If omitted, the type will default to `"rgba"`, but any of the [supported color types][imgdata_colortype] can be specified instead.
 
 The `colorSpace` argument is currently unused since non-sRGB colorspaces are not yet supported. You may omit it from your calls to these methods.
+
+The `getImageData()` method also accepts a handful of rendering options which have the same behaviors and default values as their equivalents in the Canvas [saveAs()][saveAs] method: [`density`][density], [`matte`][matte], and [`msaa`][msaa].
 
 ### `drawCanvas()`
 ```js
@@ -596,9 +598,13 @@ for (let i=0; i<8000; i++){
 [ctx_imagedata]: #createimagedata--getimagedata
 [p2d_offset]: path2d.md#offset
 [p2d_transform]: path2d.md#transform
+[saveAs]: canvas.md#saveas
 [textDecoration]: #textdecoration
 [textwrap]: #textwrap
 [transforms]: #transform--settransform
+[matte]: canvas.md#matte
+[density]: canvas.md#density
+[msaa]: canvas.md#msaa
 [p2d_closePath]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
 [css_transform]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform
 [css_transform_fns]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform-function

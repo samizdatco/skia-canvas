@@ -103,10 +103,20 @@ The method’s return value is a `CanvasRenderingContext2D` object which you can
 
 ### `saveAs()`
 ```js returns="Promise<void>"
-saveAs(filename, {page, format, matte, density=1, msaa=4, quality=0.92, outline=false, colorType='rgba'})
+saveAs(filename, {
+  page,
+  format,
+  matte,
+  density=1,
+  quality=0.92,
+  msaa=true,
+  outline=false,
+  downsample=false,
+  colorType='rgba'
+})
 ```
 ```js returns="void"
-saveAsSync(filename, {page, format, matte, density=1, msaa=4, quality=0.92, outline=false, colorType='rgba'})
+saveAsSync(filename, {page, format, matte, density, quality, msaa, outline, downsample, colorType})
 ```
 
 The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
@@ -119,7 +129,6 @@ An integer can optionally be placed between the braces to indicate the number of
 The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.saveAs("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
 
 #### format
-
 The image format to generate, specified either as a mime-type string or file extension. The `format` argument will take precedence over the type specified through the `filename` argument’s extension, but is primarily useful when generating a file whose name cannot end with an extension for other reasons.
 
 Supported formats include:
@@ -141,32 +150,48 @@ canvas.saveAs('image@3x.png') // equivalent to setting the density to 3
 The `msaa` argument allows you to control the number of samples used for each pixel by the GPU's multi-scale antialiasing (common values are `2`, `4`, & `8`, corresponding to 2𝗑, 4𝗑, or 8𝗑 sampling). Higher values will produce smoother-looking images but also increase resource usage. Setting the value to `false` will disable MSAA and use (slower but potentially higher-quality) shader-based AA routines instead. If omitted, the renderer defaults to 4x MSAA as it produces good results with relatively low overhead.
 
 #### quality
-The `quality` option is a number between 0 and 1.0 that controls the level of JPEG compression both when making JPEG files directly and when embedding them in a PDF. If omitted, quality will default to 0.92.
+The `quality` option is a number between 0 and 1.0 that controls the level of compression both when making JPEG or WEBP files directly and when embedding them in a PDF. If omitted, quality will default to 0.92.
 
 #### outline
+:::warning[SVG format only]
+*Default value: __`false`__*
+:::
+
 When generating SVG output containing text, you have two options for how to handle the fonts that were used. By default, SVG files will contain `<text>` elements that refer to the fonts by name in the embedded stylesheet. This requires that viewers of the SVG have the same fonts available on their system (or accessible as webfonts). Setting the optional `outline` argument to `true` will trace all the letterforms and ‘burn’ them into the file as bézier paths. This will result in a much larger file (and one in which the original text strings will be unrecoverable), but it will be viewable regardless of the specifics of the system it’s displayed on.
 
+#### downsample
+:::warning[JPEG format only]
+*Default value: __`false`__*
+:::
+
+When exporting to JPEG, you can enable 4:2:0 [chroma subsampling][chroma_subsampling] by setting `downsample` to `true`. Otherwise it will default to 4:4:4 (i.e., no subsampling), resulting in sharper edges but larger files.
+
+
 #### colorType
+
+:::warning[RAW format only]
+*Default value: __`"rgba"`__*
+:::
 
 Specifies the color type to use when exporting pixel data in `"raw"` format (for other formats this setting has no effect). If omitted, defaults to `"rgba"`. See the ImageData documentation for a [list of supported `colorType` formats][imgdata_colortype]
 
 
 ### `toBuffer()`
 ```js returns="Promise<Buffer>"
-toBuffer(format, {page, format, matte, density, msaa, quality, outline, colorType})
+toBuffer(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
 ```
 ```js returns="Buffer"
-toBufferSync(format, {page, format, matte, density, msaa, quality, outline, colorType})
+toBufferSync(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
 ```
 
-Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as in the [`saveAs`][saveAs] method.
+Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as their equivalents in the [`saveAs`][saveAs] method.
 
 ### `toDataURL()`
 ```js returns="Promise<String>"
-toDataURL(format, {page, format, matte, density, msaa, quality, outline, colorType})
+toDataURL(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
 ```
 ```js returns="String"
-toDataURLSync(format, {page, format, matte, density, msaa, quality, outline, colorType})
+toDataURLSync(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
 ```
 
 This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
@@ -176,6 +201,7 @@ This method accepts the same arguments and behaves similarly to [.toBuffer()][to
 [canvas_pages]: #pages
 [context]: context.md
 [engine]: #engine
+[fonthinting]: context.md#fonthinting
 [newPage]: #newpage
 [imgdata_colortype]: imagedata.md#colortype
 [saveAs]: #saveas
@@ -184,6 +210,7 @@ This method accepts the same arguments and behaves similarly to [.toBuffer()][to
 [toDataURL_ext]: #todataurl
 [multithreading]: ../getting-started.md#multithreading
 [Buffer]: https://nodejs.org/api/buffer.html
+[chroma_subsampling]: https://en.wikipedia.org/wiki/Chroma_subsampling
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
