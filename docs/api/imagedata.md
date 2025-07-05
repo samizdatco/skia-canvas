@@ -6,11 +6,11 @@ description: Direct pixel access to image and canvas contents
 
 > The `ImageData` object offers a convenient container that bundled raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard **ImageData**][ImageData]'s structure and behavior, but extends it in a few ways.
 
-| Dimensions                 | Format                                     | Pixel Data               |
-| --                         | --                                         | --                       |
-| [**width**][imgdata_size]  | [**colorSpace**][mdn_ImageData_colorspace] | [**data**][imgdata_data] |
-| [**height**][imgdata_size] | [**colorType**][imgdata_colortype] 🧪      |                          |
-|                            | [**bytesPerPixel**][imgdata_bpp] 🧪        |                          |
+| Dimensions                 | Format                                     | Pixel Data                   |
+| --                         | --                                         | --                           |
+| [**width**][imgdata_size]  | [**colorSpace**][mdn_ImageData_colorspace] | [**data**][imgdata_data]     |
+| [**height**][imgdata_size] | [**colorType**][imgdata_colortype] 🧪      | [toSharp()][imgdata_tosharp] |
+|                            | [**bytesPerPixel**][imgdata_bpp] 🧪        |                              |
 
 ## Working with `ImageData` objects
 
@@ -133,11 +133,27 @@ console.log(id.data.length == id.width * id.height * id.bytesPerPixel) // → tr
 
 
 ### `.data`
-
 A writeable buffer with the pixel contents of the image presented as an [array of 8-bit bytes][u8_array]. See the [standard docs][mdn_ImageData_data] for more details.
 
 
-## `loadImageData()`
+## Methods
+
+### `toSharp()`
+
+```js returns="Sharp"
+toSharp()
+```
+
+:::tip[Optional]
+The Sharp library is an optional dependency that you must [install separately][sharp_npm]
+:::
+
+The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. See the [`loadImageData()`](#loadimagedata) helper for details on converting the `Sharp` object back into an `ImageData`.
+
+
+
+## Helpers
+### `loadImageData()`
 
 ```js returns="Promise<ImageData>"
 loadImageData(src, width)
@@ -184,6 +200,7 @@ await loadImageData('data:application/octet-stream;base64,//8A////AP///...')
 [imgdata_size]: #width--height
 [imgdata_colortype]: #colortype
 [imgdata_bpp]: #bytesperpixel
+[imgdata_tosharp]: #tosharp
 [skia_colortype]: https://rust-skia.github.io/doc/skia_safe/enum.ColorType.html
 [fetch]: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
 [fetch_opts]: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit

@@ -196,6 +196,32 @@ toDataURLSync(format, {page, matte, density, msaa, quality, outline, downsample,
 
 This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
 
+
+### `toSharp()`
+```js returns="Sharp"
+toSharp({page, matte, msaa, density})
+```
+<!-- ```js returns="Sharp"
+toSharpSync({page, matte, msaa, density})
+``` -->
+
+:::tip[Optional]
+The Sharp library is an optional dependency that you must [install separately][sharp_npm]:
+:::
+
+The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The optional arguments behave the same as their equivalents in the [`saveAs`][saveAs] method.
+
+Note that while this method returns synchronously, you will need to `await` most operations on the resulting Sharp object:
+
+```js
+let sharpImg = canvas.toSharp()
+await sharpImg.heif({compression:'hevc'}).toFile("image.heif")
+```
+As a result, when using method-chaining you'll want to `await` the whole thing:
+```js
+await canvas.toSharp().heif({compression:'hevc'}).toFile("image.heif")
+```
+
 <!-- references_begin -->
 [canvas_gpu]: #gpu
 [canvas_pages]: #pages
@@ -211,6 +237,8 @@ This method accepts the same arguments and behaves similarly to [.toBuffer()][to
 [multithreading]: ../getting-started.md#multithreading
 [Buffer]: https://nodejs.org/api/buffer.html
 [chroma_subsampling]: https://en.wikipedia.org/wiki/Chroma_subsampling
+[sharp]: https://sharp.pixelplumbing.com
+[sharp_npm]: https://www.npmjs.com/package/sharp
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
