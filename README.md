@@ -286,6 +286,8 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 [window]: https://skia-canvas.org/api/window
 [multithreading]: https://skia-canvas.org/getting-started#multithreading
 [node_napi]: https://nodejs.org/api/n-api.html#node-api-version-matrix
+[node_env]: https://nodejs.org/en/learn/command-line/how-to-read-environment-variables-from-nodejs
+[node_env_arg]: https://nodejs.org/dist/latest-v22.x/docs/api/cli.html#--env-fileconfig
 [rayon]: https://crates.io/crates/rayon
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
@@ -295,5 +297,3 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 [rotate()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/rotate
 [scale()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/scale
 [translate()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/translate
-[node_env]: https://nodejs.org/en/learn/command-line/how-to-read-environment-variables-from-nodejs
-[node_env_arg]: https://nodejs.org/dist/latest-v22.x/docs/api/cli.html#--env-fileconfig
