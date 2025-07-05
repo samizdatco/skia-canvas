@@ -110,23 +110,20 @@ impl Default for RenderCache{
 
 impl RenderCache{
     pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32, clip:Rect) -> Option<(&Image, &Rect, Rect)>{
-        if self.state == RenderState::Dirty{
-            self.clear();
+        if
+            self.state == RenderState::Dirty ||
+            self.page.id != page.id ||
+            self.page.rev != page.rev ||
+            self.matte != matte ||
+            self.dpr != dpr
+        {
+            *self = Self::default();
         }
 
-        let is_valid =
-            self.page.id == page.id &&
-            self.page.rev == page.rev &&
-            self.matte == matte &&
-            self.dpr == dpr;
-
-        match is_valid{
-            true => self.image.as_ref().map(|img| {
-                let (dst, _) = Matrix::scale((dpr, dpr)).map_rect(clip);
-                (img, &self.content, dst)
-            }),
-            false => None
-        }
+        self.image.as_ref().map(|img| {
+            let (dst, _) = Matrix::scale((dpr, dpr)).map_rect(clip);
+            (img, &self.content, dst)
+        })
     }
 
     pub fn depth(&self) -> usize {
@@ -142,10 +139,6 @@ impl RenderCache{
             let (content, _) = skia_safe::Matrix::scale((dpr, dpr)).map_rect(content);
             *self = Self{image: Some(image), page:page.clone(), matte, dpr, content, state};
         }
-    }
-
-    pub fn clear(&mut self){
-        *self = Self::default();
     }
 }
 
