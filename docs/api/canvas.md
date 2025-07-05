@@ -22,7 +22,6 @@ Rather than calling a DOM method to create a new canvas, you can simply call the
 let defaultCanvas = new Canvas() // without arguments, defaults to 300 × 150 px
 let squareCanvas = new Canvas(512, 512) // creates a 512 px square
 ```
-
 ## Saving graphics to files, buffers, and strings
 
 When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script. As a result you’ll generally want to deal with the canvas from within an `async` function and be sure to use the `await` keyword when accessing any of its output methods or shorthand properties (all of which return Promises):
@@ -52,6 +51,16 @@ function synchronous(){
   let pdfBuffer = canvas.toBufferSync("pdf")
 }
 ```
+
+## Controlling Font Rendering
+
+```js
+new Canvas(512, 512, {textContrast:1, textGamma: 0.8}) // more contrast & darker gamma
+```
+An optional text-rendering argument can be included when creating a new Canvas and will apply to all the bitmaps it generates. Note that these settings have shading effects on top of the context's current [`fontHinting`][fonthinting] setting, so you may need to experiment to find the results you're looking for:
+  - `textContrast` — a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to `0.0`)
+  - `textGamma` — a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to `1.4`)
+
 
 --------
 

@@ -66,6 +66,18 @@ console.log([win.canvas.width, win.canvas.height])
 
 > When the window and canvas sizes don’t perfectly match, the canvas will be scaled using the approach selected via the window’s [`fit`][fit] property.
 
+
+## Controlling Font Rendering
+
+```js
+new Window(800, 600, {textContrast:1, textGamma: 0.8}) // more contrast & darker gamma
+```
+An optional text-rendering argument can be included when creating a new Window and will apply to all the images it renders. Note that these settings have shading effects on top of the context's current [`fontHinting`][fonthinting] setting, so you may need to experiment to find the results you're looking for:
+  - `textContrast` — a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to `0.0`)
+  - `textGamma` — a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to `1.4`)
+
+
+
 ##  Drawing to a Window
 
 To draw to the window’s canvas, you can either use the reference to its `.canvas` property to create a context, or use the shortcut `.ctx` property which skips that step:
@@ -194,7 +206,6 @@ This specifies the color of the window's background which is drawn behind your c
 The `Canvas` object associated with the window. By default the window will create a canvas with the same size as the window dimensions, but the canvas can also be replaced at any time by assigning a new one to this property.
 
 ### `.closed`
-
 A read-only boolean indicating whether the Window has been closed (either programmatically or via its title-bar close button). A closed window can be re-opened by calling its [`open()`][open] method.
 
 ###  `.ctx`
@@ -291,6 +302,7 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 [borderless]: #borderless
 [draw]: #draw
 [fit]: #fit
+[fonthinting]: context.md#fonthinting
 [fps]: app.md#fps
 [frame]: #frame
 [fullscreen]: #fullscreen
