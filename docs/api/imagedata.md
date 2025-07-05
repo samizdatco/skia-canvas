@@ -6,11 +6,11 @@ description: Direct pixel access to image and canvas contents
 
 > The `ImageData` object offers a convenient container that bundled raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard **ImageData**][ImageData]'s structure and behavior, but extends it in a few ways.
 
-| Dimensions                 | Format                                     | Pixel Data                   |
-| --                         | --                                         | --                           |
-| [**width**][imgdata_size]  | [**colorSpace**][mdn_ImageData_colorspace] | [**data**][imgdata_data]     |
-| [**height**][imgdata_size] | [**colorType**][imgdata_colortype] 🧪      | [toSharp()][imgdata_tosharp] |
-|                            | [**bytesPerPixel**][imgdata_bpp] 🧪        |                              |
+| Dimensions                 | Format                                     | Pixel Data                    |
+| --                         | --                                         | --                            |
+| [**width**][imgdata_size]  | [**colorSpace**][mdn_ImageData_colorspace] | [**data**][imgdata_data]      |
+| [**height**][imgdata_size] | [**colorType**][imgdata_colortype] 🧪      | [toSharp()][imgdata_tosharp] 🧪|
+|                            | [**bytesPerPixel**][imgdata_bpp] 🧪        |                               |
 
 ## Working with `ImageData` objects
 

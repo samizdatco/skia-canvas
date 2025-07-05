@@ -12,7 +12,7 @@ description: An emulation of the HTML <canvas> element
 | [**engine**][engine] 🧪       | [saveAs()][saveAs] / [saveAsSync()][saveAs] 🧪                      | [**height**][canvas_height]    |
 | [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |                                |
 | [getContext()][getContext]    | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] 🧪  |                                |
-| [newPage()][newPage] 🧪       |                                                                     |                                |
+| [newPage()][newPage] 🧪       | [toSharp()][canvas_tosharp] 🧪                                      |                                |
 
 ## Creating new `Canvas` objects
 
@@ -225,6 +225,7 @@ await canvas.toSharp().heif({compression:'hevc'}).toFile("image.heif")
 <!-- references_begin -->
 [canvas_gpu]: #gpu
 [canvas_pages]: #pages
+[canvas_tosharp]: #tosharp
 [context]: context.md
 [engine]: #engine
 [fonthinting]: context.md#fonthinting
