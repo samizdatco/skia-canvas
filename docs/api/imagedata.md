@@ -159,22 +159,25 @@ The contents of the canvas can be copied into a [Sharp][sharp] image object, all
 loadImageData(src, width)
 loadImageData(src, width, height)
 loadImageData(src, width, height, {colorType='rgba', …requestOptions})
+loadImageData(sharpImage)
 ```
 
-Similar to the [loadImage()][loadimage] utility, `loadImageData()` will asynchronously fetch a URL or local file path and package it into a usable object for you. In this case, you will need to provide slightly more information about the nature of the data since you will be loading ‘raw’ binary data lacking an internal representation of its dimensions or color type. If the file you are loading is stored in `rgba` format, you need only specify the row-width of the image.
+Similar to the [loadImage()][loadimage] utility, `loadImageData()` will asynchronously fetch a URL or local file path and package it into a usable object for you. In this case, you will need to provide slightly more information about the nature of the data since you will be loading ‘raw’ binary data lacking an internal representation of its dimensions or color type.
 
-If the data uses a non-standard color type you'll need to fully specify the dimensions and include a `colorType`:
 
+#### Loading files
+If the file you are loading is stored in `rgba` format, you need only specify the row-width of the image. But if it uses a non-standard color type you'll need to fully specify the dimensions and include a `colorType`:
 
 ```js
 import {loadImageData} from 'skia-canvas'
 
-let id = await loadImageData('https://skia-canvas.org/icon.raw', 64, 64, {
+let id = await loadImageData('some-image-file.raw', 64, 64, {
   colorType: "bgra"
 })
 ```
 
-You can also include any [request options][fetch_opts] supported by [`fetch`][fetch] in the final argument:
+#### Loading URLs
+If the `src` argument is a URL, you can optionally include any [request options][fetch_opts] supported by [`fetch`][fetch] in the final argument:
 ```js
 let id = await loadImageData('https://skia-canvas.org/customized.raw', 64, 64, {
   colorType: "rgb",
@@ -188,11 +191,27 @@ let id = await loadImageData('https://skia-canvas.org/customized.raw', 64, 64, {
 })
 ```
 
+#### Loading Data URIs
 Note that in addition to HTTP URLs you may also call `loadImageData()` using Data URLs. Just make sure you use the mime type `application/octet-stream` in the header:
 
 ```js
 await loadImageData('data:application/octet-stream;base64,//8A////AP///...')
 ```
+#### Loading Sharp images
+[Sharp][sharp] images can be loaded without any additional arguments since they already contain their dimensions and encoding. The resulting `colorType` will always be converted to `rgba`, even if the Sharp object was initialized with 3-channel RGB:
+
+```js
+import sharp from 'sharp'
+
+let sharpImage = sharp({
+  create: {width:2, height:2, channels:3, background:"#f00"}
+})
+await loadImageData(sharpImage)
+```
+
+
+
+
 
 <!-- references_begin -->
 [loadimage]: image.md#loadimage
@@ -202,6 +221,8 @@ await loadImageData('data:application/octet-stream;base64,//8A////AP///...')
 [imgdata_bpp]: #bytesperpixel
 [imgdata_tosharp]: #tosharp
 [skia_colortype]: https://rust-skia.github.io/doc/skia_safe/enum.ColorType.html
+[sharp]: https://sharp.pixelplumbing.com
+[sharp_npm]: https://www.npmjs.com/package/sharp
 [fetch]: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
 [fetch_opts]: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit
 [ImageData]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData

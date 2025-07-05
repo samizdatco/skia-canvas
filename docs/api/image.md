@@ -65,6 +65,7 @@ Setting the `src` property will kick off the loading process. While the browser 
 - an absolute or relative path pointing to a file on the local system
 - a [Data URL][DataURL] with the image data base64-encoded into the string (or [url-encoded][url_encode] in the case of SVG images)
 - a [Buffer][Buffer] containing the pre-loaded bytes of a supported image file format
+- a [Sharp][sharp] bitmap image object (if the library has been [installed separately][sharp_npm])
 
 The images you load can be from a variety of formats:
 - Bitmap: `png`, `jpeg`, or `webp`
@@ -144,8 +145,9 @@ Emitted once data has been retrieved and successfully decoded into one of the su
 Emitted if loading was unsuccessful for any reason. An **Error** object with details is passed to your callback as the first argument.
 
 
+## Helpers
 
-## `loadImage()`
+### `loadImage()`
 
 ```js returns="Promise<Image>"
 loadImage(src)
@@ -157,8 +159,18 @@ The `loadImage` utility function is included to avoid the fiddly, callback-heavy
 ```js
 import {loadImage} from 'skia-canvas'
 
-let img = await loadImage('https://skia-canvas.org/icon.png')
+let img = await loadImage('some-image-file.png')
 ```
+#### Image Sources
+
+Note that you can pass a wide variety of image sources to the `loadImage` helper: its `src` argument can be any of the types supported by the **Image** class:
+- an HTTP URL to asynchronously retrieve the image from
+- an absolute or relative path pointing to a file on the local system
+- a [Data URL][DataURL] with the image data base64-encoded into the string (or [url-encoded][url_encode] in the case of SVG images)
+- a [Buffer][Buffer] containing the pre-loaded bytes of a supported image file format (`png`, `jpg`, `webp`, or `svg`)
+- a [Sharp][sharp] bitmap image object (if the library has been [installed separately][sharp_npm])
+
+#### Loading URLs
 
 When loading a URL over HTTP(S) you may also include a second argument containing [request options][fetch_opts] to be used when the library calls [`fetch`][fetch] behind the scenes. This can be useful for accessing resources requiring authentication…
 
@@ -182,11 +194,6 @@ let img = await loadImage('https://example.com/customized.svg', {
 })
 ```
 
-:::info[Note]
-Note that you are not limited to web URLs when calling `loadImage`: the `src` argument can be any of the file-path, URL, or buffer types listed above for the [**src** property][img_src].
-:::
-
-
 <!-- references_begin -->
 [loadimage]: #loadimage
 [img_bind]: #on--off--once
@@ -198,6 +205,8 @@ Note that you are not limited to web URLs when calling `loadImage`: the `src` ar
 [img_decode]: #decode
 [event_emitter]: https://nodejs.org/api/events.html#class-eventemitter
 [Buffer]: https://nodejs.org/api/buffer.html
+[sharp]: https://sharp.pixelplumbing.com
+[sharp_npm]: https://www.npmjs.com/package/sharp
 [fetch]: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
 [fetch_opts]: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit
 [Promise]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
