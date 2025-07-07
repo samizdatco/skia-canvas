@@ -5,7 +5,11 @@ on:
 jobs:
   lambda:
     name: Create layer for lambda
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, arm64]
+    runs-on: ${{ matrix.arch == 'x86' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
 
     steps:
     - name: Checkout repository
@@ -18,12 +22,12 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
 
     - name: Build layer
-      run: make aws-lambda-x64.zip
+      run: |
+        docker run -v ./arch/lambda:/opt -v .:/mnt amazonlinux:2023 bash /opt/build-layer.sh
 
     - name: Add to release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         PKG_VERSION=v$(npm pkg get version | tr -d '"')
-        echo $PKG_VERSION
-        gh release upload $PKG_VERSION aws-lambda-x64.zip
+        gh release upload $PKG_VERSION aws-lambda-*.zip

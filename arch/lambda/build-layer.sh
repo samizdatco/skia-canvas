@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # see `skia-canvas-lambda.zip` recipe in Makefile for invocation details
 
-export NODE_DIR="/opt/layer/nodejs"
-export LAYER_DIR="/opt/layer"
-export LAYER_ZIP="/mnt/aws-lambda-x64.zip"
+case "$(uname -p)" in
+ x86_64) LAYER_ZIP="/mnt/aws-lambda-x64.zip" ;;
+ aarch64) LAYER_ZIP="/mnt/aws-lambda-arm64.zip" ;;
+esac
+
+NODE_DIR="/opt/layer/nodejs"
+LAYER_DIR="/opt/layer"
 
 yum -y install fontconfig nodejs zip git
 
