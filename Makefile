@@ -69,7 +69,7 @@ release:
 
 # AWS Lambda layer
 aws-lambda-x86.zip:
-	docker run -it --platform linux/amd64 -v ./arch/lambda:/opt -v .:/mnt --rm amazonlinux:2023 bash /opt/build-layer.sh
+	docker run --platform linux/amd64 -v ./arch/lambda:/opt -v .:/mnt --rm amazonlinux:2023 bash /opt/build-layer.sh
 
 # linux-build helpers
 skia-version:
