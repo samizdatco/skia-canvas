@@ -67,6 +67,10 @@ release:
 	git push origin --tags
 	@printf "\nNext: publish the release on github to submit to npm\n"
 
+# AWS Lambda layer
+aws-lambda-x86.zip:
+	docker run -it --platform linux/amd64 -v ./arch/lambda:/opt -v .:/mnt --rm amazonlinux:2023 bash /opt/build-layer.sh
+
 # linux-build helpers
 skia-version:
 	@grep -m 1 '^skia-safe' Cargo.toml | egrep -o '[0-9\.]+'

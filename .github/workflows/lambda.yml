@@ -1,0 +1,24 @@
+name: Build lambda layer
+on:
+  workflow_dispatch:
+
+jobs:
+  lambda:
+    name: Create layer for lambda
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: 15
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Build layer
+      run: make aws-lambda-x86.zip
+
+    - name: Add to release
+      run: gh release upload v$(npm pkg get version) aws-lambda-x86.zip
