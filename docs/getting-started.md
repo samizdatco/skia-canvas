@@ -23,7 +23,7 @@ Pre-compiled binaries are available for:
 
   - Linux (x64 & arm64)
   - macOS (x64 & Apple silicon)
-  - Windows (x64)
+  - Windows (x64 & arm64)
 
 Nearly everything you need is statically linked into the library. A notable exception is the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library which must be installed separately if you’re running on Linux.
 
