@@ -14,7 +14,7 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@v2
       with:
-        node-version: 15
+        node-version: 20
         registry-url: 'https://registry.npmjs.org'
 
     - name: Build layer
@@ -24,4 +24,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        gh release upload v$(npm pkg get version | tr -d '"') aws-lambda-x86.zip
+        PKG_VERSION=v$(npm pkg get version | tr -d '"')
+        echo $PKG_VERSION
+        gh release upload $PKG_VERSION aws-lambda-x86.zip
