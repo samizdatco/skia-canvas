@@ -68,7 +68,7 @@ release:
 	@printf "\nNext: publish the release on github to submit to npm\n"
 
 # AWS Lambda layer
-aws-lambda-x86.zip:
+aws-lambda-x64.zip:
 	docker run --platform linux/amd64 -v ./arch/lambda:/opt -v .:/mnt --rm amazonlinux:2023 bash /opt/build-layer.sh
 
 # linux-build helpers

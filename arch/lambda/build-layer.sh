@@ -3,7 +3,7 @@
 
 export NODE_DIR="/opt/layer/nodejs"
 export LAYER_DIR="/opt/layer"
-export LAYER_ZIP="/mnt/aws-lambda-x86.zip"
+export LAYER_ZIP="/mnt/aws-lambda-x64.zip"
 
 yum -y install fontconfig nodejs zip git
 

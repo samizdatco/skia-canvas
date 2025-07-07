@@ -18,7 +18,7 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
 
     - name: Build layer
-      run: make aws-lambda-x86.zip
+      run: make aws-lambda-x64.zip
 
     - name: Add to release
       env:
@@ -26,4 +26,4 @@ jobs:
       run: |
         PKG_VERSION=v$(npm pkg get version | tr -d '"')
         echo $PKG_VERSION
-        gh release upload $PKG_VERSION aws-lambda-x86.zip
+        gh release upload $PKG_VERSION aws-lambda-x64.zip
