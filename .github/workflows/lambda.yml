@@ -23,4 +23,5 @@ jobs:
     - name: Add to release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release upload v$(npm pkg get version) aws-lambda-x86.zip
+      run: |
+        gh release upload v$(npm pkg get version | tr -d '"') aws-lambda-x86.zip
