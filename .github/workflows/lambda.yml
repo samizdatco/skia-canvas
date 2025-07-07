@@ -21,4 +21,6 @@ jobs:
       run: make aws-lambda-x86.zip
 
     - name: Add to release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: gh release upload v$(npm pkg get version) aws-lambda-x86.zip
