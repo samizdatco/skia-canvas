@@ -24,6 +24,7 @@ Pre-compiled binaries are available for:
   - Linux (x64 & arm64)
   - macOS (x64 & Apple silicon)
   - Windows (x64 & arm64)
+  - AWS Lambda (x64 & arm64)
 
 Nearly everything you need is statically linked into the library. A notable exception is the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library which must be installed separately if you’re running on Linux.
 
@@ -49,6 +50,20 @@ If you wish to use Alpine as the underlying distribution, you can start with som
 FROM node:alpine
 RUN apk update && apk add fontconfig
 ```
+
+## Running on AWS Lambda
+
+Skia Canvas depends on libraries that aren't present in the standard Lambda [runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html). You can add these to your function by uploading a ‘[layer](https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html)’ (a zip file containing the required libraries and `node_modules` directory) and configuring your function to use it.
+
+1. Look in the **Assets** section of Skia Canvas’s [current release](https://github.com/samizdatco/skia-canvas/releases/latest) and download the `aws-lambda-x64.zip` or `aws-lambda-arm64.zip` file (depending on your architecture) but don’t decompress it
+2. Go to the AWS Lambda [Layers console](https://console.aws.amazon.com/lambda/home/#/layers) and click the **Create Layer** button, then fill in the fields:
+  - **Name**: `skia-canvas` (or whatever you want)
+  - **Description**: you might want to note the Skia Canvas version here
+  - **Compatible architectures**: select **x86_64** or **arm64** depending on which zip you chose
+  - **Compatible runtimes**: select **Node.js 22.x** (and/or 20.x & 18.x)
+3. Click the **Choose file** button and select the zip file you downloaded in Step 1, then click **Create**
+
+You can now use this layer in any function you create in the [Functions console](https://console.aws.amazon.com/lambda/home/#/functions). After creating a new function, click the **Add a Layer** button and you can select your newly created Skia Canvas layer from the **Custom Layers** layer source.
 
 ## Compiling from Source
 
