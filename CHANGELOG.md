@@ -34,6 +34,7 @@
 
 ### Misc. Improvements
 - Added support for Arm-based processors on Windows
+- Now providing pre-built ‘layer’ archives for use with [AWS Lambda][running_lambda]
 - [`App.launch()`][App.launch()] now returns a Promise that resolves when the final window is closed, allowing you to schedule code to run before the process would otherwise exit (see also the new [`idle`][app_idle] event which fires under the same circumstances).
 - `input` event objects now contain an `inputType` property to distinguish between insertion, deletion, and IME composition
 - Mouse events are no longer coalesced down to a single instance per frame (most relevant for `mousemove` events)
@@ -69,6 +70,7 @@
 [downsample]: /docs/api/canvas.md#downsample
 [canvas_text_rendering]: /docs/api/canvas.md#controlling-font-rendering
 [window_text_rendering]: /docs/api/window.md#controlling-font-rendering
+[running_lambda]: /docs/getting-started.md#running-on-aws-lambda
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
