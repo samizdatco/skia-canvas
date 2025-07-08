@@ -18,16 +18,13 @@
 
 ---
 
-Skia Canvas is a browser-less implementation of the HTML Canvas drawing API for Node.js. It is based on Google’s [Skia](https://skia.org) graphics engine and, accordingly, produces very similar results to Chrome’s `<canvas>` element. The library is well suited for use on desktop machines where you can render hardware-accelerated graphics to a window and on the server where it can output a variety of image formats.
-
-While the primary goal of this project is to provide a reliable emulation of the [standard API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) according to the [spec](https://html.spec.whatwg.org/multipage/canvas.html), it also extends it in a number of areas to take greater advantage of Skia's advanced graphical features and provide a more expressive coding environment.
+Skia Canvas is a Node.js implementation of the HTML Canvas drawing [API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) for both on- and off-screen rendering. Since it uses Google’s [Skia](https://skia.org) graphics engine, its output is very similar to Chrome’s [`<canvas>`](https://html.spec.whatwg.org/multipage/canvas.html) element — though it's also capable of things the brower’s Canvas still can't achieve.
 
 In particular, Skia Canvas:
 
-  - is fast and compact since rendering takes place on the GPU and all the heavy lifting is done by native code written in Rust and C++
-  - can render to [windows][window] using an OS-native graphics pipeline and provides a browser-like [UI event][win_bind] framework
   - generates images in both raster (JPEG, PNG, & WEBP) and vector (PDF & SVG) formats
-  - can save images to [files][saveAs], return them as [Buffers][toBuffer], or encode [dataURL][toDataURL_ext] strings
+  - can draw to interactive GUI [windows][window] and provides a browser-like [event][win_bind] framework
+  - can save images to [files][saveAs], encode to [dataURL][toDataURL_ext] strings, and return [Buffers][toBuffer] or [Sharp][sharp] objects
   - uses native threads in a [user-configurable][multithreading] worker pool for asynchronous rendering and file I/O
   - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
@@ -239,7 +236,7 @@ win.on("draw", e => {
 })
 ```
 
-### Integrating with [Sharp.js](https://sharp.pixelplumbing.com)
+### Integrating with [Sharp.js][sharp]
 
 ```js
 import sharp from 'sharp'
@@ -312,6 +309,7 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 [node_env]: https://nodejs.org/en/learn/command-line/how-to-read-environment-variables-from-nodejs
 [node_env_arg]: https://nodejs.org/dist/latest-v22.x/docs/api/cli.html#--env-fileconfig
 [rayon]: https://crates.io/crates/rayon
+[sharp]: https://sharp.pixelplumbing.com
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [letterSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/letterSpacing
