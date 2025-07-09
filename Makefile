@@ -14,8 +14,10 @@ NPM_VERSION = $(shell npm view skia-canvas version)
 OS=$(shell sh -c 'uname -s 2>/dev/null')
 ifeq ($(OS),Darwin)
 	FEATURES = metal,window
-else # Linux & Windows
+else ifeq ($(OS),Linux)
 	FEATURES = vulkan,window,freetype
+else # Windows
+	FEATURES = vulkan,window
 endif
 
 $(NPM):
