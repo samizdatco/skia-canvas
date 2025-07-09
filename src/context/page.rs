@@ -168,29 +168,36 @@ impl PageRecorder{
 // Cache for the bitmap generated in the last getImageData call
 //
 
-struct PageCache{
-  image: Option<SkImage>,
-  opts: Option<ExportOptions>,
-  depth: usize,
+#[derive(Debug, Clone)]
+pub struct PageCache{
+  pub image: Option<SkImage>,
+  pub density: f32,
+  pub matte: Option<Color>,
+  pub msaa: Option<usize>,
+  pub depth: usize,
 }
 
 impl Default for PageCache{
     fn default() -> Self {
-        Self{image:None, opts:None, depth:0}
+        Self{image:None, density:1.0, matte:None, msaa:None, depth:0}
     }
 }
 
 impl PageCache{
-  pub fn validate(&mut self, opts:&ExportOptions, depth:usize) -> bool{
-     if self.opts != Some(opts.clone()){
+  pub fn validate(&mut self, opts:&ExportOptions) -> bool{
+    if
+      opts.density != self.density ||
+      opts.matte != self.matte ||
+      opts.msaa != self.msaa
+    {
       *self = Self::default();
     }
 
-    self.image.is_some() && self.depth == depth
+    opts.is_raster() && self.image.is_some()
   }
 
   pub fn update(&mut self, image:SkImage, opts:ExportOptions, depth:usize){
-    *self = Self{ image:Some(image), opts:Some(opts), depth}
+    *self = Self{ image:Some(image), density:opts.density, matte:opts.matte, msaa:opts.msaa, depth}
   }
 
   #[cfg(not(any(feature="metal", feature="vulkan")))]
