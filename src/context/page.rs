@@ -6,7 +6,7 @@ use neon::prelude::*;
 use skia_safe::{
   svg::{self, canvas::Flags},
   image::{BitDepth, CachingHint}, images, pdf,
-  Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document,
+  Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document, Surface,
   Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size,
   SurfaceProps, SurfacePropsFlags, PixelGeometry, IPoint, jpeg_encoder, png_encoder, webp_encoder
 };
@@ -28,9 +28,7 @@ pub struct PageRecorder{
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
-  cache: Option<SkImage>,
-  cache_opts: Option<ExportOptions>,
-  cache_depth: usize,
+  cache: PageCache,
   changed: bool,
   rev: usize,
   id: usize,
@@ -45,7 +43,7 @@ impl PageRecorder{
     rec.recording_canvas().unwrap().save(); // start at depth 2
 
     PageRecorder{
-      current:rec, layers:vec![], changed:false, cache:None, cache_opts:None, cache_depth:0,
+      current:rec, layers:vec![], changed:false, cache:PageCache::default(),
       matrix:Matrix::default(), clip:None, bounds, id, rev:0
     }
   }
@@ -97,29 +95,19 @@ impl PageRecorder{
     let src_size = Size::new(self.bounds.width()*opts.density, self.bounds.height()*opts.density);
     let src_info = ImageInfo::new_n32_premul(src_size.to_floor(), dst_info.color_space());
     let page = self.get_page();
-
-    // invalidate the cache if any of the export options have changed since last run
-    if self.cache_opts != Some(opts.clone()){
-      self.cache = None;
-      self.cache_opts = None;
-      self.cache_depth = 0;
-    }
+    let page_depth = page.layers.len();
 
     engine.with_surface(&src_info, &opts.clone(), |surface| {
       let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
 
       let got_pixels = {
-        if self.cache.is_some() && self.cache_depth == page.layers.len() {
+        // invalidate the cache if any of the export options have changed since last run
+        if self.cache.validate(&opts, page_depth){
           // use cached image (reading just the pixels in the requested rect)
-          self.cache
-            .as_ref().unwrap()
-            .read_pixels_with_context(
-              &mut surface.direct_context(), &dst_info, &mut dst_buffer,
-              dst_info.min_row_bytes(), (crop.x(), crop.y()), CachingHint::Allow
-            )
+          self.cache.copy_pixels(surface, &dst_info, crop, &mut dst_buffer)
         }else{
           let canvas = surface.canvas();
-          if let Some(image) = &self.cache{
+          if let Some(image) = &self.cache.image{
             // update the full-canvas cache image using (potentially gpu-backed) rasterizer
             canvas.draw_image(image, (0,0), None);
           }else if let Some(color) = opts.matte{
@@ -129,12 +117,10 @@ impl PageRecorder{
 
           // draw newly added layers and cache the full-canvas bitmap
           canvas.scale((opts.density, opts.density));
-          for pict in page.layers.iter().skip(self.cache_depth){
+          for pict in page.layers.iter().skip(self.cache.depth){
             pict.playback(canvas);
-            self.cache_depth += 1;
           }
-          self.cache = Some(surface.image_snapshot());
-          self.cache_opts = Some(opts);
+          self.cache.update(surface.image_snapshot(), opts, page_depth);
 
           // copy subset of pixels into buffer (and convert to requested color_type)
           surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), (crop.x(), crop.y()))
@@ -143,7 +129,7 @@ impl PageRecorder{
 
       match got_pixels {
         true => Ok(dst_buffer),
-        false => Err(format!("Could get pixels in format: {:?}", dst_info.color_type()))
+        false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
       }
     })
   }
@@ -177,6 +163,63 @@ impl PageRecorder{
           pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()), None
         )
       })
+  }
+}
+
+
+//
+// Cache for the bitmap generated in the last getImageData call
+//
+
+struct PageCache{
+  image: Option<SkImage>,
+  opts: Option<ExportOptions>,
+  depth: usize,
+}
+
+impl Default for PageCache{
+    fn default() -> Self {
+        Self{image:None, opts:None, depth:0}
+    }
+}
+
+impl PageCache{
+  pub fn validate(&mut self, opts:&ExportOptions, depth:usize) -> bool{
+     if self.opts != Some(opts.clone()){
+      *self = Self::default();
+    }
+
+    self.image.is_some() && self.depth == depth
+  }
+
+  pub fn update(&mut self, image:SkImage, opts:ExportOptions, depth:usize){
+    *self = Self{ image:Some(image), opts:Some(opts), depth}
+  }
+
+  #[cfg(not(any(feature="metal", feature="vulkan")))]
+  pub fn copy_pixels<'a>(
+    &self,
+    _surface: &mut Surface,
+    dst_info: &ImageInfo,
+    src: IRect,
+    pixels: &mut [u8],
+  ) -> bool{
+    self.image.as_ref().map(|image| image.read_pixels(
+      &dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()), CachingHint::Allow
+    )).unwrap_or(false)
+  }
+
+  #[cfg(any(feature="metal", feature="vulkan"))]
+  pub fn copy_pixels<'a>(
+    &self,
+    surface: &mut Surface,
+    dst_info: &ImageInfo,
+    src: IRect,
+    pixels: &mut [u8],
+  ) -> bool{
+    self.image.as_ref().map(|image| image.read_pixels_with_context(
+        &mut surface.direct_context(), &dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()), CachingHint::Allow
+    )).unwrap_or(false)
   }
 }
 
