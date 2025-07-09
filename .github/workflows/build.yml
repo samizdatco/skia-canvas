@@ -32,15 +32,11 @@ jobs:
         chown -R github $CARGO_HOME/registry
         make optimized
 
-    - name: Package module
-      run: |
-        npm test && npm run package
-
     - name: Add to release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        npm run upload
+        npm test && npm run upload
 
   linux-arm64:
     runs-on: ubuntu-24.04-arm
@@ -77,15 +73,11 @@ jobs:
       run: |
         make optimized
 
-    - name: Package module
-      run: |
-        npm test && npm run package
-
     - name: Add to release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        npm run upload
+        npm test && npm run upload
 
   mac:
     strategy:
@@ -116,14 +108,11 @@ jobs:
         MACOSX_DEPLOYMENT_TARGET: 10.14
       run: make optimized
 
-    - name: Package module
-      run: npm test && npm run package
-
     - name: Add to release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        npm run upload
+        npm test && npm run upload
 
   windows:
     strategy:
@@ -155,13 +144,10 @@ jobs:
     - name: Build module
       run: make optimized
 
-    - name: Package module
-      run: npm test && npm run package
-
     - name: Add to release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         npm config set script-shell bash
-        npm run upload
+        npm test && npm run upload
 
