@@ -93,6 +93,7 @@ impl RenderingEngine{
     }
 }
 
+#[allow(dead_code)]
 pub struct RenderCache {
     image: Option<Image>,
     content: Rect,
@@ -108,6 +109,7 @@ impl Default for RenderCache{
     }
 }
 
+#[allow(dead_code)]
 impl RenderCache{
     pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32, clip:Rect) -> Option<(&Image, &Rect, Rect)>{
         if
