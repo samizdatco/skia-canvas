@@ -3,7 +3,6 @@
 .env
 _arc
 lib/*.node
-lib/*.gz
 node_modules
 target
 test/assets/Oswald

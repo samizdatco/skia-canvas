@@ -2,8 +2,7 @@ NAPI_VERSION := 8
 NPM := $(CURDIR)/node_modules
 NODEMON := $(CURDIR)/node_modules/.bin/nodemon
 JEST := $(CURDIR)/node_modules/.bin/jest
-LIBDIR := $(CURDIR)/lib/v$(NAPI_VERSION)
-LIB := $(LIBDIR)/index.node
+LIB := $(CURDIR)/lib/skia.node
 LIB_SRC := Cargo.toml $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src/*/*/*.rs)
 GIT_TAG = $(shell git describe)
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | cut -d '=' -f 2)
@@ -43,13 +42,12 @@ check:
 	cargo check
 
 clean:
-	rm -rf $(LIBDIR)
-	rm -rf $(CURDIR)/target/debug
-	rm -rf $(CURDIR)/target/release
+	rm -rf $(LIB)
 
 distclean: clean
 	rm -rf $(NPM)
-	rm -rf $(CURDIR)/build
+	rm -rf $(CURDIR)/target/debug
+	rm -rf $(CURDIR)/target/release
 	cargo clean
 
 release:
