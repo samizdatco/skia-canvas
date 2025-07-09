@@ -99,32 +99,29 @@ impl PageRecorder{
 
     engine.with_surface(&src_info, &opts.clone(), |surface| {
       let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
+      let canvas = surface.canvas();
 
       let got_pixels = {
         // invalidate the cache if any of the export options have changed since last run
-        if self.cache.validate(&opts, page_depth){
-          // use cached image (reading just the pixels in the requested rect)
-          self.cache.copy_pixels(surface, &dst_info, crop, &mut dst_buffer)
-        }else{
-          let canvas = surface.canvas();
-          if let Some(image) = &self.cache.image{
-            // update the full-canvas cache image using (potentially gpu-backed) rasterizer
-            canvas.draw_image(image, (0,0), None);
-          }else if let Some(color) = opts.matte{
-            // start from scratch, filling the canvas if requested
+        if !self.cache.validate(&opts) {
+          // start from scratch, filling the canvas if requested
+          if let Some(color) = opts.matte{
             canvas.clear(color);
           }
-
-          // draw newly added layers and cache the full-canvas bitmap
-          canvas.scale((opts.density, opts.density));
-          for pict in page.layers.iter().skip(self.cache.depth){
-            pict.playback(canvas);
-          }
-          self.cache.update(surface.image_snapshot(), opts, page_depth);
-
-          // copy subset of pixels into buffer (and convert to requested color_type)
-          surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), (crop.x(), crop.y()))
+        }else if let Some(image) = &self.cache.image{
+          // otherwise, use the cached bitmap as the background
+          canvas.draw_image(image, (0,0), None);
         }
+
+        // draw newly added layers and cache the full-canvas bitmap
+        canvas.scale((opts.density, opts.density));
+        for pict in page.layers.iter().skip(self.cache.depth){
+          pict.playback(canvas);
+        }
+        self.cache.update(surface.image_snapshot(), opts, page_depth);
+
+        // use cached image (reading just the pixels in the requested rect)
+        self.cache.copy_pixels(surface, &dst_info, crop, &mut dst_buffer)
       };
 
       match got_pixels {
