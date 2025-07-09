@@ -23,7 +23,7 @@ struct Engine { }
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 impl Engine {
     pub fn supported() -> bool { false }
-    pub fn with_surface<T, F>(_: &ImageInfo, _:Option<usize>, _:F)  -> Result<T, String>
+    pub fn with_surface<T, F>(_: &ImageInfo, _:&ExportOptions, _:F)  -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         Err("Compiled without GPU support".to_string())
