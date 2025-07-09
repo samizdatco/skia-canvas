@@ -2,12 +2,9 @@
 .vscode
 .env
 _arc
-build
-lib/v*/*.node
+lib/*.node
+lib/*.gz
 node_modules
-native/artifacts.json
-native/target
-native/*.node
 target
 test/assets/Oswald
 test/assets/Raleway
