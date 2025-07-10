@@ -27,7 +27,7 @@ jest.mock("cross-fetch", () => {
 
 describe("Image", () => {
   var PATH = 'test/assets/pentagon.png',
-      URL = `https://${PATH}`,
+      URI = `https://${PATH}`,
       BUFFER = fs.readFileSync(PATH),
       DATA_URI = `data:image/png;base64,${BUFFER.toString('base64')}`,
       FRESH = {complete:false, width:0, height:0},
@@ -35,7 +35,7 @@ describe("Image", () => {
       FORMAT = 'test/assets/image/format',
       PARSED = {complete:true, width:60, height:60},
       SVG_PATH = `${FORMAT}.svg`,
-      SVG_URL = `https://${SVG_PATH}`,
+      SVG_URI = `https://${SVG_PATH}`,
       SVG_BUFFER = fs.readFileSync(SVG_PATH),
       SVG_DATA_URI = `data:image/svg;base64,${SVG_BUFFER.toString('base64')}`,
       img
@@ -70,13 +70,13 @@ describe("Image", () => {
         expect(img).toMatchObject(LOADED)
         done()
       }
-      img.src = URL
+      img.src = URI
     })
 
     test("loadImage call", async () => {
       expect(img).toMatchObject(FRESH)
 
-      img = await loadImage(URL)
+      img = await loadImage(URI)
       expect(img).toMatchObject(LOADED)
 
       img = await loadImage(BUFFER)
@@ -89,6 +89,18 @@ describe("Image", () => {
       expect(img).toMatchObject(LOADED)
 
       img = await loadImage(SVG_PATH)
+      expect(img).toMatchObject(PARSED)
+
+      img = await loadImage(new URL(URI))
+      expect(img).toMatchObject(LOADED)
+
+      img = await loadImage(new URL(DATA_URI))
+      expect(img).toMatchObject(LOADED)
+
+      img = await loadImage(new URL(`file:${__dirname}/../`+PATH))
+      expect(img).toMatchObject(LOADED)
+
+      img = await loadImage(new URL(`file:${__dirname}/../`+SVG_PATH))
       expect(img).toMatchObject(PARSED)
 
       expect(loadImage("http://nonesuch")).rejects.toThrow("HTTP error 404")
@@ -124,7 +136,7 @@ describe("Image", () => {
         expect(img).toMatchObject(PARSED)
         done()
       }
-      img.src = SVG_URL
+      img.src = SVG_URI
     })
   })
 
@@ -140,7 +152,7 @@ describe("Image", () => {
     test(".onload callback", done => {
       // ensure that the fetch process can be overwritten while in flight
       img.onload = loaded => { throw Error("should not be called") }
-      img.src = URL
+      img.src = URI
 
       img.onload = function(){
         // confirm that `this` is set correctly
@@ -161,7 +173,7 @@ describe("Image", () => {
     test(".decode promise", async () => {
       expect(()=> img.decode() ).rejects.toEqual(new Error('Image source not set'))
 
-      img.src = URL
+      img.src = URI
       let decoded = await img.decode()
       expect(decoded).toBe(img)
 

@@ -119,11 +119,11 @@ declare var DOMRectReadOnly: {
 // Images
 //
 
-export function loadImage(src: string | Buffer, options?: RequestInit): Promise<Image>
+export function loadImage(src: string | Buffer | URL, options?: RequestInit): Promise<Image>
 export function loadImage(src: Sharp): Promise<Image>
 
-export function loadImageData(src: string | Buffer, width: number, height?:number): Promise<ImageData>
-export function loadImageData(src: string | Buffer, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
+export function loadImageData(src: string | Buffer | URL, width: number, height?:number): Promise<ImageData>
+export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
 export function loadImageData(src: Sharp): Promise<ImageData>
 
 export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
@@ -175,7 +175,7 @@ export class ImageData {
 export class Image extends EventEmitter {
   constructor()
   get src(): string
-  set src(src: string | Buffer)
+  set src(src: string | Buffer | URL)
   get width(): number
   get height(): number
   onload: ((this: Image, image: Image) => any) | null;

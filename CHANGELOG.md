@@ -41,6 +41,8 @@
 - Mouse events now include a standard [`buttons`][mdn_buttons] attribute
 - DPI metadata is now included in webp files (reflecting the [`density`][density] option passed to [saveAs()][Canvas.saveAs] or [toBuffer()][Canvas.toBuffer])
 - Argument validation now emulates browser behavior much more closely—including converting what were previously TypeErrors in certain cases into silent failures. To reënable these errors, set the `SKIA_CANVAS_STRICT` environment variable to `1` or `true`.
+- Replaced `node-pre-gyp` with a custom installation script, cutting the number of `node_modules` directories installed from 83 to 42.
+- loadImage(), loadImageData(), and Image.src can now accept [URL][node_url] objects (using http(s), file, or data protocols)
 
 ### Bugfixes
 - Setting a window's `cursor` property to "none" now hides the cursor
@@ -71,6 +73,7 @@
 [canvas_text_rendering]: /docs/api/canvas.md#controlling-font-rendering
 [window_text_rendering]: /docs/api/window.md#controlling-font-rendering
 [running_lambda]: /docs/getting-started.md#running-on-aws-lambda
+[node_url]: https://nodejs.org/api/url.html#class-url
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
