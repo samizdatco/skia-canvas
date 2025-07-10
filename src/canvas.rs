@@ -120,8 +120,11 @@ pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
 
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let pages = pages_arg(&mut cx, 1, &this)?;
+  let mut pages = pages_arg(&mut cx, 1, &this)?;
   let options = export_options_arg(&mut cx, 2)?;
+
+  // ensure cached bitmaps are sendable to other thread
+  pages.materialize(&this.borrow_mut().engine(), &options);
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
@@ -168,11 +171,14 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
 
 pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  let pages = pages_arg(&mut cx, 1, &this)?;
+  let mut pages = pages_arg(&mut cx, 1, &this)?;
   let name_pattern = string_arg(&mut cx, 2, "filePath")?;
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
   let options = export_options_arg(&mut cx, 4)?;
+
+  // ensure cached bitmaps are sendable to other thread
+  pages.materialize(&this.borrow_mut().engine(), &options);
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();

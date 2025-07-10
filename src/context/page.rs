@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path as FilePath;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
@@ -8,8 +9,9 @@ use skia_safe::{
   image::{BitDepth, CachingHint}, images, pdf,
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document, Surface,
   Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size,
-  SurfaceProps, SurfacePropsFlags, PixelGeometry, IPoint, jpeg_encoder, png_encoder, webp_encoder
+  SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder
 };
+use dashmap::DashMap;
 use little_exif::{metadata::Metadata, exif_tag::ExifTag, filetype::FileExtension};
 use crc::{Crc, CRC_32_ISO_HDLC};
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
@@ -17,6 +19,8 @@ const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
 use crate::gpu::RenderingEngine;
+
+static CACHE: OnceLock<Arc<DashMap<usize, PageCache>>> = OnceLock::new();
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -28,7 +32,6 @@ pub struct PageRecorder{
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
-  cache: PageCache,
   changed: bool,
   rev: usize,
   id: usize,
@@ -38,13 +41,14 @@ impl PageRecorder{
   pub fn new(bounds:Rect) -> Self {
     static COUNTER:AtomicUsize = AtomicUsize::new(1);
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+    PageCache::add(id);
+
     let mut rec = PictureRecorder::new();
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
 
     PageRecorder{
-      current:rec, layers:vec![], changed:false, cache:PageCache::default(),
-      matrix:Matrix::default(), clip:None, bounds, id, rev:0
+      current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id, rev:0
     }
   }
 
@@ -92,39 +96,33 @@ impl PageRecorder{
 
   pub fn get_pixels(&mut self, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String>{
     let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), AlphaType::Unpremul, opts.color_space.clone());
-    let src_size = Size::new(self.bounds.width()*opts.density, self.bounds.height()*opts.density);
+    let src_size = Size::new(self.bounds.width() * opts.density, self.bounds.height() * opts.density);
     let src_info = ImageInfo::new_n32_premul(src_size.to_floor(), dst_info.color_space());
     let page = self.get_page();
-    let page_depth = page.layers.len();
+    let depth = page.layers.len();
 
     engine.with_surface(&src_info, &opts.clone(), |surface| {
-      let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
+      let (cache_image, cache_depth) = PageCache::read(self.id, &opts, depth);
+
       let canvas = surface.canvas();
+      if let Some(image) = cache_image{
+        // use the cached bitmap as the background (if present)
+        canvas.draw_image(image, (0,0), None);
+      }else if let Some(color) = opts.matte{
+        // otherwise, fill the canvas if requested
+        canvas.clear(color);
+      }
 
-      let got_pixels = {
-        // invalidate the cache if any of the export options have changed since last run
-        if !self.cache.validate(&opts) {
-          // start from scratch, filling the canvas if requested
-          if let Some(color) = opts.matte{
-            canvas.clear(color);
-          }
-        }else if let Some(image) = &self.cache.image{
-          // otherwise, use the cached bitmap as the background
-          canvas.draw_image(image, (0,0), None);
-        }
+      // draw newly added layers and cache the full-canvas bitmap
+      canvas.scale((opts.density, opts.density));
+      for pict in page.layers.iter().skip(cache_depth){
+        pict.playback(canvas);
+      }
+      PageCache::write(self.id, &surface.image_snapshot(), &opts, depth);
 
-        // draw newly added layers and cache the full-canvas bitmap
-        canvas.scale((opts.density, opts.density));
-        for pict in page.layers.iter().skip(self.cache.depth){
-          pict.playback(canvas);
-        }
-        self.cache.update(surface.image_snapshot(), opts, page_depth);
-
-        // use cached image (reading just the pixels in the requested rect)
-        self.cache.copy_pixels(surface, &dst_info, crop, &mut dst_buffer)
-      };
-
-      match got_pixels {
+      // use cached image (reading just the pixels in the requested rect)
+      let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
+      match PageCache::copy_pixels(self.id, surface, &dst_info, crop, &mut dst_buffer) {
         true => Ok(dst_buffer),
         false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
       }
@@ -163,67 +161,9 @@ impl PageRecorder{
   }
 }
 
-
-//
-// Cache for the bitmap generated in the last getImageData call
-//
-
-#[derive(Debug, Clone)]
-pub struct PageCache{
-  pub image: Option<SkImage>,
-  pub density: f32,
-  pub matte: Option<Color>,
-  pub msaa: Option<usize>,
-  pub depth: usize,
-}
-
-impl Default for PageCache{
-    fn default() -> Self {
-        Self{image:None, density:1.0, matte:None, msaa:None, depth:0}
-    }
-}
-
-impl PageCache{
-  pub fn validate(&mut self, opts:&ExportOptions) -> bool{
-    if
-      opts.density != self.density ||
-      opts.matte != self.matte ||
-      opts.msaa != self.msaa
-    {
-      *self = Self::default();
-    }
-
-    opts.is_raster() && self.image.is_some()
-  }
-
-  pub fn update(&mut self, image:SkImage, opts:ExportOptions, depth:usize){
-    *self = Self{ image:Some(image), density:opts.density, matte:opts.matte, msaa:opts.msaa, depth}
-  }
-
-  #[cfg(not(any(feature="metal", feature="vulkan")))]
-  pub fn copy_pixels<'a>(
-    &self,
-    _surface: &mut Surface,
-    dst_info: &ImageInfo,
-    src: IRect,
-    pixels: &mut [u8],
-  ) -> bool{
-    self.image.as_ref().map(|image| image.read_pixels(
-      &dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()), CachingHint::Allow
-    )).unwrap_or(false)
-  }
-
-  #[cfg(any(feature="metal", feature="vulkan"))]
-  pub fn copy_pixels<'a>(
-    &self,
-    surface: &mut Surface,
-    dst_info: &ImageInfo,
-    src: IRect,
-    pixels: &mut [u8],
-  ) -> bool{
-    self.image.as_ref().map(|image| image.read_pixels_with_context(
-        &mut surface.direct_context(), &dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()), CachingHint::Allow
-    )).unwrap_or(false)
+impl Drop for PageRecorder{
+  fn drop(&mut self) {
+    PageCache::drop(self.id);
   }
 }
 
@@ -241,15 +181,15 @@ pub struct Page{
 
 impl PartialEq for Page {
   fn eq(&self, other: &Self) -> bool {
-      self.id == other.id &&
-      self.rev == other.rev &&
-      self.layers.len() == other.layers.len()
+    self.id == other.id &&
+    self.rev == other.rev &&
+    self.layers.len() == other.layers.len()
   }
 }
 
 impl Default for Page {
   fn default() -> Self {
-      Self{ id:0, rev:0, bounds: skia_safe::Rect::new_empty(), layers:vec![]}
+    Self{ id:0, rev:0, bounds: skia_safe::Rect::new_empty(), layers:vec![] }
   }
 }
 
@@ -273,7 +213,6 @@ impl Page{
     }
 
     let ExportOptions{ ref format, quality, density, matte, color_type, .. } = options;
-    let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
     let size = self.bounds.size();
     let img_dims = Size::new(size.width * density, size.height * density).to_floor();
     let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
@@ -285,6 +224,7 @@ impl Page{
         let mut pdf_bytes = Vec::new();
         let mut document = pdf_document(&mut pdf_bytes, quality, density).begin_page(size, None);
         let canvas = document.canvas();
+        let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
         canvas.draw_picture(&picture, None, None);
         document.end_page().close();
         Ok(pdf_bytes)
@@ -292,19 +232,44 @@ impl Page{
 
       "svg" => {
         let canvas = svg::Canvas::new(Rect::from_size(size), options.svg_flags());
+        let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end().as_bytes().to_vec())
       }
 
       // handle bitmap formats using (potentially gpu-backed) rasterizer
       _ => engine.with_surface(&img_info, &options, |surface|{
-        surface
-          .canvas()
-          .set_matrix(&img_scale)
-          .draw_picture(&picture, None, None);
+        let canvas = surface.canvas();
+        let depth = self.layers.len();
+        let (cache_image, cache_depth) = PageCache::read(self.id, &options, depth);
 
-        let image = surface.image_snapshot();
+        if let Some(image) = cache_image{
+          // use the cached bitmap as the background
+          canvas.draw_image(image, (0,0), None);
+        }else if let Some(color) = options.matte{
+          // otherwise, fill the canvas if requested
+          canvas.clear(color);
+        }
+
+        // draw newly added layers and cache the full-canvas bitmap
+        canvas.set_matrix(&img_scale);
+        for pict in self.layers.iter().skip(cache_depth){
+          pict.playback(canvas);
+        }
+
+        // extract the results
+        let mut image = surface.image_snapshot();
         let context = &mut surface.direct_context();
+
+        // update cache
+        if rayon::current_thread_index().is_some(){
+          // only move off GPU if we're in a background thread and need to share
+          let context = &mut surface.direct_context();
+          if let Some(raster) = image.make_raster_image(context, CachingHint::Allow){
+            image = raster;
+          }
+        }
+        PageCache::write(self.id, &image, &options, depth);
 
         match format.as_str(){
           "raw" => {
@@ -416,7 +381,6 @@ impl Page{
   }
 }
 
-
 //
 // Container for a canvas's entire stack of page contexts
 //
@@ -437,6 +401,13 @@ impl PageSequence{
 
   pub fn len(&self) -> usize{
     self.pages.len()
+  }
+
+  pub fn materialize(&mut self, engine:&RenderingEngine, options:&ExportOptions){
+    if !options.is_raster(){ return }
+    for page in self.pages.iter_mut(){
+      PageCache::materialize(page.id, &engine, &options);
+    }
   }
 
   pub fn as_pdf(&self, options:ExportOptions) -> Result<Vec<u8>, String>{
@@ -479,7 +450,110 @@ impl PageSequence{
       Err(msg) => Err(msg)
     }
   }
+}
 
+//
+// Cache for the last bitmap generated by a given Page
+//
+
+#[derive(Debug, Clone)]
+struct PageCache{
+  image: Option<SkImage>,
+  density: f32,
+  matte: Option<Color>,
+  msaa: Option<usize>,
+  depth: usize,
+}
+
+impl Default for PageCache{
+  fn default() -> Self {
+    Self{image:None, density:1.0, matte:None, msaa:None, depth:0}
+  }
+}
+
+impl PageCache{
+  pub fn shared<'a>() -> &'a Arc<DashMap<usize, PageCache>>{
+    CACHE.get_or_init(|| Arc::new(DashMap::new()))
+  }
+
+  pub fn add(id:usize){
+    Self::shared().insert(id, PageCache::default());
+  }
+
+  pub fn drop(id:usize){
+    Self::shared().remove(&id).unwrap();
+  }
+
+  pub fn read(id:usize, opts:&ExportOptions, depth:usize) -> (Option<SkImage>, usize){
+    Self::shared().get(&id).map(|cache|{
+      let is_valid = opts.is_raster() &&
+        opts.density == cache.density &&
+        opts.matte == cache.matte &&
+        opts.msaa == cache.msaa &&
+        depth >= cache.depth &&
+        cache.image.is_some();
+
+      match is_valid{
+        true => (cache.image.clone(), cache.depth),
+        false => (None, 0)
+      }
+    })
+    .unwrap_or((None, 0))
+  }
+
+  pub fn write(id:usize, image:&SkImage, opts:&ExportOptions, depth:usize){
+    Self::shared().get_mut(&id).map(|mut cache|{
+      let out_of_order = cache.image.is_some() &&
+          opts.density == cache.density &&
+          opts.matte == cache.matte &&
+          opts.msaa == cache.msaa &&
+          depth <= cache.depth;
+
+      if !out_of_order{
+        *cache = Self{ image:Some(image.clone()), density:opts.density, matte:opts.matte, msaa:opts.msaa, depth}
+      }
+    });
+  }
+
+  pub fn materialize(id:usize, engine:&RenderingEngine, options:&ExportOptions){
+    Self::shared().get_mut(&id).map(|mut cache|{
+      if let Some(ref img) = cache.image{
+        // nothing to be done if the image isn't currently in GPU memory
+        if !img.is_texture_backed(){ return }
+
+        // otherwise move the image to main memory
+        cache.image = cache.image.as_ref().and_then(|image|
+          engine.with_surface(image.image_info(), options, |surface|{
+            surface.direct_context().as_mut()
+              .and_then(|context|
+                image.make_raster_image(context, CachingHint::Allow)
+              ).ok_or(String::from("Failed"))
+          }).ok()
+        );
+      }
+    });
+  }
+
+  pub fn copy_pixels(id:usize, surface: &mut Surface, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8]) -> bool {
+    Self::shared().get(&id).and_then(|cache|{
+      cache._blit(surface, dst_info, src, pixels)
+    }).unwrap_or(false)
+  }
+
+  #[cfg(not(any(feature="metal", feature="vulkan")))]
+  fn _blit<'a>( &self, _surface: &mut Surface, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8], ) -> Option<bool>{
+    self.image.as_ref().map(|image| image.read_pixels(
+      &dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()), CachingHint::Allow
+    ))
+  }
+
+  #[cfg(any(feature="metal", feature="vulkan"))]
+  fn _blit<'a>( &self, surface: &mut Surface, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8], ) -> Option<bool>{
+    let context = &mut surface.direct_context();
+    self.image.as_ref().map(|image| image.read_pixels_with_context(
+      context, &dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()), CachingHint::Allow
+    ))
+  }
 }
 
 //
@@ -558,5 +632,9 @@ impl ExportOptions{
       true => Ok(samples),
       false => Err(format!("{}x MSAA not supported by GPU (options: {:?})", samples, valid_msaa))
     }
+  }
+
+  pub fn is_raster(&self) -> bool{
+    self.format!="pdf" && self.format!="svg"
   }
 }
