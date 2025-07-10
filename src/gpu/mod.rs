@@ -115,7 +115,6 @@ impl RenderCache{
         if
             self.state == RenderState::Dirty ||
             self.page.id != page.id ||
-            self.page.rev != page.rev ||
             self.matte != matte ||
             self.dpr != dpr
         {

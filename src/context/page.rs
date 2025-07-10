@@ -33,7 +33,6 @@ pub struct PageRecorder{
   matrix: Matrix,
   clip: Option<Path>,
   changed: bool,
-  rev: usize,
   id: usize,
 }
 
@@ -48,7 +47,7 @@ impl PageRecorder{
     rec.recording_canvas().unwrap().save(); // start at depth 2
 
     PageRecorder{
-      current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id, rev:0
+      current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id
     }
   }
 
@@ -62,9 +61,7 @@ impl PageRecorder{
   }
 
   pub fn set_bounds(&mut self, bounds:Rect){
-    let rev = self.rev;
     *self = PageRecorder::new(bounds);
-    self.rev = rev + 1;
   }
 
   pub fn update_bounds(&mut self, bounds:Rect){
@@ -143,7 +140,6 @@ impl PageRecorder{
     Page{
       layers: self.layers.clone(),
       bounds: self.bounds,
-      rev: self.rev,
       id: self.id,
     }
   }
@@ -174,7 +170,6 @@ impl Drop for PageRecorder{
 #[derive(Debug, Clone)]
 pub struct Page{
   pub id: usize,
-  pub rev: usize,
   pub bounds: Rect,
   pub layers: Vec<Picture>,
 }
@@ -182,14 +177,13 @@ pub struct Page{
 impl PartialEq for Page {
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id &&
-    self.rev == other.rev &&
     self.layers.len() == other.layers.len()
   }
 }
 
 impl Default for Page {
   fn default() -> Self {
-    Self{ id:0, rev:0, bounds: skia_safe::Rect::new_empty(), layers:vec![] }
+    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![] }
   }
 }
 
