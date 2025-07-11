@@ -19,6 +19,11 @@ jobs:
         node-version: 15
         registry-url: 'https://registry.npmjs.org'
 
+    - name: Add hashes to package.json
+      run: |
+        node lib/prebuild.mjs snapshot
+        npm pkg get prebuild
+
     - name: Publish to NPM
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
