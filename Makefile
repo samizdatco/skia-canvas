@@ -7,7 +7,7 @@ LIB_SRC := Cargo.toml $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src
 GIT_TAG = $(shell git describe)
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | cut -d '=' -f 2)
 NPM_VERSION = $(shell npm view skia-canvas version)
-.PHONY: optimized test debug visual check clean distclean release skia-version with-local-skia run preview
+.PHONY: optimized dev test debug visual check clean distclean release skia-version with-local-skia
 .DEFAULT_GOAL := $(LIB)
 
 # platform-specific features to be passed to cargo
@@ -24,12 +24,16 @@ $(NPM):
 	npm ci --ignore-scripts
 
 $(LIB): $(NPM) $(LIB_SRC)
-	@npm run build
+	@npm run build -- --features $(FEATURES)
 	@touch $(LIB)
 
 optimized: $(NPM)
 	@rm -f $(LIB)
 	@npm run build -- --release --features $(FEATURES)
+
+dev: $(NPM) $(LIB_SRC)
+	@npm run build
+	@touch $(LIB)
 
 test: $(LIB)
 	@$(JEST) --verbose
@@ -76,10 +80,3 @@ with-local-skia:
 	echo '[patch.crates-io]' >> Cargo.toml
 	echo 'skia-safe = { path = "../rust-skia/skia-safe" }' >> Cargo.toml
 	echo 'skia-bindings = { path = "../rust-skia/skia-bindings" }' >> Cargo.toml
-
-# debugging
-run: $(LIB)
-	@node check.js
-
-preview: run
-	@less out.png || true
