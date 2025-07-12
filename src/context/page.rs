@@ -461,7 +461,7 @@ struct PageCache{
 
 impl Default for PageCache{
   fn default() -> Self {
-    Self{image:None, density:1.0, matte:None, msaa:None, depth:0}
+    Self{image:None, depth:0, density:1.0, matte:None, msaa:None}
   }
 }
 
@@ -480,14 +480,7 @@ impl PageCache{
 
   pub fn read(id:usize, opts:&ExportOptions, depth:usize) -> (Option<SkImage>, usize){
     Self::shared().get(&id).map(|cache|{
-      let is_valid = opts.is_raster() &&
-        opts.density == cache.density &&
-        opts.matte == cache.matte &&
-        opts.msaa == cache.msaa &&
-        depth >= cache.depth &&
-        cache.image.is_some();
-
-      match is_valid{
+      match cache.is_valid(opts) && depth >= cache.depth{
         true => (cache.image.clone(), cache.depth),
         false => (None, 0)
       }
@@ -497,13 +490,8 @@ impl PageCache{
 
   pub fn write(id:usize, image:&SkImage, opts:&ExportOptions, depth:usize){
     Self::shared().get_mut(&id).map(|mut cache|{
-      let out_of_order = cache.image.is_some() &&
-          opts.density == cache.density &&
-          opts.matte == cache.matte &&
-          opts.msaa == cache.msaa &&
-          depth <= cache.depth;
-
-      if !out_of_order{
+      // save the bitmap if it's newer than the cached version, or is replacing an invaildated cache
+      if !cache.is_valid(opts) || depth > cache.depth{
         *cache = Self{ image:Some(image.clone()), density:opts.density, matte:opts.matte, msaa:opts.msaa, depth}
       }
     });
@@ -529,9 +517,9 @@ impl PageCache{
   }
 
   pub fn copy_pixels(id:usize, surface: &mut Surface, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8]) -> bool {
-    Self::shared().get(&id).and_then(|cache|{
+    Self::shared().get(&id).and_then(|cache|
       cache._blit(surface, dst_info, src, pixels)
-    }).unwrap_or(false)
+    ).unwrap_or(false)
   }
 
   #[cfg(not(any(feature="metal", feature="vulkan")))]
@@ -547,6 +535,14 @@ impl PageCache{
     self.image.as_ref().map(|image| image.read_pixels_with_context(
       context, &dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()), CachingHint::Allow
     ))
+  }
+
+  pub fn is_valid(&self, opts:&ExportOptions) -> bool{
+    self.density == opts.density &&
+    self.matte == opts.matte &&
+    self.msaa == opts.msaa &&
+    self.image.is_some() &&
+    opts.is_raster()
   }
 }
 
