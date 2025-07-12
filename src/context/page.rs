@@ -499,20 +499,18 @@ impl PageCache{
 
   pub fn materialize(id:usize, engine:&RenderingEngine, options:&ExportOptions){
     Self::shared().get_mut(&id).map(|mut cache|{
+      // nothing to be done if the image isn't currently in GPU memory
+      // or if the options have changed (so the cache is invalid anyway)
       if let Some(ref img) = cache.image{
-        // nothing to be done if the image isn't currently in GPU memory
-        if !img.is_texture_backed(){ return }
-
-        // otherwise move the image to main memory
-        cache.image = cache.image.as_ref().and_then(|image|
-          engine.with_surface(image.image_info(), options, |surface|{
-            surface.direct_context().as_mut()
-              .and_then(|context|
-                image.make_raster_image(context, CachingHint::Allow)
-              ).ok_or(String::from("Failed"))
-          }).ok()
-        );
+        if !cache.is_valid(options) || !img.is_texture_backed(){ return }
       }
+
+      // otherwise move the image to main memory
+      engine.with_direct_context(|context|
+        cache.image = cache.image.as_ref().and_then(|img|
+          img.make_raster_image(context, CachingHint::Allow)
+        )
+      );
     });
   }
 
