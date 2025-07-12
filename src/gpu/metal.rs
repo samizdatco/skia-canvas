@@ -78,30 +78,38 @@ impl MetalEngine {
         });
     }
 
-    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
-        where F:FnOnce(&mut Surface) -> Result<T, String>
+    pub fn with_context<T, F>(f:F) -> Result<T, String>
+        where F:FnOnce(&mut MetalContext) -> Result<T, String>
     {
         match MetalEngine::supported() {
             false => Err("Metal API not supported".to_string()),
             true => MTL_CONTEXT.with_borrow_mut(|local_ctx|
                 autoreleasepool(||
+                    // lazily initialize this thread's context...
                     local_ctx
-                        // lazily initialize this thread's context...
                         .take()
                         .or_else(|| MetalContext::new() )
                         .ok_or("Metal initialization failed".to_string())
                         .and_then(|ctx|{
-                            let ctx = local_ctx.insert(ctx);
-                            // ...then create the surface with it...
-                            ctx.surface(image_info, opts)
+                            f(local_ctx.insert(ctx))
                         })
-                        .and_then(|mut surface|
-                            // ... finally let the callback use it
-                            f(&mut surface)
-                        )
                 )
             )
         }
+    }
+
+    pub fn with_direct_context<F>(f:F)
+        where F:FnOnce(&mut DirectContext)
+    {
+        Self::with_context(|ctx| Ok(f(&mut ctx.context)) ).ok();
+    }
+
+    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
+        where F:FnOnce(&mut Surface) -> Result<T, String>
+    {
+        Self::with_context(|ctx|
+            ctx.surface(image_info, opts).and_then(|mut surface| f(&mut surface) )
+        )
     }
 }
 pub struct MetalContext {

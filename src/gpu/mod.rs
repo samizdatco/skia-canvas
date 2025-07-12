@@ -1,5 +1,5 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{ImageInfo, Image, Rect, Matrix, Color, Surface, surfaces};
+use skia_safe::{gpu::DirectContext, ImageInfo, Image, Rect, Matrix, Color, Surface, surfaces};
 use serde_json::{json, Value};
 use crate::context::page::{Page, ExportOptions};
 
@@ -23,6 +23,7 @@ struct Engine { }
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 impl Engine {
     pub fn supported() -> bool { false }
+    pub fn with_direct_context<T, F>(_f:F) -> Option<T>{ None }
     pub fn with_surface<T, F>(_: &ImageInfo, _:&ExportOptions, _:F)  -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
@@ -66,6 +67,10 @@ impl RenderingEngine{
                 .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
                 .and_then(|mut surface|f(&mut surface))
         }
+    }
+
+    pub fn with_direct_context(&self, f:impl FnOnce(&mut DirectContext)){
+        Engine::with_direct_context(f);
     }
 
     pub fn status(&self) -> serde_json::Value {

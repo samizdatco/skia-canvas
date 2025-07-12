@@ -101,7 +101,40 @@ impl VulkanEngine {
         });
     }
 
+    pub fn with_context<T, F>(f:F) -> Result<T, String>
+        where F:FnOnce(&mut VulkanContext) -> Result<T, String>
+    {
+        match VulkanEngine::supported() {
+            false => Err("Vulkan API not supported".to_string()),
+            true => VK_CONTEXT.with_borrow_mut(|local_ctx|{
+                local_ctx
+                    // lazily initialize this thread's context...
+                    .take()
+                    .or_else(|| VulkanContext::new().ok() )
+                    .ok_or("Vulkan initialization failed".to_string())
+                    .and_then(|ctx|{
+                        f(local_ctx.insert(ctx))
+                    })
+            })
+        }
+
+    }
+
+    pub fn with_direct_context<F>(f:F)
+        where F:FnOnce(&mut DirectContext)
+    {
+        Self::with_context(|ctx| Ok(f(&mut ctx.context)) ).ok();
+    }
+
     pub fn with_surface<T, F>(image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
+        where F:FnOnce(&mut Surface) -> Result<T, String>
+    {
+        Self::with_context(|ctx|
+            ctx.surface(image_info, opts).and_then(|mut surface| f(&mut surface) )
+        )
+    }
+
+    pub fn _with_surface<T, F>(image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
         match VulkanEngine::supported() {
@@ -128,7 +161,7 @@ impl VulkanEngine {
 
 
 #[allow(dead_code)]
-struct VulkanContext{
+pub struct VulkanContext{
     context: DirectContext,
     library: Arc<VulkanLibrary>,
     instance: Arc<Instance>,
