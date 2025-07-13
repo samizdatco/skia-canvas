@@ -95,6 +95,13 @@ impl PageRecorder{
     let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), AlphaType::Unpremul, opts.color_space.clone());
     let src_size = Size::new(self.bounds.width() * opts.density, self.bounds.height() * opts.density);
     let src_info = ImageInfo::new_n32_premul(src_size.to_floor(), dst_info.color_space());
+
+    // return an empty buffer if the requested rect is entirely outside the canvas
+    let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
+    if !self.bounds.intersects(Rect::from_irect(crop)){
+      return Ok(dst_buffer)
+    }
+
     let page = self.get_page();
     let depth = page.layers.len();
 
@@ -118,7 +125,6 @@ impl PageRecorder{
       PageCache::write(self.id, &surface.image_snapshot(), &opts, depth);
 
       // use cached image (reading just the pixels in the requested rect)
-      let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
       match PageCache::copy_pixels(self.id, surface, &dst_info, crop, &mut dst_buffer) {
         true => Ok(dst_buffer),
         false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
