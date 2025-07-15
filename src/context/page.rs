@@ -102,11 +102,9 @@ impl PageRecorder{
       return Ok(dst_buffer)
     }
 
-    let page = self.get_page();
-    let depth = page.layers.len();
-
     engine.with_surface(&src_info, &opts.clone(), |surface| {
-      let (cache_image, cache_depth) = PageCache::read(self.id, &opts, depth);
+      let page = self.get_page();
+      let (cache_image, cache_depth) = PageCache::read(self.id, &opts, page.depth());
 
       let canvas = surface.canvas();
       if let Some(image) = cache_image{
@@ -122,7 +120,7 @@ impl PageRecorder{
       for pict in page.layers.iter().skip(cache_depth){
         pict.playback(canvas);
       }
-      PageCache::write(self.id, &surface.image_snapshot(), &opts, depth);
+      PageCache::write(self.id, &surface.image_snapshot(), &opts, page.depth());
 
       // use cached image (reading just the pixels in the requested rect)
       match PageCache::copy_pixels(self.id, surface, &dst_info, crop, &mut dst_buffer) {
@@ -183,7 +181,7 @@ pub struct Page{
 impl PartialEq for Page {
   fn eq(&self, other: &Self) -> bool {
     self.id == other.id &&
-    self.layers.len() == other.layers.len()
+    self.depth() == other.depth()
   }
 }
 
@@ -194,6 +192,9 @@ impl Default for Page {
 }
 
 impl Page{
+  pub fn depth(&self) -> usize{
+    self.layers.len()
+  }
 
   pub fn get_picture(&self, matte:Option<Color>) -> Option<Picture> {
     let mut compositor = PictureRecorder::new();
@@ -240,8 +241,7 @@ impl Page{
       // handle bitmap formats using (potentially gpu-backed) rasterizer
       _ => engine.with_surface(&img_info, &options, |surface|{
         let canvas = surface.canvas();
-        let depth = self.layers.len();
-        let (cache_image, cache_depth) = PageCache::read(self.id, &options, depth);
+        let (cache_image, cache_depth) = PageCache::read(self.id, &options, self.depth());
 
         if let Some(image) = cache_image{
           // use the cached bitmap as the background
@@ -269,7 +269,7 @@ impl Page{
             image = raster;
           }
         }
-        PageCache::write(self.id, &image, &options, depth);
+        PageCache::write(self.id, &image, &options, self.depth());
 
         match format.as_str(){
           "raw" => {
