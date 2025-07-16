@@ -22,6 +22,7 @@ use crate::gpu::RenderingEngine;
 
 static CACHE: OnceLock<Arc<DashMap<usize, PageCache>>> = OnceLock::new();
 
+
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
 //
@@ -32,9 +33,7 @@ pub struct PageRecorder{
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
-  surface: Surface,
-  surface_opts: ExportOptions,
-  surface_depth: usize,
+  surface: RecordingSurface,
   changed: bool,
   id: usize,
 }
@@ -49,12 +48,9 @@ impl PageRecorder{
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
 
-    let image_info = ImageInfo::new_n32_premul((1,1), ColorSpace::new_srgb());
-    let surface = surfaces::raster(&image_info, None, None).unwrap();
-
     PageRecorder{
       current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id,
-      surface, surface_opts:ExportOptions::default(), surface_depth:0
+      surface:RecordingSurface::default(),
     }
   }
 
@@ -109,35 +105,10 @@ impl PageRecorder{
       return Ok(dst_buffer)
     }
 
-    if
-      self.surface.width() != src_size.width as i32 ||
-      self.surface.height() != src_size.height as i32 ||
-      self.surface_opts.density != opts.density ||
-      self.surface_opts.matte != opts.matte ||
-      self.surface_opts.msaa != opts.msaa
-    {
-      self.surface = engine.make_surface(&src_info, &opts)?;
-      self.surface_opts = opts.clone();
-      self.surface_depth = 0;
-    }
-
     let page = self.get_page();
-    let canvas = self.surface.canvas();
+    self.surface.update(&page, &src_info, &opts, &engine);
 
-    if self.surface_depth==0{
-      if let Some(color) = opts.matte{
-        canvas.clear(color);
-      }
-    }
-
-    // draw newly added layers and cache the full-canvas bitmap
-    canvas.scale((opts.density, opts.density));
-    for pict in page.layers.iter().skip(self.surface_depth){
-      pict.playback(canvas);
-    }
-    self.surface_depth = page.depth();
-
-    match self.surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), (crop.x(), crop.y())){
+    match self.surface.copy_pixels(&dst_info, crop, &mut dst_buffer){
       true => Ok(dst_buffer),
       false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
     }
@@ -179,6 +150,79 @@ impl Drop for PageRecorder{
     PageCache::drop(self.id);
   }
 }
+
+
+//
+// Persistent GPU/CPU surface for caching intermediate results of getImageData()
+//
+
+pub struct RecordingSurface{
+  surface: Option<Surface>,
+  depth: usize,
+  matte: Option<Color>,
+  msaa: Option<usize>,
+  gpu: Option<bool>,
+  density: f32,
+}
+
+impl Default for RecordingSurface{
+  fn default() -> Self {
+      Self{surface:None, depth:0, matte:None, msaa:None, gpu:None, density:0.0}
+  }
+}
+
+impl RecordingSurface{
+  pub fn update(&mut self, page:&Page, img_info:&ImageInfo, opts:&ExportOptions, engine:&RenderingEngine){
+    // check for anything that would invalidate the previous contents
+    let gpu_toggled = self.gpu != Some(matches!(engine, RenderingEngine::GPU));
+
+    let updated = self.density != opts.density ||
+                  self.matte != opts.matte ||
+                  self.msaa != opts.msaa;
+
+    let resized = self.surface.as_ref().map(|surface|{
+      surface.width() != img_info.width() || surface.height() != img_info.height()
+    }).unwrap_or(true);
+
+    // only allocate a new surface if the dimensions have changed or engine switched
+    if resized || gpu_toggled{
+      self.surface = engine.make_surface(&img_info, &opts).ok();
+    }
+
+    // start from scratch if invalidated
+    if updated || resized || gpu_toggled{
+      self.density = opts.density;
+      self.matte = opts.matte;
+      self.msaa = opts.msaa;
+      self.depth = 0;
+      self.gpu = Some(matches!(engine, RenderingEngine::GPU));
+
+      if let Some(surface) = self.surface.as_mut(){
+        surface.canvas().clear(self.matte.unwrap_or(Color::TRANSPARENT));
+      }
+    }
+
+    // only add new layers to surface
+    if let Some(surface) = self.surface.as_mut(){
+      let canvas = surface.canvas();
+      canvas.scale((self.density, self.density));
+
+      // draw newly added layers
+      for pict in page.layers.iter().skip(self.depth){
+        pict.playback(canvas);
+      }
+      self.depth = page.layers.len();
+    }
+  }
+
+
+  pub fn copy_pixels(&mut self, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8]) -> bool{
+    self.surface.as_mut().map(|surface|{
+      surface.read_pixels(dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()))
+    }).unwrap_or(false)
+  }
+}
+
 
 //
 // Image generator for a single drawing context
