@@ -9,7 +9,7 @@ use skia_safe::{
   image::{BitDepth, CachingHint}, images, pdf,
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document, Surface,
   Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size,
-  SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder
+  SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder, surfaces
 };
 use dashmap::DashMap;
 use little_exif::{metadata::Metadata, exif_tag::ExifTag, filetype::FileExtension};
@@ -32,6 +32,9 @@ pub struct PageRecorder{
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
+  surface: Surface,
+  surface_opts: ExportOptions,
+  surface_depth: usize,
   changed: bool,
   id: usize,
 }
@@ -46,8 +49,12 @@ impl PageRecorder{
     rec.begin_recording(bounds, None);
     rec.recording_canvas().unwrap().save(); // start at depth 2
 
+    let image_info = ImageInfo::new_n32_premul((1,1), ColorSpace::new_srgb());
+    let surface = surfaces::raster(&image_info, None, None).unwrap();
+
     PageRecorder{
-      current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id
+      current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id,
+      surface, surface_opts:ExportOptions::default(), surface_depth:0
     }
   }
 
@@ -102,32 +109,38 @@ impl PageRecorder{
       return Ok(dst_buffer)
     }
 
-    engine.with_surface(&src_info, &opts.clone(), |surface| {
-      let page = self.get_page();
-      let (cache_image, cache_depth) = PageCache::read(self.id, &opts, page.depth());
+    if
+      self.surface.width() != src_size.width as i32 ||
+      self.surface.height() != src_size.height as i32 ||
+      self.surface_opts.density != opts.density ||
+      self.surface_opts.matte != opts.matte ||
+      self.surface_opts.msaa != opts.msaa
+    {
+      self.surface = engine.make_surface(&src_info, &opts)?;
+      self.surface_opts = opts.clone();
+      self.surface_depth = 0;
+    }
 
-      let canvas = surface.canvas();
-      if let Some(image) = cache_image{
-        // use the cached bitmap as the background (if present)
-        canvas.draw_image(image, (0,0), None);
-      }else if let Some(color) = opts.matte{
-        // otherwise, fill the canvas if requested
+    let page = self.get_page();
+    let canvas = self.surface.canvas();
+
+    if self.surface_depth==0{
+      if let Some(color) = opts.matte{
         canvas.clear(color);
       }
+    }
 
-      // draw newly added layers and cache the full-canvas bitmap
-      canvas.scale((opts.density, opts.density));
-      for pict in page.layers.iter().skip(cache_depth){
-        pict.playback(canvas);
-      }
-      PageCache::write(self.id, &surface.image_snapshot(), &opts, page.depth());
+    // draw newly added layers and cache the full-canvas bitmap
+    canvas.scale((opts.density, opts.density));
+    for pict in page.layers.iter().skip(self.surface_depth){
+      pict.playback(canvas);
+    }
+    self.surface_depth = page.depth();
 
-      // use cached image (reading just the pixels in the requested rect)
-      match PageCache::copy_pixels(self.id, surface, &dst_info, crop, &mut dst_buffer) {
-        true => Ok(dst_buffer),
-        false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
-      }
-    })
+    match self.surface.read_pixels(&dst_info, &mut dst_buffer, dst_info.min_row_bytes(), (crop.x(), crop.y())){
+      true => Ok(dst_buffer),
+      false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
+    }
   }
 
   pub fn get_page(&mut self) -> Page{

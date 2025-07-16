@@ -120,7 +120,7 @@ pub struct MetalContext {
 }
 
 impl MetalContext{
-    fn new() -> Option<Self>{
+    pub fn new() -> Option<Self>{
         autoreleasepool(|| {
             Device::system_default().and_then(|device|{
                 let queue = device.new_command_queue();
@@ -140,7 +140,7 @@ impl MetalContext{
         })
     }
 
-    fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
+    pub fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
         self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,

@@ -58,6 +58,14 @@ impl RenderingEngine{
         }
     }
 
+    pub fn make_surface(&self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
+        match self {
+            Self::GPU => Engine::with_context(|ctx| ctx.surface(image_info, opts) ),
+            Self::CPU => surfaces::raster(image_info, None, Some(&opts.surface_props()))
+                .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
+        }
+    }
+
     pub fn with_surface<T,F>(&self, image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
         where F:FnOnce(&mut Surface) -> Result<T, String>
     {
