@@ -9,7 +9,7 @@ use skia_safe::{
   image::{BitDepth, CachingHint}, images, pdf,
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document, Surface,
   Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size,
-  SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder, surfaces
+  SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder
 };
 use dashmap::DashMap;
 use little_exif::{metadata::Metadata, exif_tag::ExifTag, filetype::FileExtension};
@@ -95,18 +95,15 @@ impl PageRecorder{
   }
 
   pub fn get_pixels(&mut self, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String>{
-    let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), AlphaType::Unpremul, opts.color_space.clone());
-    let src_size = Size::new(self.bounds.width() * opts.density, self.bounds.height() * opts.density);
-    let src_info = ImageInfo::new_n32_premul(src_size.to_floor(), dst_info.color_space());
-
     // return an empty buffer if the requested rect is entirely outside the canvas
+    let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), AlphaType::Unpremul, opts.color_space.clone());
     let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
     if !self.bounds.intersects(Rect::from_irect(crop)){
       return Ok(dst_buffer)
     }
 
     let page = self.get_page();
-    self.surface.update(&page, &src_info, &opts, &engine);
+    self.surface.update(&page, &opts, &engine);
 
     match self.surface.copy_pixels(&dst_info, crop, &mut dst_buffer){
       true => Ok(dst_buffer),
@@ -130,6 +127,17 @@ impl PageRecorder{
       bounds: self.bounds,
       id: self.id,
     }
+  }
+
+  pub fn get_page_for_export(&mut self, opts:&ExportOptions, engine:&RenderingEngine) -> Page{
+    // update the PageCache with the surface bitmap (if it's valid for this export)
+    let page = self.get_page();
+    if opts.is_raster(){
+      if let Some(image) = self.surface.get_image(&page, &opts, &engine){
+        PageCache::write(self.id, image, &opts, self.surface.depth);
+      }
+    }
+    page
   }
 
   pub fn get_image(&mut self) -> Option<SkImage>{
@@ -162,49 +170,72 @@ pub struct RecordingSurface{
   matte: Option<Color>,
   msaa: Option<usize>,
   gpu: Option<bool>,
+  color_space: ColorSpace,
   density: f32,
 }
 
 impl Default for RecordingSurface{
   fn default() -> Self {
-      Self{surface:None, depth:0, matte:None, msaa:None, gpu:None, density:0.0}
+      Self{surface:None, depth:0, matte:None, msaa:None, gpu:None, color_space:ColorSpace::new_srgb(), density:0.0}
   }
 }
 
 impl RecordingSurface{
-  pub fn update(&mut self, page:&Page, img_info:&ImageInfo, opts:&ExportOptions, engine:&RenderingEngine){
-    // check for anything that would invalidate the previous contents
+
+  fn surface_is_stale(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> bool{
     let gpu_toggled = self.gpu != Some(matches!(engine, RenderingEngine::GPU));
-
-    let updated = self.density != opts.density ||
-                  self.matte != opts.matte ||
-                  self.msaa != opts.msaa;
-
-    let resized = self.surface.as_ref().map(|surface|{
-      surface.width() != img_info.width() || surface.height() != img_info.height()
+    let page_size = page.scaled_dimensions(opts.density).to_floor();
+    let resized = self.surface.as_mut().map(|surface|{
+      surface.image_info().dimensions() != page_size
     }).unwrap_or(true);
 
-    // only allocate a new surface if the dimensions have changed or engine switched
-    if resized || gpu_toggled{
-      self.surface = engine.make_surface(&img_info, &opts).ok();
-    }
+    gpu_toggled || resized
+  }
+
+  fn opts_changed(&self, opts:&ExportOptions) -> bool{
+    self.density != opts.density ||
+    self.matte != opts.matte ||
+    self.msaa != opts.msaa ||
+    self.color_space != opts.color_space
+  }
+
+  pub fn update(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine){
+    // check for anything that would invalidate the previous contents
+    let reconfigure = self.opts_changed(&opts);
+    let recreate = self.surface_is_stale(&page, &opts, &engine);
 
     // start from scratch if invalidated
-    if updated || resized || gpu_toggled{
+    if reconfigure || recreate{
+      self.gpu = Some(matches!(engine, RenderingEngine::GPU));
+      self.color_space = opts.color_space.clone();
       self.density = opts.density;
       self.matte = opts.matte;
       self.msaa = opts.msaa;
       self.depth = 0;
-      self.gpu = Some(matches!(engine, RenderingEngine::GPU));
 
-      if let Some(surface) = self.surface.as_mut(){
-        surface.canvas().clear(self.matte.unwrap_or(Color::TRANSPARENT));
+      // only allocate a new surface if the dimensions (size * density) have changed or engine switched
+      if recreate{
+        let page_size = page.scaled_dimensions(opts.density).to_floor();
+        let img_info = ImageInfo::new_n32_premul(page_size, opts.color_space.clone());
+        self.surface = engine.make_surface(&img_info, &opts).ok();
       }
     }
 
-    // only add new layers to surface
     if let Some(surface) = self.surface.as_mut(){
       let canvas = surface.canvas();
+      let (cache_image, cache_depth) = PageCache::read(page.id, &opts, page.depth());
+
+      if let Some(image) = cache_image{
+        // use the cached bitmap as the background (if present)
+        canvas.draw_image(image, (0,0), None);
+        self.depth = cache_depth;
+      }else if self.depth==0 {
+        // otherwise, fill the canvas if requested
+        canvas.clear(self.matte.unwrap_or(Color::TRANSPARENT));
+      }
+
+
+      // only add new layers to surface
       canvas.scale((self.density, self.density));
 
       // draw newly added layers
@@ -215,6 +246,15 @@ impl RecordingSurface{
     }
   }
 
+  pub fn get_image(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> Option<SkImage>{
+    let reconfigured = self.opts_changed(&opts);
+    let stale = self.surface_is_stale(&page, &opts, &engine);
+
+    match reconfigured || stale{
+      true => None,
+      false => self.surface.as_mut().map(|surface| surface.image_snapshot()),
+    }
+  }
 
   pub fn copy_pixels(&mut self, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8]) -> bool{
     self.surface.as_mut().map(|surface|{
@@ -251,6 +291,10 @@ impl Default for Page {
 impl Page{
   pub fn depth(&self) -> usize{
     self.layers.len()
+  }
+
+  pub fn scaled_dimensions(&self, density:f32) -> Size{
+    Size::new(self.bounds.width() * density, self.bounds.height() * density)
   }
 
   pub fn get_picture(&self, matte:Option<Color>) -> Option<Picture> {
@@ -315,19 +359,21 @@ impl Page{
         }
 
         // extract the results
-        let mut image = surface.image_snapshot();
         let context = &mut surface.direct_context();
+        let image = surface.make_temporary_image().unwrap_or_else(|| surface.image_snapshot());
 
         // update cache
-        if rayon::current_thread_index().is_some(){
-          // only move off GPU if we're in a background thread and need to share
-          let context = &mut surface.direct_context();
-          if let Some(raster) = image.make_raster_image(context, CachingHint::Allow){
-            image = raster;
+        if self.depth() > cache_depth{
+          if rayon::current_thread_index().is_some(){
+            // move bitmap off GPU if we're in a background thread and need to share
+            image.make_non_texture_image(&mut surface.direct_context())
+              .map(|raster| PageCache::write(self.id, raster, &options, self.depth()) );
+          }else{
+            PageCache::write(self.id, image.clone(), &options, self.depth());
           }
         }
-        PageCache::write(self.id, &image, &options, self.depth());
 
+        // handle image encoding
         match format.as_str(){
           "raw" => {
             let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
@@ -551,11 +597,11 @@ impl PageCache{
     .unwrap_or((None, 0))
   }
 
-  pub fn write(id:usize, image:&SkImage, opts:&ExportOptions, depth:usize){
+  pub fn write(id:usize, image:SkImage, opts:&ExportOptions, depth:usize){
     Self::shared().get_mut(&id).map(|mut cache|{
       // save the bitmap if it's newer than the cached version, or is replacing an invaildated cache
       if !cache.is_valid(opts) || depth > cache.depth{
-        *cache = Self{ image:Some(image.clone()), density:opts.density, matte:opts.matte, msaa:opts.msaa, depth}
+        *cache = Self{ image:Some(image), density:opts.density, matte:opts.matte, msaa:opts.msaa, depth}
       }
     });
   }
@@ -571,7 +617,7 @@ impl PageCache{
       // otherwise move the image to main memory
       engine.with_direct_context(|context|
         cache.image = cache.image.as_ref().and_then(|img|
-          img.make_raster_image(context, CachingHint::Allow)
+          img.make_non_texture_image(context)
         )
       );
     });
@@ -611,14 +657,14 @@ impl PageCache{
 // Helpers
 //
 
-pub fn pages_arg(cx: &mut FunctionContext, idx:usize, canvas:&BoxedCanvas) -> NeonResult<PageSequence> {
+pub fn pages_arg(cx: &mut FunctionContext, idx:usize, opts:&ExportOptions, canvas:&BoxedCanvas) -> NeonResult<PageSequence> {
   let engine = canvas.borrow_mut().engine();
   let pages = cx.argument::<JsArray>(idx)?
       .to_vec(cx)?
       .iter()
       .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
       .filter( |ctx| ctx.is_ok() )
-      .map(|obj| obj.unwrap().borrow().get_page())
+      .map(|obj| obj.unwrap().borrow().get_page_for_export(opts, &engine))
       .collect();
   Ok(PageSequence::from(pages, engine))
 }
