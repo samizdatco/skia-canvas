@@ -133,7 +133,7 @@ impl PageRecorder{
     // update the PageCache with the surface bitmap (if it's valid for this export)
     let page = self.get_page();
     if opts.is_raster(){
-      if let Some(image) = self.surface.get_image(&page, &opts, &engine){
+      if let Some(image) = self.surface.snapshot_if_valid(&page, &opts, &engine){
         PageCache::set(self.id, image, &opts, self.surface.depth);
       }
     }
@@ -182,7 +182,7 @@ impl Default for RecordingSurface{
 
 impl RecordingSurface{
 
-  fn surface_is_stale(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> bool{
+  fn is_surface_stale(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> bool{
     let gpu_toggled = self.gpu != Some(matches!(engine, RenderingEngine::GPU));
     let page_size = page.scaled_dimensions(opts.density);
     let resized = self.surface.as_mut().map(|surface|{
@@ -192,7 +192,7 @@ impl RecordingSurface{
     gpu_toggled || resized
   }
 
-  fn opts_changed(&self, opts:&ExportOptions) -> bool{
+  fn is_config_stale(&self, opts:&ExportOptions) -> bool{
     self.density != opts.density ||
     self.matte != opts.matte ||
     self.msaa != opts.msaa ||
@@ -201,8 +201,8 @@ impl RecordingSurface{
 
   pub fn update(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine){
     // check for anything that would invalidate the previous contents
-    let reconfigure = self.opts_changed(&opts);
-    let recreate = self.surface_is_stale(&page, &opts, &engine);
+    let reconfigure = self.is_config_stale(&opts);
+    let recreate = self.is_surface_stale(&page, &opts, &engine);
 
     // start from scratch if invalidated
     if reconfigure || recreate{
@@ -246,13 +246,10 @@ impl RecordingSurface{
     }
   }
 
-  pub fn get_image(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> Option<SkImage>{
-    let reconfigured = self.opts_changed(&opts);
-    let stale = self.surface_is_stale(&page, &opts, &engine);
-
-    match reconfigured || stale{
-      true => None,
-      false => self.surface.as_mut().map(|surface| surface.image_snapshot()),
+  pub fn snapshot_if_valid(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> Option<SkImage>{
+    match !(self.is_config_stale(&opts) || self.is_surface_stale(&page, &opts, &engine)){
+      true => self.surface.as_mut().map(|surface| surface.image_snapshot()),
+      false => None,
     }
   }
 
