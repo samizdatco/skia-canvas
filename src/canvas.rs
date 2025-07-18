@@ -128,7 +128,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
-  rayon::spawn(move || {
+  rayon::spawn_fifo(move || {
     let result = {
       if options.format=="pdf" && pages.len() > 1 {
         pages.as_pdf(options)
@@ -182,7 +182,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
-  rayon::spawn(move || {
+  rayon::spawn_fifo(move || {
     let result = {
       if sequence {
         pages.write_sequence(&name_pattern, padding, options)
