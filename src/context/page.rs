@@ -134,7 +134,7 @@ impl PageRecorder{
     let page = self.get_page();
     if opts.is_raster(){
       if let Some(image) = self.surface.get_image(&page, &opts, &engine){
-        PageCache::write(self.id, image, &opts, self.surface.depth);
+        PageCache::set(self.id, image, &opts, self.surface.depth);
       }
     }
     page
@@ -223,7 +223,7 @@ impl RecordingSurface{
 
     if let Some(surface) = self.surface.as_mut(){
       let canvas = surface.canvas();
-      let (cache_image, cache_depth) = PageCache::read(page.id, &opts, page.depth());
+      let (cache_image, cache_depth) = PageCache::get(page.id, &opts, page.depth());
 
       if let Some(image) = cache_image{
         // use the cached bitmap as the background (if present)
@@ -342,7 +342,7 @@ impl Page{
       // handle bitmap formats using (potentially gpu-backed) rasterizer
       _ => engine.with_surface(&img_info, &options, |surface|{
         let canvas = surface.canvas();
-        let (cache_image, cache_depth) = PageCache::read(self.id, &options, self.depth());
+        let (cache_image, cache_depth) = PageCache::get(self.id, &options, self.depth());
 
         if let Some(image) = cache_image{
           // use the cached bitmap as the background
@@ -367,9 +367,9 @@ impl Page{
           if rayon::current_thread_index().is_some(){
             // move bitmap off GPU if we're in a background thread and need to share
             image.make_non_texture_image(&mut surface.direct_context())
-              .map(|raster| PageCache::write(self.id, raster, &options, self.depth()) );
+              .map(|raster| PageCache::set(self.id, raster, &options, self.depth()) );
           }else{
-            PageCache::write(self.id, image.clone(), &options, self.depth());
+            PageCache::set(self.id, image.clone(), &options, self.depth());
           }
         }
 
@@ -587,7 +587,7 @@ impl PageCache{
     Self::shared().remove(&id).unwrap();
   }
 
-  pub fn read(id:usize, opts:&ExportOptions, depth:usize) -> (Option<SkImage>, usize){
+  pub fn get(id:usize, opts:&ExportOptions, depth:usize) -> (Option<SkImage>, usize){
     Self::shared().get(&id).map(|cache|{
       match cache.is_valid(opts) && depth >= cache.depth{
         true => (cache.image.clone(), cache.depth),
@@ -597,7 +597,7 @@ impl PageCache{
     .unwrap_or((None, 0))
   }
 
-  pub fn write(id:usize, image:SkImage, opts:&ExportOptions, depth:usize){
+  pub fn set(id:usize, image:SkImage, opts:&ExportOptions, depth:usize){
     Self::shared().get_mut(&id).map(|mut cache|{
       // save the bitmap if it's newer than the cached version, or is replacing an invaildated cache
       if !cache.is_valid(opts) || depth > cache.depth{
