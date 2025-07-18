@@ -8,7 +8,7 @@ use skia_safe::{
   svg::{self, canvas::Flags},
   image::{BitDepth, CachingHint}, images, pdf,
   Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document, Surface,
-  Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size,
+  Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size, ISize,
   SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder
 };
 use dashmap::DashMap;
@@ -184,7 +184,7 @@ impl RecordingSurface{
 
   fn surface_is_stale(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> bool{
     let gpu_toggled = self.gpu != Some(matches!(engine, RenderingEngine::GPU));
-    let page_size = page.scaled_dimensions(opts.density).to_floor();
+    let page_size = page.scaled_dimensions(opts.density);
     let resized = self.surface.as_mut().map(|surface|{
       surface.image_info().dimensions() != page_size
     }).unwrap_or(true);
@@ -215,7 +215,7 @@ impl RecordingSurface{
 
       // only allocate a new surface if the dimensions (size * density) have changed or engine switched
       if recreate{
-        let page_size = page.scaled_dimensions(opts.density).to_floor();
+        let page_size = page.scaled_dimensions(opts.density);
         let img_info = ImageInfo::new_n32_premul(page_size, opts.color_space.clone());
         self.surface = engine.make_surface(&img_info, &opts).ok();
       }
@@ -293,8 +293,8 @@ impl Page{
     self.layers.len()
   }
 
-  pub fn scaled_dimensions(&self, density:f32) -> Size{
-    Size::new(self.bounds.width() * density, self.bounds.height() * density)
+  pub fn scaled_dimensions(&self, density:f32) -> ISize{
+    Size::new(self.bounds.width() * density, self.bounds.height() * density).to_floor()
   }
 
   pub fn get_picture(&self, matte:Option<Color>) -> Option<Picture> {
@@ -316,7 +316,7 @@ impl Page{
 
     let ExportOptions{ ref format, quality, density, matte, color_type, .. } = options;
     let size = self.bounds.size();
-    let img_dims = Size::new(size.width * density, size.height * density).to_floor();
+    let img_dims = self.scaled_dimensions(density);
     let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
     let img_quality = ((quality*100.0) as u32).clamp(0, 100);
     let img_scale = Matrix::scale((density, density)).into();
