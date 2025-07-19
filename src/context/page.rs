@@ -337,10 +337,11 @@ impl Page{
       }
 
       // handle bitmap formats using (potentially gpu-backed) rasterizer
-      _ => engine.with_surface(&img_info, &options, |surface|{
+      _ => {
+        let mut surface = engine.make_surface(&img_info, &options)?;
         let canvas = surface.canvas();
-        let (cache_image, cache_depth) = PageCache::get(self.id, &options, self.depth());
 
+        let (cache_image, cache_depth) = PageCache::get(self.id, &options, self.depth());
         if let Some(image) = cache_image{
           // use the cached bitmap as the background
           canvas.draw_image(image, (0,0), None);
@@ -455,7 +456,7 @@ impl Page{
           }
           _ => return Err(format!("Unsupported file format {}", format))
         }.ok_or(format!("Could not encode as {}", format))
-      })
+      }
     }
   }
 

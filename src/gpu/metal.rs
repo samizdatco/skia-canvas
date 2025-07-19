@@ -99,18 +99,15 @@ impl MetalEngine {
     }
 
     pub fn with_direct_context<F>(f:F)
-        where F:FnOnce(&mut DirectContext)
+        where F:FnOnce(Option<&mut DirectContext>)
     {
-        Self::with_context(|ctx| Ok(f(&mut ctx.context)) ).ok();
+        Self::with_context(|ctx| Ok(f(Some(&mut ctx.context))) ).ok();
     }
 
-    pub fn with_surface<T, F>(image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
-        where F:FnOnce(&mut Surface) -> Result<T, String>
-    {
-        Self::with_context(|ctx|
-            ctx.surface(image_info, opts).and_then(|mut surface| f(&mut surface) )
-        )
+    pub fn make_surface(image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
+        Self::with_context(|ctx| ctx.surface(image_info, opts) )
     }
+
 }
 pub struct MetalContext {
     device: Device,
