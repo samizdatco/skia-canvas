@@ -107,8 +107,8 @@ impl MetalEngine {
     pub fn make_surface(image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
         Self::with_context(|ctx| ctx.surface(image_info, opts) )
     }
-
 }
+
 pub struct MetalContext {
     device: Device,
     context: DirectContext,
@@ -117,7 +117,7 @@ pub struct MetalContext {
 }
 
 impl MetalContext{
-    pub fn new() -> Option<Self>{
+    fn new() -> Option<Self>{
         autoreleasepool(|| {
             Device::system_default().and_then(|device|{
                 let queue = device.new_command_queue();
@@ -137,7 +137,7 @@ impl MetalContext{
         })
     }
 
-    pub fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
+    fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
         self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,
