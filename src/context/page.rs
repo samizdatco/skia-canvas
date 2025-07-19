@@ -247,7 +247,7 @@ impl RecordingSurface{
   }
 
   pub fn snapshot_if_valid(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> Option<SkImage>{
-    match !(self.is_config_stale(&opts) || self.is_surface_stale(&page, &opts, &engine)){
+    match !(self.is_config_stale(&opts) || self.is_surface_stale(&page, &opts, &engine) || self.depth==0){
       true => self.surface.as_mut().map(|surface| surface.image_snapshot()),
       false => None,
     }
