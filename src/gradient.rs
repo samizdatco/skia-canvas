@@ -119,52 +119,39 @@ impl CanvasGradient{
 //
 
 pub fn linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
-  if let [x1, y1, x2, y2] = opt_float_args(&mut cx, 1..5).as_slice(){
-    let start = Point::new(*x1, *y1);
-    let end = Point::new(*x2, *y2);
-    let ramp = Gradient::Linear{ start, end, stops:vec![], colors:vec![] };
-    let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(ramp)) };
-    let this = RefCell::new(canvas_gradient);
-    Ok(cx.boxed(this))
-  }else{
-    cx.throw_type_error(match cx.len(){
-      5.. => "The provided value is non-finite",
-      _ => "not enough arguments"
-    })
-  }
+  let nums = &float_args(&mut cx, &["x1", "y1", "x2", "y2"])?[..4];
+  let [x1, y1, x2, y2] = nums else{ panic!() };
+
+  let start = Point::new(*x1, *y1);
+  let end = Point::new(*x2, *y2);
+  let ramp = Gradient::Linear{ start, end, stops:vec![], colors:vec![] };
+  let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(ramp)) };
+  let this = RefCell::new(canvas_gradient);
+  Ok(cx.boxed(this))
 }
 
 pub fn radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
-  if let [x1, y1, r1, x2, y2, r2] = opt_float_args(&mut cx, 1..7).as_slice(){
-    let start_point = Point::new(*x1, *y1);
-    let end_point = Point::new(*x2, *y2);
-    let bloom = Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![] };
-    let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(bloom)) };
-    let this = RefCell::new(canvas_gradient);
-    Ok(cx.boxed(this))
-  }else{
-    cx.throw_type_error(match cx.len(){
-      7.. => "The provided value is non-finite",
-      _ => "not enough arguments"
-    })
+  let nums = &float_args(&mut cx, &["x1", "y1", "r1", "x2", "y2", "r2"])?[..6];
+  let [x1, y1, r1, x2, y2, r2] = nums else{ panic!() };
 
-  }
+  let start_point = Point::new(*x1, *y1);
+  let end_point = Point::new(*x2, *y2);
+  let bloom = Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![] };
+  let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(bloom)) };
+  let this = RefCell::new(canvas_gradient);
+  Ok(cx.boxed(this))
 }
 
 pub fn conic(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
-  if let [theta, x, y] = opt_float_args(&mut cx, 1..4).as_slice(){
-    let center = Point::new(*x, *y);
-    let angle = to_degrees(*theta);
-    let sweep = Gradient::Conic{ center, angle, stops:vec![], colors:vec![] };
-    let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(sweep)) };
-    let this = RefCell::new(canvas_gradient);
-    Ok(cx.boxed(this))
-  }else{
-    cx.throw_type_error(match cx.len(){
-      4.. => "The provided value is non-finite",
-      _ => "not enough arguments"
-    })
-  }
+  let nums = &float_args(&mut cx, &["theta", "x", "y"])?[..3];
+  let [theta, x, y] = nums else{ panic!() };
+
+  let center = Point::new(*x, *y);
+  let angle = to_degrees(*theta);
+  let sweep = Gradient::Conic{ center, angle, stops:vec![], colors:vec![] };
+  let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(sweep)) };
+  let this = RefCell::new(canvas_gradient);
+  Ok(cx.boxed(this))
 }
 
 pub fn addColorStop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
