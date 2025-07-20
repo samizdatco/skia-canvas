@@ -207,14 +207,6 @@ impl Context2D{
     }
   }
 
-  pub fn width(&self) -> f32{
-    self.bounds.width()
-  }
-
-  pub fn height(&self) -> f32{
-    self.bounds.height()
-  }
-
   pub fn with_recorder<'a, F>(&'a self, f:F)
     where F:FnOnce(std::cell::RefMut<'a, PageRecorder>)
   {

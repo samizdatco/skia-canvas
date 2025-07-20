@@ -2,20 +2,20 @@
 use std::f32::consts::PI;
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::{Matrix, PaintStyle, Point, RRect, Rect, Size, ImageInfo, AlphaType};
-use skia_safe::path::{AddPathMode::{Append,Extend}, Direction::{CCW, CW}, Path};
+use skia_safe::{Matrix, PaintStyle, Point, RRect, Rect, Size};
+use skia_safe::path::{AddPathMode::{Extend}, Direction::{CCW, CW}, Path};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
 use super::{Context2D, BoxedContext2D, Dye, page::ExportOptions};
 use crate::canvas::BoxedCanvas;
-use crate::path::{Path2D, BoxedPath2D};
+use crate::path::Path2D;
 use crate::image::{BoxedImage, Content};
 use crate::filter::Filter;
 use crate::typography::{
   font_arg, decoration_arg, font_features, from_width, to_width,
   from_text_align, to_text_align, from_text_baseline, to_text_baseline,
-  Spacing, opt_spacing_arg
+  opt_spacing_arg
 };
 use crate::utils::*;
 

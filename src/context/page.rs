@@ -621,12 +621,6 @@ impl PageCache{
     });
   }
 
-  pub fn copy_pixels(id:usize, surface: &mut Surface, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8]) -> bool {
-    Self::shared().get(&id).and_then(|cache|
-      cache._blit(surface, dst_info, src, pixels)
-    ).unwrap_or(false)
-  }
-
   #[cfg(not(any(feature="metal", feature="vulkan")))]
   fn _blit<'a>( &self, _surface: &mut Surface, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8], ) -> Option<bool>{
     self.image.as_ref().map(|image| image.read_pixels(
