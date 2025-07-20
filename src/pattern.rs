@@ -1,13 +1,8 @@
-#![allow(unused_mut)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
 #![allow(non_snake_case)]
-#![allow(dead_code)]
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
 use neon::prelude::*;
-use skia_safe::{Shader, TileMode, TileMode::{Decal, Repeat}, SamplingOptions, Size,
-                Image as SkImage, Picture, Matrix, FilterMode};
+use skia_safe::{Shader, TileMode, Size, Matrix, FilterMode};
 
 use crate::utils::*;
 use crate::image::{BoxedImage, Content};
@@ -27,13 +22,12 @@ pub struct Stamp{
 
 #[derive(Clone)]
 pub struct CanvasPattern{
-  pub stamp:Arc<Mutex<Stamp>>
+  pub stamp:Rc<RefCell<Stamp>>
 }
 
 impl CanvasPattern{
   pub fn shader(&self, image_filter: ImageFilter) -> Option<Shader>{
-    let stamp = Arc::clone(&self.stamp);
-    let stamp = stamp.lock().unwrap();
+    let stamp = self.stamp.borrow();
 
     match &stamp.content{
       Content::Bitmap(image) =>
@@ -49,8 +43,7 @@ impl CanvasPattern{
   }
 
   pub fn is_opaque(&self) -> bool{
-    let stamp = Arc::clone(&self.stamp);
-    let stamp = stamp.lock().unwrap();
+    let stamp = self.stamp.borrow();
 
     match &stamp.content{
       Content::Bitmap(image) => image.is_opaque(),
@@ -75,6 +68,7 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 
   if let Some(repeat) = to_repeat_mode(&repetition){
     let src = src.borrow();
+    let content = src.content.clone();
     let dims:Size = src.content.size().into();
     let mut matrix = Matrix::new_identity();
 
@@ -86,11 +80,10 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
       matrix.set_scale(factor, None);
     }
 
-    let content = src.content.clone();
-    let stamp = Arc::new(Mutex::new(Stamp{
-      content, dims, repeat, matrix
-    }));
-    Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
+    let stamp = Stamp{content, dims, repeat, matrix};
+    let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
+    let this = RefCell::new(canvas_pattern);
+    Ok(cx.boxed(this))
   }else{
     cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
   }
@@ -107,11 +100,12 @@ pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> 
   if let Some(repeat) = to_repeat_mode(&repetition){
     let content = Content::from_image_data(src);
     let dims:Size = content.size().into();
-    let mut matrix = Matrix::new_identity();
-    let stamp = Arc::new(Mutex::new(Stamp{
-      content, dims, repeat, matrix
-    }));
-    Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
+    let matrix = Matrix::new_identity();
+
+    let stamp = Stamp{content, dims, repeat, matrix};
+    let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
+    let this = RefCell::new(canvas_pattern);
+    Ok(cx.boxed(this))
   }else{
     cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
   }
@@ -132,14 +126,12 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
       .map(|picture| Content::Vector(picture))
       .unwrap_or_default();
     let dims = ctx.bounds.size();
-    let stamp = Stamp{
-      content,
-      dims,
-      repeat,
-      matrix:Matrix::new_identity()
-    };
-    let stamp = Arc::new(Mutex::new(stamp));
-    Ok(cx.boxed(RefCell::new(CanvasPattern{stamp})))
+    let matrix = Matrix::new_identity();
+
+    let stamp = Stamp{content, dims, repeat, matrix};
+    let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
+    let this = RefCell::new(canvas_pattern);
+    Ok(cx.boxed(this))
   }else{
     cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
   }
@@ -148,20 +140,18 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 pub fn setTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvasPattern>(0)?;
   let matrix = matrix_arg(&mut cx, 1)?;
-  let mut this = this.borrow_mut();
-  let stamp = Arc::clone(&this.stamp);
-  let mut stamp = stamp.lock().unwrap();
+  let this = this.borrow();
 
+  let mut stamp = this.stamp.borrow_mut();
   stamp.matrix = matrix;
   Ok(cx.undefined())
 }
 
 pub fn repr(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvasPattern>(0)?;
-  let mut this = this.borrow_mut();
+  let this = this.borrow();
 
-  let stamp = Arc::clone(&this.stamp);
-  let stamp = stamp.lock().unwrap();
+  let stamp = this.stamp.borrow();
   let style = match stamp.content{
     Content::Bitmap(..) => "Bitmap",
     _ => "Canvas"

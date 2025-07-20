@@ -1,12 +1,9 @@
-#![allow(unused_imports)]
-#![allow(unused_variables)]
 #![allow(dead_code)]
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex, MutexGuard};
 use neon::prelude::*;
 use skia_safe::{
-  Canvas as SkCanvas, Paint, Path, PathOp, Image, ImageInfo, Contains,
-  Rect, IRect, Point, IPoint, Size, Color, Color4f, ColorSpace, Data,
+  Canvas as SkCanvas, Paint, Path, PathOp, Image, Contains,
+  Rect, IRect, Point, Size, Color, Color4f, ColorSpace,
   PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture,
   images, image_filters, dash_path_effect, path_1d_path_effect,
   matrix::{ Matrix, TypeMask },
@@ -36,13 +33,10 @@ const TRANSPARENT:Color = Color::TRANSPARENT;
 
 pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
 impl Finalize for Context2D {}
-unsafe impl Send for Context2D {
-  // PictureRecorder is non-threadsafe
-}
 
 pub struct Context2D{
   pub bounds: Rect,
-  recorder: Arc<Mutex<PageRecorder>>,
+  recorder: RefCell<PageRecorder>,
   state: State,
   stack: Vec<State>,
   path: Path,
@@ -199,7 +193,7 @@ impl Context2D{
 
     Context2D{
       bounds,
-      recorder: Arc::new(Mutex::new(PageRecorder::new(bounds))),
+      recorder: RefCell::new(PageRecorder::new(bounds)),
       path: Path::new(),
       stack: vec![],
       state: State::default(),
@@ -221,11 +215,10 @@ impl Context2D{
     self.bounds.height()
   }
 
-  pub fn with_recorder<F>(&self, f:F)
-    where F:FnOnce(MutexGuard<PageRecorder>)
+  pub fn with_recorder<'a, F>(&'a self, f:F)
+    where F:FnOnce(std::cell::RefMut<'a, PageRecorder>)
   {
-    let recorder = self.recorder.lock().unwrap();
-    f(recorder);
+    f(self.recorder.borrow_mut());
   }
 
   pub fn with_canvas<F>(&self, f:F)
@@ -504,23 +497,23 @@ impl Context2D{
   }
 
   pub fn get_page(&self) -> Page {
-    self.recorder.lock().unwrap().get_page()
+    self.recorder.borrow_mut().get_page()
   }
 
   pub fn get_page_for_export(&self, opts:&ExportOptions, engine:&RenderingEngine) -> Page {
-    self.recorder.lock().unwrap().get_page_for_export(opts, engine)
+    self.recorder.borrow_mut().get_page_for_export(opts, engine)
   }
 
   pub fn get_image(&self) -> Option<Image> {
-    self.recorder.lock().unwrap().get_image()
+    self.recorder.borrow_mut().get_image()
   }
 
   pub fn get_picture(&mut self) -> Option<Picture> {
-    self.recorder.lock().unwrap().get_page().get_picture(None)
+    self.recorder.borrow_mut().get_page().get_picture(None)
   }
 
   pub fn get_pixels(&mut self, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String>{
-    self.recorder.lock().unwrap().get_pixels(crop, opts, engine)
+    self.recorder.borrow_mut().get_pixels(crop, opts, engine)
   }
 
   pub fn blit_pixels(&mut self, image_data:ImageData, src_rect:&Rect, dst_rect:&Rect){
@@ -696,7 +689,7 @@ impl Dye{
       Dye::Color(color) => Color4f::from(*color).is_opaque(),
       Dye::Gradient(gradient) => gradient.is_opaque(),
       Dye::Pattern(pattern) => pattern.is_opaque(),
-      Dye::Texture(texture) => false,
+      Dye::Texture(_) => false,
     }
   }
 

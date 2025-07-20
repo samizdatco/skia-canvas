@@ -1,19 +1,13 @@
-#![allow(unused_variables)]
-#![allow(unused_mut)]
-#![allow(dead_code)]
-#![allow(unused_imports)]
 #![allow(non_snake_case)]
 use std::cell::RefCell;
-use std::sync::{Arc, Mutex};
+use std::rc::Rc;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Rect, Color, Color4f, Point, TileMode, Matrix, Paint, PaintStyle};
-use skia_safe::{PathEffect, line_2d_path_effect, path_2d_path_effect};
+use skia_safe::{Path, Color, Color4f, Matrix, Paint, PaintStyle};
+use skia_safe::{line_2d_path_effect, path_2d_path_effect};
 
 use crate::utils::*;
-use crate::path::BoxedPath2D;
 
-#[derive(Debug)]
 struct Texture{
   path: Option<Path>,
   color: Color,
@@ -34,13 +28,12 @@ impl Default for Texture {
 
 #[derive(Clone)]
 pub struct CanvasTexture{
-  texture:Arc<Mutex<Texture>>
+  texture:Rc<RefCell<Texture>>
 }
 
 impl CanvasTexture{
   pub fn mix_into(&self, paint: &mut Paint, alpha:f32){
-    let tile = Arc::clone(&self.texture);
-    let tile = tile.lock().unwrap();
+    let tile = self.texture.borrow();
 
     let mut matrix = Matrix::new_identity();
     matrix
@@ -71,15 +64,12 @@ impl CanvasTexture{
   }
 
   pub fn spacing(&self) -> (f32, f32) {
-    let tile = Arc::clone(&self.texture);
-    let tile = tile.lock().unwrap();
+    let tile = self.texture.borrow();
     tile.scale
   }
 
   pub fn to_color(&self, alpha:f32) -> Color {
-    let tile = Arc::clone(&self.texture);
-    let tile = tile.lock().unwrap();
-
+    let tile = self.texture.borrow();
     let mut color:Color4f = tile.color.into();
     color.a *= alpha;
     color.to_color()
@@ -116,7 +106,7 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvasTexture> {
   };
 
   let texture = Texture{path, color, line, angle, scale, shift};
-  let canvas_texture = CanvasTexture{ texture:Arc::new(Mutex::new(texture)) };
+  let canvas_texture = CanvasTexture{ texture:Rc::new(RefCell::new(texture)) };
   let this = RefCell::new(canvas_texture);
   Ok(cx.boxed(this))
 }
@@ -125,9 +115,7 @@ pub fn repr(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvasTexture>(0)?;
   let this = this.borrow();
 
-  let tile = Arc::clone(&this.texture);
-  let tile = tile.lock().unwrap();
-
+  let tile = this.texture.borrow();
   let style = if tile.path.is_some(){ "Path" }else{ "Lines" };
   Ok(cx.string(style))
 }
