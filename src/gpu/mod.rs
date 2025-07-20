@@ -23,18 +23,16 @@ struct Engine { }
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 impl Engine {
     pub fn supported() -> bool { false }
-    pub fn with_direct_context<T, F>(_f:F) -> Option<T>{ None }
-    pub fn with_surface<T, F>(_: &ImageInfo, _:&ExportOptions, _:F)  -> Result<T, String>
-        where F:FnOnce(&mut Surface) -> Result<T, String>
-    {
-        Err("Compiled without GPU support".to_string())
-    }
     pub fn status() -> Value { serde_json::json!({
         "renderer": "CPU",
         "api": Value::Null,
         "device": "CPU-based renderer (compiled without GPU support)",
         "error": Value::Null,
     })}
+    // placeholders that match the GPU signatures (for the type-checker) but will never be called
+    // (see the RenderingEngine methods for their inline implementation when in CPU mode)
+    pub fn make_surface(_info: &ImageInfo, _opts:&ExportOptions) -> Result<Surface, String>{ panic!() }
+    pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -58,19 +56,19 @@ impl RenderingEngine{
         }
     }
 
-    pub fn with_surface<T,F>(&self, image_info: &ImageInfo, opts:&ExportOptions, f:F) -> Result<T, String>
-        where F:FnOnce(&mut Surface) -> Result<T, String>
-    {
+    pub fn make_surface(&self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
         match self {
-            Self::GPU => Engine::with_surface(image_info, opts, f),
+            Self::GPU => Engine::make_surface(image_info, opts),
             Self::CPU => surfaces::raster(image_info, None, Some(&opts.surface_props()))
                 .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
-                .and_then(|mut surface|f(&mut surface))
         }
     }
 
-    pub fn with_direct_context(&self, f:impl FnOnce(&mut DirectContext)){
-        Engine::with_direct_context(f);
+    pub fn with_direct_context(&self, f:impl FnOnce(Option<&mut DirectContext>)){
+        match self {
+            Self::GPU => Engine::with_direct_context(f),
+            Self::CPU => f(None)
+        }
     }
 
     pub fn status(&self) -> serde_json::Value {
