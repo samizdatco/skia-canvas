@@ -60,81 +60,55 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let src = cx.argument::<BoxedImage>(1)?;
   let canvas_width = float_arg_or_bail(&mut cx, 2, "width")?;
   let canvas_height = float_arg_or_bail(&mut cx, 3, "height")?;
-  let repetition = if cx.len() > 4 && cx.argument::<JsValue>(4)?.is_a::<JsNull, _>(&mut cx){
-    "".to_string() // null is a valid synonym for "repeat" (as is "")
-  }else{
-    string_arg(&mut cx, 4, "repetition")?
-  };
+  let repeat = repetition_arg(&mut cx, 4)?;
 
-  if let Some(repeat) = to_repeat_mode(&repetition){
-    let src = src.borrow();
-    let content = src.content.clone();
-    let dims:Size = src.content.size().into();
-    let mut matrix = Matrix::new_identity();
+  let src = src.borrow();
+  let content = src.content.clone();
+  let dims:Size = src.content.size().into();
+  let mut matrix = Matrix::new_identity();
 
-    if src.autosized && !dims.is_empty() {
-      // If this flag is set (for SVG images with no intrinsic size) then we need to scale the image to
-      // the canvas' smallest dimension. This preserves compatibility with how Chromium browsers behave.
-      let min_size = f32::min(canvas_width, canvas_height);
-      let factor = (min_size / dims.width, min_size / dims.height);
-      matrix.set_scale(factor, None);
-    }
-
-    let stamp = Stamp{content, dims, repeat, matrix};
-    let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
-    let this = RefCell::new(canvas_pattern);
-    Ok(cx.boxed(this))
-  }else{
-    cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
+  if src.autosized && !dims.is_empty() {
+    // If this flag is set (for SVG images with no intrinsic size) then we need to scale the image to
+    // the canvas' smallest dimension. This preserves compatibility with how Chromium browsers behave.
+    let min_size = f32::min(canvas_width, canvas_height);
+    let factor = (min_size / dims.width, min_size / dims.height);
+    matrix.set_scale(factor, None);
   }
+
+  let stamp = Stamp{content, dims, repeat, matrix};
+  let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
+  let this = RefCell::new(canvas_pattern);
+  Ok(cx.boxed(this))
 }
 
 pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let src = image_data_arg(&mut cx, 1)?;
-  let repetition = if cx.len() > 2 && cx.argument::<JsValue>(2)?.is_a::<JsNull, _>(&mut cx){
-    "".to_string() // null is a valid synonym for "repeat" (as is "")
-  }else{
-    string_arg(&mut cx, 2, "repetition")?
-  };
+  let repeat = repetition_arg(&mut cx, 2)?;
+  let content = Content::from_image_data(src);
+  let dims:Size = content.size().into();
+  let matrix = Matrix::new_identity();
 
-  if let Some(repeat) = to_repeat_mode(&repetition){
-    let content = Content::from_image_data(src);
-    let dims:Size = content.size().into();
-    let matrix = Matrix::new_identity();
-
-    let stamp = Stamp{content, dims, repeat, matrix};
-    let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
-    let this = RefCell::new(canvas_pattern);
-    Ok(cx.boxed(this))
-  }else{
-    cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
-  }
+  let stamp = Stamp{content, dims, repeat, matrix};
+  let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
+  let this = RefCell::new(canvas_pattern);
+  Ok(cx.boxed(this))
 }
 
 pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let src = cx.argument::<BoxedContext2D>(1)?;
-  let repetition = if cx.len() > 2 && cx.argument::<JsValue>(2)?.is_a::<JsNull, _>(&mut cx){
-    "".to_string() // null is a valid synonym for "repeat" (as is "")
-  }else{
-    string_arg(&mut cx, 2, "repetition")?
-  };
+  let repeat = repetition_arg(&mut cx, 2)?;
 
-  if let Some(repeat) = to_repeat_mode(&repetition){
-    let mut ctx = src.borrow_mut();
+  let mut ctx = src.borrow_mut();
+  let content = ctx.get_picture()
+    .map(|picture| Content::Vector(picture))
+    .unwrap_or_default();
+  let dims = ctx.bounds.size();
+  let matrix = Matrix::new_identity();
 
-    let content = ctx.get_picture()
-      .map(|picture| Content::Vector(picture))
-      .unwrap_or_default();
-    let dims = ctx.bounds.size();
-    let matrix = Matrix::new_identity();
-
-    let stamp = Stamp{content, dims, repeat, matrix};
-    let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
-    let this = RefCell::new(canvas_pattern);
-    Ok(cx.boxed(this))
-  }else{
-    cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
-  }
+  let stamp = Stamp{content, dims, repeat, matrix};
+  let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
+  let this = RefCell::new(canvas_pattern);
+  Ok(cx.boxed(this))
 }
 
 pub fn setTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {

@@ -162,7 +162,7 @@ pub fn string_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult
   match opt_string_arg(cx, idx){
     Some(v) => Ok(v),
     None => cx.throw_type_error(
-      if exists { format!("{} must be a string", attr) }
+      if exists { format!("Expected a string for `{}`", attr) }
       else { format!("not enough arguments: expected a string for `{}` as {} arg", attr, arg_num(idx)) }
     )
   }
@@ -770,6 +770,22 @@ pub fn from_filter_quality(mode:FilterQuality) -> String{
   }.to_string()
 }
 
+//
+// CanvasPattern
+//
+
+pub fn repetition_arg<'a>(cx: &mut FunctionContext<'a>, idx: usize) -> NeonResult<(TileMode, TileMode)>{
+  let repetition = if cx.len() > idx && cx.argument::<JsValue>(idx)?.is_a::<JsNull, _>(cx){
+    "".to_string() // null is a valid synonym for "repeat" (as is "")
+  }else{
+    string_arg(cx, idx, "repetition")?
+  };
+
+  match to_repeat_mode(&repetition){
+    Some(mode) => Ok(mode),
+    None => cx.throw_type_error("Expected `repetition` to be \"repeat\", \"repeat-x\", \"repeat-y\", or \"no-repeat\"")
+  }
+}
 
 //
 // Skia Enums
