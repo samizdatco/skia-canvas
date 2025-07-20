@@ -11,7 +11,7 @@ use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
     Decoration, FontCollection, FontFamilies, Paragraph, ParagraphBuilder, ParagraphStyle, TextAlign, TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextStyle
 };
-use crate::FONT_LIBRARY;
+use crate::font_library::FontLibrary;
 use crate::utils::*;
 use crate::context::State;
 
@@ -33,9 +33,12 @@ pub struct Typesetter{
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
-    let mut library = FONT_LIBRARY.lock().unwrap();
     let (mut char_style, graf_style, text_decoration, baseline, wrap) = state.typography();
-    let typefaces = library.set_hinting(graf_style.hinting_is_on()).collect_fonts(&char_style);
+    let typefaces = FontLibrary::with_shared(|lib|
+      lib
+        .set_hinting(graf_style.hinting_is_on())
+        .collect_fonts(&char_style)
+    );
     let width = width.unwrap_or(GALLEY);
     let text = match wrap{
       true => text.to_string(),

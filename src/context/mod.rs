@@ -17,8 +17,8 @@ use skia_safe::{
 pub mod api;
 pub mod page;
 
-use crate::FONT_LIBRARY;
 use crate::utils::*;
+use crate::font_library::FontLibrary;
 use crate::typography::{Typesetter, FontSpec, Baseline, Spacing, DecorationStyle};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
@@ -527,8 +527,9 @@ impl Context2D{
   }
 
   pub fn set_font(&mut self, spec: FontSpec){
-    let mut library = FONT_LIBRARY.lock().unwrap();
-    if let Some(new_style) = library.update_style(&self.state.char_style, &spec){
+    if let Some(new_style) = FontLibrary::with_shared(|lib|
+      lib.update_style(&self.state.char_style, &spec)
+    ){
       self.state.font = spec.canonical;
       self.state.font_variant = spec.variant.to_string();
       self.state.font_width = spec.width;
