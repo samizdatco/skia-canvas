@@ -469,6 +469,9 @@ export interface CreateTextureOptions {
   /** The lineWidth with which to stroke the path (if omitted, the path will be filled instead) */
   line?: number
 
+  /** The lineCap style to use if stroking the path */
+  cap?: CanvasLineCap
+
   /** The color to use for stroking/filling the path */
   color?: string
 

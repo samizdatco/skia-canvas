@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Color, Color4f, Matrix, Paint, PaintStyle};
+use skia_safe::{Path, Color, Color4f, Matrix, Paint, PaintStyle, PaintCap};
 use skia_safe::{line_2d_path_effect, path_2d_path_effect};
 
 use crate::utils::*;
@@ -12,6 +12,7 @@ struct Texture{
   path: Option<Path>,
   color: Color,
   line: f32,
+  cap: PaintCap,
   angle: f32,
   scale: (f32, f32),
   shift: (f32, f32),
@@ -22,7 +23,7 @@ impl Finalize for CanvasTexture {}
 
 impl Default for Texture {
   fn default() -> Self {
-    Texture{path:None, color:Color::BLACK, line:1.0, angle:0.0, scale:(1.0, 1.0), shift:(0.0, 0.0)}
+    Texture{path:None, color:Color::BLACK, line:1.0, cap:PaintCap::Butt, angle:0.0, scale:(1.0, 1.0), shift:(0.0, 0.0)}
   }
 }
 
@@ -55,6 +56,7 @@ impl CanvasTexture{
 
     if tile.line > 0.0{
       paint.set_stroke_width(tile.line);
+      paint.set_stroke_cap(tile.cap);
       paint.set_style(PaintStyle::Stroke);
     }
 
@@ -90,22 +92,27 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvasTexture> {
     None => cx.throw_type_error("Expected a number for `line`")?
   };
 
-  let angle = match opt_float_arg(&mut cx, 4){
+  let cap = match opt_string_arg(&mut cx, 4).or(Some("butt".to_string())).and_then(|c| to_stroke_cap(&c)){
+    Some(style) => style,
+    None => cx.throw_type_error("Expected \"butt\", \"square\", or \"round\" for `cap`")?
+  };
+
+  let angle = match opt_float_arg(&mut cx, 5){
     Some(theta) => theta,
     None => cx.throw_type_error("Expected a number for `angle`")?
   };
 
-  let scale = match opt_float_args(&mut cx, 5..7).as_slice(){
+  let scale = match opt_float_args(&mut cx, 6..8).as_slice(){
     [h, v] => (*h, *v),
     _ => cx.throw_type_error("Expected a number or array with 2 numbers for `spacing`")?
   };
 
-  let shift = match opt_float_args(&mut cx, 7..9).as_slice(){
+  let shift = match opt_float_args(&mut cx, 8..10).as_slice(){
     [h, v] => (*h, *v),
     _ => cx.throw_type_error("Expected a number or array with 2 numbers for `offset`")?
   };
 
-  let texture = Texture{path, color, line, angle, scale, shift};
+  let texture = Texture{path, color, line, cap, angle, scale, shift};
   let canvas_texture = CanvasTexture{ texture:Rc::new(RefCell::new(texture)) };
   let this = RefCell::new(canvas_texture);
   Ok(cx.boxed(this))
