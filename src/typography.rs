@@ -29,23 +29,24 @@ pub struct Typesetter{
   char_style: TextStyle,
   graf_style: ParagraphStyle,
   text_decoration: DecorationStyle,
+  text_wrap: bool,
 }
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
-    let (mut char_style, graf_style, text_decoration, baseline, wrap) = state.typography();
+    let (mut char_style, graf_style, text_decoration, baseline, text_wrap) = state.typography();
     let typefaces = FontLibrary::with_shared(|lib|
       lib
         .set_hinting(graf_style.hinting_is_on())
         .collect_fonts(&char_style)
     );
     let width = width.unwrap_or(GALLEY);
-    let text = match wrap{
+    let text = match text_wrap{
       true => text.to_string(),
-      false => text.replace("\n", " ")
+      false => text.replace("\n", " ") + "\u{200b}", // add zero-width space so trailing whitespace won't be ignored
     };
 
-    Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration}
+    Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration, text_wrap}
   }
 
   pub fn layout(&self, paint:&Paint) -> (Paragraph, Point) {
@@ -104,12 +105,26 @@ impl Typesetter{
       let (skipped, path) = paragraph.get_path_at(i);
       let mut used_rect = path.bounds().with_offset(rect_origin);
 
-      // measure the full line (including ascent & descent whether occupied or not)
-      let line = paragraph.get_line_metrics_at(i)?;
+      // measure the full line and find its character range in the source string
+      // - include font's ascent & descent based on metrics (not just glyph-occupied bounds)
+      // - compensate for the full-letterspace split between the beginning & end of the line
+      // - if wrap is disabled, compensate by 2x (to include the space added before the terminal \u200b)
+      // - ensure the \u200b is excluded from the character range returned
+      let mut line = paragraph.get_line_metrics_at(i)?;
+      let text_end = self.text.char_indices().count();
+      let (compensation, line_end) = match self.text_wrap{
+        true => (1.0, line.end_excluding_whitespaces),
+        false => match line.end_index {
+          idx if idx==text_end => (2.0, idx - 1), // remove the `\u200b` and its leading letterspace
+          idx => (1.0, idx) // `\u200b` already gone: string was truncated to single line at width cutoff
+        }
+      };
+      let text_range = line.start_index..line_end;
+      let spacing = self.char_style.letter_spacing() as f64 * compensation;
       let mut line_rect = Rect::new(
         line.left as f32,
         (line.baseline - line.ascent) as f32,
-        (line.left + line.width) as f32,
+        (line.left + line.width - spacing) as f32,
         (line.baseline + line.descent) as f32
       ).with_offset(line_origin);
 
@@ -123,11 +138,7 @@ impl Typesetter{
         true => line_rect,
       };
 
-      // find the character range of the line's content in the source string
-      let line_end = if self.width==GALLEY{ line.end_index }else{ line.end_excluding_whitespaces };
-      let range = string_idx_range(&self.text, line.start_index, line_end);
-
-      Some((used_rect, range, line.baseline as f32 + origin.y - half_leading))
+      Some((used_rect, text_range, line.baseline as f32 + origin.y - half_leading))
     }).collect();
 
     // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are

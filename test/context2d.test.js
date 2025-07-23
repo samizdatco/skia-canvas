@@ -706,10 +706,11 @@ describe("Context2D", ()=>{
 
         let [x, y] = [40, 100]
         let size = 32
+        let text = "RR"
         ctx.font = `${size}px Monoton`
         ctx.letterSpacing = '20px'
         ctx.fillStyle = 'black'
-        ctx.fillText("RR", x, y)
+        ctx.fillText(text, x, y)
 
         // there should be no initial added space indenting the beginning of the line
         expect(ctx.getImageData(x, y-size, 10, size).data.some(a => a)).toBe(true)
@@ -719,6 +720,11 @@ describe("Context2D", ()=>{
 
         // check whether upstream has fixed the indent bug and our compensation is now outdenting
         expect(ctx.getImageData(x-20, y-size, 18, size).data.some(a => a)).toBe(false)
+
+        // make sure the extra space skia adds to the beginning/end have been subtracted
+        expect(ctx.measureText(text).width).toBeCloseTo(74)
+        ctx.textWrap = true
+        expect(ctx.measureText(text).width).toBeCloseTo(74)
     })
 
     test("measureText()", () => {
@@ -764,6 +770,11 @@ describe("Context2D", ()=>{
       })
       expect(lft).toBeCloseTo(cnt)
       expect(cnt).toBeCloseTo(rgt)
+
+      // make sure string indices account for trailing whitespace and non-8-bit characters
+      let text = ' 石 ',
+          {startIndex, endIndex} = ctx.measureText(text).lines[0]
+      expect(text.substring(startIndex, endIndex)).toBe(text)
     })
 
 
