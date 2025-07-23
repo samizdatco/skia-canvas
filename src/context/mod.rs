@@ -563,12 +563,18 @@ impl Context2D{
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, style:PaintStyle){
     let paint = self.paint_for_drawing(style);
-    let typesetter = Typesetter::new(&self.state, text, width);
-    self.render_to_canvas(&paint, |canvas, paint| {
-      let point = Point::new(x, y);
-      let (paragraph, offset) = typesetter.layout(paint);
-      paragraph.paint(canvas, point + offset);
-    });
+    let mut typesetter = Typesetter::new(&self.state, text, width);
+    let origin = Point::new(x, y);
+
+    if self.state.texture(style).is_some(){
+      // if dye is a texture, convert text to path first
+      self.draw_path(Some(typesetter.path(origin)), style, None);
+    }else{
+      self.render_to_canvas(&paint, |canvas, paint| {
+        let (paragraph, offset) = typesetter.layout(paint);
+        paragraph.paint(canvas, origin + offset);
+      });
+    }
   }
 
   pub fn measure_text(&mut self, text: &str, width:Option<f32>) -> Vec<Vec<f32>>{
