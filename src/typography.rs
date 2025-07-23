@@ -143,15 +143,17 @@ impl Typesetter{
     results
   }
 
-  pub fn path(&mut self) -> SkPath {
-    let (mut paragraph, mut offset) = self.layout(&Paint::default());
+  pub fn path(&mut self, point:impl Into<Point>) -> SkPath {
+    let (mut paragraph, mut origin) = self.layout(&Paint::default());
     let headroom = self.char_style.font_metrics().ascent + paragraph.alphabetic_baseline();
-    offset.y -= headroom - self.baseline.get_offset(&self.char_style);
+    let offset = self.baseline.get_offset(&self.char_style);
+    origin += point.into();
+    origin.y -= headroom - offset;
 
     let mut path = SkPath::new();
     for idx in 0..paragraph.line_number(){
       let (skipped, line) = paragraph.get_path_at(idx);
-      path.add_path(&line, offset, None);
+      path.add_path(&line, origin, None);
     };
     path
   }

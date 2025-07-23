@@ -568,7 +568,7 @@ impl Context2D{
   }
 
   pub fn outline_text(&self, text:&str, width:Option<f32>) -> Path{
-    Typesetter::new(&self.state, text, width).path()
+    Typesetter::new(&self.state, text, width).path((0.0, 0.0))
   }
 
   pub fn paint_for_drawing(&mut self, style:PaintStyle) -> Paint{
