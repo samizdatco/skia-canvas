@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Color, Color4f, Matrix, Paint, PaintStyle, PaintCap};
+use skia_safe::{Path, Color, Color4f, Matrix, Paint, PaintStyle, PaintCap, Point};
 use skia_safe::{line_2d_path_effect, path_2d_path_effect};
 
 use crate::utils::*;
@@ -58,6 +58,8 @@ impl CanvasTexture{
       paint.set_stroke_width(tile.line);
       paint.set_stroke_cap(tile.cap);
       paint.set_style(PaintStyle::Stroke);
+    }else{
+      paint.set_style(PaintStyle::Fill);
     }
 
     let mut color:Color4f = tile.color.into();
@@ -65,9 +67,9 @@ impl CanvasTexture{
     paint.set_color(color.to_color());
   }
 
-  pub fn spacing(&self) -> (f32, f32) {
+  pub fn spacing(&self) -> Point {
     let tile = self.texture.borrow();
-    tile.scale
+    tile.scale.into()
   }
 
   pub fn to_color(&self, alpha:f32) -> Color {
