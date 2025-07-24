@@ -366,30 +366,41 @@ impl Context2D{
     let paint = self.paint_for_drawing(style);
     self.render_to_canvas(&paint, |canvas, paint| {
       if let Some(tile) = self.state.texture(style){
-        // SKIA BUG WORKAROUND:
+        // SKIA PATH EFFECT BUG WORKAROUND:
         //
-        // Simply adding the PathEffect to the paint and drawing totally misjudges the boundaries of the
+        // Simply mixing the PathEffect into the paint and drawing totally misjudges the boundaries of the
         // path being filled/stroked. Instead we'll create a path with the texture and a path with the
-        // desired outline separately, then draw their overlap. This is really inefficient but a lot
-        // closer to 'correct'...
+        // desired outline separately, then draw their overlap
 
-        // construct a bounding box significantly larger than the path + stroke area
-        let mut stencil = Path::default();
-        fill_path_with_paint(&path, paint, &mut stencil, None, None);
-        let expanded_bounds = stencil.bounds().with_outset(tile.spacing() * 1.5);
-        let stencil_frame = &Path::rect(expanded_bounds, None);
-
-        // filter the stencil rect with the repeating pattern and save the overlap as tile_path
+        // paint containing the PathEffect
         let mut tile_paint = paint.clone();
         tile.mix_into(&mut tile_paint, self.state.global_alpha);
-        let mut tile_path = Path::default();
-        fill_path_with_paint(stencil_frame, &tile_paint, &mut tile_path, None, None);
 
-        // intersect the rectangular texture tile with the path being drawn and fill with proper color
-        let mut fill_paint = paint.clone();
-        fill_paint.set_style(PaintStyle::Fill);
-        if let Some(fill_path) = stencil.op(&tile_path, PathOp::Intersect){
-          canvas.draw_path(&fill_path, &fill_paint);
+        // outline strokes on user path (if paint style is stroke) so we can use a fill operation below
+        let mut stencil = Path::default();
+        fill_path_with_paint(&path, paint, &mut stencil, None, None);
+
+        // construct a rectangle significantly larger than the path + stroke area (1.5x seems to work?)
+        let expanded_bounds = stencil.bounds().with_outset(tile.spacing() * 1.5);
+        let enclosing_frame = Path::rect(expanded_bounds, None);
+
+        if tile.use_clip(){
+          // apply the user path as a clipping mask and fill the whole enclosing rect with tile pattern
+          canvas.save();
+          canvas.clip_path(&stencil, Some(ClipOp::Intersect), Some(true));
+          canvas.draw_path(&enclosing_frame, &tile_paint);
+          canvas.restore();
+        }else{
+          // create a path merging the the tile pattern outlines and the enclosing rectangle
+          let mut textured_frame = Path::default();
+          fill_path_with_paint(&enclosing_frame, &tile_paint, &mut textured_frame, None, None);
+
+          // intersect the rectangular texture with the user path and fill with flat color
+          let mut fill_paint = paint.clone();
+          fill_paint.set_style(PaintStyle::Fill);
+          if let Some(fill_path) = stencil.op(&textured_frame, PathOp::Intersect){
+            canvas.draw_path(&fill_path, &fill_paint);
+          }
         }
       }else{
         canvas.draw_path(&path, paint);

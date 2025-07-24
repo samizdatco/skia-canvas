@@ -480,6 +480,9 @@ export interface CreateTextureOptions {
 
   /** The amount by which to shift the pattern relative to the canvas origin */
   offset?: Offset
+
+  /** Whether to render the texture as a single path (rather than as a repeating pattern within a clipping mask) */
+  outline?: boolean
 }
 
 interface CanvasCompositing {

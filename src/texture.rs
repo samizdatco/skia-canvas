@@ -29,7 +29,8 @@ impl Default for Texture {
 
 #[derive(Clone)]
 pub struct CanvasTexture{
-  texture:Rc<RefCell<Texture>>
+  texture:Rc<RefCell<Texture>>,
+  outline: bool,
 }
 
 impl CanvasTexture{
@@ -65,6 +66,10 @@ impl CanvasTexture{
     let mut color:Color4f = tile.color.into();
     color.a *= alpha;
     paint.set_color(color.to_color());
+  }
+
+  pub fn use_clip(&self) -> bool{
+    !self.outline
   }
 
   pub fn spacing(&self) -> Point {
@@ -104,18 +109,20 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvasTexture> {
     None => cx.throw_type_error("Expected a number for `angle`")?
   };
 
-  let scale = match opt_float_args(&mut cx, 6..8).as_slice(){
+  let outline = bool_arg(&mut cx, 6, "outline")?;
+
+  let scale = match opt_float_args(&mut cx, 7..9).as_slice(){
     [h, v] => (*h, *v),
     _ => cx.throw_type_error("Expected a number or array with 2 numbers for `spacing`")?
   };
 
-  let shift = match opt_float_args(&mut cx, 8..10).as_slice(){
+  let shift = match opt_float_args(&mut cx, 9..11).as_slice(){
     [h, v] => (*h, *v),
     _ => cx.throw_type_error("Expected a number or array with 2 numbers for `offset`")?
   };
 
   let texture = Texture{path, color, line, cap, angle, scale, shift};
-  let canvas_texture = CanvasTexture{ texture:Rc::new(RefCell::new(texture)) };
+  let canvas_texture = CanvasTexture{ texture:Rc::new(RefCell::new(texture)), outline };
   let this = RefCell::new(canvas_texture);
   Ok(cx.boxed(this))
 }
