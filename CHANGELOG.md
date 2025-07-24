@@ -17,6 +17,7 @@
   - The new Canvas[.toSharp()][canvas_toSharp] & ImageData[.toSharp()][id_toSharp] convenience methods convert their contents to a Sharp bitmap object
   - `loadImage()` & `loadImageData()` can now be called with a Sharp object as their sole argument
   - The `src` property on a new Image object can be set to a Sharp object and it will begin asynchronously loading
+- Added new options to [`createTexture()`][createTexture()] for setting the [line cap][createTexture_cap] style and selecting whether vector patterns should be clipped or [outlined][createTexture_outline]
 
 #### Rendering
 - Significant speed-ups for deeply layered drawing in which the canvas isn't cleared or reset (potentially resulting in numerous vector objects being re-drawn despite being hidden by shapes drawn on top):
@@ -51,6 +52,8 @@
 - Angles passed to [`createConicGradient()`][createConicGradient()] are no longer incorrectly offset by 90°
 - Calling `lineTo` on an empty Path2D no longer adds a line from the origin to the specified coordinates: it now acts as if it were a `moveTo`
 - When exporting to an SVG, text is now converted to paths only if the [`outline`][export_outline] option is set to `true`
+- [`measureText()`][measureText()] now correctly calculates widths when letterSpacing has been set
+- `startRange` and `endRange` in TextMetrics.lines[] now correspond to character indices in the string passed to measureText(), not byte indices into the UTF-8 buffer backing it
 
 [App.launch()]: /docs/api/app.md#launch
 [app_eventLoop]: /docs/api/app.md#eventLoop
@@ -75,7 +78,9 @@
 [running_lambda]: /docs/getting-started.md#running-on-aws-lambda
 [node_url]: https://nodejs.org/api/url.html#class-url
 [meta_url]: https://nodejs.org/api/esm.html#importmetaurl
-[Image.src]: /docs/image.md#src
+[Image.src]: /docs/api/image.md#src
+[createTexture_cap]: /docs/api/context.md#cap
+[createTexture_outline]: /docs/api/context.md#outline
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features
