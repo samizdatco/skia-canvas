@@ -99,7 +99,7 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvasTexture> {
     None => cx.throw_type_error("Expected a number for `line`")?
   };
 
-  let cap = match opt_string_arg(&mut cx, 4).or(Some("butt".to_string())).and_then(|c| to_stroke_cap(&c)){
+  let cap = match to_stroke_cap(&string_arg(&mut cx, 4, "cap")?){
     Some(style) => style,
     None => cx.throw_type_error("Expected \"butt\", \"square\", or \"round\" for `cap`")?
   };

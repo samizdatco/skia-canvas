@@ -403,6 +403,72 @@ describe("Context2D", ()=>{
         expect(pixel(256, 5)).toEqual(BLACK)
       })
     })
+
+    describe("CanvasTexture", () => {
+      var waves, nylon, lines
+
+      beforeEach(() => {
+        let w = 40
+        let wavePath = new Path2D()
+        wavePath.moveTo(-w/2, w/2)
+        wavePath.bezierCurveTo(-w*3/8, w*3/4, -w/8, w*3/4, 0, w/2)
+        wavePath.bezierCurveTo(w/8, w/4, w*3/8, w/4, w/2, w/2)
+        wavePath.bezierCurveTo(w*5/8, w*3/4, w*7/8, w*3/4, w, w/2)
+        wavePath.bezierCurveTo(w*9/8, w/4, w*11/8, w/4, w*3/2, w/2)
+        waves = ctx.createTexture([w, w/2], {path:wavePath, color:'black', line:3, angle:Math.PI/7})
+
+        let n = 50
+        let nylonPath = new Path2D()
+        nylonPath.moveTo(0,     n/4)
+        nylonPath.lineTo(n/4,   n/4)
+        nylonPath.lineTo(n/4,   0)
+        nylonPath.moveTo(n*3/4, n)
+        nylonPath.lineTo(n*3/4, n*3/4)
+        nylonPath.lineTo(n,     n*3/4)
+        nylonPath.moveTo(n/4,   n/2)
+        nylonPath.lineTo(n/4,   n*3/4)
+        nylonPath.lineTo(n/2,   n*3/4)
+        nylonPath.moveTo(n/2,   n/4)
+        nylonPath.lineTo(n*3/4, n/4)
+        nylonPath.lineTo(n*3/4, n/2)
+        nylon = ctx.createTexture(n, {path:nylonPath, color:'black', line:5, cap:'square', angle:Math.PI/8})
+
+        lines = ctx.createTexture(8, {line:4, color:'black'})
+      })
+
+      test("with filled Path2D", async () => {
+        ctx.fillStyle = nylon
+        ctx.fillRect(10, 10, 80, 80)
+
+        expect(pixel(26, 24)).toEqual(CLEAR)
+        expect(pixel(28, 26)).toEqual(BLACK)
+        expect(pixel(48, 48)).toEqual(BLACK)
+        expect(pixel(55, 40)).toEqual(CLEAR)
+      })
+
+      test("with stroked Path2D", async () => {
+        ctx.strokeStyle = waves
+        ctx.lineWidth = 10
+        ctx.moveTo(0,0)
+        ctx.lineTo(100, 100)
+        ctx.stroke()
+
+        expect(pixel(10, 10)).toEqual(CLEAR)
+        expect(pixel(16, 16)).toEqual(BLACK)
+        expect(pixel(73, 73)).toEqual(BLACK)
+        expect(pixel(75, 75)).toEqual(CLEAR)
+      })
+
+      test("with lines", async () => {
+        ctx.fillStyle = lines
+        ctx.fillRect(10, 10, 80, 80)
+
+        expect(pixel(22, 22)).toEqual(CLEAR)
+        expect(pixel(25, 25)).toEqual(BLACK)
+        expect(pixel(73, 73)).toEqual(CLEAR)
+        expect(pixel(76, 76)).toEqual(BLACK)
+      })
+    })
   })
 
   describe("supports", () => {
@@ -1292,6 +1358,8 @@ describe("Context2D", ()=>{
       expect(() => ctx.createTexture(20, {line:{}})).toThrow("Expected a number for `line`")
       expect(() => ctx.createTexture(20, {angle:{}})).toThrow("Expected a number for `angle`")
       expect(() => ctx.createTexture(20, {offset:{}})).toThrow("Expected a number or array")
+      expect(() => ctx.createTexture(20, {cap:{}})).toThrow("Expected a string")
+      expect(() => ctx.createTexture(20, {cap:""})).toThrow("Expected \"butt\", \"square\"")
       expect(() => ctx.createTexture(20, {offset:[1, NaN]})).toThrow("Expected a number or array")
       expect(() => ctx.isPointInPath(0, 10, 10)).toThrow("Expected `fillRule`")
       expect(() => ctx.isPointInPath(false, 10, 10)).toThrow("Expected `fillRule`")
