@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# see `skia-canvas-lambda.zip` recipe in Makefile for invocation details
 
 case "$(uname -p)" in
  x86_64) LAYER_ZIP="aws-lambda-x64.zip" ;;

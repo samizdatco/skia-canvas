@@ -6,6 +6,79 @@ on:
       - "v*"
 
 jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, arm64]
+    runs-on: ${{ matrix.arch == 'x86' && 'macos-13' || 'macos-14' }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 16
+
+    - name: Use Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Use Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: Build module
+      env:
+        MACOSX_DEPLOYMENT_TARGET: 10.14
+      run: make optimized
+
+    - name: Add to release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        npm test && npm run upload
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, arm64]
+    runs-on: ${{ matrix.arch == 'x86' && 'windows-latest' || 'windows-11-arm' }}
+
+    steps:
+    - name: Enable long paths
+      run: git config --system core.longpaths true
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 19 # the minimum version that supports arm64
+
+    - name: Use Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+
+    - name: Install Ninja
+      run: choco install ninja
+
+    - name: Build module
+      run: make optimized
+
+    - name: Add to release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        npm config set script-shell bash
+        npm test && npm run upload
+
+
   linux-x86:
     runs-on: ubuntu-latest
     strategy:
@@ -79,75 +152,30 @@ jobs:
       run: |
         npm test && npm run upload
 
-  mac:
+  aws-lambda:
+    needs: [linux-x86, linux-arm64] # only run after linux binaries have been uploaded to release
     strategy:
       fail-fast: false
       matrix:
         arch: [x86, arm64]
-    runs-on: ${{ matrix.arch == 'x86' && 'macos-13' || 'macos-14' }}
+    runs-on: ${{ matrix.arch == 'x86' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Use Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v2
       with:
-        node-version: 16
+        node-version: 20
 
-    - name: Use Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-
-    - name: Use Ninja
-      uses: seanmiddleditch/gha-setup-ninja@master
-
-    - name: Build module
-      env:
-        MACOSX_DEPLOYMENT_TARGET: 10.14
-      run: make optimized
+    - name: Build layer
+      run: |
+        docker run -v ./arch/lambda:/opt -v .:/mnt amazonlinux:2023 bash /opt/build-layer.sh
 
     - name: Add to release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        npm test && npm run upload
-
-  windows:
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86, arm64]
-    runs-on: ${{ matrix.arch == 'x86' && 'windows-latest' || 'windows-11-arm' }}
-
-    steps:
-    - name: Enable long paths
-      run: git config --system core.longpaths true
-
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Use Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 19 # the minimum version that supports arm64
-
-    - name: Use Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-
-    - name: Install Ninja
-      run: choco install ninja
-
-    - name: Build module
-      run: make optimized
-
-    - name: Add to release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        npm config set script-shell bash
-        npm test && npm run upload
-
+        PKG_VERSION=v$(npm pkg get version | tr -d '"')
+        gh release upload $PKG_VERSION aws-lambda-*.zip
