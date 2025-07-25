@@ -154,6 +154,8 @@ jobs:
 
   aws-lambda:
     needs: [linux-x86, linux-arm64] # only run after linux binaries have been uploaded to release
+    if: ${{ always() }} # run even if linux build failed (since it may have already uploaded)
+
     strategy:
       fail-fast: false
       matrix:
