@@ -82,7 +82,6 @@ impl Typesetter{
     let (paragraph, origin) = self.layout(&Paint::default());
     let glyphs = GlyphMap::new(&self.text, &paragraph); // the char -> glyph index mapping
     let font_runs = paragraph.get_fonts(); // char ranges of contiguous fonts (and their metrics)
-    let mut full_bounds = Rect::new_empty(); // gets filled with line bounds to measure full text block
 
     // calculate baseline positions (as offsets to origin based on current ctx.textBaseline setting)
     let shift = self.char_style.baseline_shift();
@@ -99,71 +98,20 @@ impl Typesetter{
       (norm - ascent, descent - norm)
     });
 
-    // adjust layout rects to line up with the origin and compensate for the letterspacing Skia adds at the start/end of the line
+    // adjust layout rects to line up with the origin and compensate for half-letterspacing at the start & end of the line
     let get_text_bounds = |tb:&TextBox| -> Rect{
-      Rect::new(tb.rect.left, tb.rect.top, tb.rect.right - self.char_style.letter_spacing(), tb.rect.bottom).with_offset(origin)
+      let Rect{left, top, right, bottom} = tb.rect;
+      Rect::new(left, top, right - self.char_style.letter_spacing(), bottom).with_offset(origin)
     };
 
-    // calculate the line-by-line metrics
-    let lines:Vec<Value> = (0..paragraph.line_number()).filter_map(|i|{
-      // find the range of char indicies into that are on this line (includes trailing whitespace if not wrapping)
-      let text_range = paragraph.get_actual_text_range(i, !self.text_wrap);
-
-      // find layout sub-rectangles within this line and union them for the full-line bounds
-      let line_bounds = paragraph
-        .get_rects_for_range(glyphs.for_range(&text_range), RectHeightStyle::Tight, RectWidthStyle::Tight)
-        .iter()
-        .map(get_text_bounds)
-        .reduce(Rect::join2)
-        .unwrap_or(Rect::new_empty());
-
-      // add the line bounds to the whole-text-block bounds
-      full_bounds = Rect::join2(full_bounds, line_bounds);
-
-      // shift line metrics to correct for additional top-leading provided by strut (if any)
-      let line = paragraph.get_line_metrics_at(i)?;
-      let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
-      let baseline = line.baseline as f32 + origin.y - half_leading;
-
-
-      Some(json!({
-        "x": line_bounds.left,
-        "y": line_bounds.top,
-        "width": line_bounds.width(),
-        "height": line_bounds.height(),
-        "baseline": baseline,
-        "startIndex": text_range.start,
-        "endIndex": text_range.end,
-        "runs": font_runs.iter().filter_map(|FontInfo{ text_range: font_range, font}|{
-          // divide line into runs of contiguous font use, calculating layout dimensions and relative font metrics
-          if font_range.start < text_range.end && font_range.end > text_range.start{
-            let overlap = font_range.start.max(text_range.start)..font_range.end.min(text_range.end);
-            let glyph_range = glyphs.for_range(&overlap);
-            let (_, metrics) = font.metrics();
-
-            paragraph
-              .get_rects_for_range(glyph_range, RectHeightStyle::Tight, RectWidthStyle::Tight)
-              .first()
-              .map(|text_box|{
-                let rect = get_text_bounds(text_box);
-                json!({
-                  "font": font.typeface().family_name(),
-                  "capHeight": baseline - norm - metrics.cap_height,
-                  "xHeight": baseline - norm - metrics.x_height,
-                  "underlineHeight": metrics.underline_position().map(|ulH| baseline - norm + ulH ),
-                  "strikethroughHeight": metrics.strikeout_position().map(|stH| baseline - norm + stH ),
-                  "x": rect.left,
-                  "y": rect.top,
-                  "width": rect.width(),
-                  "height": rect.height(),
-                })
-              })
-          }else{
-            None
-          }
-        }).collect::<Vec<Value>>()
-      }))
-    }).collect();
+    // take the union of each line's bounds to construct the whole-text-run bounds
+    let full_bounds:Rect = (0..paragraph.line_number())
+      .flat_map(|ln| paragraph.get_rects_for_range(
+        glyphs.for_range(&paragraph.get_actual_text_range(ln, !self.text_wrap)), RectHeightStyle::Tight, RectWidthStyle::Tight
+      ))
+      .map(|tb| get_text_bounds(&tb))
+      .reduce(Rect::join2)
+      .unwrap_or(Rect::new_empty());
 
     json!({
       "width": (-full_bounds.left).max(0.0) + full_bounds.right,
@@ -178,7 +126,64 @@ impl Typesetter{
       "hangingBaseline": hang,
       "alphabeticBaseline": norm,
       "ideographicBaseline": ideo,
-      "lines": lines,
+      "lines": (0..paragraph.line_number()).filter_map(|ln|{
+        // find the range of byte & char indices that are on this line (includes trailing whitespace if not wrapping)
+        let text_range = paragraph.get_actual_text_range(ln, !self.text_wrap);
+        let char_range = byte_to_char_range(&self.text, &text_range);
+
+        // find layout sub-rectangles within this line and union them for the full-line bounds
+        let line_bounds = paragraph
+          .get_rects_for_range(glyphs.for_range(&text_range), RectHeightStyle::Tight, RectWidthStyle::Tight)
+          .iter()
+          .map(get_text_bounds)
+          .reduce(Rect::join2)
+          .unwrap_or(Rect::new_empty());
+
+        // calculate this line's baseline offset relative to the typesetting origin
+        let line_metrics = paragraph.get_line_metrics_at(ln)?;
+        let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
+        let baseline = line_metrics.baseline as f32 + origin.y - half_leading;
+
+        Some(json!({
+          "x": line_bounds.left,
+          "y": line_bounds.top,
+          "width": line_bounds.width(),
+          "height": line_bounds.height(),
+          "baseline": baseline,
+          "startIndex": char_range.start,
+          "endIndex": char_range.end,
+          "runs": font_runs.iter().filter_map(|FontInfo{text_range: font_range, font}|{
+            // divide line into runs of contiguous font use, calculating layout dimensions and relative font metrics
+            match font_range.start.max(text_range.start)..font_range.end.min(text_range.end){
+              rng if !rng.is_empty() => Some(rng),
+              _ => None
+            }.and_then(|overlap|{
+              let glyph_range = glyphs.for_range(&overlap);
+              let (_, metrics) = font.metrics();
+
+              paragraph
+                .get_rects_for_range(glyph_range, RectHeightStyle::Tight, RectWidthStyle::Tight)
+                .first() // there should only ever be one rect within a single font run
+                .map(|text_box|{
+                  let rect = get_text_bounds(text_box);
+                  json!({
+                    "font": font.typeface().family_name(),
+                    "ascent": baseline - norm + metrics.ascent,
+                    "descent": baseline - norm + metrics.descent,
+                    "capHeight": baseline - norm - metrics.cap_height,
+                    "xHeight": baseline - norm - metrics.x_height,
+                    "underlineHeight": metrics.underline_position().map(|ulH| baseline - norm + ulH ),
+                    "strikethroughHeight": metrics.strikeout_position().map(|stH| baseline - norm + stH ),
+                    "x": rect.left,
+                    "y": rect.top,
+                    "width": rect.width(),
+                    "height": rect.height(),
+                  })
+                })
+            })
+          }).collect::<Vec<Value>>()
+        }))
+      }).collect::<Vec<Value>>()
     })
   }
 
@@ -219,15 +224,15 @@ impl Typesetter{
 }
 
 //
-// Unicode codepoint -> glyph index converter
+// Byte index -> glyph index converter
 //
 struct GlyphMap{
-  glyphs:Vec<Range<usize>>
+  glyphs:Vec<Range<usize>> // vec[glyph_index] -> text_range
 }
 
 impl GlyphMap{
   fn new(text:&str, graf:&Paragraph) -> Self{
-    // walk the whole string, finding the char range for the each glyph,
+    // walk the whole string, finding the text range for the each glyph,
     // and storing them at the corresponding index in the vec
     let mut glyphs:Vec<Range<usize>> = vec![];
     let mut at = 0;
@@ -243,7 +248,7 @@ impl GlyphMap{
   }
 
   fn for_range(&self, text_range:&Range<usize>) -> Range<usize>{
-    // convert from a range of codepoints in the string to the range of glyphs they encode
+    // convert from a range of byte indices in the string to the range of glyphs they encode
     let test_overlap = |rng:&Range<usize>| -> bool{
       rng.start < text_range.end && rng.end > text_range.start
     };

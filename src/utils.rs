@@ -177,6 +177,14 @@ pub fn strings_to_array<'a>(cx: &mut FunctionContext<'a>, strings: &[String]) ->
   Ok(array)
 }
 
+// Convert from byte-indices to char-indices for a given UTF-16 string
+pub fn byte_to_char_range(text:&str, byte_range:&Range<usize>) -> Range<usize> {
+  let indices = text.char_indices().collect::<Vec<(usize, char)>>();
+  let start = indices.iter().position(|(idx, _)| *idx>= byte_range.start).unwrap_or(0);
+  let end = indices.iter().rposition(|(idx, _)| *idx < byte_range.end).map(|i| i + 1).unwrap_or(start);
+  start..end
+}
+
 //
 // bools
 //
