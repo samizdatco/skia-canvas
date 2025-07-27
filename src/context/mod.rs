@@ -588,7 +588,7 @@ impl Context2D{
     }
   }
 
-  pub fn measure_text(&mut self, text: &str, width:Option<f32>) -> Vec<Vec<f32>>{
+  pub fn measure_text(&mut self, text: &str, width:Option<f32>) -> serde_json::Value{
     Typesetter::new(&self.state, text, width).metrics()
   }
 

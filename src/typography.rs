@@ -1,15 +1,16 @@
-#![allow(unused_variables)]
-#![allow(unused_mut)]
+// #![allow(unused_variables)]
+// #![allow(unused_mut)]
+// #![allow(unused_imports)]
 #![allow(dead_code)]
-#![allow(unused_imports)]
 #![allow(non_snake_case)]
 use std::ops::Range;
 use neon::prelude::*;
-
+use serde_json::{json, Value};
 use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, Color};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
-    Decoration, FontCollection, FontFamilies, Paragraph, ParagraphBuilder, ParagraphStyle, TextAlign, TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextStyle
+  paragraph::FontInfo, Decoration, FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
+  TextAlign, TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextStyle, TextBox,
 };
 use crate::font_library::FontLibrary;
 use crate::utils::*;
@@ -34,7 +35,7 @@ pub struct Typesetter{
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
-    let (mut char_style, graf_style, text_decoration, baseline, text_wrap) = state.typography();
+    let (char_style, graf_style, text_decoration, baseline, text_wrap) = state.typography();
     let typefaces = FontLibrary::with_shared(|lib|
       lib
         .set_hinting(graf_style.hinting_is_on())
@@ -43,7 +44,7 @@ impl Typesetter{
     let width = width.unwrap_or(GALLEY);
     let text = match text_wrap{
       true => text.to_string(),
-      false => text.replace("\n", " ") + "\u{200b}", // add zero-width space so trailing whitespace won't be ignored
+      false => text.replace("\n", " ")
     };
 
     Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration, text_wrap}
@@ -77,81 +78,108 @@ impl Typesetter{
     (paragraph, offset)
   }
 
-  pub fn metrics(&self) -> Vec<Vec<f32>>{
-    let (mut paragraph, origin) = self.layout(&Paint::default());
+  pub fn metrics(&self) -> Value {
+    let (paragraph, origin) = self.layout(&Paint::default());
+    let glyphs = GlyphMap::new(&self.text, &paragraph); // the char -> glyph index mapping
+    let font_runs = paragraph.get_fonts(); // char ranges of contiguous fonts (and their metrics)
+    let mut full_bounds = Rect::new_empty(); // gets filled with line bounds to measure full text block
 
+    // calculate baseline positions (as offsets to origin based on current ctx.textBaseline setting)
     let shift = self.char_style.baseline_shift();
     let hang = Baseline::Hanging.get_offset(&self.char_style) - shift;
     let norm = Baseline::Alphabetic.get_offset(&self.char_style) - shift;
     let ideo = Baseline::Ideographic.get_offset(&self.char_style) - shift;
 
-    let font_metrics = self.char_style.font_metrics();
-    let ascent = norm - font_metrics.ascent;
-    let descent = font_metrics.descent - norm;
+    // use line metrics to find maximal ascent/descent of all fonts on first line
+    let (ascent, descent) = paragraph.get_line_metrics_at(0).map(|line|
+      (norm + line.ascent as f32, line.descent as f32 - norm)
+    ).unwrap_or_else(||{
+      // or fall back to the first-matched font's metrics
+      let FontMetrics{ascent, descent, ..} = self.char_style.font_metrics();
+      (norm - ascent, descent - norm)
+    });
 
-    // shift line metrics to correct for additional top-leading provided by strut (if any)
-    let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
-    let line_origin = (origin.x, origin.y - half_leading);
+    // adjust layout rects to line up with the origin and compensate for the letterspacing Skia adds at the start/end of the line
+    let get_text_bounds = |tb:&TextBox| -> Rect{
+      Rect::new(tb.rect.left, tb.rect.top, tb.rect.right - self.char_style.letter_spacing(), tb.rect.bottom).with_offset(origin)
+    };
 
-    // shift glyph-path metrics to account for distance between lineHeight and ascender
-    let headroom = font_metrics.ascent + paragraph.alphabetic_baseline();
-    let rect_origin = Point::new(origin.x, origin.y + shift - headroom);
+    // calculate the line-by-line metrics
+    let lines:Vec<Value> = (0..paragraph.line_number()).filter_map(|i|{
+      // find the range of char indicies into that are on this line (includes trailing whitespace if not wrapping)
+      let text_range = paragraph.get_actual_text_range(i, !self.text_wrap);
 
-    // find the bounds, text-range, and baseline offset for each individual line and
-    // accumulate the whole run's bounds
-    let mut bounds = Rect::new_empty();
-    let lines:Vec<(Rect, Range<usize>, f32)> = (0..paragraph.line_number()).filter_map(|i|{
-      // measure the glyph bounds
-      let (skipped, path) = paragraph.get_path_at(i);
-      let mut used_rect = path.bounds().with_offset(rect_origin);
+      // find layout sub-rectangles within this line and union them for the full-line bounds
+      let line_bounds = paragraph
+        .get_rects_for_range(glyphs.for_range(&text_range), RectHeightStyle::Tight, RectWidthStyle::Tight)
+        .iter()
+        .map(get_text_bounds)
+        .reduce(Rect::join2)
+        .unwrap_or(Rect::new_empty());
 
-      // measure the full line and find its character range in the source string
-      // - include font's ascent & descent based on metrics (not just glyph-occupied bounds)
-      // - compensate for the full-letterspace split between the beginning & end of the line
-      // - if wrap is disabled, compensate by 2x (to include the space added before the terminal \u200b)
-      // - ensure the \u200b is excluded from the character range returned
-      let mut line = paragraph.get_line_metrics_at(i)?;
-      let text_end = self.text.char_indices().count();
-      let (compensation, line_end) = match self.text_wrap{
-        true => (1.0, line.end_excluding_whitespaces),
-        false => match line.end_index {
-          idx if idx==text_end => (2.0, idx - 1), // remove the `\u200b` and its leading letterspace
-          idx => (1.0, idx) // `\u200b` already gone: string was truncated to single line at width cutoff
-        }
-      };
-      let text_range = line.start_index..line_end;
-      let spacing = self.char_style.letter_spacing() as f64 * compensation;
-      let mut line_rect = Rect::new(
-        line.left as f32,
-        (line.baseline - line.ascent) as f32,
-        (line.left + line.width - spacing) as f32,
-        (line.baseline + line.descent) as f32
-      ).with_offset(line_origin);
+      // add the line bounds to the whole-text-block bounds
+      full_bounds = Rect::join2(full_bounds, line_bounds);
 
-      // use horizontal bounds from line_rect and vertical from used_rect
-      line_rect.top = used_rect.top;
-      line_rect.bottom = used_rect.bottom;
+      // shift line metrics to correct for additional top-leading provided by strut (if any)
+      let line = paragraph.get_line_metrics_at(i)?;
+      let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
+      let baseline = line.baseline as f32 + origin.y - half_leading;
 
-      // build up union of line_rects to find the bounds for the whole text run
-      bounds = match bounds.is_empty(){
-        false => Rect::join2(bounds, line_rect),
-        true => line_rect,
-      };
 
-      Some((used_rect, text_range, line.baseline as f32 + origin.y - half_leading))
+      Some(json!({
+        "x": line_bounds.left,
+        "y": line_bounds.top,
+        "width": line_bounds.width(),
+        "height": line_bounds.height(),
+        "baseline": baseline,
+        "startIndex": text_range.start,
+        "endIndex": text_range.end,
+        "runs": font_runs.iter().filter_map(|FontInfo{ text_range: font_range, font}|{
+          // divide line into runs of contiguous font use, calculating layout dimensions and relative font metrics
+          if font_range.start < text_range.end && font_range.end > text_range.start{
+            let overlap = font_range.start.max(text_range.start)..font_range.end.min(text_range.end);
+            let glyph_range = glyphs.for_range(&overlap);
+            let (_, metrics) = font.metrics();
+
+            paragraph
+              .get_rects_for_range(glyph_range, RectHeightStyle::Tight, RectWidthStyle::Tight)
+              .first()
+              .map(|text_box|{
+                let rect = get_text_bounds(text_box);
+                json!({
+                  "font": font.typeface().family_name(),
+                  "capHeight": baseline - norm - metrics.cap_height,
+                  "xHeight": baseline - norm - metrics.x_height,
+                  "underlineHeight": metrics.underline_position().map(|ulH| baseline - norm + ulH ),
+                  "strikethroughHeight": metrics.strikeout_position().map(|stH| baseline - norm + stH ),
+                  "x": rect.left,
+                  "y": rect.top,
+                  "width": rect.width(),
+                  "height": rect.height(),
+                })
+              })
+          }else{
+            None
+          }
+        }).collect::<Vec<Value>>()
+      }))
     }).collect();
 
-    // return a list-of-lists whose first entry is the whole-run font metrics and subsequent entries are
-    // per-line used_rect/range values (with the js side responsible for restructuring the whole bundle)
-    let mut results = vec![vec![
-      -bounds.left, bounds.right, -bounds.top, bounds.bottom,
-      ascent, descent, hang, norm, ideo
-    ]];
-    for (used_rect, range, baseline) in lines{
-      results.push(vec![used_rect.left, used_rect.top, used_rect.width(), used_rect.height(),
-                        baseline, range.start as f32, range.end as f32])
-    }
-    results
+    json!({
+      "width": (-full_bounds.left).max(0.0) + full_bounds.right,
+      "actualBoundingBoxLeft": -full_bounds.left,
+      "actualBoundingBoxRight": full_bounds.right,
+      "actualBoundingBoxAscent": -full_bounds.top,
+      "actualBoundingBoxDescent": full_bounds.bottom,
+      "fontBoundingBoxAscent": ascent,
+      "fontBoundingBoxDescent": descent,
+      "emHeightAscent": ascent,
+      "emHeightDescent": descent,
+      "hangingBaseline": hang,
+      "alphabeticBaseline": norm,
+      "ideographicBaseline": ideo,
+      "lines": lines,
+    })
   }
 
   pub fn path(&mut self, point:impl Into<Point>) -> SkPath {
@@ -163,7 +191,7 @@ impl Typesetter{
 
     let mut path = SkPath::new();
     for idx in 0..paragraph.line_number(){
-      let (skipped, line) = paragraph.get_path_at(idx);
+      let (_skipped, line) = paragraph.get_path_at(idx);
       path.add_path(&line, origin, None);
     };
     path
@@ -187,6 +215,41 @@ impl Typesetter{
     };
 
     alignment_factor * self.width + spacing_step * self.char_style.letter_spacing()
+  }
+}
+
+//
+// Unicode codepoint -> glyph index converter
+//
+struct GlyphMap{
+  glyphs:Vec<Range<usize>>
+}
+
+impl GlyphMap{
+  fn new(text:&str, graf:&Paragraph) -> Self{
+    // walk the whole string, finding the char range for the each glyph,
+    // and storing them at the corresponding index in the vec
+    let mut glyphs:Vec<Range<usize>> = vec![];
+    let mut at = 0;
+    while at < text.len(){
+      if let Some(cluster) = graf.get_glyph_cluster_at(at){
+        at = cluster.text_range.end;
+        glyphs.push(cluster.text_range);
+      }else{
+        break
+      }
+    }
+    Self{glyphs}
+  }
+
+  fn for_range(&self, text_range:&Range<usize>) -> Range<usize>{
+    // convert from a range of codepoints in the string to the range of glyphs they encode
+    let test_overlap = |rng:&Range<usize>| -> bool{
+      rng.start < text_range.end && rng.end > text_range.start
+    };
+    let start = self.glyphs.iter().position(test_overlap).unwrap_or(text_range.start);
+    let end = self.glyphs.iter().rposition(test_overlap).unwrap_or(text_range.end-1) + 1;
+    start..end
   }
 }
 
@@ -470,9 +533,9 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
     let size = match inherit.as_str(){
       "from-font" => None,
       _ => match opt_object_for_key(cx, &deco, "thickness"){
-          Some(thickness) => Spacing::from_obj(cx, &thickness)?,
-          _ => None
-        }
+        Some(thickness) => Spacing::from_obj(cx, &thickness)?,
+        _ => None
+      }
     };
 
     // if the setting is invalid, it should just be ignored
@@ -501,7 +564,7 @@ pub struct Spacing{
 
 impl Default for Spacing{
   fn default() -> Self {
-      Self{raw_size:0.0, unit:"px".to_string(), px_size:0.0}
+    Self{raw_size:0.0, unit:"px".to_string(), px_size:0.0}
   }
 }
 

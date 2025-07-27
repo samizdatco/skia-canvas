@@ -928,19 +928,13 @@ fn _draw_text(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsUndefined
 }
 
 
-pub fn measureText(mut cx: FunctionContext) -> JsResult<JsArray> {
+pub fn measureText(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
   let text = string_arg(&mut cx, 1, "text")?;
   let width = opt_float_arg(&mut cx, 2);
   let text_metrics = this.measure_text(&text, width);
-
-  let results = JsArray::new(&mut cx, text_metrics.len());
-  for (i, info) in text_metrics.iter().enumerate(){
-    let line = floats_to_array(&mut cx, info)?;
-    results.set(&mut cx, i as u32, line)?;
-  }
-  Ok(results)
+  Ok(cx.string(text_metrics.to_string()))
 }
 
 pub fn outlineText(mut cx: FunctionContext) -> JsResult<JsValue> {
