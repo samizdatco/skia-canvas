@@ -10,8 +10,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86, arm64]
-    runs-on: ${{ matrix.arch == 'x86' && 'macos-13' || 'macos-14' }}
+        arch: [x64, arm64]
+    runs-on: ${{ matrix.arch == 'x64' && 'macos-13' || 'macos-14' }}
 
     steps:
     - name: Checkout repository
@@ -45,8 +45,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86, arm64]
-    runs-on: ${{ matrix.arch == 'x86' && 'windows-latest' || 'windows-11-arm' }}
+        arch: [x64, arm64]
+    runs-on: ${{ matrix.arch == 'x64' && 'windows-latest' || 'windows-11-arm' }}
 
     steps:
     - name: Enable long paths
@@ -79,7 +79,7 @@ jobs:
         npm test && npm run upload
 
 
-  linux-x86:
+  linux-x64:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -153,14 +153,14 @@ jobs:
         npm test && npm run upload
 
   aws-lambda:
-    needs: [linux-x86, linux-arm64] # only run after linux binaries have been uploaded to release
+    needs: [linux-x64, linux-arm64] # only run after linux binaries have been uploaded to release
     if: ${{ always() }} # run even if linux build failed (since it may have already uploaded)
 
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86, arm64]
-    runs-on: ${{ matrix.arch == 'x86' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
+        arch: [x64, arm64]
+    runs-on: ${{ matrix.arch == 'x64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
 
     steps:
     - name: Checkout repository
@@ -172,7 +172,11 @@ jobs:
         node-version: 20
 
     - name: Build layer
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
+        PKG_VERSION=v$(npm pkg get version | tr -d '"')
+        gh release download $PKG_VERSION -p linux-${{ matrix.arch }}-glibc.gz -O - | gunzip > ./arch/lambda/skia.node
         docker run -v ./arch/lambda:/opt -v .:/mnt amazonlinux:2023 bash /opt/build-layer.sh
 
     - name: Add to release
