@@ -6,11 +6,11 @@
 use std::ops::Range;
 use neon::prelude::*;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, Color};
+use skia_safe::{Font, FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, Color};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
   paragraph::FontInfo, Decoration, FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
-  TextAlign, TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextStyle, TextBox,
+  TextAlign, TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextStyle,
 };
 use crate::font_library::FontLibrary;
 use crate::utils::*;
@@ -79,8 +79,8 @@ impl Typesetter{
   }
 
   pub fn metrics(&self) -> Value {
-    let (paragraph, origin) = self.layout(&Paint::default());
-    let font_runs = paragraph.get_fonts(); // char ranges of contiguous fonts (and their metrics)
+    let (mut paragraph, origin) = self.layout(&Paint::default());
+    let font_ranges = paragraph.get_fonts(); // char ranges of contiguous fonts (and their metrics)
     let lookup = CharMap::new(&self.text, &paragraph); // the byte-idx -> glyph/char-idx mapping
 
     // calculate baseline positions (as offsets to origin based on current ctx.textBaseline setting)
@@ -98,9 +98,9 @@ impl Typesetter{
       (norm - ascent, descent - norm)
     });
 
-    // adjust layout rects to line up with the origin and compensate for half-letterspacing at the start & end of the line
-    let get_text_bounds = |tb:&TextBox| -> Rect{
-      let Rect{left, top, right, bottom} = tb.rect;
+    // helper to line up layout rects with the origin and compensate for letterspacing
+    let adjust_bounds = |rect:&Rect| -> Rect{
+      let Rect{left, top, right, bottom} = *rect;
       Rect::new(left, top, right - self.char_style.letter_spacing(), bottom).with_offset(origin)
     };
 
@@ -109,7 +109,7 @@ impl Typesetter{
       .flat_map(|ln| paragraph.get_rects_for_range(
         lookup.glyph_range(&paragraph.get_actual_text_range(ln, !self.text_wrap)), RectHeightStyle::Tight, RectWidthStyle::Tight
       ))
-      .map(|tb| get_text_bounds(&tb))
+      .map(|tb| adjust_bounds(&tb.rect))
       .reduce(Rect::join2)
       .unwrap_or(Rect::new_empty());
 
@@ -131,18 +131,39 @@ impl Typesetter{
         let text_range = paragraph.get_actual_text_range(ln, !self.text_wrap);
         let char_range = lookup.char_range(&text_range);
 
-        // find layout sub-rectangles within this line and union them for the full-line bounds
-        let line_bounds = paragraph
-          .get_rects_for_range(lookup.glyph_range(&text_range), RectHeightStyle::Tight, RectWidthStyle::Tight)
-          .iter()
-          .map(get_text_bounds)
-          .reduce(Rect::join2)
-          .unwrap_or(Rect::new_empty());
-
-        // calculate this line's baseline offset relative to the typesetting origin
+        // calculate this line's vertical offset relative to the typesetting origin
         let line_metrics = paragraph.get_line_metrics_at(ln)?;
         let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
         let baseline = line_metrics.baseline as f32 + origin.y - half_leading;
+        let ascent = line_metrics.ascent as f32;
+        let descent = line_metrics.descent as f32;
+
+        // divide line into runs of contiguous font use
+        let font_runs:Vec<(&Font, Range<usize>)> = font_ranges.iter()
+          .filter_map(|FontInfo{text_range: font_range, font}|{
+            match font_range.start.max(text_range.start)..font_range.end.min(text_range.end){
+              rng if !rng.is_empty() => Some((font, rng)),
+              _ => None
+            }
+          })
+          .collect();
+
+        // find the full-line bounds (either tight or loose depending on number of fonts present)
+        let line_bounds = if font_runs.len() == 1 {
+          // use path-tracing to get tighter bounds (but only if no font-mixing occurs)
+          // NB: avoids a Skia bug where incorrect paths are produced when outlining multi-font text runs
+          let headroom = shift + paragraph.alphabetic_baseline() - ascent;
+          adjust_bounds(
+            &paragraph.get_path_at(ln).1.compute_tight_bounds().with_offset((0.0, -headroom))
+          )
+        }else{
+          // find layout sub-rectangles (running from ascent to descent) and union them
+          paragraph
+            .get_rects_for_range(lookup.glyph_range(&text_range), RectHeightStyle::Tight, RectWidthStyle::Tight).iter()
+            .map(|tb| adjust_bounds(&tb.rect))
+            .reduce(Rect::join2)
+            .unwrap_or(Rect::new_empty())
+        };
 
         Some(json!({
           "x": line_bounds.left,
@@ -153,38 +174,32 @@ impl Typesetter{
           "hangingBaseline": baseline - hang,
           "alphabeticBaseline": baseline - norm,
           "ideographicBaseline": baseline - ideo,
+          "ascent": baseline - ascent,
+          "descent": baseline + descent,
           "startIndex": char_range.start,
           "endIndex": char_range.end,
-          "runs": font_runs.iter().filter_map(|FontInfo{text_range: font_range, font}|{
-            // divide line into runs of contiguous font use, calculating layout dimensions and relative font metrics
-            match font_range.start.max(text_range.start)..font_range.end.min(text_range.end){
-              rng if !rng.is_empty() => Some(rng),
-              _ => None
-            }.and_then(|overlap|{
-              let (_, metrics) = font.metrics();
-              let glyph_range = lookup.glyph_range(&overlap);
-              let base = baseline - norm;
+          "runs": font_runs.iter().filter_map(|(font, overlap)| {
+            let metrics = font.metrics().1;
+            let glyph_range = lookup.glyph_range(&overlap);
+            let base = baseline - norm;
 
-              paragraph
-                .get_rects_for_range(glyph_range, RectHeightStyle::Tight, RectWidthStyle::Tight)
-                .first() // there should only ever be one rect within a single font run
-                .map(|text_box|{
-                  let rect = get_text_bounds(text_box);
-                  json!({
-                    "x": rect.left,
-                    "y": rect.top,
-                    "width": rect.width(),
-                    "height": rect.height(),
-                    "family": font.typeface().family_name(),
-                    "ascent": base + metrics.ascent,
-                    "descent": base + metrics.descent,
-                    "capHeight": base - metrics.cap_height,
-                    "xHeight": base - metrics.x_height,
-                    "underline": metrics.underline_position().map(|ulH| base + ulH ),
-                    "strikethrough": metrics.strikeout_position().map(|stH| base + stH ),
-                  })
+            paragraph
+              .get_rects_for_range(glyph_range, RectHeightStyle::Tight, RectWidthStyle::Tight)
+              .first() // there should only ever be one rect within a single font run
+              .map(|text_box|{
+                let rect = adjust_bounds(&text_box.rect);
+                json!({
+                  "x": rect.left,
+                  "y": rect.top,
+                  "width": rect.width(),
+                  "height": rect.height(),
+                  "family": font.typeface().family_name(),
+                  "capHeight": base - metrics.cap_height,
+                  "xHeight": base - metrics.x_height,
+                  "underline": metrics.underline_position().map(|ulH| base + ulH ),
+                  "strikethrough": metrics.strikeout_position().map(|stH| base + stH ),
                 })
-            })
+              })
           }).collect::<Vec<Value>>()
         }))
       }).collect::<Vec<Value>>()
