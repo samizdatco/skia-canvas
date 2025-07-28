@@ -842,8 +842,26 @@ export interface TextMetricsLine {
   readonly width: number
   readonly height: number
   readonly baseline: number
+  readonly hangingBaseline: number
+  readonly alphabeticBaseline: number
+  readonly ideographicBaseline: number
   readonly startIndex: number
   readonly endIndex: number
+  readonly runs: TextMetricsRun[]
+}
+
+export interface TextMetricsRun {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+  readonly family: string
+  readonly ascent: number
+  readonly descent: number
+  readonly capHeight: number
+  readonly xHeight: number
+  readonly underline: number
+  readonly strikethrough: number
 }
 
 export interface FontFamily {

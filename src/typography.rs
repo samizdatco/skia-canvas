@@ -161,8 +161,9 @@ impl Typesetter{
               rng if !rng.is_empty() => Some(rng),
               _ => None
             }.and_then(|overlap|{
-              let glyph_range = lookup.glyph_range(&overlap);
               let (_, metrics) = font.metrics();
+              let glyph_range = lookup.glyph_range(&overlap);
+              let base = baseline - norm;
 
               paragraph
                 .get_rects_for_range(glyph_range, RectHeightStyle::Tight, RectWidthStyle::Tight)
@@ -170,17 +171,17 @@ impl Typesetter{
                 .map(|text_box|{
                   let rect = get_text_bounds(text_box);
                   json!({
-                    "font": font.typeface().family_name(),
-                    "ascent": baseline - norm + metrics.ascent,
-                    "descent": baseline - norm + metrics.descent,
-                    "capHeight": baseline - norm - metrics.cap_height,
-                    "xHeight": baseline - norm - metrics.x_height,
-                    "underline": metrics.underline_position().map(|ulH| baseline - norm + ulH ),
-                    "strikethrough": metrics.strikeout_position().map(|stH| baseline - norm + stH ),
                     "x": rect.left,
                     "y": rect.top,
                     "width": rect.width(),
                     "height": rect.height(),
+                    "family": font.typeface().family_name(),
+                    "ascent": base + metrics.ascent,
+                    "descent": base + metrics.descent,
+                    "capHeight": base - metrics.cap_height,
+                    "xHeight": base - metrics.x_height,
+                    "underline": metrics.underline_position().map(|ulH| base + ulH ),
+                    "strikethrough": metrics.strikeout_position().map(|stH| base + stH ),
                   })
                 })
             })
