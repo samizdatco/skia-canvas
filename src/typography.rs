@@ -80,8 +80,8 @@ impl Typesetter{
 
   pub fn metrics(&self) -> Value {
     let (paragraph, origin) = self.layout(&Paint::default());
-    let glyphs = GlyphMap::new(&self.text, &paragraph); // the char -> glyph index mapping
     let font_runs = paragraph.get_fonts(); // char ranges of contiguous fonts (and their metrics)
+    let lookup = CharMap::new(&self.text, &paragraph); // the byte-idx -> glyph/char-idx mapping
 
     // calculate baseline positions (as offsets to origin based on current ctx.textBaseline setting)
     let shift = self.char_style.baseline_shift();
@@ -107,7 +107,7 @@ impl Typesetter{
     // take the union of each line's bounds to construct the whole-text-run bounds
     let full_bounds:Rect = (0..paragraph.line_number())
       .flat_map(|ln| paragraph.get_rects_for_range(
-        glyphs.for_range(&paragraph.get_actual_text_range(ln, !self.text_wrap)), RectHeightStyle::Tight, RectWidthStyle::Tight
+        lookup.glyph_range(&paragraph.get_actual_text_range(ln, !self.text_wrap)), RectHeightStyle::Tight, RectWidthStyle::Tight
       ))
       .map(|tb| get_text_bounds(&tb))
       .reduce(Rect::join2)
@@ -129,11 +129,11 @@ impl Typesetter{
       "lines": (0..paragraph.line_number()).filter_map(|ln|{
         // find the range of byte & char indices that are on this line (includes trailing whitespace if not wrapping)
         let text_range = paragraph.get_actual_text_range(ln, !self.text_wrap);
-        let char_range = byte_to_char_range(&self.text, &text_range);
+        let char_range = lookup.char_range(&text_range);
 
         // find layout sub-rectangles within this line and union them for the full-line bounds
         let line_bounds = paragraph
-          .get_rects_for_range(glyphs.for_range(&text_range), RectHeightStyle::Tight, RectWidthStyle::Tight)
+          .get_rects_for_range(lookup.glyph_range(&text_range), RectHeightStyle::Tight, RectWidthStyle::Tight)
           .iter()
           .map(get_text_bounds)
           .reduce(Rect::join2)
@@ -158,7 +158,7 @@ impl Typesetter{
               rng if !rng.is_empty() => Some(rng),
               _ => None
             }.and_then(|overlap|{
-              let glyph_range = glyphs.for_range(&overlap);
+              let glyph_range = lookup.glyph_range(&overlap);
               let (_, metrics) = font.metrics();
 
               paragraph
@@ -224,36 +224,48 @@ impl Typesetter{
 }
 
 //
-// Byte index -> glyph index converter
+// Convert byte indices -> glyph or codepoint indices
 //
-struct GlyphMap{
-  glyphs:Vec<Range<usize>> // vec[glyph_index] -> text_range
+struct CharMap{
+  glyphs:Vec<Range<usize>>, // vec[glyph_index] -> byte_range
+  chars:Vec<Range<usize>>, // vec[char_index] -> byte_index
 }
 
-impl GlyphMap{
+impl CharMap{
   fn new(text:&str, graf:&Paragraph) -> Self{
-    // walk the whole string, finding the text range for the each glyph,
-    // and storing them at the corresponding index in the vec
     let mut glyphs:Vec<Range<usize>> = vec![];
     let mut at = 0;
     while at < text.len(){
-      if let Some(cluster) = graf.get_glyph_cluster_at(at){
-        at = cluster.text_range.end;
-        glyphs.push(cluster.text_range);
-      }else{
-        break
+      match graf.get_glyph_cluster_at(at){
+        Some(cluster) => {
+          at = cluster.text_range.end;
+          glyphs.push(cluster.text_range)
+        },
+        None => break
       }
     }
-    Self{glyphs}
+
+    let mut chars:Vec<Range<usize>> = vec![];
+    let mut indices = text.char_indices();
+    loop{
+      match indices.next(){
+        Some((idx, _)) => chars.push(idx..indices.offset()),
+        None => break,
+      }
+    }
+
+    Self{glyphs, chars}
   }
 
-  fn for_range(&self, text_range:&Range<usize>) -> Range<usize>{
-    // convert from a range of byte indices in the string to the range of glyphs they encode
-    let test_overlap = |rng:&Range<usize>| -> bool{
-      rng.start < text_range.end && rng.end > text_range.start
-    };
-    let start = self.glyphs.iter().position(test_overlap).unwrap_or(text_range.start);
-    let end = self.glyphs.iter().rposition(test_overlap).unwrap_or(text_range.end-1) + 1;
+  fn glyph_range(&self, byte_range:&Range<usize>) -> Range<usize>{
+    let start = self.glyphs.iter().position(|g| g.start >= byte_range.start).unwrap_or(0);
+    let end = self.glyphs.iter().rposition(|g| g.start < byte_range.end).map(|i| i + 1).unwrap_or(start);
+    start..end
+  }
+
+  fn char_range(&self, byte_range:&Range<usize>) -> Range<usize>{
+    let start = self.chars.iter().position(|c| c.start >= byte_range.start).unwrap_or(0);
+    let end = self.chars.iter().rposition(|c| c.start < byte_range.end).map(|i| i + 1).unwrap_or(start);
     start..end
   }
 }
