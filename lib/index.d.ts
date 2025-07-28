@@ -837,30 +837,52 @@ declare var TextMetrics: {
 };
 
 export interface TextMetricsLine {
+  /** Left edge of line bounding box */
   readonly x: number
+  /** Top edge of line bounding box */
   readonly y: number
+  /** Width of line bounding box */
   readonly width: number
+  /** Height of line bounding box */
   readonly height: number
+  /** Vertical position of currently selected textBaseline */
   readonly baseline: number
+  /** Vertical position of highest ascent for all fonts used in line */
+  readonly ascent: number
+  /** Vertical position of lowest descent for all fonts used in line */
+  readonly descent: number
+  /** Vertical position of hanging baseline (irrespective of current textBaseline setting) */
   readonly hangingBaseline: number
+  /** Vertical position of alphabetic baseline (irrespective of current textBaseline setting) */
   readonly alphabeticBaseline: number
+  /** Vertical position of ideographic baseline (irrespective of current textBaseline setting) */
   readonly ideographicBaseline: number
+  /** Character index into source string of the beginning of this line */
   readonly startIndex: number
+  /** Character index into source string of the end of this line */
   readonly endIndex: number
+  /** Array of dimensions & metrics for each single-font subsection of the line */
   readonly runs: TextMetricsRun[]
 }
 
 export interface TextMetricsRun {
+  /** Left edge of single-font bounding box */
   readonly x: number
+  /** Top edge of single-font bounding box (using its ascent metric) */
   readonly y: number
+  /** Width of single-font bounding box */
   readonly width: number
+  /** Height of single-font bounding box (measuring from its ascent to its descent metric) */
   readonly height: number
+  /** Name of font family used in this run */
   readonly family: string
-  readonly ascent: number
-  readonly descent: number
+  /** Vertical position of this font's capital letters */
   readonly capHeight: number
+  /** Vertical position of this font's ascender-less letters */
   readonly xHeight: number
+  /** Vertical position of the stroke used for underlines */
   readonly underline: number
+  /** Vertical position of the stroke used for strikethroughs */
   readonly strikethrough: number
 }
 
