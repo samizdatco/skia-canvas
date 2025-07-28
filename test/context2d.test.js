@@ -821,15 +821,14 @@ describe("Context2D", ()=>{
       // for ascenders + means up, for descenders + means down
       expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(0)
       expect(metrics.actualBoundingBoxDescent).toBeGreaterThan(0)
+      expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(metrics.actualBoundingBoxDescent)
 
-      // make sure the polarity has flipped for 'bottom' baseline
-      ctx.textBaseline = "bottom"
+      // make sure the polarity has flipped for 'top' baseline
+      ctx.textBaseline = "top"
       metrics = ctx.measureText("Lordran gypsum")
-      expect(metrics.alphabeticBaseline).toBeGreaterThan(0)
-      expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(0)
-
-      //// TODO: fix this for cross-platform font choice
-      //// expect(metrics.actualBoundingBoxDescent).toBeLessThanOrEqual(0)
+      expect(metrics.alphabeticBaseline).toBeLessThan(0)
+      expect(metrics.hangingBaseline).toBeLessThan(0)
+      expect(metrics.actualBoundingBoxAscent).toBeLessThan(metrics.actualBoundingBoxDescent)
 
       // width calculations should be the same (modulo rounding) for any alignment
       let [lft, cnt, rgt] = ['left', 'center', 'right'].map(align => {
