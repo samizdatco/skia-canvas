@@ -149,7 +149,10 @@ impl Typesetter{
           "y": line_bounds.top,
           "width": line_bounds.width(),
           "height": line_bounds.height(),
-          "baseline": baseline,
+          "baseline": baseline, // corresponds to the ctx.textBaseline selection
+          "hangingBaseline": baseline - hang,
+          "alphabeticBaseline": baseline - norm,
+          "ideographicBaseline": baseline - ideo,
           "startIndex": char_range.start,
           "endIndex": char_range.end,
           "runs": font_runs.iter().filter_map(|FontInfo{text_range: font_range, font}|{
