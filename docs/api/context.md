@@ -215,7 +215,7 @@ ctx.setTransform(-2, 0, 0, -0.5, -20, -40) // numeric arguments
 ```
 ### `createTexture()`
 ```js returns="CanvasTexture"
-createTexture(spacing, {path, line, color, angle, offset=0})
+createTexture(spacing, {path, color, angle, line, cap="butt", offset=0, outline=false})
 ```
 
 The `createTexture()` method returns a `CanvasTexture` object that can be assigned to the context’s `strokeStyle` or `fillStyle` property. Similar to a `CanvasPattern`, a `CanvasTexture` defines a repeating pattern that will be drawn instead of a flat color, but textures define their content using *vectors* rather than bitmaps.
@@ -234,6 +234,10 @@ If set to a Path2D object, the `path` will be drawn once per tile with its origi
 #### `line`
 If set to a positive number, the path will be stroked rather than filled and the `line` value will set the width of the stroke.
 
+#### `cap`
+
+By default, stroked lines in the pattern will be drawn with blunt line caps. The `cap` argument can be set to any valid [lineCap][lineCap] string to change this style. If the `line` argument isn't also included, the `cap` setting will have no effect since the pattern will be filled rather than stroked.
+
 #### `color`
 By default the texture will be drawn in black (filled if `line` is undefined, stroked otherwise). The `color` argument can be set to a string defining the stroke/fill color to be used instead.
 
@@ -242,6 +246,90 @@ The rectangle defined by the `spacing` argument will be aligned with the canvas�
 
 #### `offset`
 As with `CanvasPattern` objects, textures are positioned globally relative to the upper left corner of the canvas—not the corner of the object currently being filled or stroked. To fine-tune the texture’s alignment with individual objects, set the `offset` argument to an `[x, y]` array with two numbers that will shift the texture relative to its origin.
+
+#### `outline`
+
+By default, textures are drawn to the canvas using a using a [clipping path][clip()] to match the shape being filled or stroked. This is quick and gives good results when generating bitmaps. But for exports to PDF or SVG, you may want to ‘flatten’ the texture into plain Bézier paths by setting the `outline` argument to `true`. Enabling this option does some fairly expensive vector math (which will slow down rendering), but yields cleaner vectors in the output file:
+
+![clipped vs outlined textures](../assets/createTexture-outline@2x.png)
+
+<details>
+  <summary>
+    Sample Code: CanvasTexture
+
+    ![example using createTexture to make vector patterns for filling & stroking paths](../assets/createTexture@2x.png)
+
+  </summary>
+
+```js
+async function texturesDemo(){
+  let canvas = new Canvas(512, 256),
+      ctx = canvas.getContext("2d")
+
+  // define Path2Ds to use as repeating patterns
+  let n = 10
+  let nylonPath = new Path2D()
+  nylonPath.moveTo(0,     n/4)
+  nylonPath.lineTo(n/4,   n/4)
+  nylonPath.lineTo(n/4,   0)
+  nylonPath.moveTo(n*3/4, n)
+  nylonPath.lineTo(n*3/4, n*3/4)
+  nylonPath.lineTo(n,     n*3/4)
+  nylonPath.moveTo(n/4,   n/2)
+  nylonPath.lineTo(n/4,   n*3/4)
+  nylonPath.lineTo(n/2,   n*3/4)
+  nylonPath.moveTo(n/2,   n/4)
+  nylonPath.lineTo(n*3/4, n/4)
+  nylonPath.lineTo(n*3/4, n/2)
+
+  let d = 1
+  let dotPath = new Path2D()
+  dotPath.arc(0, 0, d, 0, 2*Math.PI)
+
+  let w = 16
+  let wavePath = new Path2D()
+  wavePath.moveTo(-w/2, w/2)
+  wavePath.bezierCurveTo(-w*3/8, w*3/4, -w/8,    w*3/4, 0,     w/2)
+  wavePath.bezierCurveTo( w/8,   w/4,    w*3/8,  w/4,   w/2,   w/2)
+  wavePath.bezierCurveTo( w*5/8, w*3/4,  w*7/8,  w*3/4, w,     w/2)
+  wavePath.bezierCurveTo( w*9/8, w/4,    w*11/8, w/4,   w*3/2, w/2)
+
+  // create CanvasTextures using the Path2D objects
+  let dots = ctx.createTexture(d*4, {path:dotPath, color:'teal', angle:Math.PI/4}), // path is filled if `line` omitted
+      waves = ctx.createTexture([w, w/2], {path:wavePath, color:'red', line:3, angle:Math.PI/7}),
+      nylon = ctx.createTexture(n, {path:nylonPath, color:'skyblue', line:1, cap:'round', angle:Math.PI/8}),
+      lines = ctx.createTexture(5, {line:2, color:'orange'}) // no `path` required for parallel lines pattern
+
+  // draw using CanvasTextures as fill & stroke styles
+  for (let [i, texture] of Object.entries([dots, waves, nylon, lines])){
+    let x = 80 + i*120
+    let y = 60
+
+    // stroke path
+    ctx.lineWidth = 30
+    ctx.strokeStyle = texture
+    ctx.beginPath()
+    ctx.ellipse(x, y, 30, 30, 0, Math.PI, 2*Math.PI)
+    ctx.stroke()
+
+    // fill path
+    ctx.fillStyle = texture
+    ctx.beginPath()
+    ctx.ellipse(x, y+50, 40, 40, 0, 0, Math.PI*2)
+    ctx.fill()
+
+    // fill text
+    ctx.textAlign = 'center'
+    ctx.font = '900 100px sans-serif'
+    ctx.fillText("Z", x, y+170)
+  }
+
+  await canvas.saveAs('out.png', {density:2, matte:'white'})
+}
+
+texturesDemo()
+```
+</details>
 
 ### `drawImage()`
 ```js
@@ -274,6 +362,11 @@ These methods behave identically to the standard [createImageData()][createImage
 The `colorSpace` argument is currently unused since non-sRGB colorspaces are not yet supported. You may omit it from your calls to these methods.
 
 The `getImageData()` method also accepts a handful of rendering options which have the same behaviors and default values as their equivalents in the Canvas [saveAs()][saveAs] method: [`density`][density], [`matte`][matte], and [`msaa`][msaa].
+
+:::tip
+Calling `getImageData` involves copying bitmaps between the GPU and main memory. If you're invoking it frequently in your code (e.g., within a tight loop), you may get better performance by disabling the [`gpu` property][canvas_gpu] for that canvas to avoid this overhead.
+:::
+
 
 ### `drawCanvas()`
 ```js
@@ -319,17 +412,39 @@ measureText(str, [width])
 
 The `measureText()` method returns a [TextMetrics][TextMetrics] object describing the dimensions of a run of text *without* actually drawing it to the canvas. Skia Canvas adds an additional property to the metrics object called `.lines` which contains an array describing the geometry of each line individually.
 
+#### Per-line metrics
 Each element of the `.lines` array contains an object of the form:
+```js
+{x, y, width, height, baseline, hangingBaseline, alphabeticBaseline, ideographicBaseline, ascent, descent, startIndex, endIndex, runs}
 ```
-{x, y, width, height, baseline, startIndex, endIndex}
+
+The `x`, `y`, `width`, and `height` values define a rectangle that fully encloses the text of a given line relative to the ‘origin’ point you would pass to `fillText()` or `strokeText()`. The rectangle only includes the visible glyph shapes on the line, so in cases where [`textWrap`][textwrap] is enabled, only the longest line will extend to the full width of the text block.
+
+The `baseline` value is a y-axis offset from the text origin to that particular line’s baseline (using the context’s current `textBaseline` setting). The `hangingBaseline`, `alphabeticBaseline`, and `ideographicBaseline` properties give the offsets for those positions regardless of the current `textBaseline`.
+
+The `ascent` and `descent` properties give the y-axis offsets from the text origin to the font’s ascender and descender lines (as defined in the metrics). In the case of a line using multiple fonts, the values will be the maximum values of all fonts on the line.
+
+The `startIndex` and `endIndex` values are the indices into the string of the range of characters that were typeset on that line. Calling `.substring(startIndex, endIndex)` on your original string will extract the snippet.
+
+The `runs` array further decomposes the line into all its single-font ranges of characters, providing their bounds and font metrics. This can be useful in cases where a fallback font is providing character glyphs not present in the ‘main’ font specified in the [`font`][ctx_font] property.
+
+#### Per-font metrics
+Each element of the `.runs` array contains an object of the form:
+```js
+{x, y, width, height, family, ascent, descent, capHeight, xHeight, underline, strikethrough}
 ```
-The `x`, `y`, `width`, and `height` values define a rectangle that fully encloses the text of a given line relative to the ‘origin’ point you would pass to `fillText()` or `strokeText()` (and reflecting the context’s current `.textBaseline` setting).
 
-The `baseline` value is a y-axis offset from the text origin to that particular line’s baseline.
+The `x`, `y`, `width`, and `height` values define a rectangle that fully encloses this single-font run of characters relative to the text’s ‘origin’ point.
 
-The `startIndex` and `endIndex` values are the indices into the string of the first and last character that were typeset on that line.
+The `family` property is a string identifying the typeface being used for this region of the line.
 
+The `ascent` and `descent` properties give the y-axis offsets from the text origin to the font’s ascender and descender lines (as defined in the metrics). In the case of a line using multiple fonts, each run on the line will likely have different values.
 
+The `capHeight` and `xHeight` values give the y-axis offsets for the tops of capital letters and ascender-less letters respectively. Note that these heights are derived from the font’s metrics rather than the letterforms themselves, so they may not precisely align with any given character.
+
+The `underline` and `strikethrough` offsets provide the vertical position at which you could draw the corresponding type of line (if you wish to do so manually).
+
+#### Examples
 <details>
   <summary>
     Sample Code: TextMetrics
@@ -423,8 +538,8 @@ TextMetrics {
   width: 667.3400268554688,
   actualBoundingBoxLeft: -0,
   actualBoundingBoxRight: 667.3400268554688,
-  actualBoundingBoxAscent: 43.243751525878906,
-  actualBoundingBoxDescent: 181.38125610351562,
+  actualBoundingBoxAscent: 44.79999923706055,
+  actualBoundingBoxDescent: 182.1999969482422,
   fontBoundingBoxAscent: 48,
   fontBoundingBoxDescent: 16,
   emHeightAscent: 48,
@@ -434,31 +549,49 @@ TextMetrics {
   ideographicBaseline: -16,
   lines: [
     {
-      x: 3.46875,
-      y: -43.243751525878906,
-      width: 662.71875,
-      height: 57.125,
+      x: 2,
+      y: -44.79999923706055,
+      width: 665.9375,
+      height: 60,
       baseline: 0.40000152587890625,
+      hangingBaseline: -38,
+      alphabeticBaseline: 0.40000152587890625,
+      ideographicBaseline: 16.400001525878906,
+      ascent: -47.599998474121094,
+      descent: 16.400001525878906,
       startIndex: 0,
-      endIndex: 27
+      endIndex: 27,
+      runs: [Array]
     },
     {
-      x: 2.40625,
-      y: 46.756248474121094,
-      width: 654.375,
-      height: 57.125,
+      x: 1,
+      y: 45.19999694824219,
+      width: 657.4375,
+      height: 60,
       baseline: 90.39999389648438,
+      hangingBaseline: 51.99999237060547,
+      alphabeticBaseline: 90.39999389648438,
+      ideographicBaseline: 106.39999389648438,
+      ascent: 42.399993896484375,
+      descent: 106.39999389648438,
       startIndex: 28,
-      endIndex: 53
+      endIndex: 53,
+      runs: [Array]
     },
     {
-      x: 3.03125,
-      y: 136.75625610351562,
-      width: 289.96875,
-      height: 44.625,
+      x: 2,
+      y: 135.1999969482422,
+      width: 292.65625,
+      height: 47,
       baseline: 180.39999389648438,
+      hangingBaseline: 142,
+      alphabeticBaseline: 180.39999389648438,
+      ideographicBaseline: 196.39999389648438,
+      ascent: 132.39999389648438,
+      descent: 196.39999389648438,
       startIndex: 54,
-      endIndex: 65
+      endIndex: 65,
+      runs: [Array]
     }
   ]
 }
@@ -553,6 +686,98 @@ baselinesDemo()
 ```
 </details>
 
+<details>
+  <summary>
+    Sample Code: Lines & Runs
+
+    ![example using measureText to draw bounds of individual lines of text](../assets/measureTextLines@2x.png)
+
+  </summary>
+
+
+```js
+import {Canvas} from 'skia-canvas'
+const canvas = new Canvas(750, 340),
+      ctx = canvas.getContext("2d")
+
+async function lineMetricsDemo(){
+  let msg = "ABC ДЖЯ xyz ឦ ючл 地水炎空" // text with many glyphs not present in Avenir…
+  let [x, y] = [75, 75] // set the location of the text
+  let maxWidth = 315 // set the point at which the text will wrap
+  ctx.font = '56px/2 Avenir'
+  ctx.textWrap = true
+
+  // set the origin point for the drawing the text to screen
+  ctx.translate(x, y)
+
+  // obtain the font metrics we'll be using to draw boxes
+  let m = ctx.measureText(msg, maxWidth)
+
+  for (const column of ['left', 'right']){
+    // use the `actualBoundingBox` to draw a white rectangle behind the entire multi-line run
+    let left   = -m.actualBoundingBoxLeft
+    let top    = -m.actualBoundingBoxAscent
+    let right  =  m.actualBoundingBoxRight
+    let bottom =  m.actualBoundingBoxDescent
+    ctx.fillStyle = 'white'
+    ctx.fillRect(left, top, right - left, bottom - top)
+
+    // draw a red circle at the origin point (i.e., the position passed to fillText)
+    ctx.fillStyle = 'red'
+    ctx.beginPath()
+    ctx.ellipse(0, 0, 2.5, 2.5, 0, 0, 2*Math.PI)
+    ctx.fill()
+
+    for (const line of m.lines){
+      // on the left, draw green boxes around the line bounds and stroke the line's ascent & descent
+      if (column=='left'){
+        ctx.fillStyle = '#00dc0033'
+        ctx.fillRect(line.x, line.y, line.width, line.height)
+
+        ctx.strokeStyle = '#007700'
+        ctx.beginPath()
+        ctx.moveTo(0, line.ascent)
+        ctx.lineTo(m.width, line.ascent)
+        ctx.moveTo(0, line.descent)
+        ctx.lineTo(m.width, line.descent)
+        ctx.stroke()
+      }
+
+      // on the right, draw blue boxes around each single-font run's bounds and stroke the
+      // ascent & descent lines specific to that font run
+      if (column=='right'){
+        for (const run of line.runs){
+          ctx.fillStyle = '#09f3'
+          ctx.fillRect(run.x, run.y, run.width, run.height)
+
+          ctx.strokeStyle = '#07c'
+          ctx.beginPath()
+          ctx.moveTo(run.x, run.ascent)
+          ctx.lineTo(run.x + run.width, run.ascent)
+          ctx.moveTo(run.x, run.descent)
+          ctx.lineTo(run.x + run.width, run.descent)
+          ctx.stroke()
+        }
+      }
+    }
+
+    // draw the text on top
+    ctx.fillStyle = 'black'
+    ctx.fillText(msg, 0, 0, maxWidth)
+
+    // shift rightward for next column
+    ctx.translate(maxWidth + 5, 0)
+  }
+
+  await canvas.saveAs('out.png', {density:2, matte:'#d9d9d9'})
+}
+
+lineMetricsDemo()
+```
+
+</details>
+
+
 ### `outlineText()`
 ```js returns="Path2D"
 outlineText(str, [width])
@@ -581,6 +806,7 @@ for (let i=0; i<8000; i++){
 [c2d_measuretext]: #measuretext
 [c2d_textAlign]: #textalign
 [canvas]: canvas.md
+[canvas_gpu]: canvas.md#gpu
 [conicCurveTo]: #coniccurveto
 [createProjection()]: #createprojection
 [createTexture()]: #createtexture
@@ -589,6 +815,7 @@ for (let i=0; i<8000; i++){
 [drawimage]: #drawimage
 [fontvariant]: #fontvariant
 [fonthinting]: #fonthinting
+[ctx_font]: #font
 [lineDashFit]: #linedashfit
 [lineDashMarker]: #linedashmarker
 [newPage]: canvas.md#newpage
