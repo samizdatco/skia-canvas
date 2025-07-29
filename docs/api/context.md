@@ -447,9 +447,9 @@ The `underline` and `strikethrough` offsets provide the vertical position at whi
 #### Examples
 <details>
   <summary>
-    Sample Code: TextMetrics
+Sample Code: TextMetrics
 
-    ![example using measureText to draw bounds of individual lines of text](../assets/measureText@2x.png)
+![example using measureText to draw bounds of individual lines of text](../assets/measureText@2x.png)
 
   </summary>
 
@@ -605,9 +605,9 @@ line 3: "in the wabe"
 
 <details>
   <summary>
-    Sample Code: Baselines
+Sample Code: Baselines
 
-    ![example demonstrating text baseline offset calculations](../assets/measureTextBaselines@2x.png)
+![example demonstrating text baseline offset calculations](../assets/measureTextBaselines@2x.png)
 
   </summary>
 
@@ -688,9 +688,9 @@ baselinesDemo()
 
 <details>
   <summary>
-    Sample Code: Lines & Runs
+Sample Code: Lines & Runs
 
-    ![example using measureText to draw bounds of individual lines of text](../assets/measureTextLines@2x.png)
+![example using measureText to draw bounds of individual lines of text](../assets/measureTextLines@2x.png)
 
   </summary>
 
