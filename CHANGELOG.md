@@ -32,7 +32,7 @@
   - `textContrast` — a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to `0.0`)
   - `textGamma` — a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to `1.4`)
 - The [`textAlign`][textAlign] attribute can now be set to `"justify"`
-- [`measureText()`][measureText()] has been rewritten to calculate metrics based not just on the font specified in [`font`][ctx_font] but also any fallback fonts that were used for character glyphs not present in the ‘main’ font. The line-by-line measurements now include a `runs` array with bounds and metrics for each single-font range of characters on the line.
+- [`measureText()`][measureText()] has been rewritten to calculate metrics based not just on the font specified in [`font`][ctx_font] but also any fallback fonts that were used for character glyphs not present in the ‘main’ font. The line-by-line measurements now include a [`runs`][measureText.runs] array with bounds and metrics for each single-font range of characters on the line.
 
 ### Misc. Improvements
 - Added support for Arm-based processors on Windows
@@ -83,6 +83,7 @@
 [createTexture_cap]: /docs/api/context.md#cap
 [createTexture_outline]: /docs/api/context.md#outline
 [ctx_font]: /docs/api/context.md#font
+[measureText.runs]: /docs/api/context.md#per-font-metrics
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features

@@ -828,7 +828,8 @@ describe("Context2D", ()=>{
       metrics = ctx.measureText("Lordran gypsum")
       expect(metrics.alphabeticBaseline).toBeLessThan(0)
       expect(metrics.hangingBaseline).toBeLessThan(0)
-      expect(metrics.actualBoundingBoxAscent).toBeLessThan(metrics.actualBoundingBoxDescent)
+      expect(metrics.actualBoundingBoxAscent).toBeLessThan(0)
+      expect(metrics.actualBoundingBoxDescent).toBeGreaterThan(0)
 
       // width calculations should be the same (modulo rounding) for any alignment
       let [lft, cnt, rgt] = ['left', 'center', 'right'].map(align => {

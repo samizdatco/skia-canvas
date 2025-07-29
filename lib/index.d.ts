@@ -866,16 +866,20 @@ export interface TextMetricsLine {
 }
 
 export interface TextMetricsRun {
-  /** Left edge of single-font bounding box */
+  /** Left edge of single-font run of characters */
   readonly x: number
-  /** Top edge of single-font bounding box (using its ascent metric) */
+  /** Top edge of single-font run of characters */
   readonly y: number
-  /** Width of single-font bounding box */
+  /** Width of single-font run of characters */
   readonly width: number
-  /** Height of single-font bounding box (measuring from its ascent to its descent metric) */
+  /** Height of single-font run of characters */
   readonly height: number
   /** Name of font family used in this run */
   readonly family: string
+  /** Vertical position of this font's ascent metric */
+  readonly ascent: number
+  /** Vertical position of this font's descent metric */
+  readonly descent: number
   /** Vertical position of this font's capital letters */
   readonly capHeight: number
   /** Vertical position of this font's ascender-less letters */
