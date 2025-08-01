@@ -78,7 +78,6 @@ impl Typesetter{
 
   pub fn metrics(&self) -> Value {
     let (mut paragraph, origin) = self.layout(&Paint::default());
-    let lookup = CharMap::new(&self.text, &paragraph); // the byte-idx -> glyph/char-idx mapping
     let mut line_rects:Vec<Rect> = vec![]; // accumulate line rects to calculate full bounds
 
     // calculate baseline offsets (relative to line_metrics.baseline which reflects ctx.textBaseline setting)
@@ -109,8 +108,7 @@ impl Typesetter{
     let lines = (0..paragraph.line_number()).filter_map(|ln|{
       // find the range of byte & char indices that are on this line (includes trailing whitespace if not wrapping)
       let text_range = paragraph.get_actual_text_range(ln, !self.text_wrap);
-      let char_range = lookup.char_range(&text_range);
-      let glyph_range = lookup.glyph_range(&text_range);
+      let char_range = utf16_range(&self.text, &text_range);
 
       // calculate this line's vertical offsets relative to the typesetting origin
       let line_metrics = paragraph.get_line_metrics_at(ln)?;
@@ -130,14 +128,14 @@ impl Typesetter{
       // (and compensate for the extra half-letterspace added to the start & end of each line)
       line_rects.push(
         paragraph
-          .get_rects_for_range(glyph_range, RectHeightStyle::Tight, RectWidthStyle::Tight).iter()
+          .get_rects_for_range(char_range.clone(), RectHeightStyle::Tight, RectWidthStyle::Tight).iter()
           .map(|tb| {
             let Rect{top, bottom, ..} = text_bounds;
             let Rect{left, right, ..} = tb.rect.with_offset(origin);
             Rect::new(left, top, right - self.char_style.letter_spacing(), bottom)
           })
           .reduce(Rect::join2)
-          .unwrap_or(Rect::new_empty())
+          .unwrap_or(text_bounds)
       );
 
       Some(json!({
@@ -239,50 +237,23 @@ impl Typesetter{
 }
 
 //
-// Convert byte indices -> glyph or codepoint indices
+// Convert utf-8 byte indices -> utf-16 codepoint indices
 //
-struct CharMap{
-  glyphs:Vec<Range<usize>>, // vec[glyph_index] -> byte_range
-  chars:Vec<Range<usize>>, // vec[char_index] -> byte_index
-}
+fn utf16_range(text:&str, byte_range:&Range<usize>) -> Range<usize>{
+  let chars:Vec<(usize, usize)> = text.char_indices()
+    .map(|(idx, c)| (idx, c.len_utf16()))
+    .collect::<Vec<(usize, usize)>>();
 
-impl CharMap{
-  fn new(text:&str, graf:&Paragraph) -> Self{
-    let mut glyphs:Vec<Range<usize>> = vec![];
-    let mut at = 0;
-    while at < text.len(){
-      match graf.get_glyph_cluster_at(at){
-        Some(cluster) => {
-          at = cluster.text_range.end;
-          glyphs.push(cluster.text_range)
-        },
-        None => break
-      }
-    }
+  // find the char indices corresponding to the byte range endpoints
+  let start = chars.iter().position(|(i, _)| *i >= byte_range.start).unwrap_or(0);
+  let end = chars.iter().rposition(|(i, _)| *i < byte_range.end).map(|i| i + 1).unwrap_or(start);
 
-    let mut chars:Vec<Range<usize>> = vec![];
-    let mut indices = text.char_indices();
-    loop{
-      match indices.next(){
-        Some((idx, _)) => chars.push(idx..indices.offset()),
-        None => break,
-      }
-    }
-
-    Self{glyphs, chars}
-  }
-
-  fn glyph_range(&self, byte_range:&Range<usize>) -> Range<usize>{
-    let start = self.glyphs.iter().position(|g| g.start >= byte_range.start).unwrap_or(0);
-    let end = self.glyphs.iter().rposition(|g| g.start < byte_range.end).map(|i| i + 1).unwrap_or(start);
-    start..end
-  }
-
-  fn char_range(&self, byte_range:&Range<usize>) -> Range<usize>{
-    let start = self.chars.iter().position(|c| c.start >= byte_range.start).unwrap_or(0);
-    let end = self.chars.iter().rposition(|c| c.start < byte_range.end).map(|i| i + 1).unwrap_or(start);
-    start..end
-  }
+  // sum up the number of utf-16 code units needed for all chars in the range
+  let sum = |a,b|{a+b};
+  let len = |&(_, len)|{len};
+  let head = chars.iter().take(start).map(len).reduce(sum).unwrap_or(0);
+  let tail = chars.iter().skip(start).take(end-start).map(len).reduce(sum).unwrap_or(head);
+  head..head+tail
 }
 
 //
