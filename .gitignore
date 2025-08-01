@@ -7,4 +7,10 @@ node_modules
 target
 test/assets/Oswald
 test/assets/Raleway
+
 /*.*
+!/*.md
+!/package*.json
+!/Cargo.{toml,lock}
+!/.gitignore
+!/.github
