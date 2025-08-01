@@ -49,6 +49,7 @@
 ### Bugfixes
 - Setting a window's `cursor` property to "none" now hides the cursor
 - Spurious `moved` window events are no longer emitted during resizes
+- `resize` events now update the window object’s width & height properties in addition to providing the new size in the event object
 - [`roundRect()`][roundRect] now reflects context's current transform state and accepts plain `{x, y}` objects for corner-radii in addition to Numbers and DOMPoints (thanks to @mpaperno #223)
 - Angles passed to [`createConicGradient()`][createConicGradient()] are no longer incorrectly offset by 90°
 - Calling `lineTo` on an empty Path2D no longer adds a line from the origin to the specified coordinates: it now acts as if it were a `moveTo`
