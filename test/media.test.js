@@ -262,7 +262,8 @@ describe("ImageData", () => {
 describe("FontLibrary", ()=>{
   let canvas, ctx,
       WIDTH = 512, HEIGHT = 512,
-      findFont = font => path.join(__dirname, 'assets', font),
+      FONTS_DIR = path.join(__dirname, 'assets/fonts'),
+      findFont = font => path.join(FONTS_DIR, font),
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
 
   beforeEach(() => {

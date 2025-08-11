@@ -768,7 +768,7 @@ describe("Context2D", ()=>{
     })
 
     test("letterSpacing", () => {
-        FontLibrary.use(`${__dirname}/assets/Monoton-Regular.woff`)
+        FontLibrary.use(`${__dirname}/assets/fonts/Monoton-Regular.woff`)
 
         let [x, y] = [40, 100]
         let size = 32
