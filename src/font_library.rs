@@ -58,6 +58,19 @@ pub struct FontLibrary{
     {
       LIBRARY.with(|lib_lock|{
         let shared_lib = lib_lock.get_or_init(||{
+          // detect linux systems without a working fontconfig setup and use the fallback config in `lib/fonts` instead
+          #[cfg(target_os = "linux")]
+          {
+            let has_config = fs::exists(Path::new("/etc/fonts/fonts.conf")).unwrap_or(false);
+            let has_override = std::env::var_os("FONTCONFIG_PATH").is_some() || std::env::var_os("FONTCONFIG_FILE").is_some();
+            if !(has_config || has_override){
+              if let Some(mut fallback_config_path) = process_path::get_dylib_path(){
+                fallback_config_path.set_file_name("fonts");
+                std::env::set_var("FONTCONFIG_PATH", fallback_config_path);
+              }
+            }
+          }
+
           RefCell::new(FontLibrary{
             mgr:FontMgr::default(), collection:None, collection_cache:HashMap::new(), collection_hinted:false, fonts:vec![], generics:vec![]
           })

@@ -1614,6 +1614,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "process_path"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f676f11eb0b3e2ea0fbaee218fa6b806689e2297b8c8adc5bf73df465c4f6171"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.37.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1916,6 +1926,7 @@ dependencies = [
  "neon",
  "objc",
  "once_cell",
+ "process_path",
  "raw-window-handle 0.6.2",
  "raw-window-metal",
  "rayon",
