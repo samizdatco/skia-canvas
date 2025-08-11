@@ -1,0 +1,35 @@
+FROM node:20-alpine3.20 AS skia-build-env
+ARG TARGETARCH
+
+ENV RUSTFLAGS="-C target-feature=-crt-static" \
+    CC="clang" \
+    CXX="clang++" \
+    GN_EXE="gn" \
+    SKIA_GN_COMMAND="/usr/bin/gn" \
+    SKIA_NINJA_COMMAND="/usr/bin/ninja"
+
+RUN apk update && apk add --update --no-cache \
+    bash curl git python3 perl build-base g++ linux-headers ttf-dejavu \
+    musl-dev openssl-dev gn ninja-build
+
+RUN apk add --update --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
+    gperf cmake expat-static expat-dev libpng-dev brotli-dev \
+    clang clang-dev llvm llvm-dev
+
+# manually build harfbuzz, freetype, & fontconfig and install them in /usr/local
+COPY ./install-fontlibs.sh /opt
+RUN bash /opt/install-fontlibs.sh
+
+# move the static libs to a common location consistent across glibc & musl builds
+# (renaming freetype lib so it matches the internal copy built by skia)
+RUN mkdir -p /opt/skia-static-libs && \
+    cp /usr/local/lib/libfreetype.a /opt/skia-static-libs/libfreetype2.a && \
+    cp /usr/local/lib/libfontconfig.a /opt/skia-static-libs
+
+# install gh
+ARG GH_VERSION=2.76.2
+ARG GH_URL=https://github.com/cli/cli/releases/download/v$GH_VERSION/gh_${GH_VERSION}_linux_$TARGETARCH.tar.gz
+RUN curl -sL $GH_URL | tar xz --strip-components=2 -C /usr/local/bin
+
+WORKDIR /opt
+CMD ["bash"]

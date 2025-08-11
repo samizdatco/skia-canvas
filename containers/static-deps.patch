@@ -1,0 +1,105 @@
+diff --git i/skia-bindings/build_support/binaries_config.rs w/skia-bindings/build_support/binaries_config.rs
+index 3c156b8..da0a5ad 100644
+--- i/skia-bindings/build_support/binaries_config.rs
++++ w/skia-bindings/build_support/binaries_config.rs
+@@ -115,20 +115,43 @@ impl BinariesConfiguration {
+     /// Inform cargo that the library files of the given configuration are available and
+     /// can be used as dependencies.
+     pub fn commit_to_cargo(&self) {
+         cargo::add_link_search(self.output_directory.to_str().unwrap());
+ 
+         // On Linux, the order is significant, first the static libraries we built, and then
+         // the system libraries.
+ 
+         let target = cargo::target();
+ 
++        // copy the static libs into the output directory, overwriting the copy of freetype that was generated
++        // by the `embed-freetype` option (which we still use for its side effect of building brotli)
++        for lib in [
++          "/opt/skia-static-libs/libfreetype2.a",
++          "/opt/skia-static-libs/libfontconfig.a",
++        ]{
++          let lib_path = std::path::Path::new(&lib);
++          let to_path = self.output_directory.join(&lib_path.file_name().unwrap());
++          fs::copy(&lib_path, &to_path).inspect_err(|e|{
++            panic!(
++                "COPY OPERATION FAILED: from '{}' to '{}': {}",
++                lib_path.display(),
++                to_path.display(),
++                e
++            );
++          }).ok();
++
++          // add to the static-libraries list
++          if let Some(lib_name) = lib_path.file_stem().and_then(|p| p.to_str()).and_then(|s| s.strip_prefix("lib")){
++            cargo::add_static_link_lib(&target, lib_name);
++          }
++        }
++
+         cargo::add_static_link_libs(&target, self.built_libraries(true));
+         cargo::add_link_libs(&self.link_libraries);
+     }
+ 
+     /// Import library and additional files from `from_dir` to the output directory.
+     pub fn import(&self, from_dir: &Path, import_bindings: bool) -> io::Result<()> {
+         let output_directory = &self.output_directory;
+         self.copy_libs_and_additional_files(from_dir, output_directory, import_bindings)
+     }
+ 
+diff --git i/skia-bindings/build_support/platform/linux.rs w/skia-bindings/build_support/platform/linux.rs
+index 0678295..0832e12 100644
+--- i/skia-bindings/build_support/platform/linux.rs
++++ w/skia-bindings/build_support/platform/linux.rs
+@@ -24,23 +24,22 @@ impl PlatformDetails for Linux {
+     }
+ }
+ 
+ pub fn gn_args(config: &BuildConfiguration, builder: &mut GnArgsBuilder) {
+     generic::gn_args(config, builder);
+ }
+ 
+ pub fn link_libraries(features: &Features) -> Vec<String> {
+     let mut libs = vec!["stdc++".to_string()];
+ 
+-    // Use pkg-config for system libraries when available
+-    add_pkg_config_libs(&mut libs, "freetype2", &["freetype"]);
+-    add_pkg_config_libs(&mut libs, "fontconfig", &["fontconfig"]);
++    // don't add freetype & fontconfig to the list of shared libraries to be linked
++    // since we'll be adding static versions in binaries_config.rs
+ 
+     if features[feature::GL] {
+         if features[feature::EGL] {
+             add_pkg_config_libs(&mut libs, "egl", &["EGL"]);
+         }
+ 
+         if features[feature::X11] {
+             add_pkg_config_libs(&mut libs, "gl", &["GL"]);
+         }
+ 
+diff --git i/skia-bindings/build_support/skia/config.rs w/skia-bindings/build_support/skia/config.rs
+index 3dd4acd..18f8705 100644
+--- i/skia-bindings/build_support/skia/config.rs
++++ w/skia-bindings/build_support/skia/config.rs
+@@ -110,21 +110,21 @@ impl FinalBuildConfiguration {
+ 
+         // `SDKROOT` is the environment variable used on macOS to specify the sysroot.
+         // `SDKTARGETSYSROOT` is the environment variable set in Yocto Linux SDKs when
+         // cross-compiling.
+         let sysroot = cargo::env_var("SDKTARGETSYSROOT").or_else(|| cargo::env_var("SDKROOT"));
+ 
+         let mut builder = GnArgsBuilder::new(&build.target);
+ 
+         let gn_args = {
+             builder
+-                .arg("is_official_build", yes_if(!build.skia_debug))
++                .arg("is_official_build", no()) // disabled to make skia build static libs for its dependencies, even for release builds
+                 .arg("is_debug", yes_if(build.skia_debug))
+                 .arg("skia_enable_svg", yes_if(features[feature::SVG]))
+                 .arg("skia_enable_gpu", yes_if(features.gpu()))
+                 .arg("skia_enable_skottie", no())
+                 .arg("skia_enable_pdf", yes_if(features[feature::PDF]))
+                 .arg("skia_use_gl", yes_if(features[feature::GL]))
+                 .arg("skia_use_egl", yes_if(features[feature::EGL]))
+                 .arg("skia_use_x11", yes_if(features[feature::X11]))
+                 .arg("skia_use_system_libpng", yes_if(use_system_libraries))
+                 .arg(
