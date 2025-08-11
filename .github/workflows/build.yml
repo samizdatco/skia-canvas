@@ -79,55 +79,17 @@ jobs:
         npm test && npm run upload
 
 
-  linux-x64:
-    runs-on: ubuntu-latest
+  linux:
     strategy:
       fail-fast: false
       matrix:
+        arch: [arm64, x64]
         libc: [glibc, musl]
-
+    runs-on: ${{ matrix.arch == 'x64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     container:
       image: ${{ format('ghcr.io/{0}-{1}:latest', github.repository, matrix.libc) }}
-      options: --user github
 
     steps:
-    - name: Use Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        toolchain: stable
-
-    - name: Checkout skia-canvas
-      uses: actions/checkout@v4
-
-    - name: Build module
-      run: |
-        mkdir -p $CARGO_HOME/registry
-        chown -R github $CARGO_HOME/registry
-        make optimized
-
-    - name: Add to release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        npm test && npm run upload
-
-  linux-arm64:
-    runs-on: ubuntu-24.04-arm
-    strategy:
-      fail-fast: false
-      matrix:
-        libc: [glibc, musl]
-
-    container:
-      image: ${{ format('ghcr.io/{0}-{1}:latest', github.repository, matrix.libc) }}
-      options: --user github
-
-    steps:
-    - name: Prepare workspace
-      run: |
-        rm -rf "$GITHUB_WORKSPACE"
-        mkdir -p "$GITHUB_WORKSPACE"
-
     - name: Install rust
       run: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
@@ -140,11 +102,18 @@ jobs:
         REPO: ${{ github.repository }}
         REF: ${{ github.ref_name }}
       run: |
-        git clone --depth 1 --branch $REF ${SERVER}/${REPO} .
+        git clone --depth 1 --branch $REF ${SERVER}/${REPO} skia-canvas
+
+    - name: Checkout rust-skia and apply static deps patch
+      run: |
+        export TAG=$(make -sC skia-canvas skia-version)
+        git clone --depth 1 --branch $TAG --recurse-submodules -j8 https://github.com/rust-skia/rust-skia.git
+        patch -d rust-skia -p1 -F10 < ./skia-canvas/containers/use-static-fontconfig.patch
 
     - name: Build module
       run: |
-        make optimized
+        make -sC skia-canvas with-local-skia
+        cd skia-canvas && make optimized
 
     - name: Add to release
       env:
@@ -152,36 +121,21 @@ jobs:
       run: |
         npm test && npm run upload
 
-  aws-lambda:
-    needs: [linux-x64, linux-arm64] # only run after linux binaries have been uploaded to release
-    if: ${{ always() }} # run even if linux build failed (since it may have already uploaded)
-
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
-    runs-on: ${{ matrix.arch == 'x64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Use Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: 20
-
-    - name: Build layer
+    - name: Add AWS layer to release
+      if: ${{ matrix.libc == 'glibc' }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        PKG_VERSION=v$(npm pkg get version | tr -d '"')
-        gh release download $PKG_VERSION -p linux-${{ matrix.arch }}-glibc.gz -O - | gunzip > ./arch/lambda/skia.node
-        docker run -v ./arch/lambda:/opt -v .:/mnt amazonlinux:2023 bash /opt/build-layer.sh
+        export PKG_VERSION=v$(npm pkg get version | tr -d '"')
+        export SRC_DIR="$GITHUB_WORKSPACE/skia-canvas"
+        export SRC_DIST="$SRC_DIR/$(cd $SRC_DIR; npm pack)"
+        export LAYER_DIR="$GITHUB_WORKSPACE/layer"
+        export LAYER_ZIP="$GITHUB_WORKSPACE/aws-lambda-${{ matrix.arch }}.zip"
 
-    - name: Add to release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        PKG_VERSION=v$(npm pkg get version | tr -d '"')
+        mkdir -p $LAYER_DIR/node
+        cd $LAYER_DIR/node && \
+           npm install --ignore-scripts $SRC_DIST && \
+           cp $SRC_DIR/lib/skia.node node_modules/skia-canvas/lib
+        cd $LAYER_DIR && \
+           zip -r9 $LAYER_ZIP node/node_modules
         gh release upload $PKG_VERSION aws-lambda-*.zip
