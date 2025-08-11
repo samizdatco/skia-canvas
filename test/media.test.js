@@ -359,13 +359,21 @@ describe("FontLibrary", ()=>{
     // single alias
     expect( FontLibrary.use("Montmartre", [`${ASSETS_DIR}/**/montserrat*italic.*`]) ).toHaveLength(3)
 
-    // multiple aliases
+    // multiple aliases (array of patterns)
     let { Monaton, Montserrat } = FontLibrary.use({
       Monaton: [`${FONTS_DIR}/*.woff2`],
-      Montserrat: [`${FONTS_DIR}/montserrat-latin/*.woff2`]
+      Montserrat: [`${FONTS_DIR}/montserrat-latin/*italic.woff2`, `${FONTS_DIR}/**/montserrat-latin/*700.woff2`]
     })
     expect(Monaton).toHaveLength(1)
-    expect(Montserrat).toHaveLength(6)
+    expect(Montserrat).toHaveLength(4)
+
+    // multiple aliases (bare-string pattern)
+    let { MonatonNowrap, MontserratNowrap  } = FontLibrary.use({
+      MonatonNowrap: `${FONTS_DIR}/*.woff2`,
+      MontserratNowrap: `${FONTS_DIR}/montserrat-latin/*.woff2`
+    })
+    expect(MonatonNowrap).toHaveLength(1)
+    expect(MontserratNowrap).toHaveLength(6)
   })
 
 })

@@ -35,7 +35,7 @@
     "cargo-cp-artifact": "^0.1",
     "cross-fetch": "^4.1.0",
     "detect-libc": "^2.0.4",
-    "glob": "^11.0.3",
+    "fast-glob": "^3.3.3",
     "https-proxy-agent": "^7.0.6",
     "path-browserify": "^1.0.1",
     "string-split-by": "^1.0.0"
