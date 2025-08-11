@@ -8,7 +8,7 @@ function register_clang_version {
     local priority=$2
 
     update-alternatives \
-        --verbose \
+         --verbose \
         --install /usr/bin/llvm-config          llvm-config          /usr/bin/llvm-config-${version} ${priority} \
         --slave   /usr/bin/llvm-ar              llvm-ar              /usr/bin/llvm-ar-${version} \
         --slave   /usr/bin/llvm-as              llvm-as              /usr/bin/llvm-as-${version} \
@@ -59,7 +59,7 @@ function register_clang_version {
 
 
     update-alternatives \
-        --verbose \
+         --verbose \
         --install /usr/bin/clang                clang                /usr/bin/clang-${version} ${priority} \
         --slave   /usr/bin/clang++              clang++              /usr/bin/clang++-${version}  \
         --slave   /usr/bin/clang-format         clang-format         /usr/bin/clang-format-${version}  \
@@ -83,6 +83,7 @@ function register_clang_version {
         --slave   /usr/bin/verify-uselistorder  verify-uselistorder  /usr/bin/verify-uselistorder-${version} \
         --slave   /usr/bin/wasm-ld              wasm-ld              /usr/bin/wasm-ld-${version} \
         --slave   /usr/bin/yaml2obj             yaml2obj             /usr/bin/yaml2obj-${version}
+
 }
 
 # install requested version

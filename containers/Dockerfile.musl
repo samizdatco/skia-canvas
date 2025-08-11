@@ -13,17 +13,16 @@ RUN apk update && apk add --update --no-cache \
     musl-dev openssl-dev gn ninja-build
 
 RUN apk add --update --no-cache --repository http://dl-cdn.alpinelinux.org/alpine/edge/main \
-    gperf cmake expat-static expat-dev libpng-dev brotli-dev \
+    gperf cmake expat-static expat-dev libpng-dev \
     clang clang-dev llvm llvm-dev
 
 # manually build harfbuzz, freetype, & fontconfig and install them in /usr/local
 COPY ./install-fontlibs.sh /opt
+COPY ./freetype.cfg /opt
 RUN bash /opt/install-fontlibs.sh
 
 # move the static libs to a common location consistent across glibc & musl builds
-# (renaming freetype lib so it matches the internal copy built by skia)
 RUN mkdir -p /opt/skia-static-libs && \
-    cp /usr/local/lib/libfreetype.a /opt/skia-static-libs/libfreetype2.a && \
     cp /usr/local/lib/libfontconfig.a /opt/skia-static-libs
 
 # install gh
