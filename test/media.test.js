@@ -262,13 +262,18 @@ describe("ImageData", () => {
 describe("FontLibrary", ()=>{
   let canvas, ctx,
       WIDTH = 512, HEIGHT = 512,
-      FONTS_DIR = path.join(__dirname, 'assets/fonts'),
+      ASSETS_DIR = path.join(__dirname, 'assets'),
+      FONTS_DIR = path.join(ASSETS_DIR, 'fonts'),
       findFont = font => path.join(FONTS_DIR, font),
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
 
   beforeEach(() => {
     canvas = new Canvas(WIDTH, HEIGHT)
     ctx = canvas.getContext("2d")
+  })
+
+  afterEach(() => {
+    FontLibrary.reset()
   })
 
   test("can list families", ()=>{
@@ -339,9 +344,28 @@ describe("FontLibrary", ()=>{
       let bmp = ctx.getImageData(300, 172, 1, 1)
       expect(Array.from(bmp.data)).toEqual([0,0,0,0])
     }
+  })
 
+  test("can handle glob patterns", () => {
+    expect( FontLibrary.use([`${FONTS_DIR}/montserrat*/montserrat-v30-latin-italic.woff2`]) ).toHaveLength(1)
+    expect( FontLibrary.use([`${FONTS_DIR}/montserrat-latin/*700*.woff2`]) ).toHaveLength(2)
+    expect( FontLibrary.use([`${ASSETS_DIR}/**/montserrat-v30-latin-italic.woff2`]) ).toHaveLength(1)
+    expect( FontLibrary.use([`${ASSETS_DIR}/**/montserrat*italic.*`]) ).toHaveLength(3)
 
-    FontLibrary.reset()
+    // `**` must be standalone (i.e., can't be attached to a file extension)
+    expect( FontLibrary.use([`${ASSETS_DIR}/**.woff2`]) ).toHaveLength(0)
+    expect( FontLibrary.use([`${ASSETS_DIR}/**/*.woff2`]) ).toHaveLength(7)
+
+    // single alias
+    expect( FontLibrary.use("Montmartre", [`${ASSETS_DIR}/**/montserrat*italic.*`]) ).toHaveLength(3)
+
+    // multiple aliases
+    let { Monaton, Montserrat } = FontLibrary.use({
+      Monaton: [`${FONTS_DIR}/*.woff2`],
+      Montserrat: [`${FONTS_DIR}/montserrat-latin/*.woff2`]
+    })
+    expect(Monaton).toHaveLength(1)
+    expect(Montserrat).toHaveLength(6)
   })
 
 })
