@@ -1,4 +1,4 @@
-# Use bullseye's more recent tools to compile depencies, then switch to buster as the
+# Use bullseye's more recent tools to compile dependencies, then switch to buster as the
 # final container's environment to maximize glibc backward compatability:
 #   - buster: glibc 2.28
 #   - bullseye: glibc 2.31
@@ -33,7 +33,7 @@ ARG LLVM_VERSION=18
 COPY install-llvm.sh .
 RUN bash install-llvm.sh $LLVM_VERSION
 
-# manually build harfbuzz, freetype, & fontconfig and install them in /usr/local
+# manually build freetype & fontconfig and install fontconfig in /usr/local
 COPY ./install-fontlibs.sh /opt
 COPY ./freetype.cfg /opt
 RUN bash /opt/install-fontlibs.sh

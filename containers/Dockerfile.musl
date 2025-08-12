@@ -16,7 +16,7 @@ RUN apk add --update --no-cache --repository http://dl-cdn.alpinelinux.org/alpin
     gperf cmake expat-static expat-dev libpng-dev \
     clang clang-dev llvm llvm-dev
 
-# manually build harfbuzz, freetype, & fontconfig and install them in /usr/local
+# manually build freetype & fontconfig and install fontconfig in /usr/local
 COPY ./install-fontlibs.sh /opt
 COPY ./freetype.cfg /opt
 RUN bash /opt/install-fontlibs.sh
