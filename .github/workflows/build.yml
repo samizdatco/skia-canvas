@@ -126,16 +126,16 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        export PKG_VERSION=v$(cd $SRC_DIR; npm pkg get version | tr -d '"')
         export SRC_DIR="$GITHUB_WORKSPACE/skia-canvas"
         export SRC_DIST="$SRC_DIR/$(cd $SRC_DIR; npm pack)"
         export LAYER_DIR="$GITHUB_WORKSPACE/layer"
         export LAYER_ZIP="$GITHUB_WORKSPACE/aws-lambda-${{ matrix.arch }}.zip"
+        export PKG_VERSION=v$(cd $SRC_DIR; npm pkg get version | tr -d '"')
 
         mkdir -p $LAYER_DIR/node
         cd $LAYER_DIR/node && \
            npm install --ignore-scripts $SRC_DIST && \
-           cp $SRC_DIR/lib/skia.node node_modules/skia-canvas/lib
+           cp $SRC_DIR/lib/skia.node ./node_modules/skia-canvas/lib
         cd $LAYER_DIR && \
            zip -r9 $LAYER_ZIP node/node_modules
         gh release upload $PKG_VERSION $LAYER_ZIP
