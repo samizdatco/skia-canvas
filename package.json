@@ -26,7 +26,7 @@
   },
   "scripts": {
     "build": "node lib/prebuild.mjs compile",
-    "install": "node lib/prebuild.mjs download --or-build",
+    "install": "node lib/prebuild.mjs download --or-compile",
     "upload": "node lib/prebuild.mjs upload",
     "test": "jest"
   },
@@ -51,7 +51,9 @@
     "tmp": "^0.2.5"
   },
   "files": [
-    "lib"
+    "lib/*js",
+    "lib/classes/*js",
+    "lib/fonts"
   ],
   "keywords": [
     "canvas",
