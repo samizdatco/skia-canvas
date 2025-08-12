@@ -25,8 +25,8 @@
     "path": "path-browserify"
   },
   "scripts": {
-    "build": "cargo-cp-artifact -nc lib/skia.node -- cargo build --message-format=json-render-diagnostics",
-    "install": "node lib/prebuild.mjs download || make optimized",
+    "build": "node lib/prebuild.mjs compile",
+    "install": "node lib/prebuild.mjs download --or-build",
     "upload": "node lib/prebuild.mjs upload",
     "test": "jest"
   },

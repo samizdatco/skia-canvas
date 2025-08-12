@@ -10,29 +10,19 @@ NPM_VERSION = $(shell npm view skia-canvas version)
 .PHONY: optimized dev test debug visual check clean distclean release skia-version with-local-skia
 .DEFAULT_GOAL := $(LIB)
 
-# platform-specific features to be passed to cargo
-OS=$(shell sh -c 'uname -s 2>/dev/null')
-ifeq ($(OS),Darwin)
-	FEATURES = metal,window
-else ifeq ($(OS),Linux)
-	FEATURES = vulkan,window,freetype
-else # Windows
-	FEATURES = vulkan,window
-endif
-
 $(NPM):
 	npm ci --ignore-scripts
 
 $(LIB): $(NPM) $(LIB_SRC)
-	@npm run build -- --features $(FEATURES)
+	@npm run build -- dev
 	@touch $(LIB)
 
 optimized: $(NPM)
 	@rm -f $(LIB)
-	@npm run build -- --release --features $(FEATURES)
+	@npm run build
 
 dev: $(NPM) $(LIB_SRC)
-	@npm run build
+	@npm run build -- generic
 	@touch $(LIB)
 
 test: $(LIB)
@@ -48,7 +38,7 @@ check:
 	cargo check
 
 clean:
-	rm -rf $(LIB)
+	rm -f $(LIB)
 
 distclean: clean
 	rm -rf $(NPM)
