@@ -132,10 +132,10 @@ jobs:
         export LAYER_ZIP="$GITHUB_WORKSPACE/aws-lambda-${{ matrix.arch }}.zip"
         export PKG_VERSION=v$(cd $SRC_DIR; npm pkg get version | tr -d '"')
 
-        mkdir -p $LAYER_DIR/node
-        cd $LAYER_DIR/node && \
+        mkdir -p $LAYER_DIR/nodejs
+        cd $LAYER_DIR/nodejs && \
            npm install --ignore-scripts $SRC_DIST && \
            cp $SRC_DIR/lib/skia.node ./node_modules/skia-canvas/lib
         cd $LAYER_DIR && \
-           zip -r9 $LAYER_ZIP node/node_modules
+           zip -r9 $LAYER_ZIP nodejs/node_modules
         gh release -R samizdatco/skia-canvas upload $PKG_VERSION $LAYER_ZIP
