@@ -31,7 +31,6 @@
     "test": "jest"
   },
   "dependencies": {
-    "cargo-cp-artifact": "^0.1",
     "cross-fetch": "^4.1.0",
     "detect-libc": "^2.0.4",
     "fast-glob": "^3.3.3",
@@ -43,6 +42,7 @@
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.20",
     "@types/node": "^24.2.1",
+    "cargo-cp-artifact": "^0.1",
     "express": "^5.1.0",
     "jest": "^30.0.5",
     "lodash": "^4.17.21",
