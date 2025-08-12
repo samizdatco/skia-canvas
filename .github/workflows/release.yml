@@ -1,0 +1,18 @@
+name: New release
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  new-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Auto-generate release
+      uses: marvinpinto/action-automatic-releases@v1.2.0
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        prerelease: false
+        draft: true
