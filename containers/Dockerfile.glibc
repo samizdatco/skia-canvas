@@ -1,4 +1,11 @@
-FROM node:bullseye-slim AS git
+# Use bullseye's more recent tools to compile depencies, then switch to buster as the
+# final container's environment to maximize glibc backward compatability:
+#   - buster: glibc 2.28
+#   - bullseye: glibc 2.31
+
+# --------------------------------------------------------------------------------------------------------
+
+FROM debian:bullseye-slim AS git
 
 RUN apt-get update && apt-get install -y -q \
     wget curl gpg software-properties-common pkg-config \
@@ -14,7 +21,7 @@ RUN curl -sL $GIT_URL | tar xz -C /opt && \
 
 # --------------------------------------------------------------------------------------------------------
 
-FROM node:bullseye-slim AS dependencies
+FROM debian:bullseye-slim AS dependencies
 
 RUN apt-get update && apt-get install -y -q \
     git perl curl wget gpg software-properties-common pkg-config \
@@ -37,11 +44,13 @@ RUN mkdir -p /opt/skia-static-libs && \
 
 # --------------------------------------------------------------------------------------------------------
 
-FROM node:bullseye-slim AS skia-build-env
+FROM node:buster-slim AS skia-build-env
 ARG TARGETARCH
 
+COPY sources.list-buster /etc/apt/sources.list
+
 RUN apt-get update && apt-get install -y -q \
-  curl wget perl zip software-properties-common lsb-release build-essential ninja-build
+  curl wget perl zip software-properties-common lsb-release build-essential ninja-build fonts-dejavu-core
 
 # install clang v18
 ARG LLVM_VERSION=18
