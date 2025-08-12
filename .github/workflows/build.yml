@@ -126,7 +126,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        export PKG_VERSION=v$(npm pkg get version | tr -d '"')
+        export PKG_VERSION=v$(cd $SRC_DIR; npm pkg get version | tr -d '"')
         export SRC_DIR="$GITHUB_WORKSPACE/skia-canvas"
         export SRC_DIST="$SRC_DIR/$(cd $SRC_DIR; npm pack)"
         export LAYER_DIR="$GITHUB_WORKSPACE/layer"
