@@ -57,30 +57,3 @@ index 0678295..0832e12 100644
              add_pkg_config_libs(&mut libs, "gl", &["GL"]);
          }
  
-diff --git i/skia-bindings/build_support/skia/config.rs w/skia-bindings/build_support/skia/config.rs
-index 3dd4acd..18f8705 100644
---- i/skia-bindings/build_support/skia/config.rs
-+++ w/skia-bindings/build_support/skia/config.rs
-@@ -110,21 +110,21 @@ impl FinalBuildConfiguration {
- 
-         // `SDKROOT` is the environment variable used on macOS to specify the sysroot.
-         // `SDKTARGETSYSROOT` is the environment variable set in Yocto Linux SDKs when
-         // cross-compiling.
-         let sysroot = cargo::env_var("SDKTARGETSYSROOT").or_else(|| cargo::env_var("SDKROOT"));
- 
-         let mut builder = GnArgsBuilder::new(&build.target);
- 
-         let gn_args = {
-             builder
--                .arg("is_official_build", yes_if(!build.skia_debug))
-+                .arg("is_official_build", no()) // disabled to make skia build static libs for its dependencies, even for release builds
-                 .arg("is_debug", yes_if(build.skia_debug))
-                 .arg("skia_enable_svg", yes_if(features[feature::SVG]))
-                 .arg("skia_enable_gpu", yes_if(features.gpu()))
-                 .arg("skia_enable_skottie", no())
-                 .arg("skia_enable_pdf", yes_if(features[feature::PDF]))
-                 .arg("skia_use_gl", yes_if(features[feature::GL]))
-                 .arg("skia_use_egl", yes_if(features[feature::EGL]))
-                 .arg("skia_use_x11", yes_if(features[feature::X11]))
-                 .arg("skia_use_system_libpng", yes_if(use_system_libraries))
-                 .arg(
