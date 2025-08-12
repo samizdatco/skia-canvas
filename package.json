@@ -31,7 +31,6 @@
     "test": "jest"
   },
   "dependencies": {
-    "@types/sharp": "^0.31.1",
     "cargo-cp-artifact": "^0.1",
     "cross-fetch": "^4.1.0",
     "detect-libc": "^2.0.4",
