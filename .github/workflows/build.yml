@@ -119,7 +119,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        npm test && npm run upload
+        cd skia-canvas && npm test && npm run upload
 
     - name: Add AWS layer to release
       if: ${{ matrix.libc == 'glibc' }}
@@ -138,4 +138,4 @@ jobs:
            cp $SRC_DIR/lib/skia.node node_modules/skia-canvas/lib
         cd $LAYER_DIR && \
            zip -r9 $LAYER_ZIP node/node_modules
-        gh release upload $PKG_VERSION aws-lambda-*.zip
+        gh release upload $PKG_VERSION $LAYER_ZIP
