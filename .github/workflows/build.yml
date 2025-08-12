@@ -138,4 +138,4 @@ jobs:
            cp $SRC_DIR/lib/skia.node ./node_modules/skia-canvas/lib
         cd $LAYER_DIR && \
            zip -r9 $LAYER_ZIP node/node_modules
-        gh release upload $PKG_VERSION $LAYER_ZIP
+        gh release -R samizdatco/skia-canvas upload $PKG_VERSION $LAYER_ZIP
