@@ -51,6 +51,7 @@
   },
   "files": [
     "lib/*js",
+    "lib/*ts",
     "lib/classes/*js",
     "lib/fonts"
   ],
