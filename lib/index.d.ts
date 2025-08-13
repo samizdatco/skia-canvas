@@ -312,7 +312,7 @@ export interface ExportOptions extends RenderOptions {
 }
 
 export interface SaveOptions extends ExportOptions {
-  /** Image format to use */
+  /** Image format to use (either as a file extension or a mime-type string) */
   format?: ExportFormat
 }
 
@@ -366,24 +366,30 @@ export class Canvas {
   set gpu(enabled: boolean)
   readonly engine: EngineDetails
 
-  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#saveas) */
+  /** @deprecated Use {@link Canvas.toFile()} instead */
   saveAs(filename: string, options?: SaveOptions): Promise<void>
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tofile): toFile() */
+  toFile(filename: string, options?: SaveOptions): Promise<void>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
   toBuffer(format: ExportFormat, options?: ExportOptions): Promise<Buffer>
-  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#todataurl) */
-  toDataURL(format: ExportFormat, options?: ExportOptions): Promise<string>
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tourl) */
+  toURL(format: ExportFormat, options?: ExportOptions): Promise<string>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
   toSharp(options?: RenderOptions): Sharp
 
-  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#saveas) */
+  /** @deprecated Use {@link Canvas.toFileSync()} instead */
   saveAsSync(filename: string, options?: SaveOptions): void
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
   toBufferSync(format: ExportFormat, options?: ExportOptions): Buffer
-  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#todataurl) */
+  /** @deprecated {@link Canvas.toDataURL()} is now synchronous; use it instead */
   toDataURLSync(format: ExportFormat, options?: ExportOptions): string
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tourl) */
+  toURLSync(format: ExportFormat, options?: ExportOptions): string
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
   toSharpSync(options?: RenderOptions): Sharp
 
+  /** [MDN Reference](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL) */
+  toDataURL(format: ExportFormat, quality?: number): string
   get pdf(): Promise<Buffer>
   get svg(): Promise<Buffer>
   get jpg(): Promise<Buffer>
