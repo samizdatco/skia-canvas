@@ -1,11 +1,11 @@
-NAPI_VERSION := 8
 NPM := $(CURDIR)/node_modules
 NODEMON := $(CURDIR)/node_modules/.bin/nodemon
 JEST := $(CURDIR)/node_modules/.bin/jest
 LIB := $(CURDIR)/lib/skia.node
-LIB_SRC := Cargo.toml $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src/*/*/*.rs)
+LIB_SRC := Cargo.toml lib/prebuild.mjs $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src/*/*/*.rs)
 GIT_TAG = $(shell git describe)
-PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | cut -d '=' -f 2)
+PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | sed -e 's/^.*=/v/')
+PRERELEASE_FLAG = $(subst -rc,--prerelease,$(findstring -rc,$(PACKAGE_VERSION)))
 NPM_VERSION = $(shell npm view skia-canvas version)
 .PHONY: optimized dev test debug visual check clean distclean release skia-version with-local-skia
 .DEFAULT_GOAL := $(LIB)
@@ -49,16 +49,18 @@ distclean: clean
 release:
 	@if [[ `git status -s package.json` != "" ]]; then printf "Commit changes to package.json first:\n\n"; git --no-pager diff package.json; exit 1; fi
 	@if [[ `git cherry -v` != "" ]]; then printf "Unpushed commits:\n\n"; git --no-pager log --branches --not --remotes; exit 1; fi
-	@if [[ $(GIT_TAG) =~ ^v$(PACKAGE_VERSION) ]]; then printf "Already published $(GIT_TAG)\n"; exit 1; fi
+	@if gh release view $(PACKAGE_VERSION) --json id > /dev/null; then printf "Already published $(PACKAGE_VERSION)\n"; exit 1; fi
 	@echo
 	@echo "Currently on NPM:  $(NPM_VERSION)"
-	@echo "Package Version:   $(PACKAGE_VERSION)"
 	@echo "Last Git Tag:     $(GIT_TAG)"
+	@echo "Package Version:  $(PACKAGE_VERSION)"
 	@echo
-	@/bin/echo -n "Update release -> v$(PACKAGE_VERSION)? [y/N] "
-	@read line; if [[ $$line = "y" ]]; then printf "\nPushing tag to github..."; else exit 1; fi
-	git tag -a v$(PACKAGE_VERSION) -m v$(PACKAGE_VERSION)
-	git push origin --tags
+	@/bin/echo -n "Update release -> $(PACKAGE_VERSION)? [y/N] "
+	@read line; if [[ $$line = "y" ]]; then printf "\nPushing tag to github...\n"; else exit 1; fi
+	@git tag -a $(PACKAGE_VERSION) -m $(PACKAGE_VERSION)
+	@git push origin --tags
+	@printf "\nCreating new release...\n"
+	@gh release create $(PACKAGE_VERSION) $(PRERELEASE_FLAG) --draft --fail-on-no-commits --generate-notes
 	@printf "\nNext: publish the release on github to submit to npm\n"
 
 # linux-build helpers
