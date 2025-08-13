@@ -20,8 +20,8 @@ pub struct Canvas{
 }
 
 impl Canvas{
-  pub fn new(text_contrast:f64, text_gamma:f64) -> Self{
-    Canvas{width:300.0, height:150.0, text_contrast, text_gamma, gpu_disabled:false, engine:None}
+  pub fn new(text_contrast:f64, text_gamma:f64, gpu_disabled:bool) -> Self{
+    Canvas{width:300.0, height:150.0, text_contrast, text_gamma, gpu_disabled, engine:None}
   }
 
   pub fn engine(&mut self) -> gpu::RenderingEngine{
@@ -54,7 +54,8 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
     return cx.throw_range_error(format!("Expected a number between {} and {} for `textGamma`", min_g, max_g))
   }
 
-  let this = RefCell::new(Canvas::new(text_contrast as f64, text_gamma as f64));
+  let gpu_enabled = bool_for_key(&mut cx, &opts, "gpu")?;
+  let this = RefCell::new(Canvas::new(text_contrast as f64, text_gamma as f64, !gpu_enabled));
   Ok(cx.boxed(this))
 }
 

@@ -59,6 +59,7 @@
 - Argument validation now emulates browser behavior much more closely—including converting what were previously TypeErrors in certain cases into silent failures. To reënable these errors, set the `SKIA_CANVAS_STRICT` environment variable to `1` or `true`.
 - Replaced `node-pre-gyp` with a custom installation script and `glob` with `fast-glob`, cutting the number of `node_modules` directories installed from 83 to 30.
 - [loadImage()][loadImage()], [loadImageData()][loadImageData()], and [Image.src][Image.src] can now accept [URL][node_url] objects (using http(s), file, or data protocols). Likewise, [toFile()][Canvas.toFile] now accepts `file:` URLs  (allowing relative paths to be constructed with [`import.meta.url`][meta_url])
+- The Canvas constructor's options argument can now contain a `gpu` property which can be set to `false` in order to use CPU-based rendering
 
 ### Bugfixes
 - Setting a window's `cursor` property to "none" now hides the cursor
