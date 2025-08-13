@@ -390,6 +390,8 @@ export class Canvas {
 
   /** [MDN Reference](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL) */
   toDataURL(format: ExportFormat, quality?: number): string
+
+  get raw(): Promise<Buffer>
   get pdf(): Promise<Buffer>
   get svg(): Promise<Buffer>
   get jpg(): Promise<Buffer>
