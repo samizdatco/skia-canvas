@@ -25,6 +25,10 @@ static MTL_STATUS: OnceLock<Value> = OnceLock::new();
 pub struct MetalEngine {}
 
 impl MetalEngine {
+    pub fn api() -> Option<String>{
+        Some("Metal".to_string())
+    }
+
     pub fn supported() -> bool {
         Self::status()["renderer"] == "GPU"
     }

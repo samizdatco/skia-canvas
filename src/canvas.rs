@@ -15,12 +15,13 @@ pub struct Canvas{
   pub height: f32,
   pub text_contrast: f64,
   pub text_gamma: f64,
+  pub gpu_disabled: bool,
   engine: Option<gpu::RenderingEngine>,
 }
 
 impl Canvas{
   pub fn new(text_contrast:f64, text_gamma:f64) -> Self{
-    Canvas{width:300.0, height:150.0, text_contrast, text_gamma, engine:None}
+    Canvas{width:300.0, height:150.0, text_contrast, text_gamma, gpu_disabled:false, engine:None}
   }
 
   pub fn engine(&mut self) -> gpu::RenderingEngine{
@@ -100,6 +101,7 @@ pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if let Some(engine_name) = opt_string_arg(&mut cx, 1){
     if let Some(new_engine) = to_engine(&engine_name){
       if new_engine.selectable() {
+        this.borrow_mut().gpu_disabled = matches!(new_engine, gpu::RenderingEngine::CPU);
         this.borrow_mut().engine = Some(new_engine)
       }
     }
@@ -112,7 +114,7 @@ pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let mut this = this.borrow_mut();
 
-  let mut details = this.engine().status();
+  let mut details = this.engine().status(this.gpu_disabled);
   details["textContrast"] = json!(this.text_contrast);
   details["textGamma"] = json!(this.text_gamma);
   Ok(cx.string(details.to_string()))

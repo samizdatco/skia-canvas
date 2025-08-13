@@ -35,6 +35,10 @@ pub struct VulkanEngine {
 }
 
 impl VulkanEngine {
+    pub fn api() -> Option<String>{
+        Some("Vulkan".to_string())
+    }
+
     pub fn supported() -> bool {
         Self::status()["renderer"] == "GPU"
     }

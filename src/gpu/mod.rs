@@ -22,6 +22,7 @@ pub use crate::gpu::vulkan::renderer::VulkanRenderer as Renderer;
 struct Engine { }
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 impl Engine {
+    pub fn api() -> Option<String>{ None }
     pub fn supported() -> bool { false }
     pub fn status() -> Value { serde_json::json!({
         "renderer": "CPU",
@@ -71,15 +72,17 @@ impl RenderingEngine{
         }
     }
 
-    pub fn status(&self) -> serde_json::Value {
-        let mut status = Engine::status();
-        if let Self::CPU = self{
-            if Engine::supported(){
-                status["renderer"] = json!("CPU");
-                status["device"] = json!("CPU-based renderer (GPU manually disabled)")
-            }
+    pub fn status(&self, is_manually_disabled:bool) -> serde_json::Value {
+        match is_manually_disabled{
+            true => json!({
+                "renderer":"CPU",
+                "api": Engine::api(),
+                "device": "CPU-based renderer (GPU manually disabled)",
+                "driver": "N/A",
+                "threads": rayon::current_num_threads()
+            }),
+            false=> Engine::status(),
         }
-        status
     }
 
     pub fn lacks_gpu_support(&self) -> Option<String> {
