@@ -549,6 +549,11 @@ describe("Canvas", ()=>{
       expect(canvas).toMatchObject({width, height})
       expect( () => canvas.toFileSync(`${TMP}/zeroed.png`)).toThrow("must be non-zero")
     })
+
+    test("an image even without a ctx", () => {
+      let canvas = new Canvas(200, 200)
+      expect( () => canvas.toURLSync() ).not.toThrow()
+    })
   })
 
 })
