@@ -24,9 +24,9 @@ In particular, Skia Canvas:
 
   - generates images in vector (PDF & SVG) as well as bitmap (JPEG, PNG, & WEBP) formats
   - can draw to interactive GUI [windows][window] and provides a browser-like [event][win_bind] framework
-  - can save images to [files][saveAs], encode to [dataURL][toDataURL_ext] strings, and return [Buffers][toBuffer] or [Sharp][sharp] objects
+  - can save images to [files][toFile], encode to [dataURL][toURL] strings, and return [Buffers][toBuffer] or [Sharp][sharp] objects
   - uses native threads in a [user-configurable][multithreading] worker pool for asynchronous rendering and file I/O
-  - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
+  - can create [multiple ‘pages’][newPage] on a given canvas and then [output][toFile] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] Bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - provides [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
   - can fill shapes with vector-based [Textures][createTexture()] in addition to bitmap-based [Patterns][createPattern()] and supports line-drawing with custom [markers][lineDashMarker]
@@ -119,10 +119,11 @@ Skia Canvas depends on libraries that aren't present in the standard Lambda [run
 3. Click the **Choose file** button and select the zip file you downloaded in Step 1, then click **Create**
 
 Alternatively, you can use the [`aws` command line tool](https://github.com/aws/aws-cli) to create the layer. This bash script will fetch the skia-canvas version of your choice and make it available to your Lambda functions.
-```bash
+```sh
 #!/usr/bin/env bash
 VERSION=3.0 # the skia-canvas version to include
 PLATFORM=arm64 # arm64 or x64
+
 curl -sLO https://github.com/samizdatco/skia-canvas/releases/download/v${VERSION}/aws-lambda-${PLATFORM}.zip
 aws lambda publish-layer-version \
     --layer-name skia-canvas \
@@ -182,7 +183,7 @@ Start by installing:
 
 ### Multithreading
 
-When rendering canvases in the background (e.g., by using the asynchronous [saveAs][saveAs] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's [`engine.threads`][engine] property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
+When rendering canvases in the background (e.g., by using the asynchronous [toFile][toFile] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's [`engine.threads`][engine] property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
 
 For example, you can limit your asynchronous processing to two simultaneous tasks by running your script with:
 ```bash
@@ -399,10 +400,10 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 [p2d_round]: https://skia-canvas.org/api/path2d#round
 [p2d_simplify]: https://skia-canvas.org/api/path2d#simplify
 [p2d_trim]: https://skia-canvas.org/api/path2d#trim
-[saveAs]: https://skia-canvas.org/api/canvas#saveas
+[toFile]: https://skia-canvas.org/api/canvas#tofile
 [textwrap]: https://skia-canvas.org/api/context#textwrap
 [toBuffer]: https://skia-canvas.org/api/canvas#tobuffer
-[toDataURL_ext]: https://skia-canvas.org/api/canvas#todataurl
+[toURL]: https://skia-canvas.org/api/canvas#tourl
 [win_bind]: https://skia-canvas.org/api/window#on--off--once
 [window]: https://skia-canvas.org/api/window
 [multithreading]: https://skia-canvas.org/getting-started#multithreading
