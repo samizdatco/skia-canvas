@@ -126,10 +126,10 @@ PLATFORM=arm64 # arm64 or x64
 
 curl -sLO https://github.com/samizdatco/skia-canvas/releases/download/v${VERSION}/aws-lambda-${PLATFORM}.zip
 aws lambda publish-layer-version \
-    --layer-name skia-canvas \
+    --layer-name "skia-canvas" \
     --description "Skia Canvas ${VERSION} layer" \
-    --zip-file fileb://aws-lambda-${PLATFORM}.zip \
-    --compatible-runtimes nodejs20.x nodejs22.x \
+    --zip-file "fileb://aws-lambda-${PLATFORM}.zip" \
+    --compatible-runtimes "nodejs20.x" "nodejs22.x" \
     --compatible-architectures "${X/#x/x86_}"
 ```
 
