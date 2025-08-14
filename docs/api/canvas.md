@@ -3,17 +3,17 @@ description: An emulation of the HTML <canvas> element
 ---
 # Canvas
 
-> The Canvas object is a stand-in for the HTML `<canvas>` element. It defines image dimensions and provides a [rendering context][context] to draw to it. Once you’re ready to save or display what you’ve drawn, the canvas can [save][saveAs] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toDataURL_ext] to process manually.
+> The Canvas object is a stand-in for the HTML `<canvas>` element. It defines image dimensions and provides a [rendering context][context] to draw to it. Once you’re ready to save or display what you’ve drawn, the canvas can [save][toFile] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toURL] to process manually.
 
 
 | Rendering Contexts            | Output                                                              | Image Dimensions               |
 | --                            | --                                                                  | --                             |
-| [**gpu**][canvas_gpu] 🧪      | [**pdf**, **png**, **svg**, **jpg**, **webp**][shorthands] 🧪       | [**width**][canvas_width]      |
-| [**engine**][engine] 🧪       | [saveAs()][saveAs] / [saveAsSync()][saveAs] 🧪                      | [**height**][canvas_height]    |
+| [**gpu**][canvas_gpu] 🧪      | [**pdf**, **svg**, **png**, **jpg**, **webp**, **raw**][shorthands] 🧪       | [**width**][canvas_width]      |
+| [**engine**][engine] 🧪       | [toFile()][toFile] / [toFileSync()][toFile] 🧪                      | [**height**][canvas_height]    |
 | [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |                                |
-| [getContext()][getContext]    | [toDataURL()][toDataURL_ext] / [toDataURLSync()][toDataURL_ext] 🧪  |                                |
+| [getContext()][getContext]    | [toURL()][toURL] / [toURLSync()][toURL] 🧪                          |                                |
 | [newPage()][newPage] 🧪       | [toSharp()][canvas_tosharp] 🧪                                      |                                |
-
+| | [toDataURL][toDataURL_mdn] |
 ## Creating new `Canvas` objects
 
 Rather than calling a DOM method to create a new canvas, you can simply call the `Canvas` constructor with the width and height (in pixels) of the image you’d like to begin drawing.
@@ -24,17 +24,22 @@ let squareCanvas = new Canvas(512, 512) // creates a 512 px square
 ```
 ## Saving graphics to files, buffers, and strings
 
-When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script. As a result you’ll generally want to deal with the canvas from within an `async` function and be sure to use the `await` keyword when accessing any of its output methods or shorthand properties (all of which return Promises):
-  - [`saveAs()`][saveAs]
+In order to be capable of generating both vector and bitmap graphics from your canvases, Skia Canvas defers rendering until you call one of its export methods. When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script (allowing for multiple images to render in parallel).
+
+As a result you’ll generally want to deal with the canvas from within an `async` function and be sure to use the `await` keyword when accessing any of its output methods or shorthand properties (all of which return Promises):
+  - [`toFile()`][toFile]
   - [`toBuffer()`][toBuffer]
-  - [`toDataURL()`][toDataURL_ext]
-  - [`.pdf`, `.svg`, `.jpg`, `.webp`, and `.png`][shorthands]
+  - [`toURL()`][toURL]
+  - [`.pdf`, `.svg`, `.jpg`, `.webp`, `.png`, & `raw`][shorthands]
 
 
-In cases where this is not the desired behavior, you can use the synchronous equivalents for the primary export functions. They accept identical arguments to their async versions but block execution and return their values synchronously rather than wrapped in Promises. Also note that the [shorthand properties][shorthands] do not have synchronous versions:
-- [`saveAsSync()`][saveAs]
+In cases where this is not the desired behavior, you can use the synchronous equivalents for the primary export functions. They accept identical arguments to their async versions but block execution and return their values synchronously rather than wrapped in Promises:
+- [`toFileSync()`][toFile]
 - [`toBufferSync()`][toBuffer]
-- [`toDataURLSync()`][toDataURL_ext]
+- [`toURLSync()`][toURL]
+
+A special case is the `toDataURL` method which replicates the browser API of the same name. It is always synchronous and only accepts a numeric `quality` argument rather than supporting the full range of export options available in [`toURLSync()`][toURL]:
+- [`toDataURL()` 📖][toDataURL_mdn]
 
 For instance, both of the example functions below will generate PNG & PDF from the canvas, though the first will be more efficient (particularly for parallel contexts like request-handlers in an HTTP server or batch exports):
 
@@ -42,12 +47,12 @@ For instance, both of the example functions below will generate PNG & PDF from t
 let canvas = new Canvas()
 
 async function normal(){
-  let pngURL = await canvas.toDataURL("png")
+  let pngURL = await canvas.toURL("png")
   let pdfBuffer = await canvas.pdf
 }
 
 function synchronous(){
-  let pngURL = canvas.toDataURLSync("png")
+  let pngURL = canvas.toURLSync("png")
   let pdfBuffer = canvas.toBufferSync("pdf")
 }
 ```
@@ -61,6 +66,16 @@ An optional text-rendering argument can be included when creating a new Canvas a
   - `textContrast` — a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to `0.0`)
   - `textGamma` — a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to `1.4`)
 
+
+## Choosing a Rendering Engine
+
+```js
+new Canvas(512, 512, {gpu:false}) // use CPU-based rendering
+```
+
+By default, Skia will make use of your system’s GPU for faster rendering. You can toggle this on and off after creating a canvas object by reassigning its [`gpu` property][canvas_gpu] (see below), or you can pass a `gpu` option to the constructor when creating it in the first place. In general, you'll get significantly better performance from the GPU when rendering complex scenes (i.e., those with a large number of drawing operations).
+
+The main scenario in which you should consider disabling the `gpu` is when you are repeatedly accessing the canvas’s [bitmap data][ctx_imagedata] from your JavaScript code rather than writing it to the filesystem. In those cases the overhead of copying the pixels between GPU and CPU memory may outweigh any potential speedup in rendering.
 
 --------
 
@@ -77,16 +92,18 @@ The `.engine` property is a read-only object that provides you with a status rep
   - `api`: either `Metal` or `Vulkan` depending on your platform
   - `device`: the identity of the ‘video card’ that was found during start-up
   - `driver`: the name of the OS's device driver *‹vulkan-only›*
-  - `threads`: the number of threads in the worker pool that will be used for asynchronous [`saveAs`][saveAs] & [`toBuffer`][toBuffer] exports. By default this is the same as the number of CPU cores found, but can be overridden by setting the [`SKIA_CANVAS_THREADS`][multithreading] environment variable.
+  - `threads`: the number of threads in the worker pool that will be used for asynchronous [`toFile`][toFile], [`toBuffer`][toBuffer], & [`toURL`][toURL] exports. By default this is the same as the number of CPU cores found, but can be overridden by setting the [`SKIA_CANVAS_THREADS`][multithreading] environment variable.
   - `error`: if GPU initialization failed, this property will contain a description of what went wrong. Otherwise it will be undefined.
+  - `textContrast`: a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to 0.0)
+  - `textGamma`: a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to 1.4)
 
 ### `.pages`
 
 The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the `newPage()` method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
 
-### `.pdf`, `.png`, `.svg`, `.jpg`, & `.webp`
+### `pdf`, `svg`, `png`, `jpg`, `webp`, & `raw`
 
-These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF.
+These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF. The `raw` property will produce a buffer containing unencoded pixels using `rgba` order.
 
 --------
 
@@ -101,12 +118,12 @@ This method allows for the creation of additional drawing contexts that are full
 
 The method’s return value is a `CanvasRenderingContext2D` object which you can either save a reference to or recover later from the `.pages` array.
 
-### `saveAs()`
+### `toFile()`
 ```js returns="Promise<void>"
-saveAs(filename, {
+toFile(filename, {
   page,
-  format,
   matte,
+  format,
   density=1,
   quality=0.92,
   msaa=true,
@@ -115,18 +132,23 @@ saveAs(filename, {
   colorType='rgba'
 })
 ```
+
+##### Synchronous version
 ```js returns="void"
-saveAsSync(filename, {page, format, matte, density, quality, msaa, outline, downsample, colorType})
+toFileSync(filename, {page, matte, format, density, quality, msaa, outline, downsample, colorType})
 ```
 
-The `saveAs` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
+The `toFile` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
 
 The way multi-page documents are handled depends on the `filename` argument. If the filename contains the string `"{}"`, it will be used as template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formats it will contain only the most recently added page.
 
 An integer can optionally be placed between the braces to indicate the number of padding characters to use for numbering. For instance `"page-{}.svg"` will generate files of the form `page-1.svg` whereas `"frame-{4}.png"` will generate files like `frame-0001.png`.
 
 #### page
-The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.saveAs("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
+The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.toFile("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
+
+#### matte
+The optional `matte` argument accepts a color-string specifying the background that should be drawn *behind* the canvas in the exported image. Any transparent portions of the image will be filled with the matte color.
 
 #### format
 The image format to generate, specified either as a mime-type string or file extension. The `format` argument will take precedence over the type specified through the `filename` argument’s extension, but is primarily useful when generating a file whose name cannot end with an extension for other reasons.
@@ -135,15 +157,12 @@ Supported formats include:
 - Bitmap: `png`, `jpeg`, `webp`, `raw`
 - Vector: `svg`, `pdf`
 
-#### matte
-The optional `matte` argument accepts a color-string specifying the background that should be drawn *behind* the canvas in the exported image. Any transparent portions of the image will be filled with the matte color.
-
 #### density
 By default, the images will be at a 1:1 ratio with the canvas's `width` and `height` dimensions (i.e., a 72 × 72 canvas will yield a 72 pixel × 72 pixel bitmap). But with screens increasingly operating at higher densities, you’ll frequently want to generate images where an on-canvas 'point' may occupy multiple pixels. The optional `density` argument allows you to specify this magnification factor using an integer ≥1. As a shorthand, you can also select a density by choosing a filename using the `@nx` naming convention:
 
 ```js
-canvas.saveAs('image.png', {density:2}) // choose the density explicitly
-canvas.saveAs('image@3x.png') // equivalent to setting the density to 3
+canvas.toFile('image.png', {density:2}) // choose the density explicitly
+canvas.toFile('image@3x.png') // equivalent to setting the density to 3
 ```
 
 #### msaa
@@ -184,14 +203,14 @@ toBuffer(format, {page, matte, density, msaa, quality, outline, downsample, colo
 toBufferSync(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
 ```
 
-Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as their equivalents in the [`saveAs`][saveAs] method.
+Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
 
-### `toDataURL()`
+### `toURL()`
 ```js returns="Promise<String>"
-toDataURL(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
+toURL(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
 ```
 ```js returns="String"
-toDataURLSync(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
+toURLSync(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
 ```
 
 This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
@@ -209,7 +228,7 @@ toSharpSync({page, matte, msaa, density})
 The Sharp library is an optional dependency that you must [install separately][sharp_npm]:
 :::
 
-The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The optional arguments behave the same as their equivalents in the [`saveAs`][saveAs] method.
+The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
 
 Note that while this method returns synchronously, you will need to `await` most operations on the resulting Sharp object:
 
@@ -231,10 +250,11 @@ await canvas.toSharp().heif({compression:'hevc'}).toFile("image.heif")
 [fonthinting]: context.md#fonthinting
 [newPage]: #newpage
 [imgdata_colortype]: imagedata.md#colortype
-[saveAs]: #saveas
-[shorthands]: #pdf-png-svg-jpg--webp
+[ctx_imagedata]: context.md#createimagedata--getimagedata
+[toFile]: #tofile
+[shorthands]: #pdf-svg-png-jpg-webp--raw
 [toBuffer]: #tobuffer
-[toDataURL_ext]: #todataurl
+[toURL]: #tourl
 [multithreading]: ../getting-started.md#multithreading
 [Buffer]: https://nodejs.org/api/buffer.html
 [chroma_subsampling]: https://en.wikipedia.org/wiki/Chroma_subsampling
@@ -243,6 +263,7 @@ await canvas.toSharp().heif({compression:'hevc'}).toFile("image.heif")
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
+[toDataURL_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
 [Promise]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
 [CanvasRenderingContext2D]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
 <!-- references_end -->

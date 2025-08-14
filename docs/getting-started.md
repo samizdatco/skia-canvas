@@ -38,55 +38,71 @@ Alternatively, you can add a [`pnpm.onlyBuiltDependencies`](https://pnpm.io/9.x/
 
 ## Platform Support
 
-The underlying Rust library uses [N-API][node_napi] v8 which allows it to run on Node.js versions:
-  - v12.22+
-  - v14.17+
-  - v15.12+
-  - v16.0.0 and later
+Skia Canvas runs on Linux, macOS, or Windows as well as serverless platforms like Vercel and AWS Lambda. Precompiled versions of the library’s native code will be automatically downloaded in the appropriate architecture (`arm64` or `x64`) when you install it via npm.
 
-Pre-compiled binaries are available for:
+The underlying Rust library uses [N-API][node_napi] v8 which allows it to run on all [currently supported](https://nodejs.org/en/about/previous-releases) Node.js releases, and it is backward compatible with versions going back to v12.22+, v14.17+, v15.12+, and v16+.
 
-  - Linux — x64 & arm64
-  - macOS — x64 & Apple silicon
-  - Windows — x64 & arm64
-  - AWS Lambda — x64 & arm64
+### Linux
 
-### Linux / Docker
+The library is compatible with Linux systems using [glibc](https://www.gnu.org/software/libc/) 2.28 or later as well as Alpine Linux and the [musl](https://musl.libc.org) C library it favors. It will make use of the system’s `fontconfig` settings in `/etc/fonts` if they exist but will otherwise fall back to using a [placeholder configuration](https://github.com/samizdatco/skia-canvas/blob/main/lib/fonts/fonts.conf), looking for installed fonts at commonly used Linux paths.
 
-The library is compatible with Linux systems using [glibc](https://www.gnu.org/software/libc/) 2.28 or later as well as Alpine Linux and the [musl](https://musl.libc.org) C library it favors. In both cases, the [Fontconfig](https://www.freedesktop.org/wiki/Software/fontconfig/) library must be installed on the system for `skia-canvas` to operate correctly.
+### Docker
 
-If you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, the simplest approach is to set your `FROM` image to one of the (Debian-derived) defaults like `node:lts`, `node:18`, `node:16`, `node:14-buster`, `node:12-buster`, `node:bullseye`, `node:buster`, or simply:
+If you are setting up a [Dockerfile](https://nodejs.org/en/docs/guides/nodejs-docker-webapp/) that uses [`node`](https://hub.docker.com/_/node) as its basis, the simplest approach is to set your `FROM` image to one of the (Debian-derived) defaults like `node:lts`, `node:22`, `node:24-bookworm`, or simply:
 ```dockerfile
 FROM node
-```
-
-You can also use the ‘slim’ image if you manually install fontconfig:
-
-```dockerfile
-FROM node:slim
-RUN apt-get update && apt-get install -y -q --no-install-recommends libfontconfig1
 ```
 
 If you wish to use Alpine as the underlying distribution, you can start with something along the lines of:
 
 ```dockerfile
 FROM node:alpine
-RUN apk update && apk add fontconfig
 ```
 
 ### AWS Lambda
 
 Skia Canvas depends on libraries that aren't present in the standard Lambda [runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html). You can add these to your function by uploading a ‘[layer](https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html)’ (a zip file containing the required libraries and `node_modules` directory) and configuring your function to use it.
 
+
+<details><summary>
+
+**Detailed AWS instructions**
+
+</summary>
+
+#### Adding the Skia Canvas layer to your AWS account
+
 1. Look in the **Assets** section of Skia Canvas’s [current release](https://github.com/samizdatco/skia-canvas/releases/latest) and download the `aws-lambda-x64.zip` or `aws-lambda-arm64.zip` file (depending on your architecture) but don’t decompress it
 2. Go to the AWS Lambda [Layers console](https://console.aws.amazon.com/lambda/home/#/layers) and click the **Create Layer** button, then fill in the fields:
   - **Name**: `skia-canvas` (or whatever you want)
   - **Description**: you might want to note the Skia Canvas version here
   - **Compatible architectures**: select **x86_64** or **arm64** depending on which zip you chose
-  - **Compatible runtimes**: select **Node.js 22.x** (and/or 20.x & 18.x)
+  - **Compatible runtimes**: select **Node.js 22.x** (and/or 20.x)
 3. Click the **Choose file** button and select the zip file you downloaded in Step 1, then click **Create**
 
+Alternatively, you can use the [`aws` command line tool](https://github.com/aws/aws-cli) to create the layer. This bash script will fetch the skia-canvas version of your choice and make it available to your Lambda functions.
+```sh
+#!/usr/bin/env bash
+VERSION=3.0 # the skia-canvas version to include
+PLATFORM=arm64 # arm64 or x64
+
+curl -sLO https://github.com/samizdatco/skia-canvas/releases/download/v${VERSION}/aws-lambda-${PLATFORM}.zip
+aws lambda publish-layer-version \
+    --layer-name skia-canvas \
+    --description "Skia Canvas ${VERSION} layer" \
+    --zip-file fileb://aws-lambda-${PLATFORM}.zip \
+    --compatible-runtimes nodejs20.x nodejs22.x \
+    --compatible-architectures "${X/#x/x86_}"
+```
+
+#### Using the layer in a Lambda function
+
 You can now use this layer in any function you create in the [Functions console](https://console.aws.amazon.com/lambda/home/#/functions). After creating a new function, click the **Add a Layer** button and you can select your newly created Skia Canvas layer from the **Custom Layers** layer source.
+
+Note that the layer only includes Skia Canvas and its dependencies—any other npm modules you want to use will need to be bundled into your function. To prevent the `skia-canvas` module from being doubly-included, make sure you add it to the  `devDependencies` section (**not** the regular `dependencies` section) of your package.json file.
+
+</details>
+
 
 ### Next.js / Webpack
 
@@ -114,13 +130,14 @@ If prebuilt binaries aren’t available for your system you’ll need to compile
 
 Start by installing:
 
-  1. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using [`rustup`](https://rust-lang.github.io/rustup/)
-  2. A C compiler toolchain (either LLVM/Clang or MSVC)
+  1. A recent version of `git` (older versions have difficulties with Skia's submodules)
+  2. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using [`rustup`](https://rust-lang.github.io/rustup/)
+  3. A C compiler toolchain (either LLVM/Clang or MSVC)
   4. Python 3 (used by Skia's [build process](https://skia.org/docs/user/build/))
-  3. The [Ninja](https://ninja-build.org) build system
-  5. On Linux: Fontconfig and OpenSSL
+  5. The [Ninja](https://ninja-build.org) build system
+  6. On Linux: Fontconfig and OpenSSL
 
-[Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
+[Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. The Dockerfiles in the [containers](https://github.com/samizdatco/skia-canvas/tree/main/containers) directory may also be useful for identifying needed dependencies. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
 
 ## Global Settings
 
@@ -128,7 +145,7 @@ Start by installing:
 
 ### Multithreading
 
-When rendering canvases in the background (e.g., by using the asynchronous [saveAs][saveAs] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's [`engine.threads`][engine] property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
+When rendering canvases in the background (e.g., by using the asynchronous [toFile][toFile] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's [`engine.threads`][engine] property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
 
 For example, you can limit your asynchronous processing to two simultaneous tasks by running your script with:
 ```bash
@@ -152,7 +169,7 @@ Set the `SKIA_CANVAS_STRICT` environment variable to `1` or `true` to enable thi
 <!-- references_begin -->
 [canvas]: api/canvas.md
 [engine]: api/canvas.md#engine
-[saveAs]: api/canvas.md#saveas
+[toFile]: api/canvas.md#tofile
 [toBuffer]: api/canvas.md#tobuffer
 [node_napi]: https://nodejs.org/api/n-api.html#node-api-version-matrix
 [node_env]: https://nodejs.org/en/learn/command-line/how-to-read-environment-variables-from-nodejs

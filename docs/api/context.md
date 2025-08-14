@@ -255,9 +255,9 @@ By default, textures are drawn to the canvas using a using a [clipping path][cli
 
 <details>
   <summary>
-    Sample Code: CanvasTexture
+Sample [[Code: CanvasTexture
 
-    ![example using createTexture to make vector patterns for filling & stroking paths](../assets/createTexture@2x.png)
+![examp]]le using createTexture to make vector patterns for filling & stroking paths](../assets/createTexture@2x.png)
 
   </summary>
 
@@ -324,7 +324,7 @@ async function texturesDemo(){
     ctx.fillText("Z", x, y+170)
   }
 
-  await canvas.saveAs('out.png', {density:2, matte:'white'})
+  await canvas.toFile('out.png', {density:2, matte:'white'})
 }
 
 texturesDemo()
@@ -361,7 +361,7 @@ These methods behave identically to the standard [createImageData()][createImage
 
 The `colorSpace` argument is currently unused since non-sRGB colorspaces are not yet supported. You may omit it from your calls to these methods.
 
-The `getImageData()` method also accepts a handful of rendering options which have the same behaviors and default values as their equivalents in the Canvas [saveAs()][saveAs] method: [`density`][density], [`matte`][matte], and [`msaa`][msaa].
+The `getImageData()` method also accepts a handful of rendering options which have the same behaviors and default values as their equivalents in the Canvas [toFile()][toFile] method: [`density`][density], [`matte`][matte], and [`msaa`][msaa].
 
 :::tip
 Calling `getImageData` involves copying bitmaps between the GPU and main memory. If you're invoking it frequently in your code (e.g., within a tight loop), you may get better performance by disabling the [`gpu` property][canvas_gpu] for that canvas to avoid this overhead.
@@ -525,7 +525,7 @@ async function metricsDemo(){
   ctx.fillStyle = 'black'
   ctx.fillText(msg, 0, 0, maxWidth)
 
-  await canvas.saveAs('out.png', {density:2, matte:'#d9d9d9'})
+  await canvas.toFile('out.png', {density:2, matte:'#d9d9d9'})
 }
 
 metricsDemo()
@@ -679,7 +679,7 @@ async function baselinesDemo(){
     ctx.translate(right - left + spacing, 0)
   }
 
-  await canvas.saveAs('out.png', {density:2, matte:'#d9d9d9'})
+  await canvas.toFile('out.png', {density:2, matte:'#d9d9d9'})
 }
 
 baselinesDemo()
@@ -769,7 +769,7 @@ async function lineMetricsDemo(){
     ctx.translate(maxWidth + 5, 0)
   }
 
-  await canvas.saveAs('out.png', {density:2, matte:'#d9d9d9'})
+  await canvas.toFile('out.png', {density:2, matte:'#d9d9d9'})
 }
 
 lineMetricsDemo()
@@ -825,7 +825,7 @@ for (let i=0; i<8000; i++){
 [ctx_imagedata]: #createimagedata--getimagedata
 [p2d_offset]: path2d.md#offset
 [p2d_transform]: path2d.md#transform
-[saveAs]: canvas.md#saveas
+[toFile]: canvas.md#tofile
 [textDecoration]: #textdecoration
 [textwrap]: #textwrap
 [transforms]: #transform--settransform

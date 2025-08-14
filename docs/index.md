@@ -16,11 +16,11 @@ Skia Canvas is a Node.js implementation of the HTML Canvas drawing [API](https:/
 
 In particular, Skia Canvas:
 
-  - generates images in both raster (JPEG, PNG, & WEBP) and vector (PDF & SVG) formats
+  - generates images in vector (PDF & SVG) as well as bitmap (JPEG, PNG, & WEBP) formats
   - can draw to interactive GUI [windows][window] and provides a browser-like [event][win_bind] framework
-  - can save images to [files][saveAs], encode to [dataURL][toDataURL_ext] strings, and return [Buffers][toBuffer] or [Sharp][sharp] objects
+  - can save images to [files][toFile], encode to [dataURL][toURL] strings, and return [Buffers][toBuffer] or [Sharp][sharp] objects
   - uses native threads in a [user-configurable][multithreading] worker pool for asynchronous rendering and file I/O
-  - can create [multiple ‘pages’][newPage] on a given canvas and then [output][saveAs] them as a single, multi-page PDF or an image-sequence saved to multiple files
+  - can create [multiple ‘pages’][newPage] on a given canvas and then [output][toFile] them as a single, multi-page PDF or an image-sequence saved to multiple files
   - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] Bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
   - provides [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
   - can fill shapes with vector-based [Textures][createTexture()] in addition to bitmap-based [Patterns][createPattern()] and supports line-drawing with custom [markers][lineDashMarker]
@@ -32,6 +32,7 @@ In particular, Skia Canvas:
     - proportional [letter-spacing][letterSpacing], [word-spacing][wordSpacing], and [leading][c2d_font]
     - support for [variable fonts][VariableFonts] and transparent mapping of weight values
     - use of non-system fonts [loaded][fontlibrary-use] from local files
+  - can be used for server-side image rendering on standard Linux hosts and ‘serverless’ platforms like Vercel and AWS Lambda
 
 ## Example Usage
 
@@ -212,10 +213,10 @@ In these benchmarks, Skia Canvas is tested running in two modes: serial and asyn
 [p2d_round]: api/path2d.md#round
 [p2d_simplify]: api/path2d.md#simplify
 [p2d_trim]: api/path2d.md#trim
-[saveAs]: api/canvas.md#saveas
+[toFile]: api/canvas.md#tofile
 [textwrap]: api/context.md#textwrap
 [toBuffer]: api/canvas.md#tobuffer
-[toDataURL_ext]: api/canvas.md#todataurl
+[toURL]: api/canvas.md#tourl
 [win_bind]: api/window.md#on--off--once
 [window]: api/window.md
 [multithreading]: getting-started.md#multithreading
