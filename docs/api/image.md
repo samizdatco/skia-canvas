@@ -4,7 +4,7 @@ description: Bitmap & vector image container
 
 # Image
 
-> Skia Canvas's `Image` object is a stripped-down version of the [standard **Image**][img_element] used in browser environments. Since the Canvas API ignores most of its properties, only the relevant ones have been recreated here.
+> Skia Canvas's `Image` object is a stripped-down version of the [standard **Image**][img_element] used in browser environments. Since the Canvas API ignores most of its properties, only the relevant ones have been recreated here. Use the asynchronous [`loadImage()`][loadimage] helper function to create an `Image` from any supported data source.
 
 | Content                                        | Loading                      | Event Handlers                                            |
 | --                                             | --                           | --                                                        |
@@ -12,10 +12,9 @@ description: Bitmap & vector image container
 | [**width**][img_size] / [**height**][img_size] | [decode()][img_decode]       | [on()][img_bind] / [off()][img_bind] / [once()][img_bind] |
 
 
-## Creating `Image` objects
+## Loading `Image` objects
 
 Before an image file can be drawn to the canvas a number of behind-the-scenes steps have to take place: its data has to be loaded, potentially from a remote system, its format needs to be determined, and its data must be decompressed. As a result, newly created Image objects are not ready for use; instead you must asynchronously wait for them to complete their loading & decoding process before making use of them.
-
 
 ### Callbacks
 The traditional way to do this is to set up an event listener waiting for the `load` event. You can do this either by assigning a callback function to the image's [`onload`][img_onload] property, or by using the [on()][img_bind] or [once()][img_bind] methods to set up the listener by name. Once the event handler has been set up, you can then kick off the load process by setting a `src` value for the image:
@@ -55,6 +54,32 @@ To cut down on this repetitive boilerplate, you can also use the [loadImage()][l
 let img = await loadImage('https://skia-canvas.org/icon.png')
 ctx.drawImage(img, 100, 100)
 ```
+## Constructor
+
+```js returns="Image"
+new Image(buffer)    // a Buffer or ArrayBuffer object
+new Image(dataURL)   // a String with a valid `data:` url
+new Image(data, src) // optionally include a `src` string
+```
+
+While loading images from remote sources is inherently asynchronous, if you've alread fetched a file yourself you can create an Image synchronously by passing its data to the Image constructor. The data can be in any of the *encoded* formats Skia Canvas supports (`png`, `jpeg`, `webp`, or `svg`) but can't be raw pixel data—for that you should use [ImageData][imgdata_new] instead.
+
+For example, you can synchronously create an image from a local file via:
+```js prints="Image { width:100, height:100, complete:true, src:'::Buffer::' }"
+import {readFileSync} from 'fs'
+
+let data = readFileSync("my-image.svg")
+let img = new Image(data)
+
+console.log(img)
+```
+
+Note that if you just provide the data, the `src` property on the resulting `Image` will be a placeholder. If you'd like to be able to read from the `src` later (perhaps to help identify the image), you can optionally pass a string as the second argument. Note that it isn't actually used for loading the image so it needn't be a valid URL:
+
+```js prints="Image { width:100, height:100, complete:true, src:'this string can be anything' }"
+let img = new Image(data, 'this string can be anything')
+console.log(img)
+```
 
 ## Properties
 
@@ -70,6 +95,8 @@ Setting the `src` property will kick off the loading process. While the browser 
 The images you load can be from a variety of formats:
 - Bitmap: `png`, `jpeg`, or `webp`
 - Vector: `svg` (but **not** `pdf`, sadly)
+
+Note that the image will be [`complete`][img_complete] immediately if a Buffer or Data URL was used, but otherwise you'll need to [wait for it to load](#loading-image-objects).
 
 ### `.width` & `.height`
 
@@ -203,6 +230,7 @@ let img = await loadImage('https://example.com/customized.svg', {
 [img_onerror]: #onload--onerror
 [img_size]: #width--height
 [img_decode]: #decode
+[imgdata_new]: imagedata.md#constructor
 [event_emitter]: https://nodejs.org/api/events.html#class-eventemitter
 [Buffer]: https://nodejs.org/api/buffer.html
 [sharp]: https://sharp.pixelplumbing.com
