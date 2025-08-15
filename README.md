@@ -16,6 +16,12 @@
   <a href="https://github.com/samizdatco/skia-canvas/discussions">Discussion Forum</a>
 </div>
 
+<div align="center">
+
+### [Vesrion 3.0 now available](https://github.com/samizdatco/skia-canvas/discussions/255)
+
+</div>
+
 ---
 
 Skia Canvas is a Node.js implementation of the HTML Canvas drawing [API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) for both on- and off-screen rendering. Since it uses Google’s [Skia](https://skia.org) graphics engine, its output is very similar to Chrome’s [`<canvas>`](https://html.spec.whatwg.org/multipage/canvas.html) element — though it's also capable of things the browser’s Canvas still can't achieve.
