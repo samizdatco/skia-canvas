@@ -20,6 +20,8 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
 
     - name: Add hashes to package.json
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         npm ci --ignore-scripts
         node lib/prebuild.mjs snapshot
