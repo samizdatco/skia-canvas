@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "2.0.3-rc35",
+  "version": "3.0.0",
   "description": "A multi-threaded, GPU-accelerated, Canvas API for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
