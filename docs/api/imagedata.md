@@ -71,7 +71,7 @@ new ImageData(buffer, width)
 new ImageData(buffer, width, height)
 new ImageData(buffer, width, height, {colorType='rgba', colorSpace='srgb'})
 
-new ImageData(image_data) // create a copy from another ImageData
+new ImageData(imageData) // create a copy from another ImageData
 new ImageData(image, {colorType, colorSpace}) // decode the pixels from a bitmap Image
 ```
 :::note

@@ -16,10 +16,9 @@ description: Display a canvas in a window and handle UI events
 
 When called with no arguments, the `Window` constructor will return a 512 × 512 pt window with a white background and automatically create a `Canvas` of the same size that you can access through its `.canvas` property:
 
-```js
+```js prints="Canvas {width:512, height:512, gpu:true, pages:[CanvasRenderingContext2D{}]}"
 let win = new Window()
 console.log(win.canvas)
-// Canvas {width:512, height:512, gpu:true, pages:[CanvasRenderingContext2D{}]}
 ```
 
 You can specify a size (to be shared by the window and canvas) by passing width & height arguments:
@@ -45,23 +44,20 @@ win.left = 40
 
 The object accessible through the window’s `.canvas` attribute is no different than any other `Canvas` you create. You can even create a `Window` after setting up a canvas and tell the window to use it instead of automatically creating one. If you pass it to the constructor without specifying a window size, the window will match the dimensions of the canvas:
 
-```js
+```js prints="[1024, 1024]"
 let bigCanvas = new Canvas(1024, 1024)
 let win = new Window({canvas:bigCanvas})
 console.log([win.width, win.height])
-// [1024, 1024]
 ```
 
 Likewise, assigning a new `.canvas` will replace the contents of the window (though it won’t affect the window’s size):
 
-```js
+```js prints="window [512, 512]\ncanvas [1024, 32]"
 let win = new Window()
 win.canvas = new Canvas(1024, 32)
 
-console.log([win.width, win.height])
-// [512, 512]
-console.log([win.canvas.width, win.canvas.height])
-// [1024, 32]
+console.log("window", [win.width, win.height])
+console.log("canvas", [win.canvas.width, win.canvas.height])
 ```
 
 > When the window and canvas sizes don’t perfectly match, the canvas will be scaled using the approach selected via the window’s [`fit`][fit] property.

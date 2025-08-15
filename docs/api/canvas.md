@@ -39,7 +39,7 @@ In cases where this is not the desired behavior, you can use the synchronous equ
 - [`toURLSync()`][toURL]
 
 A special case is the `toDataURL` method which replicates the browser API of the same name. It is always synchronous and only accepts a numeric `quality` argument rather than supporting the full range of export options available in [`toURLSync()`][toURL]:
-- [`toDataURL()` 📖][toDataURL_mdn]
+- [`toDataURL()`][toDataURL_mdn]  📖
 
 For instance, both of the example functions below will generate PNG & PDF from the canvas, though the first will be more efficient (particularly for parallel contexts like request-handlers in an HTTP server or batch exports):
 
