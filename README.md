@@ -18,7 +18,7 @@
 
 <div align="center">
 
-### [Vesrion 3.0 now available](https://github.com/samizdatco/skia-canvas/discussions/255)
+### [Version 3.0 now available](https://github.com/samizdatco/skia-canvas/discussions/255)
 
 </div>
 
