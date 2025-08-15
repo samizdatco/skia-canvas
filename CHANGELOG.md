@@ -46,11 +46,10 @@
 
 ### Breaking Changes
 - Renamed export functions and options to be more consistent with similar browser APIs and other Node modules:
-  - `toFile()` and `saveAsSync()` are now called [`toFile()`][Canvas.toFile] and [`toFileSync()`][Canvas.toFile]
-  - [`toDataURL()`][toDataURL] is now synchronous and uses the same (limited) arguments as the browser
-  - [`toURL()`][toURL] and [`toURLSync()`][toURL] produce data URLs and support the same enhanced export options as [`toBuffer`][Canvas.toBuffer])
+  - `saveAs()` and `saveAsSync()` are now called [`toFile()`][Canvas.toFile] and [`toFileSync()`][Canvas.toFile]
+  - [`toDataURL()`][toDataURL] now behaves the same as its browser equivalent: it is synchronous and its only configuration option is a numerical `quality` setting
   - `toDataURLSync()` has been removed
-  - `toFile()` ’s optional `format` has been renamed to [`type`][export_type]
+  - [`toURL()`][toURL] and [`toURLSync()`][toURL] produce data URLs and support the same enhanced export options as [`toBuffer`][Canvas.toBuffer]
 - When exporting to an SVG, text is now converted to paths only if the [`outline`][export_outline] option is set to `true`
 
 ### Misc. Improvements
@@ -60,7 +59,7 @@
 - Mouse events now include a standard [`buttons`][mdn_buttons] attribute
 - DPI metadata is now included in webp files (reflecting the [`density`][density] option passed to [toFile()][Canvas.toFile] or [toBuffer()][Canvas.toBuffer])
 - Argument validation now emulates browser behavior much more closely—including converting what were previously TypeErrors in certain cases into silent failures. To reënable these errors, set the `SKIA_CANVAS_STRICT` environment variable to `1` or `true`.
-- Replaced `node-pre-gyp` with a custom installation script and `glob` with `fast-glob`, cutting the number of `node_modules` directories installed from 83 to 30.
+- Replaced `node-pre-gyp` with a custom installation script and `glob` with `fast-glob`, cutting the number of `node_modules` directories installed from 83 to 29.
 - [loadImage()][loadImage()], [loadImageData()][loadImageData()], and [Image.src][Image.src] can now accept [URL][node_url] objects (using http(s), file, or data protocols). Likewise, [toFile()][Canvas.toFile] now accepts `file:` URLs  (allowing relative paths to be constructed with [`import.meta.url`][meta_url])
 - The Canvas constructor's options argument can now contain a [`gpu` property][gpu_opt] which can be set to `false` in order to use CPU-based rendering
 
@@ -105,7 +104,6 @@
 [Canvas.toFile]: /docs/api/canvas.md#tofile
 [toDataURL]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
 [toURL]: /docs/api/canvas.md#tourl
-[export_type]: /docs/api/canvas.md#type
 [gpu_opt]: /docs/api/canvas.md#choosing-a-rendering-engine
 [image_constructor]: /docs/api/image.md#constructor
 
