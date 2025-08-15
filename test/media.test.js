@@ -3,6 +3,7 @@
 const _ = require('lodash'),
       fs = require('fs'),
       path = require('path'),
+      {pathToFileURL, fileURLToPath} = require('url'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
 
 jest.mock("cross-fetch", () => {
@@ -30,6 +31,7 @@ describe("Image", () => {
       URI = `https://${PATH}`,
       BUFFER = fs.readFileSync(PATH),
       DATA_URI = `data:image/png;base64,${BUFFER.toString('base64')}`,
+      FILE_URL = pathToFileURL(PATH),
       FRESH = {complete:false, width:0, height:0},
       LOADED = {complete:true, width:125, height:125},
       FORMAT = 'test/assets/image/format',
@@ -38,22 +40,37 @@ describe("Image", () => {
       SVG_URI = `https://${SVG_PATH}`,
       SVG_BUFFER = fs.readFileSync(SVG_PATH),
       SVG_DATA_URI = `data:image/svg;base64,${SVG_BUFFER.toString('base64')}`,
+      SVG_FILE_URL = pathToFileURL(SVG_PATH),
       img
 
   beforeEach(() => img = new Image() )
 
   describe("can initialize bitmaps from", () => {
     test("buffer", async () => {
-      expect(img).toMatchObject(FRESH)
+      img = new Image(BUFFER)
+      expect(img).toMatchObject(LOADED)
+      expect(img.src).toEqual("::Buffer::")
+
+      let fakeSrc = 'arbitrary*src*string'
+      img = new Image(BUFFER, fakeSrc)
+      expect(img.src).toEqual(fakeSrc)
+
+      img = new Image()
       img.src = BUFFER
-      await img.decode()
       expect(img).toMatchObject(LOADED)
     })
 
     test("data uri", () => {
-      expect(img).toMatchObject(FRESH)
       img.src = DATA_URI
       expect(img).toMatchObject(LOADED)
+
+      img = new Image(DATA_URI)
+      expect(img).toMatchObject(LOADED)
+      expect(img.src).toEqual(DATA_URI)
+
+      let fakeSrc = 'arbitrary*src*string'
+      img = new Image(DATA_URI, fakeSrc)
+      expect(img.src).toEqual(fakeSrc)
     })
 
     test("local file", async () => {
@@ -61,6 +78,19 @@ describe("Image", () => {
       img.src = PATH
       await img.decode()
       expect(img).toMatchObject(LOADED)
+      expect(img.src).toEqual(PATH)
+
+      expect(() => new Image(PATH)).toThrow("Expected a valid data URL")
+    })
+
+    test("file url", async () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = FILE_URL
+      await img.decode()
+      expect(img).toMatchObject(LOADED)
+      expect(img.src).toEqual(fileURLToPath(FILE_URL))
+
+      expect(() => new Image(FILE_URL)).toThrow("Expected a valid data URL")
     })
 
     test("http url", done => {
@@ -71,6 +101,8 @@ describe("Image", () => {
         done()
       }
       img.src = URI
+
+      expect(() => new Image(URI)).toThrow("Expected a valid data URL")
     })
 
     test("loadImage call", async () => {
@@ -108,23 +140,34 @@ describe("Image", () => {
   })
 
   describe("can initialize SVGs from", () => {
-    test("buffer", async () => {
+    test("buffer", () => {
       expect(img).toMatchObject(FRESH)
+      img = new Image(SVG_BUFFER)
+      expect(img).toMatchObject(PARSED)
+
+      img = new Image()
       img.src = SVG_BUFFER
-      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
 
     test("data uri", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = SVG_DATA_URI
-      await img.decode()
       expect(img).toMatchObject(PARSED)
     })
 
     test("local file", async () => {
       expect(img).toMatchObject(FRESH)
       img.src = SVG_PATH
+      expect(img.complete).toBeFalsy()
+      await img.decode()
+      expect(img).toMatchObject(PARSED)
+    })
+
+    test("file url", async () => {
+      expect(img).toMatchObject(FRESH)
+      img.src = SVG_FILE_URL
+      expect(img.complete).toBeFalsy()
       await img.decode()
       expect(img).toMatchObject(PARSED)
     })
@@ -137,6 +180,7 @@ describe("Image", () => {
         done()
       }
       img.src = SVG_URI
+      expect(img.complete).toBeFalsy()
     })
   })
 
@@ -210,9 +254,7 @@ describe("Image", () => {
       await img.decode()
       expect(img).toMatchObject(PARSED)
 
-      img = new Image()
-      img.src = asBuffer(path)
-      await img.decode()
+      img = new Image(asBuffer(path))
       expect(img).toMatchObject(PARSED)
     }
 

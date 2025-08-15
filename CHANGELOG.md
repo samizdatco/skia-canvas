@@ -13,6 +13,7 @@
 
 #### Imagery
 - The [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] helpers now use `node-fetch` to handle web requests and can accept a [fetch options][fetch_opts] object as the final argument.
+- `Image` objects can now be created by passing a Buffer or dataURL-containing string as a [constructor argument][image_constructor] and will be immeditately drawable (no asynchronous loading required).
 - Added support for integrating the [Sharp][sharp] image processor into canvas workflows (if the `sharp` npm module has been installed):
   - The new Canvas[.toSharp()][canvas_toSharp] & ImageData[.toSharp()][id_toSharp] convenience methods convert their contents to a Sharp bitmap object
   - `loadImage()` & `loadImageData()` can now be called with a Sharp object as their sole argument
@@ -104,6 +105,7 @@
 [toURL]: /docs/api/canvas.md#tourl
 [export_type]: /docs/api/canvas.md#type
 [gpu_opt]: /docs/api/canvas.md#choosing-a-rendering-engine
+[image_constructor]: /docs/api/image.md#constructor
 
 ## 📦 ⟩ [v2.0.2] ⟩ Jan 27, 2025
 ### New Features

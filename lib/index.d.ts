@@ -119,8 +119,8 @@ declare var DOMRectReadOnly: {
 // Images
 //
 
-export function loadImage(src: string | Buffer | URL, options?: RequestInit): Promise<Image>
-export function loadImage(src: Sharp): Promise<Image>
+export function loadImage(src: string | URL, options?: RequestInit): Promise<Image>
+export function loadImage(src: Sharp | Buffer): Promise<Image>
 
 export function loadImageData(src: string | Buffer | URL, width: number, height?:number): Promise<ImageData>
 export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
@@ -172,10 +172,10 @@ export class ImageData {
   toSharp(): Sharp
 }
 
-export class Image extends EventEmitter {
-  constructor()
+export class Image extends EventEmitter{
+  constructor(data?: Buffer | URL | string, src?: string)
   get src(): string
-  set src(src: string | Buffer | URL)
+  set src(src: string | URL | Buffer | Sharp)
   get width(): number
   get height(): number
   onload: ((this: Image, image: Image) => any) | null;
