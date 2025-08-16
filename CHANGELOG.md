@@ -2,6 +2,11 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
+## 📦 ⟩ [v3.0.1] ⟩ Aug 16, 2025
+### Misc. Improvements
+- Updated `node-fetch` to v3 to fix deprecation warnings on recent node versions
+- Updated `winit` and other rust dependencies
+
 ## 📦 ⟩ [v3.0.0] ⟩ Aug 15, 2025
 
 ### New Features
