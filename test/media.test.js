@@ -6,25 +6,23 @@ const _ = require('lodash'),
       {pathToFileURL, fileURLToPath} = require('url'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
 
-jest.mock("cross-fetch", () => {
-  const fs = require('fs')
-  return {
-    fetch: function(src){
-      let path = src.replace(/^https?:\//, process.cwd())
-
-      try{
-        let buf = new Uint8Array(fs.readFileSync(path)).buffer
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          arrayBuffer:() => Promise.resolve(buf)
-        })
-      }catch(e){
-        return Promise.resolve({ok: false, status: 404})
-      }
-    },
-  }
-})
+jest.mock('../lib/fetch.js', () => ({
+  ...jest.requireActual('../lib/fetch.js'),
+  fetch: (src) => {
+    let path = src.replace(/^https?:\//, process.cwd())
+    try{
+      const fs = require('fs')
+      let buf = new Uint8Array(fs.readFileSync(path)).buffer
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        arrayBuffer:() => Promise.resolve(buf)
+      })
+    }catch(e){
+      return Promise.resolve({ok: false, status: 404})
+    }
+  },
+}))
 
 describe("Image", () => {
   var PATH = 'test/assets/pentagon.png',
