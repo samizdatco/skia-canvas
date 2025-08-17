@@ -1,9 +1,12 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!--## 🥚 ⟩ [Unreleased]-->
+
+## 📦 ⟩ [v3.0.2] ⟩ Aug 17, 2025
 
 ### Misc. Improvements
 - Only use `node-fetch` on systems lacking a built-in `fetch`
+- Dropped `fast-glob` (reducing external dependency count to 11)
 
 ### Breaking Changes
 - Glob-handling has been removed from [FontLibrary.use()][FontLibrary.use]. If you want the old behavior, try using the [`fast-glob`](https://www.npmjs.com/package/fast-glob) or [`glob`](https://www.npmjs.com/package/glob) modules to prepare the file-list you pass to the method.
@@ -529,7 +532,9 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.0...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.2...HEAD
+[v3.0.2]: https://github.com/samizdatco/skia-canvas/compare/v3.0.1...v3.0.2
+[v3.0.1]: https://github.com/samizdatco/skia-canvas/compare/v3.0.0...v3.0.1
 [v3.0.0]: https://github.com/samizdatco/skia-canvas/compare/v2.0.2...v3.0.0
 [v2.0.2]: https://github.com/samizdatco/skia-canvas/compare/v2.0.1...v2.0.2
 [v2.0.1]: https://github.com/samizdatco/skia-canvas/compare/v2.0.0...v2.0.1
