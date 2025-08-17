@@ -31,7 +31,7 @@
     "detect-libc": "^2.0.4",
     "fast-glob": "^3.3.3",
     "https-proxy-agent": "^7.0.6",
-    "node-fetch": "^3.3.2",
+    "node-fetch": "^2.7.0",
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
