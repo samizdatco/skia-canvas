@@ -80,18 +80,6 @@ FontLibrary.use("Grizwald", [
 ])
 ```
 
-#### with a list of ‘glob’ patterns
-
-> Note to Windows users: Due to recent changes to the [glob][glob] module, you must write paths using unix-style _forward_ slashes. Backslashes are now used solely for escaping wildcard characters.
-
-```js
-// with default family name
-FontLibrary.use(['fonts/Crimson_Pro/*.ttf'])
-
-// with an alias
-FontLibrary.use("Stinson", ['fonts/Crimson_Pro/*.ttf'])
-```
-
 #### multiple families with aliases
 ```js
 FontLibrary.use({
@@ -111,6 +99,26 @@ The return value will be either a list or an object (matching the style in which
 }
 ```
 
+#### with a list of ‘glob’ patterns
+
+:::warning
+Glob support is no longer built-in as of v3.0: Try installing the [`glob`][glob] or [`fast-glob`][fastglob] module if you'd like to emulate the old behavior.
+:::
+
+> Note to Windows users: glob patterns require that you write paths using unix-style _forward_ slashes. Backslashes are used solely for escaping wildcard characters.
+
+```js
+import {globSync:glob} from 'fast-glob'
+
+// with default family name
+FontLibrary.use(glob('fonts/Crimson_Pro/*.ttf'))
+
+// with an alias
+FontLibrary.use("Stinson", glob('fonts/Crimson_Pro/*.ttf'))
+```
+
+
 <!-- references_begin -->
-[glob]: https://github.com/isaacs/node-glob/blob/main/changelog.md#80
+[glob]: https://www.npmjs.com/package/glob
+[fastglob]: https://www.npmjs.com/package/fast-glob
 <!-- references_end -->

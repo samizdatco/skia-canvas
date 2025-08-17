@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "detect-libc": "^2.0.4",
-    "fast-glob": "^3.3.3",
     "https-proxy-agent": "^7.0.6",
     "node-fetch": "^2.7.0",
     "string-split-by": "^1.0.0"
@@ -40,6 +39,7 @@
     "@types/node": "^24.2.1",
     "cargo-cp-artifact": "^0.1",
     "express": "^5.1.0",
+    "fast-glob": "^3.3.3",
     "jest": "^30.0.5",
     "lodash": "^4.17.21",
     "nodemon": "^3.1.10",

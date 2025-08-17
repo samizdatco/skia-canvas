@@ -4,6 +4,7 @@ const _ = require('lodash'),
       fs = require('fs'),
       path = require('path'),
       {pathToFileURL, fileURLToPath} = require('url'),
+      {globSync:glob} = require('fast-glob'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
 
 jest.mock('../lib/fetch.js', () => ({
@@ -386,31 +387,31 @@ describe("FontLibrary", ()=>{
     }
   })
 
-  test("can handle glob patterns", () => {
-    expect( FontLibrary.use([`${FONTS_DIR}/montserrat*/montserrat-v30-latin-italic.woff2`]) ).toHaveLength(1)
-    expect( FontLibrary.use([`${FONTS_DIR}/montserrat-latin/*700*.woff2`]) ).toHaveLength(2)
-    expect( FontLibrary.use([`${ASSETS_DIR}/**/montserrat-v30-latin-italic.woff2`]) ).toHaveLength(1)
-    expect( FontLibrary.use([`${ASSETS_DIR}/**/montserrat*italic.*`]) ).toHaveLength(3)
+  test("can handle different use() signatures", () => {
+    expect( FontLibrary.use(glob(`${FONTS_DIR}/montserrat*/montserrat-v30-latin-italic.woff2`)) ).toHaveLength(1)
+    expect( FontLibrary.use(glob(`${FONTS_DIR}/montserrat-latin/*700*.woff2`)) ).toHaveLength(2)
+    expect( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat-v30-latin-italic.woff2`)) ).toHaveLength(1)
+    expect( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat*italic.*`)) ).toHaveLength(3)
 
     // `**` must be standalone (i.e., can't be attached to a file extension)
-    expect( FontLibrary.use([`${ASSETS_DIR}/**.woff2`]) ).toHaveLength(0)
-    expect( FontLibrary.use([`${ASSETS_DIR}/**/*.woff2`]) ).toHaveLength(7)
+    expect( FontLibrary.use(glob(`${ASSETS_DIR}/**.woff2`)) ).toHaveLength(0)
+    expect( FontLibrary.use(glob(`${ASSETS_DIR}/**/*.woff2`)) ).toHaveLength(7)
 
     // single alias
-    expect( FontLibrary.use("Montmartre", [`${ASSETS_DIR}/**/montserrat*italic.*`]) ).toHaveLength(3)
+    expect( FontLibrary.use("Montmartre", glob(`${ASSETS_DIR}/**/montserrat*italic.*`)) ).toHaveLength(3)
 
     // multiple aliases (array of patterns)
     let { Monaton, Montserrat } = FontLibrary.use({
-      Monaton: [`${FONTS_DIR}/*.woff2`],
-      Montserrat: [`${FONTS_DIR}/montserrat-latin/*italic.woff2`, `${FONTS_DIR}/**/montserrat-latin/*700.woff2`]
+      Monaton: glob(`${FONTS_DIR}/*.woff2`),
+      Montserrat: glob([`${FONTS_DIR}/montserrat-latin/*italic.woff2`, `${FONTS_DIR}/**/montserrat-latin/*700.woff2`])
     })
     expect(Monaton).toHaveLength(1)
     expect(Montserrat).toHaveLength(4)
 
     // multiple aliases (bare-string pattern)
     let { MonatonNowrap, MontserratNowrap  } = FontLibrary.use({
-      MonatonNowrap: `${FONTS_DIR}/*.woff2`,
-      MontserratNowrap: `${FONTS_DIR}/montserrat-latin/*.woff2`
+      MonatonNowrap: glob(`${FONTS_DIR}/*.woff2`)[0],
+      MontserratNowrap: glob(`${FONTS_DIR}/montserrat-latin/*.woff2`)
     })
     expect(MonatonNowrap).toHaveLength(1)
     expect(MontserratNowrap).toHaveLength(6)
