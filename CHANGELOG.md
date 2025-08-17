@@ -9,7 +9,9 @@
 - Dropped `fast-glob` (reducing external dependency count to 11)
 
 ### Breaking Changes
-- Glob-handling has been removed from [FontLibrary.use()][FontLibrary.use]. If you want the old behavior, try using the [`fast-glob`](https://www.npmjs.com/package/fast-glob) or [`glob`](https://www.npmjs.com/package/glob) modules to prepare the file-list you pass to the method.
+- Glob-handling has been removed from [FontLibrary.use()][FontLibrary.use]. If you want the old behavior, try using the [`fast-glob`](https://www.npmjs.com/package/fast-glob) or [`glob`](https://www.npmjs.com/package/glob) modules to [prepare the file-list][font_globbing] you pass to the method.
+
+[font_globbing]: /docs/api/font-library.md#with-a-list-of-glob-patterns
 
 ## 📦 ⟩ [v3.0.1] ⟩ Aug 16, 2025
 
