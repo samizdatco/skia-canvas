@@ -3,6 +3,7 @@
 const _ = require('lodash'),
       fs = require('fs'),
       path = require('path'),
+      os = require('os'),
       {pathToFileURL, fileURLToPath} = require('url'),
       {globSync:glob} = require('fast-glob'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
@@ -388,6 +389,13 @@ describe("FontLibrary", ()=>{
   })
 
   test("can handle different use() signatures", () => {
+    const normalizePath = p => os.platform() == 'win32'
+        ? p.replace(/^\\\\(?<path>[.?])/, '//$1') // The device path (\\.\ or \\?\)
+           .replaceAll(/\\(?![!()+@[\]{}])/g, '/') // All backslashes except escapes
+        : p
+
+    FONTS_DIR = normalizePath(FONTS_DIR)
+    ASSETS_DIR = normalizePath(ASSETS_DIR)
     expect( FontLibrary.use(glob(`${FONTS_DIR}/montserrat*/montserrat-v30-latin-italic.woff2`)) ).toHaveLength(1)
     expect( FontLibrary.use(glob(`${FONTS_DIR}/montserrat-latin/*700*.woff2`)) ).toHaveLength(2)
     expect( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat-v30-latin-italic.woff2`)) ).toHaveLength(1)
