@@ -18,8 +18,8 @@ jobs:
           - windows-latest
           - ubuntu-22.04
         node:
-          - 16
-          - 22
+          - 18
+          - 24
 
     steps:
     - name: Enable long paths (Windows only)
@@ -29,10 +29,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Use Node.js ${{ matrix.node }}
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: ${{ matrix.node }}
         cache: 'npm'
 
     - name: Use Rust
@@ -49,4 +49,3 @@ jobs:
     - name: Run tests
       run: |
         npm test --verbose
-
