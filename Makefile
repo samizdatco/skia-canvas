@@ -48,7 +48,7 @@ distclean: clean
 
 release:
 	@if [[ `git status -s package.json` != "" ]]; then printf "Commit changes to package.json first:\n\n"; git --no-pager diff package.json; exit 1; fi
-	@if [[ `git cherry -v` != "" ]]; then printf "Unpushed commits:\n\n"; git --no-pager log --branches --not --remotes; exit 1; fi
+	@if [[ `git cherry -v` != "" ]]; then printf "Unpushed commits:\n"; git --no-pager log --oneline main --not --remotes="*/main"; exit 1; fi
 	@if gh release view $(PACKAGE_VERSION) --json id > /dev/null; then printf "Already published $(PACKAGE_VERSION)\n"; exit 1; fi
 	@echo
 	@echo "Currently on NPM:  $(NPM_VERSION)"
