@@ -29,8 +29,8 @@ use super::{VK_FORMATS, to_sk_format};
 
 pub struct VulkanRenderer{
     window: Arc<Window>,
+    cache: RenderCache, // must be listed before backend to ensure proper drop order
     backend: VulkanBackend,
-    cache: RenderCache,
 }
 
 impl VulkanRenderer {
@@ -192,13 +192,13 @@ impl VulkanRenderer {
 
 
 struct VulkanBackend{
-    queue: Arc<Queue>,
     framebuffers: Vec<Arc<Framebuffer>>,
     render_pass: Arc<RenderPass>,
     swapchain: Arc<Swapchain>,
     swapchain_is_valid: bool,
     last_render: Option<Box<dyn GpuFuture>>,
-    skia_ctx: gpu::DirectContext,
+    skia_ctx: gpu::DirectContext, // must be listed before parent queue to ensure proper drop order
+    queue: Arc<Queue>,
 }
 
 impl Drop for VulkanBackend{
