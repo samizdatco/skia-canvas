@@ -661,7 +661,7 @@ pub fn pages_arg(cx: &mut FunctionContext, idx:usize, opts:&ExportOptions, canva
   Ok(PageSequence::from(pages, engine))
 }
 
-fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Document{
+fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Document<'_>{
   pdf::new_document(buffer, Some(&pdf::Metadata {
     producer: "Skia Canvas <https://skia-canvas.org>".to_string(),
     encoding_quality: Some((quality*100.0) as i32),
