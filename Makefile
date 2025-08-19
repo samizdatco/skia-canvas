@@ -22,7 +22,7 @@ optimized: $(NPM)
 	@npm run build
 
 dev: $(NPM) $(LIB_SRC)
-	@npm run build -- generic
+	@npm run build -- custom
 	@touch $(LIB)
 
 test: $(LIB)
