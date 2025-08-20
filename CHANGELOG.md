@@ -2,6 +2,11 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
+## 📦 ⟩ [v3.0.3] ⟩ Aug 17, 2025
+
+### Bugfix
+- Fixed a segfault where windows on Vulkan platforms were being deallocated incorrectly upon close.
+
 ## 📦 ⟩ [v3.0.2] ⟩ Aug 17, 2025
 
 ### Misc. Improvements
@@ -534,7 +539,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.2...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.3...HEAD
+[v3.0.3]: https://github.com/samizdatco/skia-canvas/compare/v3.0.2...v3.0.3
 [v3.0.2]: https://github.com/samizdatco/skia-canvas/compare/v3.0.1...v3.0.2
 [v3.0.1]: https://github.com/samizdatco/skia-canvas/compare/v3.0.0...v3.0.1
 [v3.0.0]: https://github.com/samizdatco/skia-canvas/compare/v2.0.2...v3.0.0
