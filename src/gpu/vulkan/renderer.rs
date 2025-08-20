@@ -203,7 +203,7 @@ struct VulkanBackend{
 
 impl Drop for VulkanBackend{
     fn drop(&mut self) {
-        self.skia_ctx.abandon();
+        self.skia_ctx.release_resources_and_abandon();
     }
 }
 
