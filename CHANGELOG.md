@@ -2,7 +2,7 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
-## 📦 ⟩ [v3.0.3] ⟩ Aug 17, 2025
+## 📦 ⟩ [v3.0.3] ⟩ Aug 20, 2025
 
 ### Bugfix
 - Fixed a segfault where windows on Vulkan platforms were being deallocated incorrectly upon close.
