@@ -1,6 +1,12 @@
 # Changelog
 
-<!--## 🥚 ⟩ [Unreleased]-->
+## 🥚 ⟩ [Unreleased]
+
+### Misc. Improvements
+- When installing the module, any proxy server defined via `npm config set proxy` or an `HTTPS_PROXY` environment variable will be used to fetch the prebuilt binary
+- Replaced `fetch` altogether, now using Node's built-in `http` and `https` modules for better backward compatibility and support for additional [request parameters][request_opts] for [loadImage()][loadImage()]
+
+[request_opts]: https://nodejs.org/api/http.html#httprequestoptions-callback
 
 ## 📦 ⟩ [v3.0.3] ⟩ Aug 20, 2025
 

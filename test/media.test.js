@@ -8,21 +8,15 @@ const _ = require('lodash'),
       {globSync:glob} = require('fast-glob'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
 
-jest.mock('../lib/fetch.js', () => ({
-  ...jest.requireActual('../lib/fetch.js'),
-  fetch: (src) => {
+jest.mock('../lib/urls.js', () => ({
+  ...jest.requireActual('../lib/urls.js'),
+  fetchURL: (src, opts, ok, fail) => {
+    const fs = require('fs')
     let path = src.replace(/^https?:\//, process.cwd())
-    try{
-      const fs = require('fs')
-      let buf = new Uint8Array(fs.readFileSync(path)).buffer
-      return Promise.resolve({
-        ok: true,
-        status: 200,
-        arrayBuffer:() => Promise.resolve(buf)
-      })
-    }catch(e){
-      return Promise.resolve({ok: false, status: 404})
-    }
+    fs.readFile(path, (err, data) => {
+      if (err) fail(Error(`Failed to load image from "${src}" (HTTP error 404)`))
+      else ok(data)
+    })
   },
 }))
 

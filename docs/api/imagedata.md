@@ -177,7 +177,7 @@ let id = await loadImageData('some-image-file.raw', 64, 64, {
 ```
 
 #### Loading URLs
-If the `src` argument is a URL, you can optionally include any [request options][fetch_opts] supported by [`fetch`][fetch] in the final argument:
+If the `src` argument is a URL, you can optionally include any [supported request options][loadimage_options] in the final argument:
 ```js
 let id = await loadImageData('https://skia-canvas.org/customized.raw', 64, 64, {
   colorType: "rgb",
@@ -220,11 +220,10 @@ await loadImageData(sharpImage)
 [imgdata_colortype]: #colortype
 [imgdata_bpp]: #bytesperpixel
 [imgdata_tosharp]: #tosharp
+[loadimage_options]: image.md#loading-urls
 [skia_colortype]: https://rust-skia.github.io/doc/skia_safe/enum.ColorType.html
 [sharp]: https://sharp.pixelplumbing.com
 [sharp_npm]: https://www.npmjs.com/package/sharp
-[fetch]: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
-[fetch_opts]: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit
 [ImageData]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData
 [mdn_ImageData_data]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData/data
 [mdn_ImageData_colorspace]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData/colorSpace

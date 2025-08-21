@@ -199,11 +199,28 @@ Note that you can pass a wide variety of image sources to the `loadImage` helper
 
 #### Loading URLs
 
-When loading a URL over HTTP(S) you may also include a second argument containing [request options][fetch_opts] to be used when the library calls [`fetch`][fetch] behind the scenes. This can be useful for accessing resources requiring authentication…
+When loading a URL over HTTP(S) you may also include a second argument containing options to be used when the library makes its web request behind the scenes.
+
+The supported options include:
+- `method`: the http ‘verb’ to use (defaults to `GET`)
+- `headers`: an object mapping request header names to values
+- `body`: a string or buffer to be sent to the server if the method is set to `POST` or `PUT`
+- `auth`: credentials for Basic Auth in the format `"user:password"` which will be used to construct the `Authorization` header (if not supplied)
+- `signal`: an [AbortSignal][AbortSignal] to allow the request to be cancelled
+- `agent`: an [http.Agent][http_agent] used to customize the connection or `false` to disable the [default agent](https://www.npmjs.com/package/https-proxy-agent) which uses the url in the `HTTP_PROXY` environment variable (if defined) as a proxy server
+- any other option supported by Node’s [http.request][http_request] call
+
+
+These options can be useful for accessing resources requiring authentication…
 
 ```js
+let img = await loadImage('https://example.com/lightly-protected.png', {
+  auth: "username:password" // credentials for http-basic-auth
+})
+```
+```js
 let img = await loadImage('https://example.com/protected.png', {
-  headers: {"Authorization": 'Bearer <secret-token-value>'}
+  headers: {"Authorization": 'Bearer <secret-token-value>'} // token-based auth
 })
 ```
 
@@ -221,6 +238,8 @@ let img = await loadImage('https://example.com/customized.svg', {
 })
 ```
 
+
+
 <!-- references_begin -->
 [loadimage]: #loadimage
 [img_bind]: #on--off--once
@@ -235,8 +254,9 @@ let img = await loadImage('https://example.com/customized.svg', {
 [Buffer]: https://nodejs.org/api/buffer.html
 [sharp]: https://sharp.pixelplumbing.com
 [sharp_npm]: https://www.npmjs.com/package/sharp
-[fetch]: https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch
-[fetch_opts]: https://developer.mozilla.org/en-US/docs/Web/API/RequestInit
+[http_agent]: https://nodejs.org/api/http.html#class-httpagent
+[http_request]: https://nodejs.org/api/http.html#httprequestoptions-callback
+[AbortSignal]: https://developer.mozilla.org/en-US/docs/Webhttps://developer.mozilla.org/en-US/docs/Web/API/AbortSignal
 [Promise]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
 [DataURL]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs
 [img_element]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLImageElement
