@@ -37,7 +37,7 @@ impl Typesetter{
     let typefaces = FontLibrary::with_shared(|lib|
       lib
         .set_hinting(graf_style.hinting_is_on())
-        .collect_fonts(&char_style)
+        .fonts_for_style(&char_style)
     );
     let width = width.unwrap_or(GALLEY);
     let text = match text_wrap{

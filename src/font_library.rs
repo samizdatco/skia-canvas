@@ -83,7 +83,7 @@ pub struct FontLibrary{
     fn font_collection(&mut self) -> FontCollection{
       // lazily initialize font collection on first actual use
       if self.collection.is_none(){
-        // set up generic font family mappings
+        // set up generic font family mappings (to be used in build_font_collection())
         if self.generics.is_empty(){
           let mut generics = vec![];
           let mut font_stacks = HashMap::new();
@@ -115,7 +115,7 @@ pub struct FontLibrary{
           self.generics = generics;
         }
 
-        self.rebuild_collection(); // assigns to self.collection
+        self.collection = Some(self.build_font_collection());
       };
 
       self.collection.as_ref().unwrap().clone()
@@ -219,10 +219,11 @@ pub struct FontLibrary{
 
       // add the new typeface/alias and recreate the FontCollection to include it
       self.fonts.push((font, alias));
-      self.rebuild_collection();
+      self.collection = Some(self.build_font_collection());
+      self.collection_cache.drain();
     }
 
-    fn rebuild_collection(&mut self){
+    fn build_font_collection(&self) -> FontCollection{
       let mut assets = TypefaceFontProvider::new();
       for (font, alias) in &self.generics {
         assets.register_typeface(font.clone(), alias.as_deref());
@@ -240,8 +241,7 @@ pub struct FontLibrary{
       let mut collection = FontCollection::new();
       collection.set_default_font_manager(self.mgr.clone(), default_fam.as_deref());
       collection.set_asset_font_manager(Some(assets.into()));
-      self.collection = Some(collection);
-      self.collection_cache.drain();
+      collection
     }
 
     pub fn update_style(&mut self, orig_style:&TextStyle, spec: &FontSpec) -> Option<TextStyle>{
@@ -274,32 +274,35 @@ pub struct FontLibrary{
       self
     }
 
-    pub fn collect_fonts(&mut self, style: &TextStyle) -> FontCollection {
+    pub fn fonts_for_style(&mut self, style: &TextStyle) -> FontCollection {
       let families = style.font_families();
       let families:Vec<&str> = families.iter().collect();
       let matches = self.font_collection().find_typefaces(&families, style.font_style());
 
-      // if the matched typeface is a variable font, create an instance that matches
-      // the current weight settings and return early with a new FontCollection that
-      // contains just that single font instance
-      if let Some(font) = matches.first() {
-        if let Some(params) = font.variation_design_parameters(){
+      // if any of the matched typefaces is a variable font, create an instance that
+      // matches the current weight settings and add it to a dynamic font mgr
+      if matches.iter().any(|font| font.variation_design_parameters().is_some()){
+        // memoize the generation of single-weight FontCollections for variable fonts
+        let key = CollectionKey::new(style);
+        if let Some(collection) = self.collection_cache.get(&key){
+          return collection.clone()
+        }
 
-          // memoize the generation of single-weight FontCollections for variable fonts
-          let key = CollectionKey::new(style);
-          if let Some(collection) = self.collection_cache.get(&key){
-            return collection.clone()
-          }
+        // collect any instantiated variable fonts in a TFP to be used as the 'dynamic'
+        // font mgr (which is searched before the 'asset' or the 'default' mgr)
+        let mut dynamic = TypefaceFontProvider::new();
 
-          // reconnect to the user-specified family name (if provided)
-          let alias = self.fonts.iter().find_map(|(face, alias)|
-            if Typeface::equal(font, face){ alias.clone() }else{ None }
-          );
-
-          for param in params {
-            let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-            let tag = String::from_utf8(chars).unwrap();
-            if tag == "wght"{
+        for font in matches.into_iter(){
+          font.variation_design_parameters()
+            .and_then(|params|{
+              // find the weight axis
+              params.into_iter().find(|param|{
+                let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
+                let tag = String::from_utf8(chars).unwrap();
+                tag == "wght"
+              })
+            }).and_then(|param|{
+              // create an instance at the proper 'wght' for this weight
               // NB: currently setting the value to *one less* than what was requested
               //     to work around weird Skia behavior that returns something nonlinearly
               //     weighted in many cases (but not for ±1 of that value). This makes it so
@@ -310,25 +313,27 @@ pub struct FontLibrary{
               let coords = [ Coordinate { axis: param.tag, value } ];
               let v_pos = VariationPosition { coordinates: &coords };
               let args = FontArguments::new().set_variation_design_position(v_pos);
-              let face = font.clone_with_arguments(&args).unwrap();
+              font.clone_with_arguments(&args)
+            }).map(|face|{
+              // maintain the user-defined family alias (if applicable)
+              let alias = self.fonts.iter().find_map(|(orig, alias)|
+                if Typeface::equal(&font, orig){ alias.clone() }else{ None }
+              );
 
-              let mut dynamic = TypefaceFontProvider::new();
-              dynamic.register_typeface(face, alias.as_deref());
-
-              let mut collection = FontCollection::new();
-              collection.set_default_font_manager(self.mgr.clone(), None);
-              collection.set_asset_font_manager(Some(dynamic.into()));
-              self.collection_cache.insert(key, collection.clone());
-              return collection
-            }
-          }
+              // add the font to the dynamic font mgr
+              dynamic.register_typeface(face, alias.as_deref())
+            });
         }
+
+        let mut collection = self.build_font_collection();
+        collection.set_dynamic_font_manager(Some(dynamic.into()));
+        self.collection_cache.insert(key, collection.clone());
+        collection
+      }else{
+        // if the matched font wasn't variable, then just return the standard collection
+        self.font_collection()
       }
-
-      // if the matched font wasn't variable, then just return the standard collection
-      self.font_collection()
     }
-
   }
 
   //
