@@ -2,6 +2,9 @@
 
 ## 🥚 ⟩ [Unreleased]
 
+### Bugfixes
+- Variable fonts can now correctly function as fallbacks (previously only the first-matched font in a stack would be converted to a usable instance)
+
 ### Misc. Improvements
 - When installing the module, any proxy server defined via `npm config set proxy` or an `HTTPS_PROXY` environment variable will be used to fetch the prebuilt binary
 - Replaced `fetch` altogether, now using Node's built-in `http` and `https` modules for better backward compatibility and support for additional [request parameters][request_opts] for [loadImage()][loadImage()]
