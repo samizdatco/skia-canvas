@@ -7,7 +7,7 @@
 
 ### Misc. Improvements
 - When installing the module, any proxy server defined via `npm config set proxy` or an `HTTPS_PROXY` environment variable will be used to fetch the prebuilt binary
-- Replaced `fetch` altogether, now using Node's built-in `http` and `https` modules for better backward compatibility and support for additional [request parameters][request_opts] for [loadImage()][loadImage()]
+- Replaced `fetch` altogether, now using Node's built-in `http` and `https` modules for better backward compatibility, support for additional [request parameters][request_opts] for [loadImage()][loadImage()], and a further reduction in the number of npm dependencies (now down to 8)
 
 [request_opts]: https://nodejs.org/api/http.html#httprequestoptions-callback
 
