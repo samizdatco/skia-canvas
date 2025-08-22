@@ -43,10 +43,10 @@ impl CollectionKey{
 }
 
 pub struct FontLibrary{
-    pub mgr: FontMgr,
-    pub fonts: Vec<(Typeface, Option<String>)>,
-    pub generics: Vec<(Typeface, Option<String>)>,
-    pub collection: Option<FontCollection>,
+    mgr: FontMgr,
+    collection: Option<FontCollection>,
+    fonts: Vec<(Typeface, Option<String>)>,
+    generics_cache: Vec<(Typeface, Option<String>)>,
     collection_cache: HashMap<CollectionKey, FontCollection>,
     collection_hinted: bool,
   }
@@ -72,7 +72,7 @@ pub struct FontLibrary{
           }
 
           RefCell::new(FontLibrary{
-            mgr:FontMgr::default(), collection:None, collection_cache:HashMap::new(), collection_hinted:false, fonts:vec![], generics:vec![]
+            mgr:FontMgr::default(), fonts:vec![], collection:None, collection_cache:HashMap::new(), collection_hinted:false, generics_cache:vec![]
           })
         });
 
@@ -83,42 +83,67 @@ pub struct FontLibrary{
     fn font_collection(&mut self) -> FontCollection{
       // lazily initialize font collection on first actual use
       if self.collection.is_none(){
-        // set up generic font family mappings (to be used in build_font_collection())
-        if self.generics.is_empty(){
-          let mut generics = vec![];
-          let mut font_stacks = HashMap::new();
-          font_stacks.insert("serif", vec!["Times", "Nimbus Roman", "Times New Roman", "Tinos", "Noto Serif", "Liberation Serif", "DejaVu Serif", "Source Serif Pro"]);
-          font_stacks.insert("sans-serif", vec!["Avenir Next", "Avenir", "Helvetica Neue", "Helvetica", "Arial Nova", "Arial", "Inter", "Arimo", "Roboto", "Noto Sans", "Liberation Sans", "DejaVu Sans", "Nimbus Sans", "Clear Sans", "Lato", "Cantarell", "Arimo", "Ubuntu"]);
-          font_stacks.insert("monospace", vec!["Cascadia Code", "Source Code Pro", "Menlo", "Consolas", "Monaco", "Liberation Mono", "Ubuntu Mono", "Roboto Mono", "Lucida Console", "Monaco", "Courier New", "Courier"]);
-          font_stacks.insert("system-ui", vec!["Helvetica Neue", "Ubuntu", "Segoe UI", "Fira Sans", "Roboto", "DroidSans", "Tahoma"]);
-          // see also: https://modernfontstacks.com | https://systemfontstack.com | https://www.ctrl.blog/entry/font-stack-text.html
-
-          // Set up mappings for generic font names based on the first match found on the system
-          for (generic_name, families) in font_stacks.into_iter() {
-            let best_match = families.iter().find_map(|fam| {
-              let mut style_set = self.mgr.match_family(fam);
-              match style_set.count() > 0{
-                true => Some(style_set),
-                false => None
-              }
-            });
-
-            let alias = Some(generic_name.to_string());
-            if let Some(mut style_set) = best_match{
-              for style_index in 0..style_set.count() {
-                if let Some(font) = style_set.new_typeface(style_index){
-                  generics.push((font, alias.clone()));
-                }
-              }
-            }
-          }
-          self.generics = generics;
-        }
-
-        self.collection = Some(self.build_font_collection());
+        self.collection = Some(self.new_font_collection());
       };
 
       self.collection.as_ref().unwrap().clone()
+    }
+
+    fn new_font_collection(&mut self) -> FontCollection{
+      let mut assets = TypefaceFontProvider::new();
+      for (font, alias) in self.generics() {
+        assets.register_typeface(font.clone(), alias.as_deref());
+      }
+      for (font, alias) in &self.fonts {
+        assets.register_typeface(font.clone(), alias.as_deref());
+      }
+
+      let mut style_set = assets.match_family("system-ui");
+      let default_fam = match style_set.count() > 1{
+        true => style_set.match_style(FontStyle::default()),
+        false => self.mgr.legacy_make_typeface(None, FontStyle::default())
+      }.map(|f| f.family_name());
+
+      let mut collection = FontCollection::new();
+      collection.set_default_font_manager(self.mgr.clone(), default_fam.as_deref());
+      collection.set_asset_font_manager(Some(assets.into()));
+      collection
+    }
+
+    fn generics(&mut self) -> &Vec<(Typeface, Option<String>)> {
+      // set up generic font family mappings
+      if self.generics_cache.is_empty(){
+        let mut generics = vec![];
+        let mut font_stacks = HashMap::new();
+        font_stacks.insert("serif", vec!["Times", "Nimbus Roman", "Times New Roman", "Tinos", "Noto Serif", "Liberation Serif", "DejaVu Serif", "Source Serif Pro"]);
+        font_stacks.insert("sans-serif", vec!["Avenir Next", "Avenir", "Helvetica Neue", "Helvetica", "Arial Nova", "Arial", "Inter", "Arimo", "Roboto", "Noto Sans", "Liberation Sans", "DejaVu Sans", "Nimbus Sans", "Clear Sans", "Lato", "Cantarell", "Arimo", "Ubuntu"]);
+        font_stacks.insert("monospace", vec!["Cascadia Code", "Source Code Pro", "Menlo", "Consolas", "Monaco", "Liberation Mono", "Ubuntu Mono", "Roboto Mono", "Lucida Console", "Monaco", "Courier New", "Courier"]);
+        font_stacks.insert("system-ui", vec!["Helvetica Neue", "Ubuntu", "Segoe UI", "Fira Sans", "Roboto", "DroidSans", "Tahoma"]);
+        // see also: https://modernfontstacks.com | https://systemfontstack.com | https://www.ctrl.blog/entry/font-stack-text.html
+
+        // Set up mappings for generic font names based on the first match found on the system
+        for (generic_name, families) in font_stacks.into_iter() {
+          let best_match = families.iter().find_map(|fam| {
+            let mut style_set = self.mgr.match_family(fam);
+            match style_set.count() > 0{
+              true => Some(style_set),
+              false => None
+            }
+          });
+
+          let alias = Some(generic_name.to_string());
+          if let Some(mut style_set) = best_match{
+            for style_index in 0..style_set.count() {
+              if let Some(font) = style_set.new_typeface(style_index){
+                generics.push((font, alias.clone()));
+              }
+            }
+          }
+        }
+        self.generics_cache = generics;
+      }
+
+      &self.generics_cache
     }
 
     pub fn font_mgr(&mut self) -> FontMgr {
@@ -131,7 +156,7 @@ pub struct FontLibrary{
         .into_iter().nth(0){ dyn_mgr.register_typeface(fallback, None); }
 
       // add generic mappings & user-loaded fonts
-      for (font, alias) in &self.generics{
+      for (font, alias) in self.generics(){
         dyn_mgr.register_typeface(font.clone(), alias.as_deref());
       }
       for (font, alias) in &self.fonts{
@@ -204,9 +229,6 @@ pub struct FontLibrary{
     }
 
     fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
-      // make sure the collection & generics have been initialized before starting
-      self.font_collection();
-
       // replace any previously added font with the same metadata/alias
       if let Some(idx) = self.fonts.iter().position(|(old_font, old_alias)|
         match alias.is_some(){
@@ -219,29 +241,8 @@ pub struct FontLibrary{
 
       // add the new typeface/alias and recreate the FontCollection to include it
       self.fonts.push((font, alias));
-      self.collection = Some(self.build_font_collection());
+      self.collection = None;
       self.collection_cache.drain();
-    }
-
-    fn build_font_collection(&self) -> FontCollection{
-      let mut assets = TypefaceFontProvider::new();
-      for (font, alias) in &self.generics {
-        assets.register_typeface(font.clone(), alias.as_deref());
-      }
-      for (font, alias) in &self.fonts {
-        assets.register_typeface(font.clone(), alias.as_deref());
-      }
-
-      let mut style_set = assets.match_family("system-ui");
-      let default_fam = match style_set.count() > 1{
-        true => style_set.match_style(FontStyle::default()),
-        false => self.mgr.legacy_make_typeface(None, FontStyle::default())
-      }.map(|f| f.family_name());
-
-      let mut collection = FontCollection::new();
-      collection.set_default_font_manager(self.mgr.clone(), default_fam.as_deref());
-      collection.set_asset_font_manager(Some(assets.into()));
-      collection
     }
 
     pub fn update_style(&mut self, orig_style:&TextStyle, spec: &FontSpec) -> Option<TextStyle>{
@@ -282,7 +283,7 @@ pub struct FontLibrary{
       // if any of the matched typefaces is a variable font, create an instance that
       // matches the current weight settings and add it to a dynamic font mgr
       if matches.iter().any(|font| font.variation_design_parameters().is_some()){
-        // memoize the generation of single-weight FontCollections for variable fonts
+        // memoize the generation of FontCollections for instanced variable fonts
         let key = CollectionKey::new(style);
         if let Some(collection) = self.collection_cache.get(&key){
           return collection.clone()
@@ -325,7 +326,7 @@ pub struct FontLibrary{
             });
         }
 
-        let mut collection = self.build_font_collection();
+        let mut collection = self.new_font_collection();
         collection.set_dynamic_font_manager(Some(dynamic.into()));
         self.collection_cache.insert(key, collection.clone());
         collection
