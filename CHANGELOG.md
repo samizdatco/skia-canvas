@@ -1,6 +1,8 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!--## 🥚 ⟩ [Unreleased]-->
+
+## 📦 ⟩ [v3.0.4] ⟩ Aug 22, 2025
 
 ### Bugfixes
 - Variable fonts can now correctly function as fallbacks (previously only the first-matched font in a stack would be converted to a usable instance)
@@ -548,7 +550,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.3...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.4...HEAD
+[v3.0.4]: https://github.com/samizdatco/skia-canvas/compare/v3.0.3...v3.0.4
 [v3.0.3]: https://github.com/samizdatco/skia-canvas/compare/v3.0.2...v3.0.3
 [v3.0.2]: https://github.com/samizdatco/skia-canvas/compare/v3.0.1...v3.0.2
 [v3.0.1]: https://github.com/samizdatco/skia-canvas/compare/v3.0.0...v3.0.1
