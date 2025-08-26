@@ -1,6 +1,9 @@
 # Changelog
 
-<!--## 🥚 ⟩ [Unreleased]-->
+## 🥚 ⟩ [Unreleased]
+
+### Misc. Improvements
+- Decreased memory usage when drawing one canvas's contents onto another (via [drawImage][mdn_drawImage] or [drawCanvas][[drawCanvas]]).
 
 ## 📦 ⟩ [v3.0.4] ⟩ Aug 22, 2025
 
