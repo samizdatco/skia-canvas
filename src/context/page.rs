@@ -113,10 +113,18 @@ impl PageRecorder{
 
   pub fn get_page(&mut self) -> Page{
     if self.changed {
-      // stop and restart the recorder while adding its content as a new layer
-      if let Some(palimpsest) = self.current.finish_recording_as_picture(Some(&self.bounds)) {
-        self.layers.push(palimpsest);
-      }
+      // store layer as a drawable (so copies are deduplicated) wrapped in a picture (so it can be sent to other threads)
+      self.current
+        .finish_recording_as_drawable()
+        .and_then(|mut drawable|{
+          let mut wrapper = PictureRecorder::new();
+          wrapper.begin_recording(self.bounds, None).draw_drawable(&mut drawable, None);
+          wrapper.finish_recording_as_picture(None)
+        }).map(|pict|
+          self.layers.push(pict)
+        );
+
+      // resume recording
       self.current.begin_recording(self.bounds, None);
       self.changed = false;
       self.restore();
