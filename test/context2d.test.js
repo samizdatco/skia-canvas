@@ -2,14 +2,15 @@
 
 "use strict"
 
-const _ = require('lodash'),
-      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../lib'),
+const {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../lib'),
       css = require('../lib/classes/css');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
       GREEN = [0,128,0,255],
       CLEAR = [0,0,0,0]
+
+const _each = (obj, fn) => Object.entries(obj).forEach(([term, val]) => fn(val, term))
 
 describe("Context2D", ()=>{
   let canvas, ctx,
@@ -34,17 +35,17 @@ describe("Context2D", ()=>{
     test('currentTransform', () => {
       ctx.scale(0.1, 0.3)
       let matrix = ctx.currentTransform
-      _.each({a:0.1, b:0, c:0, d:0.3, e:0, f:0}, (val, term) =>
+      _each({a:0.1, b:0, c:0, d:0.3, e:0, f:0}, (val, term) =>
         expect(matrix[term]).toBeCloseTo(val)
       )
 
       ctx.resetTransform()
-      _.each({a:1, d:1}, (val, term) =>
+      _each({a:1, d:1}, (val, term) =>
         expect(ctx.currentTransform[term]).toBeCloseTo(val)
       )
 
       ctx.currentTransform = matrix
-      _.each({a:0.1, d:0.3}, (val, term) =>
+      _each({a:0.1, d:0.3}, (val, term) =>
         expect(ctx.currentTransform[term]).toBeCloseTo(val)
       )
     })
@@ -627,7 +628,7 @@ describe("Context2D", ()=>{
         [[{}, 10, 10], true],
       ]
 
-      _.each(argsets, ([args, shouldDraw]) => {
+      _each(argsets, ([args, shouldDraw]) => {
         canvas.width = WIDTH
         ctx.textBaseline = 'middle'
         ctx.textAlign = 'center'
@@ -1008,7 +1009,7 @@ describe("Context2D", ()=>{
       test('with args list', () => {
         ctx.transform(a, b, c, d, e, f)
         let matrix = ctx.currentTransform
-        _.each({a, b, c, d, e, f}, (val, term) =>
+        _each({a, b, c, d, e, f}, (val, term) =>
           expect(matrix[term]).toBeCloseTo(val)
         )
       })
@@ -1016,7 +1017,7 @@ describe("Context2D", ()=>{
       test('with DOMMatrix', () => {
         ctx.transform(new DOMMatrix().scale(0.1, 0.3));
         let matrix = ctx.currentTransform
-        _.each({a, b, c, d, e, f}, (val, term) =>
+        _each({a, b, c, d, e, f}, (val, term) =>
           expect(matrix[term]).toBeCloseTo(val)
         )
       })
@@ -1024,7 +1025,7 @@ describe("Context2D", ()=>{
       test('with matrix-like object', () => {
         ctx.transform({a, b, c, d, e, f});
         let matrix = ctx.currentTransform
-        _.each({a, b, c, d, e, f}, (val, term) =>
+        _each({a, b, c, d, e, f}, (val, term) =>
           expect(matrix[term]).toBeCloseTo(val)
         )
       })
@@ -1069,7 +1070,7 @@ describe("Context2D", ()=>{
         // check that the context can also take a string
         ctx.transform(`scale(${a}, ${d})`);
         let matrix = ctx.currentTransform
-        _.each({a, b, c, d, e, f}, (val, term) =>
+        _each({a, b, c, d, e, f}, (val, term) =>
           expect(matrix[term]).toBeCloseTo(val)
         )
       })
@@ -1114,8 +1115,8 @@ describe("Context2D", ()=>{
         '20px "Arial bold 300"': { size: 20, family: ['Arial bold 300'], variant: 'normal' }, // synthetic case with weight keyword inside family
       }
 
-      _.each(cases, (spec, font) => {
-        let expected = _.defaults(spec, {style:"normal", stretch:"normal", variant:"normal"}),
+      _each(cases, (spec, font) => {
+        let expected = {style:"normal", stretch:"normal", variant:"normal", ...spec},
             parsed = css.font(font);
         expect(parsed).toMatchObject(expected)
       })

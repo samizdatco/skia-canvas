@@ -1,7 +1,6 @@
 // @ts-check
 
-const _ = require('lodash'),
-      fs = require('fs'),
+const fs = require('fs'),
       tmp = require('tmp'),
       glob = require('fast-glob').globSync,
       {Canvas, Image} = require('../lib');
@@ -552,7 +551,7 @@ describe("Canvas", ()=>{
 
     test("an image even without a ctx", () => {
       let canvas = new Canvas(200, 200)
-      expect( () => canvas.toURLSync() ).not.toThrow()
+      expect( () => canvas.toURLSync("png") ).not.toThrow()
     })
   })
 

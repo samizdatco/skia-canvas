@@ -1,7 +1,6 @@
 // @ts-check
 
-const _ = require('lodash'),
-      {Canvas, DOMMatrix, Path2D, DOMPoint} = require('../lib');
+const {Canvas, DOMMatrix, Path2D, DOMPoint} = require('../lib');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -490,19 +489,23 @@ describe("Path2D", ()=>{
   describe("can apply path effect", () => {
 
     test("jitter", () => {
+      let rng = [...Array(99).keys()].map(k => k + 101)
+      let blackPixel = BLACK.toString()
+
       let line = new Path2D()
       line.moveTo(100, 100)
       line.lineTo(100, 200)
 
       ctx.lineWidth = 4
       ctx.stroke(line)
-      let allBlack = _.range(101, 199).map(y => _.isEqual(pixel(100, y), BLACK))
+      console.log(pixel(100,101))
+      let allBlack = rng.map(y => pixel(100, y).toString() == blackPixel)
       expect(allBlack).not.toContain(false)
       scrub()
 
       let zag = line.jitter(10, 20)
       ctx.stroke(zag)
-      let notAllBlack = _.range(101, 199).map(y => _.isEqual(pixel(100, y), BLACK))
+      let notAllBlack = rng.map(y => pixel(100, y).toString() == blackPixel)
       expect(notAllBlack).toContain(false)
       expect(notAllBlack).toContain(true)
     })

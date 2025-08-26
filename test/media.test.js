@@ -1,7 +1,6 @@
 // @ts-check
 
-const _ = require('lodash'),
-      fs = require('fs'),
+const fs = require('fs'),
       path = require('path'),
       os = require('os'),
       {pathToFileURL, fileURLToPath} = require('url'),
@@ -315,7 +314,7 @@ describe("FontLibrary", ()=>{
   test("can list families", ()=>{
     let fams = FontLibrary.families,
         sorted = fams.slice().sort(),
-        unique = _.uniq(sorted);
+        unique = [...new Set(sorted)];
 
     expect(fams.indexOf("Arial")>=0 || fams.indexOf("DejaVu Sans")>=0).toBe(true)
     expect(fams).toEqual(sorted)
@@ -353,12 +352,12 @@ describe("FontLibrary", ()=>{
     // with real name
     expect(() => FontLibrary.use(ttf)).not.toThrow()
     expect(FontLibrary.has(name)).toBe(true)
-    expect(_.get(FontLibrary.family(name), "weights")).toContain(400)
+    expect((FontLibrary.family(name) || {}).weights).toContain(400)
 
     // with alias
     expect(() => FontLibrary.use(alias, ttf)).not.toThrow()
     expect(FontLibrary.has(alias)).toBe(true)
-    expect(_.get(FontLibrary.family(alias), "weights")).toContain(400)
+    expect((FontLibrary.family(alias) || {}).weights).toContain(400)
 
     // fonts disappear after reset
     FontLibrary.reset()
