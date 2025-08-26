@@ -1,5 +1,4 @@
 NPM := $(CURDIR)/node_modules
-NODEMON := $(CURDIR)/node_modules/.bin/nodemon
 JEST := $(CURDIR)/node_modules/.bin/jest
 LIB := $(CURDIR)/lib/skia.node
 LIB_SRC := Cargo.toml lib/prebuild.mjs $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src/*/*/*.rs)
@@ -32,7 +31,7 @@ debug: $(LIB)
 	@$(JEST) --watch
 
 visual: $(LIB)
-	@$(NODEMON) test/visual -w native/index.node -w test/visual -e js,html
+	@node --watch-path lib --watch-path test/visual test/visual
 
 check:
 	cargo check
