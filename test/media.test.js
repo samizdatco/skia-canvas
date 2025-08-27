@@ -5,19 +5,10 @@
 const path = require('path'),
       os = require('os'),
       fs = require('fs'),
-      assert = require('node:assert'),
       nock = require('nock'),
-      {describe, test, beforeEach, afterEach} = require('node:test'),
+      {assert, describe, test, beforeEach, afterEach} = require('./runner'),
       {pathToFileURL, fileURLToPath} = require('url'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
-
-assert.contains = (actual, expected) => assert((actual || []).includes(expected))
-assert.doesNotContain = (actual, expected) => assert(!((actual || [expected]).includes(expected)))
-assert.matchesSubset = (actual, expected) => Object.entries(expected).forEach(([key, val]) => assert.equal(actual[key], val))
-assert.nearEqual = (actual, expected) => assert.ok(
-  Math.abs(expected - actual) < Math.pow(10, -2) / 2,
-  new assert.AssertionError({actual, expected, operator:"≈"})
-)
 
 const scope = nock('http://_h_o_s_t_')
   .persist()

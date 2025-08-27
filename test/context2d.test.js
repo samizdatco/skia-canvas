@@ -2,18 +2,9 @@
 
 "use strict"
 
-const assert = require('node:assert'),
-      {describe, test, beforeEach, afterEach} = require('node:test'),
+const {assert, describe, test, beforeEach, afterEach} = require('./runner'),
       {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../lib'),
       css = require('../lib/classes/css')
-
-assert.contains = (actual, expected) => assert((actual || []).includes(expected))
-assert.doesNotContain = (actual, expected) => assert(!((actual || [expected]).includes(expected)))
-assert.matchesSubset = (actual, expected) => Object.entries(expected).forEach(([key, val]) => assert.deepEqual(actual[key], val))
-assert.nearEqual = (actual, expected) => assert.ok(
-  Math.abs(expected - actual) < Math.pow(10, -2) / 2,
-  new assert.AssertionError({actual, expected, operator:"≈"})
-)
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
