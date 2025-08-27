@@ -24,10 +24,10 @@ dev: $(NPM) $(LIB_SRC)
 	@touch $(LIB)
 
 test: $(LIB)
-	node --test "test/*.js"
+	node --test
 
 debug: $(LIB)
-	node --test --watch "test/*.js"
+	node --test --watch
 
 visual: $(LIB)
 	@node --watch-path lib --watch-path test/visual test/visual

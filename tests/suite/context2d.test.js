@@ -2,9 +2,9 @@
 
 "use strict"
 
-const {assert, describe, test, beforeEach, afterEach} = require('./runner'),
-      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../lib'),
-      css = require('../lib/classes/css')
+const {assert, describe, test, beforeEach, afterEach} = require('../runner'),
+      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../../lib'),
+      css = require('../../lib/classes/css')
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -17,7 +17,7 @@ describe("Context2D", ()=>{
   let canvas, ctx,
       WIDTH = 512, HEIGHT = 512,
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data),
-      loadAsset = url => loadImage(`${__dirname}/assets/${url}`),
+      loadAsset = url => loadImage(`tests/assets/${url}`),
       mockedWarn = () => {},
       realWarn = console.warn;
 
@@ -769,7 +769,7 @@ describe("Context2D", ()=>{
     })
 
     test("letterSpacing", () => {
-        FontLibrary.use(`${__dirname}/assets/fonts/Monoton-Regular.woff`)
+        FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
 
         let [x, y] = [40, 100]
         let size = 32

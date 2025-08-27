@@ -6,9 +6,9 @@ const path = require('path'),
       os = require('os'),
       fs = require('fs'),
       nock = require('nock'),
-      {assert, describe, test, beforeEach, afterEach} = require('./runner'),
+      {assert, describe, test, beforeEach, afterEach} = require('../runner'),
       {pathToFileURL, fileURLToPath} = require('url'),
-      {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
+      {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../../lib')
 
 const scope = nock('http://_h_o_s_t_')
   .persist()
@@ -23,14 +23,14 @@ const scope = nock('http://_h_o_s_t_')
   })
 
 describe("Image", () => {
-  var PATH = 'test/assets/pentagon.png',
+  var PATH = 'tests/assets/pentagon.png',
       URI = `http://_h_o_s_t_/${PATH}`,
       BUFFER = fs.readFileSync(PATH),
       DATA_URI = `data:image/png;base64,${BUFFER.toString('base64')}`,
       FILE_URL = pathToFileURL(PATH),
       FRESH = {complete:false, width:0, height:0},
       LOADED = {complete:true, width:125, height:125},
-      FORMAT = 'test/assets/image/format',
+      FORMAT = 'tests/assets/image/format',
       PARSED = {complete:true, width:60, height:60},
       SVG_PATH = `${FORMAT}.svg`,
       SVG_URI = `http://_h_o_s_t_/${SVG_PATH}`,
@@ -125,10 +125,10 @@ describe("Image", () => {
       img = await loadImage(new URL(DATA_URI))
       assert.matchesSubset(img, LOADED)
 
-      img = await loadImage(new URL(`file:${__dirname}/../`+PATH))
+      img = await loadImage(pathToFileURL(PATH))
       assert.matchesSubset(img, LOADED)
 
-      img = await loadImage(new URL(`file:${__dirname}/../`+SVG_PATH))
+      img = await loadImage(pathToFileURL(SVG_PATH))
       assert.matchesSubset(img, PARSED)
 
       await assert.rejects(loadImage("http://_h_o_s_t_/nonesuch"), /HTTP error 404/)
@@ -199,7 +199,7 @@ describe("Image", () => {
         assert.equal(this, img)
         done()
       }
-      img.src = 'http://_h_o_s_t_/test/assets/globe.jpg'
+      img.src = 'http://_h_o_s_t_/tests/assets/globe.jpg'
     })
 
     test(".onerror callback", (t, done) => {
@@ -218,7 +218,7 @@ describe("Image", () => {
       assert.equal(decoded, img)
 
       // can load new data into existing Image
-      img.src = 'http://_h_o_s_t_/test/assets/image/format.png'
+      img.src = 'http://_h_o_s_t_/tests/assets/image/format.png'
       decoded = await img.decode()
       assert.equal(decoded, img)
 
@@ -265,7 +265,7 @@ describe("Image", () => {
 })
 
 describe("ImageData", () => {
-  var FORMAT = 'test/assets/image/format.raw',
+  var FORMAT = 'tests/assets/image/format.raw',
       RGBA = {width:60, height:60, colorType:'rgba'},
       BGRA = {width:60, height:60, colorType:'bgra'}
 
@@ -298,10 +298,8 @@ describe("ImageData", () => {
 describe("FontLibrary", ()=>{
   let canvas, ctx,
       WIDTH = 512, HEIGHT = 512,
-      ASSETS_DIR = path.join(__dirname, 'assets'),
-      FONTS_DIR = path.join(ASSETS_DIR, 'fonts'),
-      findFont = font => path.join(FONTS_DIR, font),
-      pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
+      FONTS_DIR = 'tests/assets/fonts',
+      findFont = font => path.join(FONTS_DIR, font);
 
   beforeEach(() => {
     canvas = new Canvas(WIDTH, HEIGHT)
@@ -389,7 +387,6 @@ describe("FontLibrary", ()=>{
         : p
 
     FONTS_DIR = normalizePath(FONTS_DIR)
-    ASSETS_DIR = normalizePath(ASSETS_DIR)
 
     const amstel = `${FONTS_DIR}/AmstelvarAlpha-VF.ttf`
     const monoton = [

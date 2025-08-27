@@ -5,8 +5,8 @@
 const fs = require('fs'),
       tmp = require('tmp'),
       path = require('path'),
-      {assert, describe, test, beforeEach, afterEach} = require('./runner'),
-      {Canvas, Image} = require('../lib');
+      {assert, describe, test, beforeEach, afterEach} = require('../runner'),
+      {Canvas, Image} = require('../../lib');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
