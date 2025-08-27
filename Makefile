@@ -1,5 +1,4 @@
 NPM := $(CURDIR)/node_modules
-JEST := $(CURDIR)/node_modules/.bin/jest
 LIB := $(CURDIR)/lib/skia.node
 LIB_SRC := Cargo.toml lib/prebuild.mjs $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src/*/*/*.rs)
 GIT_TAG = $(shell git describe)
@@ -25,10 +24,10 @@ dev: $(NPM) $(LIB_SRC)
 	@touch $(LIB)
 
 test: $(LIB)
-	@$(JEST) --verbose
+	node --test test/*.js
 
 debug: $(LIB)
-	@$(JEST) --watch
+	node --test --watch test/*.js
 
 visual: $(LIB)
 	@node --watch-path lib --watch-path test/visual test/visual
