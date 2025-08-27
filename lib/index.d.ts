@@ -922,7 +922,7 @@ interface FontLibrary {
   use(fontPaths: readonly string[]): Font[]
   use(
     families: Record<string, readonly string[] | string>
-  ): Record<string, Font[] | Font>
+  ): Record<string, Font[]>
 
   reset(): void
 }
