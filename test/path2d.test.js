@@ -1,6 +1,18 @@
 // @ts-check
 
-const {Canvas, DOMMatrix, Path2D, DOMPoint} = require('../lib');
+"use strict"
+
+const assert = require('node:assert'),
+      {describe, test, beforeEach, afterEach} = require('node:test'),
+      {Canvas, DOMMatrix, Path2D, DOMPoint} = require('../lib');
+
+assert.contains = (actual, expected) => assert((actual || []).includes(expected))
+assert.doesNotContain = (actual, expected) => assert(!((actual || [expected]).includes(expected)))
+assert.matchesSubset = (actual, expected) => Object.entries(expected).forEach(([key, val]) => assert.deepEqual(actual[key], val))
+assert.nearEqual = (actual, expected) => assert.ok(
+  Math.abs(expected - actual) < Math.pow(10, -2) / 2,
+  new assert.AssertionError({actual, expected, operator:"≈"})
+)
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -31,14 +43,14 @@ describe("Path2D", ()=>{
       let p1 = new Path2D()
       p1.rect(10, 10, 100, 100)
       let p2 = new Path2D(p1)
-      expect(p1.bounds).toMatchObject(p2.bounds)
+      assert.matchesSubset(p1.bounds, p2.bounds)
     })
 
     test('an SVG string', () => {
       let p1 = new Path2D()
       p1.rect(10, 10, 100, 100)
       let p2 = new Path2D("M 10,10 h 100 v 100 h -100 Z")
-      expect(p1.bounds).toMatchObject(p2.bounds)
+      assert.matchesSubset(p1.bounds, p2.bounds)
     })
 
     test('a stream of edges', () => {
@@ -67,13 +79,13 @@ describe("Path2D", ()=>{
       ctx.lineWidth = 1
       ctx.stroke(p)
       let pixels = ctx.getImageData(0, 0, WIDTH, HEIGHT)
-      expect(pixels.data.every(px => px==255)).toBe(false)
+      assert.deepEqual(pixels.data.every(px => px==255), false)
 
       ctx.lineWidth = 4
       ctx.strokeStyle = 'white'
       ctx.stroke(clone)
       pixels = ctx.getImageData(0, 0, WIDTH, HEIGHT)
-      expect(pixels.data.every(px => px==255)).toBe(true)
+      assert.deepEqual(pixels.data.every(px => px==255), true)
     })
   })
 
@@ -81,8 +93,8 @@ describe("Path2D", ()=>{
     test("moveTo", () => {
       let [left, top] = [20, 30]
       p.moveTo(left, top)
-      expect(p.bounds).toMatchObject({left, top})
-      expect(() => p.moveTo(120) ).toThrow("not enough arguments")
+      assert.matchesSubset(p.bounds, {left, top})
+      assert.throws(() => p.moveTo(120) , /not enough arguments/)
     })
 
     test("lineTo", () => {
@@ -91,9 +103,9 @@ describe("Path2D", ()=>{
       p.moveTo(left, top)
       p.lineTo(left+width, top+height)
       ctx.stroke(p)
-      expect(p.bounds).toMatchObject({left, top, width, height})
-      expect(pixel(left+width/2, top+height/2)).toEqual(BLACK)
-      expect(() => p.lineTo(120) ).toThrow("not enough arguments")
+      assert.matchesSubset(p.bounds, {left, top, width, height})
+      assert.deepEqual(pixel(left+width/2, top+height/2), BLACK)
+      assert.throws(() => p.lineTo(120) , /not enough arguments/)
     })
 
     test("bezierCurveTo", () => {
@@ -103,10 +115,10 @@ describe("Path2D", ()=>{
       ctx.strokeStyle = 'black'
       ctx.stroke(p)
 
-      expect(pixel(71, 42)).toEqual(BLACK)
-      expect(pixel(168, 157)).toEqual(BLACK)
-      expect(() => p.bezierCurveTo(120, 300, 400, 400) ).toThrow("not enough arguments")
-      expect(() => p.bezierCurveTo(120, 300, null, 'foo', NaN, 400) ).not.toThrow()
+      assert.deepEqual(pixel(71, 42), BLACK)
+      assert.deepEqual(pixel(168, 157), BLACK)
+      assert.throws(() => p.bezierCurveTo(120, 300, 400, 400) , /not enough arguments/)
+      assert.doesNotThrow(() => p.bezierCurveTo(120, 300, null, 'foo', NaN, 400) )
     })
 
     test("quadraticCurveTo", () => {
@@ -116,9 +128,9 @@ describe("Path2D", ()=>{
       ctx.strokeStyle = 'black'
       ctx.stroke(p)
 
-      expect(pixel(120, 199)).toEqual(BLACK)
-      expect(() => p.quadraticCurveTo(120, 300) ).toThrow("not enough arguments")
-      expect(() => p.quadraticCurveTo(NaN, 300, null, 'foo') ).not.toThrow()
+      assert.deepEqual(pixel(120, 199), BLACK)
+      assert.throws(() => p.quadraticCurveTo(120, 300) , /not enough arguments/)
+      assert.doesNotThrow(() => p.quadraticCurveTo(NaN, 300, null, 'foo') )
     })
 
     test("conicTo", () => {
@@ -132,23 +144,23 @@ describe("Path2D", ()=>{
       }
 
       ctx.stroke(withWeight(0))
-      expect(pixel(250, 400)).toEqual(BLACK)
+      assert.deepEqual(pixel(250, 400), BLACK)
       scrub()
 
       ctx.stroke(withWeight(1))
-      expect(pixel(250, 225)).toEqual(BLACK)
+      assert.deepEqual(pixel(250, 225), BLACK)
       scrub()
 
       ctx.stroke(withWeight(10))
-      expect(pixel(250, 81)).toEqual(BLACK)
+      assert.deepEqual(pixel(250, 81), BLACK)
       scrub()
 
       ctx.stroke(withWeight(100))
-      expect(pixel(250, 54)).toEqual(BLACK)
+      assert.deepEqual(pixel(250, 54), BLACK)
       scrub()
 
       ctx.stroke(withWeight(1000))
-      expect(pixel(250, 50)).toEqual(BLACK)
+      assert.deepEqual(pixel(250, 50), BLACK)
       scrub()
     })
 
@@ -163,10 +175,10 @@ describe("Path2D", ()=>{
       ctx.strokeStyle = 'black'
       ctx.stroke(p)
 
-      expect(pixel(150, 137)).toEqual(BLACK)
-      expect(pixel(150, 33)).toEqual(BLACK)
-      expect(() => p.arcTo(0,0, 20,20) ).toThrow("not enough arguments")
-      expect(() => p.arcTo(150, 5, null, 'foo', NaN) ).not.toThrow()
+      assert.deepEqual(pixel(150, 137), BLACK)
+      assert.deepEqual(pixel(150, 33), BLACK)
+      assert.throws(() => p.arcTo(0,0, 20,20) , /not enough arguments/)
+      assert.doesNotThrow(() => p.arcTo(150, 5, null, 'foo', NaN) )
     })
 
     test("rect", () => {
@@ -175,8 +187,8 @@ describe("Path2D", ()=>{
       ctx.strokeStyle = 'black'
       ctx.stroke(p)
 
-      expect(pixel(150, 150)).toEqual(BLACK)
-      expect(() => p.rect(0,0, 20) ).toThrow("not enough arguments")
+      assert.deepEqual(pixel(150, 150), BLACK)
+      assert.throws(() => p.rect(0,0, 20) , /not enough arguments/)
     })
 
     test("roundRect", () => {
@@ -192,17 +204,17 @@ describe("Path2D", ()=>{
       let on = [ [5,5], [dim-17, dim-17], [dim-9, 3], [9, dim-9] ]
 
       for (const [x, y] of on){
-        expect(pixel(x, y)).toEqual(BLACK)
-        expect(pixel(x, HEIGHT - y - 1)).toEqual(BLACK)
-        expect(pixel(WIDTH - x - 1, y)).toEqual(BLACK)
-        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(BLACK)
+        assert.deepEqual(pixel(x, y), BLACK)
+        assert.deepEqual(pixel(x, HEIGHT - y - 1), BLACK)
+        assert.deepEqual(pixel(WIDTH - x - 1, y), BLACK)
+        assert.deepEqual(pixel(WIDTH - x - 1, HEIGHT - y - 1), BLACK)
       }
 
       for (const [x, y] of off){
-        expect(pixel(x, y)).toEqual(CLEAR)
-        expect(pixel(x, HEIGHT - y - 1)).toEqual(CLEAR)
-        expect(pixel(WIDTH - x - 1, y)).toEqual(CLEAR)
-        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(CLEAR)
+        assert.deepEqual(pixel(x, y), CLEAR)
+        assert.deepEqual(pixel(x, HEIGHT - y - 1), CLEAR)
+        assert.deepEqual(pixel(WIDTH - x - 1, y), CLEAR)
+        assert.deepEqual(pixel(WIDTH - x - 1, HEIGHT - y - 1), CLEAR)
       }
     })
 
@@ -216,10 +228,10 @@ describe("Path2D", ()=>{
       ctx.fillStyle = 'white'
       ctx.fill(p)
 
-      expect(pixel(196, 112)).toEqual(BLACK)
-      expect(pixel(150, 150)).toEqual(WHITE)
-      expect(() => p.arc(150, 150, 75, Math.PI/8) ).toThrow("not enough arguments")
-      expect(() => p.arc(150, 150, 75, Math.PI/8, Math.PI*1.5) ).not.toThrow()
+      assert.deepEqual(pixel(196, 112), BLACK)
+      assert.deepEqual(pixel(150, 150), WHITE)
+      assert.throws(() => p.arc(150, 150, 75, Math.PI/8) , /not enough arguments/)
+      assert.doesNotThrow(() => p.arc(150, 150, 75, Math.PI/8, Math.PI*1.5) )
     })
 
     test("ellipse", () => {
@@ -229,9 +241,9 @@ describe("Path2D", ()=>{
       ctx.strokeStyle = 'black'
       ctx.stroke(p)
 
-      expect(pixel(127, 175)).toEqual(BLACK)
-      expect(pixel(130, 60)).toEqual(BLACK)
-      expect(pixel(163, 100)).toEqual(CLEAR)
+      assert.deepEqual(pixel(127, 175), BLACK)
+      assert.deepEqual(pixel(130, 60), BLACK)
+      assert.deepEqual(pixel(163, 100), CLEAR)
 
       // with ccw enabled
       let p2 = new Path2D()
@@ -239,9 +251,9 @@ describe("Path2D", ()=>{
       ctx.clearRect(0,0, WIDTH, HEIGHT)
       ctx.stroke(p2)
 
-      expect(pixel(127, 175)).toEqual(CLEAR)
-      expect(pixel(130, 60)).toEqual(CLEAR)
-      expect(pixel(163, 100)).toEqual(BLACK)
+      assert.deepEqual(pixel(127, 175), CLEAR)
+      assert.deepEqual(pixel(130, 60), CLEAR)
+      assert.deepEqual(pixel(163, 100), BLACK)
 
       // full ellipse from offset angles, clockwise
       p.ellipse(100,100, 100, 50, .25*Math.PI, -.5*Math.PI, 1.5*Math.PI, false)
@@ -249,9 +261,9 @@ describe("Path2D", ()=>{
       ctx.strokeStyle = 'black'
       ctx.stroke(p)
 
-      expect(pixel(127, 175)).toEqual(BLACK)
-      expect(pixel(130, 60)).toEqual(BLACK)
-      expect(pixel(163, 100)).toEqual(BLACK)
+      assert.deepEqual(pixel(127, 175), BLACK)
+      assert.deepEqual(pixel(130, 60), BLACK)
+      assert.deepEqual(pixel(163, 100), BLACK)
 
       // full ellipse from offset angles, CCW
       p.ellipse(100,100, 100, 50, .25*Math.PI, -.5*Math.PI, 1.5*Math.PI, true)
@@ -259,9 +271,9 @@ describe("Path2D", ()=>{
       ctx.strokeStyle = 'black'
       ctx.stroke(p)
 
-      expect(pixel(127, 175)).toEqual(BLACK)
-      expect(pixel(130, 60)).toEqual(BLACK)
-      expect(pixel(163, 100)).toEqual(BLACK)
+      assert.deepEqual(pixel(127, 175), BLACK)
+      assert.deepEqual(pixel(130, 60), BLACK)
+      assert.deepEqual(pixel(163, 100), BLACK)
 
     })
   })
@@ -272,28 +284,28 @@ describe("Path2D", ()=>{
           right = new Path2D();
       left.moveTo(20, 20)
       left.lineTo(100, 100)
-      expect(left.bounds).toMatchObject({ left: 20, top: 20, right: 100, bottom: 100 })
+      assert.matchesSubset(left.bounds, { left: 20, top: 20, right: 100, bottom: 100 })
 
       right.moveTo(200, 20)
       right.lineTo(200, 200)
-      expect(right.bounds).toMatchObject({ left: 200, top: 20, right: 200, bottom: 200 })
+      assert.matchesSubset(right.bounds, { left: 200, top: 20, right: 200, bottom: 200 })
 
       left.addPath(right)
-      expect(left.bounds).toMatchObject({ left: 20, top: 20, right: 200, bottom: 200 })
+      assert.matchesSubset(left.bounds, { left: 20, top: 20, right: 200, bottom: 200 })
     })
 
     test("with a transform matrix", () => {
       let left = new Path2D()
       left.moveTo(0, 0)
       left.lineTo(10, 10)
-      expect(left.bounds).toMatchObject( { left: 0, top: 0, right: 10, bottom: 10 } )
+      assert.matchesSubset(left.bounds,  { left: 0, top: 0, right: 10, bottom: 10 } )
 
       let right = new Path2D(left)
-      expect(right.bounds).toMatchObject( { left: 0, top: 0, right: 10, bottom: 10 } )
+      assert.matchesSubset(right.bounds,  { left: 0, top: 0, right: 10, bottom: 10 } )
 
       let matrix = new DOMMatrix().scale(10,10)
       left.addPath(right, matrix)
-      expect(left.bounds).toMatchObject( { left: 0, top: 0, right: 100, bottom: 100 } )
+      assert.matchesSubset(left.bounds,  { left: 0, top: 0, right: 100, bottom: 100 } )
     })
 
     test("to a closed path", () => {
@@ -302,27 +314,27 @@ describe("Path2D", ()=>{
 
       let left = new Path2D()
       left.arc(100, 100, 25, 0, 2*Math.PI)
-      expect(left.bounds).toMatchObject( { left: 75, top: 75, right: 125, bottom: 125 } )
+      assert.matchesSubset(left.bounds,  { left: 75, top: 75, right: 125, bottom: 125 } )
 
       let right = new Path2D()
       right.arc(200, 100, 25, 0, 2*Math.PI)
-      expect(right.bounds).toMatchObject( { left: 175, top: 75, right: 225, bottom: 125 } )
+      assert.matchesSubset(right.bounds,  { left: 175, top: 75, right: 225, bottom: 125 } )
 
       left.addPath(right)
-      expect(left.bounds).toMatchObject( { left: 75, top: 75, right: 225, bottom: 125 } )
+      assert.matchesSubset(left.bounds,  { left: 75, top: 75, right: 225, bottom: 125 } )
 
       // adding creates a path with two separate circles
       ctx.stroke(left)
-      expect(pixel(175, 100)).toEqual(BLACK)
-      expect(pixel(150, 100)).toEqual(CLEAR)
+      assert.deepEqual(pixel(175, 100), BLACK)
+      assert.deepEqual(pixel(150, 100), CLEAR)
 
       // two .arc calls in one path draws a line connecting them
       let solo = new Path2D()
       solo.arc(100, 250, 25, 0, 2*Math.PI)
       solo.arc(200, 250, 25, 0, 2*Math.PI)
       ctx.stroke(solo)
-      expect(pixel(175, 250)).toEqual(BLACK)
-      expect(pixel(150, 250)).toEqual(BLACK)
+      assert.deepEqual(pixel(175, 250), BLACK)
+      assert.deepEqual(pixel(150, 250), BLACK)
     })
 
     test("self", () => {
@@ -332,10 +344,10 @@ describe("Path2D", ()=>{
       ctx.fillStyle = 'black'
       ctx.fill(p)
 
-      expect(pixel(150, 151)).toEqual(BLACK)
-      expect(pixel(150, 223)).toEqual(BLACK)
-      expect(pixel(300, 301)).toEqual(BLACK)
-      expect(pixel(300, 448)).toEqual(BLACK)
+      assert.deepEqual(pixel(150, 151), BLACK)
+      assert.deepEqual(pixel(150, 223), BLACK)
+      assert.deepEqual(pixel(300, 301), BLACK)
+      assert.deepEqual(pixel(300, 448), BLACK)
     })
 
   })
@@ -357,67 +369,67 @@ describe("Path2D", ()=>{
     test("complement", () => {
       let c = a.complement(b)
       ctx.fill(c)
-      expect(top()).toEqual(BLACK)
-      expect(left()).toEqual(CLEAR)
-      expect(center()).toEqual(CLEAR)
-      expect(right()).toEqual(CLEAR)
-      expect(bottom()).toEqual(BLACK)
+      assert.deepEqual(top(), BLACK)
+      assert.deepEqual(left(), CLEAR)
+      assert.deepEqual(center(), CLEAR)
+      assert.deepEqual(right(), CLEAR)
+      assert.deepEqual(bottom(), BLACK)
     })
 
     test("difference", () => {
       let c = a.difference(b)
       ctx.fill(c)
-      expect(top()).toEqual(CLEAR)
-      expect(left()).toEqual(BLACK)
-      expect(center()).toEqual(CLEAR)
-      expect(right()).toEqual(BLACK)
-      expect(bottom()).toEqual(CLEAR)
+      assert.deepEqual(top(), CLEAR)
+      assert.deepEqual(left(), BLACK)
+      assert.deepEqual(center(), CLEAR)
+      assert.deepEqual(right(), BLACK)
+      assert.deepEqual(bottom(), CLEAR)
     })
 
     test("intersect", () => {
       let c = a.intersect(b)
       ctx.fill(c)
-      expect(top()).toEqual(CLEAR)
-      expect(left()).toEqual(CLEAR)
-      expect(center()).toEqual(BLACK)
-      expect(right()).toEqual(CLEAR)
-      expect(bottom()).toEqual(CLEAR)
+      assert.deepEqual(top(), CLEAR)
+      assert.deepEqual(left(), CLEAR)
+      assert.deepEqual(center(), BLACK)
+      assert.deepEqual(right(), CLEAR)
+      assert.deepEqual(bottom(), CLEAR)
     })
 
     test("union", () => {
       let c = a.union(b)
       ctx.fill(c)
-      expect(top()).toEqual(BLACK)
-      expect(left()).toEqual(BLACK)
-      expect(center()).toEqual(BLACK)
-      expect(right()).toEqual(BLACK)
-      expect(bottom()).toEqual(BLACK)
+      assert.deepEqual(top(), BLACK)
+      assert.deepEqual(left(), BLACK)
+      assert.deepEqual(center(), BLACK)
+      assert.deepEqual(right(), BLACK)
+      assert.deepEqual(bottom(), BLACK)
     })
 
     test("xor", () => {
       let c = a.xor(b)
       ctx.fill(c, 'evenodd')
-      expect(top()).toEqual(BLACK)
-      expect(left()).toEqual(BLACK)
-      expect(center()).toEqual(CLEAR)
-      expect(right()).toEqual(BLACK)
-      expect(bottom()).toEqual(BLACK)
+      assert.deepEqual(top(), BLACK)
+      assert.deepEqual(left(), BLACK)
+      assert.deepEqual(center(), CLEAR)
+      assert.deepEqual(right(), BLACK)
+      assert.deepEqual(bottom(), BLACK)
 
       ctx.fill(c, 'nonzero')
-      expect(center()).toEqual(BLACK)
+      assert.deepEqual(center(), BLACK)
     })
 
     test("simplify", () => {
       let c = a.xor(b)
       ctx.fill(c.simplify('evenodd'))
-      expect(top()).toEqual(BLACK)
-      expect(left()).toEqual(BLACK)
-      expect(center()).toEqual(CLEAR)
-      expect(right()).toEqual(BLACK)
-      expect(bottom()).toEqual(BLACK)
+      assert.deepEqual(top(), BLACK)
+      assert.deepEqual(left(), BLACK)
+      assert.deepEqual(center(), CLEAR)
+      assert.deepEqual(right(), BLACK)
+      assert.deepEqual(bottom(), BLACK)
 
       ctx.fill(c.simplify())
-      expect(center()).toEqual(BLACK)
+      assert.deepEqual(center(), BLACK)
     })
 
     test("unwind", () => {
@@ -425,13 +437,13 @@ describe("Path2D", ()=>{
       d.rect(0,0,30,30)
       d.rect(10,10,10,10)
       ctx.fill(d.offset(50,40))
-      expect(pixel(65, 55)).toEqual(BLACK)
+      assert.deepEqual(pixel(65, 55), BLACK)
       ctx.fill(d.offset(100,40), 'evenodd')
-      expect(pixel(115, 55)).toEqual(CLEAR)
+      assert.deepEqual(pixel(115, 55), CLEAR)
       ctx.fill(d.simplify().offset(150,40), 'evenodd')
-      expect(pixel(165, 55)).toEqual(BLACK)
+      assert.deepEqual(pixel(165, 55), BLACK)
       ctx.fill(d.unwind().offset(200,40))
-      expect(pixel(215, 55)).toEqual(CLEAR)
+      assert.deepEqual(pixel(215, 55), CLEAR)
     })
 
     test("interpolate", () => {
@@ -448,38 +460,38 @@ describe("Path2D", ()=>{
       ctx.lineWidth = 4
 
       ctx.stroke(start.interpolate(finish, 0))
-      expect(pixel(100, 102)).toEqual(BLACK)
-      expect(pixel(100, 200)).toEqual(BLACK)
+      assert.deepEqual(pixel(100, 102), BLACK)
+      assert.deepEqual(pixel(100, 200), BLACK)
       scrub()
 
       ctx.stroke(start.interpolate(finish, .25))
-      expect(pixel(151, 101)).toEqual(BLACK)
-      expect(pixel(151, 200)).toEqual(CLEAR)
-      expect(pixel(171, 200)).toEqual(BLACK)
+      assert.deepEqual(pixel(151, 101), BLACK)
+      assert.deepEqual(pixel(151, 200), CLEAR)
+      assert.deepEqual(pixel(171, 200), BLACK)
       scrub()
 
       ctx.stroke(start.interpolate(finish, .5))
-      expect(pixel(201, 101)).toEqual(BLACK)
-      expect(pixel(201, 200)).toEqual(CLEAR)
-      expect(pixel(243, 200)).toEqual(BLACK)
+      assert.deepEqual(pixel(201, 101), BLACK)
+      assert.deepEqual(pixel(201, 200), CLEAR)
+      assert.deepEqual(pixel(243, 200), BLACK)
       scrub()
 
       ctx.stroke(start.interpolate(finish, .75))
-      expect(pixel(251, 101)).toEqual(BLACK)
-      expect(pixel(251, 200)).toEqual(CLEAR)
-      expect(pixel(322, 200)).toEqual(BLACK)
+      assert.deepEqual(pixel(251, 101), BLACK)
+      assert.deepEqual(pixel(251, 200), CLEAR)
+      assert.deepEqual(pixel(322, 200), BLACK)
       scrub()
 
       ctx.stroke(start.interpolate(finish, 1))
-      expect(pixel(301, 101)).toEqual(BLACK)
-      expect(pixel(301, 200)).toEqual(CLEAR)
-      expect(pixel(395, 200)).toEqual(BLACK)
+      assert.deepEqual(pixel(301, 101), BLACK)
+      assert.deepEqual(pixel(301, 200), CLEAR)
+      assert.deepEqual(pixel(395, 200), BLACK)
       scrub()
 
       ctx.stroke(start.interpolate(finish, 1.25))
-      expect(pixel(351, 101)).toEqual(BLACK)
-      expect(pixel(351, 200)).toEqual(CLEAR)
-      expect(pixel(470, 200)).toEqual(BLACK)
+      assert.deepEqual(pixel(351, 101), BLACK)
+      assert.deepEqual(pixel(351, 200), CLEAR)
+      assert.deepEqual(pixel(470, 200), BLACK)
       scrub()
 
     })
@@ -498,16 +510,15 @@ describe("Path2D", ()=>{
 
       ctx.lineWidth = 4
       ctx.stroke(line)
-      console.log(pixel(100,101))
       let allBlack = rng.map(y => pixel(100, y).toString() == blackPixel)
-      expect(allBlack).not.toContain(false)
+      assert.doesNotContain(allBlack, false)
       scrub()
 
       let zag = line.jitter(10, 20)
       ctx.stroke(zag)
       let notAllBlack = rng.map(y => pixel(100, y).toString() == blackPixel)
-      expect(notAllBlack).toContain(false)
-      expect(notAllBlack).toContain(true)
+      assert.contains(notAllBlack, false)
+      assert.contains(notAllBlack, true)
     })
 
     test("round", () => {
@@ -537,71 +548,71 @@ describe("Path2D", ()=>{
 
       ctx.lineWidth = 10
       ctx.stroke(lines)
-      expect(alpha()).toEqual(BLACK)
-      expect(omega()).toEqual(BLACK)
+      assert.deepEqual(alpha(), BLACK)
+      assert.deepEqual(omega(), BLACK)
 
-      expect(topLeft()).toEqual(BLACK)
-      expect(topRight()).toEqual(BLACK)
-      expect(botLeft()).toEqual(BLACK)
-      expect(botRight()).toEqual(BLACK)
+      assert.deepEqual(topLeft(), BLACK)
+      assert.deepEqual(topRight(), BLACK)
+      assert.deepEqual(botLeft(), BLACK)
+      assert.deepEqual(botRight(), BLACK)
 
-      expect(hiLeft()).toEqual(CLEAR)
-      expect(hiRight()).toEqual(CLEAR)
-      expect(loLeft()).toEqual(CLEAR)
-      expect(loRight()).toEqual(CLEAR)
+      assert.deepEqual(hiLeft(), CLEAR)
+      assert.deepEqual(hiRight(), CLEAR)
+      assert.deepEqual(loLeft(), CLEAR)
+      assert.deepEqual(loRight(), CLEAR)
 
       let rounded = lines.round(80)
       canvas.width = WIDTH
       ctx.lineWidth = 10
       ctx.stroke(rounded)
-      expect(alpha()).toEqual(BLACK)
-      expect(omega()).toEqual(BLACK)
+      assert.deepEqual(alpha(), BLACK)
+      assert.deepEqual(omega(), BLACK)
 
-      expect(topLeft()).toEqual(CLEAR)
-      expect(topRight()).toEqual(CLEAR)
-      expect(botLeft()).toEqual(CLEAR)
-      expect(botRight()).toEqual(CLEAR)
+      assert.deepEqual(topLeft(), CLEAR)
+      assert.deepEqual(topRight(), CLEAR)
+      assert.deepEqual(botLeft(), CLEAR)
+      assert.deepEqual(botRight(), CLEAR)
 
-      expect(hiLeft()).toEqual(BLACK)
-      expect(hiRight()).toEqual(BLACK)
-      expect(loLeft()).toEqual(BLACK)
-      expect(loRight()).toEqual(BLACK)
+      assert.deepEqual(hiLeft(), BLACK)
+      assert.deepEqual(hiRight(), BLACK)
+      assert.deepEqual(loLeft(), BLACK)
+      assert.deepEqual(loRight(), BLACK)
     })
 
     test("offset", () => {
       let orig = new Path2D()
       orig.rect(10, 10, 40, 40)
-      expect(orig.bounds).toMatchObject({left:10, top:10, right:50, bottom:50})
+      assert.matchesSubset(orig.bounds, {left:10, top:10, right:50, bottom:50})
 
       let shifted = orig.offset(-10, -10)
-      expect(shifted.bounds).toMatchObject({left:0, top:0, right:40, bottom:40})
+      assert.matchesSubset(shifted.bounds, {left:0, top:0, right:40, bottom:40})
 
       shifted = shifted.offset(-40, -40)
-      expect(shifted.bounds).toMatchObject({left:-40, top:-40, right:0, bottom:0})
+      assert.matchesSubset(shifted.bounds, {left:-40, top:-40, right:0, bottom:0})
 
       // orig path should be unchanged
-      expect(orig.bounds).toMatchObject({left:10, top:10, right:50, bottom:50})
+      assert.matchesSubset(orig.bounds, {left:10, top:10, right:50, bottom:50})
     })
 
     test("transform", () => {
       let orig = new Path2D()
       orig.rect(-10, -10, 20, 20)
-      expect(orig.bounds).toMatchObject({left:-10, top:-10, right:10, bottom:10})
+      assert.matchesSubset(orig.bounds, {left:-10, top:-10, right:10, bottom:10})
 
       let shifted = orig.transform(new DOMMatrix().translate(10, 10))
-      expect(shifted.bounds).toMatchObject({left:0, top:0, right:20, bottom:20})
+      assert.matchesSubset(shifted.bounds, {left:0, top:0, right:20, bottom:20})
 
       let shiftedByHand = orig.transform(1, 0, 0, 1, 10, 10)
-      expect(shifted.edges).toEqual(shiftedByHand.edges)
+      assert.deepEqual(shifted.edges, shiftedByHand.edges)
 
       let embiggened = orig.transform(new DOMMatrix().scale(2, .5)),
           bigBounds = embiggened.bounds,
           origBounds = orig.bounds
-      expect(bigBounds.left).toBeLessThan(origBounds.left)
-      expect(bigBounds.right).toBeGreaterThan(origBounds.right)
+      assert(bigBounds.left < origBounds.left)
+      assert(bigBounds.right > origBounds.right)
 
       // orig path should be unchanged
-      expect(orig.bounds).toMatchObject({left:-10, top:-10, right:10, bottom:10})
+      assert.matchesSubset(orig.bounds, {left:-10, top:-10, right:10, bottom:10})
     })
 
     test("trim", () => {
@@ -621,94 +632,94 @@ describe("Path2D", ()=>{
 
       ctx.lineWidth = 10
       ctx.stroke(orig)
-      expect(left()).toEqual(BLACK)
-      expect(mid()).toEqual(BLACK)
-      expect(right()).toEqual(BLACK)
+      assert.deepEqual(left(), BLACK)
+      assert.deepEqual(mid(), BLACK)
+      assert.deepEqual(right(), BLACK)
       scrub()
 
       ctx.stroke(middle)
-      expect(left()).toEqual(CLEAR)
-      expect(mid()).toEqual(BLACK)
-      expect(right()).toEqual(CLEAR)
+      assert.deepEqual(left(), CLEAR)
+      assert.deepEqual(mid(), BLACK)
+      assert.deepEqual(right(), CLEAR)
       scrub()
 
       ctx.stroke(endpoints)
-      expect(left()).toEqual(BLACK)
-      expect(mid()).toEqual(CLEAR)
-      expect(right()).toEqual(BLACK)
+      assert.deepEqual(left(), BLACK)
+      assert.deepEqual(mid(), CLEAR)
+      assert.deepEqual(right(), BLACK)
       scrub()
 
       ctx.stroke(start)
-      expect(left()).toEqual(BLACK)
-      expect(mid()).toEqual(CLEAR)
-      expect(right()).toEqual(CLEAR)
+      assert.deepEqual(left(), BLACK)
+      assert.deepEqual(mid(), CLEAR)
+      assert.deepEqual(right(), CLEAR)
       scrub()
 
       ctx.stroke(end)
-      expect(left()).toEqual(CLEAR)
-      expect(mid()).toEqual(CLEAR)
-      expect(right()).toEqual(BLACK)
+      assert.deepEqual(left(), CLEAR)
+      assert.deepEqual(mid(), CLEAR)
+      assert.deepEqual(right(), BLACK)
       scrub()
 
       ctx.stroke(none)
-      expect(left()).toEqual(CLEAR)
-      expect(mid()).toEqual(CLEAR)
-      expect(right()).toEqual(CLEAR)
+      assert.deepEqual(left(), CLEAR)
+      assert.deepEqual(mid(), CLEAR)
+      assert.deepEqual(right(), CLEAR)
       scrub()
 
       ctx.stroke(everythingAndMore)
-      expect(left()).toEqual(BLACK)
-      expect(mid()).toEqual(BLACK)
-      expect(right()).toEqual(BLACK)
+      assert.deepEqual(left(), BLACK)
+      assert.deepEqual(mid(), BLACK)
+      assert.deepEqual(right(), BLACK)
       scrub()
     })
   })
 
   describe("validates", () => {
     test('not enough arguments', async () => {
-      let ERR = "not enough arguments"
-      expect(() => p.transform()).toThrow(ERR)
-      expect(() => p.transform(0,0,0,0,0)).toThrow(ERR)
-      expect(() => p.rect(0,0,0)).toThrow(ERR)
-      expect(() => p.roundRect(0,0,0)).toThrow(ERR)
-      expect(() => p.arc(0,0,0,0)).toThrow(ERR)
-      expect(() => p.arcTo(0,0,0,0)).toThrow(ERR)
-      expect(() => p.ellipse(0,0,0,0,0,0)).toThrow(ERR)
-      expect(() => p.moveTo(0)).toThrow(ERR)
-      expect(() => p.lineTo(0)).toThrow(ERR)
-      expect(() => p.bezierCurveTo(0,0,0,0,0)).toThrow(ERR)
-      expect(() => p.quadraticCurveTo(0,0,0)).toThrow(ERR)
-      expect(() => p.conicCurveTo(0,0,0,0)).toThrow(ERR)
-      expect(() => p.complement()).toThrow(ERR)
-      expect(() => p.interpolate()).toThrow(ERR)
-      expect(() => p.offset(0)).toThrow(ERR)
-      expect(() => p.round()).toThrow(ERR)
-      expect(() => p.contains(0)).toThrow(ERR)
-      expect(() => p.addPath()).toThrow(ERR)
+      let ERR =  /not enough arguments/
+      assert.throws(() => p.transform(), ERR)
+      assert.throws(() => p.transform(0,0,0,0,0), ERR)
+      assert.throws(() => p.rect(0,0,0), ERR)
+      assert.throws(() => p.roundRect(0,0,0), ERR)
+      assert.throws(() => p.arc(0,0,0,0), ERR)
+      assert.throws(() => p.arcTo(0,0,0,0), ERR)
+      assert.throws(() => p.ellipse(0,0,0,0,0,0), ERR)
+      assert.throws(() => p.moveTo(0), ERR)
+      assert.throws(() => p.lineTo(0), ERR)
+      assert.throws(() => p.bezierCurveTo(0,0,0,0,0), ERR)
+      assert.throws(() => p.quadraticCurveTo(0,0,0), ERR)
+      assert.throws(() => p.conicCurveTo(0,0,0,0), ERR)
+      assert.throws(() => p.complement(), ERR)
+      assert.throws(() => p.interpolate(), ERR)
+      assert.throws(() => p.offset(0), ERR)
+      assert.throws(() => p.round(), ERR)
+      assert.throws(() => p.contains(0), ERR)
+      assert.throws(() => p.addPath(), ERR)
     })
 
     test('value errors', async () => {
-      expect(() => p.transform(0,0,0,NaN,0,0)).toThrow("Expected a DOMMatrix")
-      expect(() => p.complement({})).toThrow("Expected a Path2D")
-      expect(() => p.interpolate(p)).toThrow("Expected a number")
-      expect(() => p.roundRect(0,0,0,0,-10)).toThrow("Corner radius cannot be negative")
-      expect(() => p.addPath(p, [])).toThrow("Invalid transform matrix")
+      assert.throws(() => p.transform(0,0,0,NaN,0,0), /Expected a DOMMatrix/)
+      assert.throws(() => p.complement({}), /Expected a Path2D/)
+      assert.throws(() => p.interpolate(p), /Expected a number/)
+      assert.throws(() => p.roundRect(0,0,0,0,-10), /Corner radius cannot be negative/)
+      assert.throws(() => p.addPath(p, []), /Invalid transform matrix/)
     })
 
     test('NaN arguments', async () => {
-      expect(() => p.rect(0,0,NaN,0)).not.toThrow()
-      expect(() => p.arc(0,0,NaN,0,0)).not.toThrow()
-      expect(() => p.arc(0,0,NaN,0,0,false)).not.toThrow()
-      expect(() => p.arc(0,0,NaN,0,0,new Date())).not.toThrow()
-      expect(() => p.ellipse(0,0,0,NaN,0,0,0)).not.toThrow()
-      expect(() => p.moveTo(NaN,0)).not.toThrow()
-      expect(() => p.lineTo(NaN,0)).not.toThrow()
-      expect(() => p.arcTo(0,0,0,0,NaN)).not.toThrow()
-      expect(() => p.bezierCurveTo(0,0,0,0,NaN,0)).not.toThrow()
-      expect(() => p.quadraticCurveTo(0,0,NaN,0)).not.toThrow()
-      expect(() => p.conicCurveTo(0,0,NaN,0,1)).not.toThrow()
-      expect(() => p.roundRect(0,0,0,0,NaN)).not.toThrow()
-      expect(() => p.transform({})).not.toThrow()
+      assert.doesNotThrow(() => p.rect(0,0,NaN,0))
+      assert.doesNotThrow(() => p.arc(0,0,NaN,0,0))
+      assert.doesNotThrow(() => p.arc(0,0,NaN,0,0,false))
+      assert.doesNotThrow(() => p.arc(0,0,NaN,0,0,new Date()))
+      assert.doesNotThrow(() => p.ellipse(0,0,0,NaN,0,0,0))
+      assert.doesNotThrow(() => p.moveTo(NaN,0))
+      assert.doesNotThrow(() => p.lineTo(NaN,0))
+      assert.doesNotThrow(() => p.arcTo(0,0,0,0,NaN))
+      assert.doesNotThrow(() => p.bezierCurveTo(0,0,0,0,NaN,0))
+      assert.doesNotThrow(() => p.quadraticCurveTo(0,0,NaN,0))
+      assert.doesNotThrow(() => p.conicCurveTo(0,0,NaN,0,1))
+      assert.doesNotThrow(() => p.roundRect(0,0,0,0,NaN))
+      assert.doesNotThrow(() => p.transform({}))
     })
   })
 })

@@ -1,9 +1,21 @@
 // @ts-check
 
+"use strict"
+
 const fs = require('fs'),
       tmp = require('tmp'),
       glob = require('fast-glob').globSync,
+      assert = require('node:assert'),
+      {describe, test, beforeEach, afterEach} = require('node:test'),
       {Canvas, Image} = require('../lib');
+
+assert.contains = (actual, expected) => assert((actual || []).includes(expected))
+assert.doesNotContain = (actual, expected) => assert(!((actual || [expected]).includes(expected)))
+assert.matchesSubset = (actual, expected) => Object.entries(expected).forEach(([key, val]) => assert.deepEqual(actual[key], val))
+assert.nearEqual = (actual, expected) => assert.ok(
+  Math.abs(expected - actual) < Math.pow(10, -2) / 2,
+  new assert.AssertionError({actual, expected, operator:"≈"})
+)
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -38,21 +50,21 @@ describe("Canvas", ()=>{
 
   describe("can get & set", ()=>{
     test('width & height', () => {
-      expect(canvas.width).toBe(WIDTH)
-      expect(canvas.height).toBe(HEIGHT)
+      assert.equal(canvas.width, WIDTH)
+      assert.equal(canvas.height, HEIGHT)
 
       ctx.fillStyle = 'white'
       ctx.fillRect(0,0, WIDTH,HEIGHT)
-      expect(ctx.fillStyle).toBe('#ffffff')
-      expect(pixel(0,0)).toEqual(WHITE)
+      assert.equal(ctx.fillStyle, '#ffffff')
+      assert.deepEqual(pixel(0,0), WHITE)
 
       // resizing also clears content & resets state
       canvas.width = 123
       canvas.height = 456
-      expect(canvas.width).toBe(123)
-      expect(canvas.height).toBe(456)
-      expect(ctx.fillStyle).toBe('#000000')
-      expect(pixel(0,0)).toEqual(CLEAR)
+      assert.equal(canvas.width, 123)
+      assert.equal(canvas.height, 456)
+      assert.equal(ctx.fillStyle, '#000000')
+      assert.deepEqual(pixel(0,0), CLEAR)
     })
   })
 
@@ -66,82 +78,82 @@ describe("Canvas", ()=>{
           c
 
       c = new Canvas()
-      expect(c.width).toBe(W)
-      expect(c.height).toBe(H)
+      assert.equal(c.width, W)
+      assert.equal(c.height, H)
 
       c = new Canvas(0, 0)
-      expect(c.width).toBe(0)
-      expect(c.height).toBe(0)
+      assert.equal(c.width, 0)
+      assert.equal(c.height, 0)
 
       c = new Canvas(-99, 123)
-      expect(c.width).toBe(W)
-      expect(c.height).toBe(123)
+      assert.equal(c.width, W)
+      assert.equal(c.height, 123)
 
       c = new Canvas(456)
-      expect(c.width).toBe(456)
-      expect(c.height).toBe(H)
+      assert.equal(c.width, 456)
+      assert.equal(c.height, H)
 
       // @ts-expect-error
       c = new Canvas("0xff")
-      expect(c.width).toBe(255)
-      expect(c.height).toBe(H)
+      assert.equal(c.width, 255)
+      assert.equal(c.height, H)
 
       c = new Canvas(undefined, 789)
-      expect(c.width).toBe(W)
-      expect(c.height).toBe(789)
+      assert.equal(c.width, W)
+      assert.equal(c.height, 789)
 
       // @ts-expect-error
       c = new Canvas('garbage', NaN)
-      expect(c.width).toBe(W)
-      expect(c.height).toBe(H)
+      assert.equal(c.width, W)
+      assert.equal(c.height, H)
 
       // @ts-expect-error
       c = new Canvas(true, {})
-      expect(c.width).toBe(1)
-      expect(c.height).toBe(H)
+      assert.equal(c.width, 1)
+      assert.equal(c.height, H)
     })
 
     test("new page dimensions", () => {
-      expect(canvas.width).toBe(WIDTH)
-      expect(canvas.height).toBe(HEIGHT)
-      expect(canvas.pages.length).toBe(1)
+      assert.equal(canvas.width, WIDTH)
+      assert.equal(canvas.height, HEIGHT)
+      assert.equal(canvas.pages.length, 1)
       canvas.getContext()
-      expect(canvas.pages.length).toBe(1)
+      assert.equal(canvas.pages.length, 1)
       canvas.newPage()
-      expect(canvas.pages.length).toBe(2)
+      assert.equal(canvas.pages.length, 2)
 
       let W = 300,
           H = 150,
           c, pg
 
       c = new Canvas(123, 456)
-      expect(c.width).toBe(123)
-      expect(c.height).toBe(456)
+      assert.equal(c.width, 123)
+      assert.equal(c.height, 456)
 
-      expect(c.pages.length).toBe(0)
+      assert.equal(c.pages.length, 0)
       pg = c.newPage().canvas
-      expect(c.pages.length).toBe(1)
+      assert.equal(c.pages.length, 1)
       c.getContext()
-      expect(c.pages.length).toBe(1)
+      assert.equal(c.pages.length, 1)
 
-      expect(pg.width).toBe(123)
-      expect(pg.height).toBe(456)
+      assert.equal(pg.width, 123)
+      assert.equal(pg.height, 456)
 
       pg = c.newPage(987).canvas
-      expect(pg.width).toBe(123)
-      expect(pg.height).toBe(456)
+      assert.equal(pg.width, 123)
+      assert.equal(pg.height, 456)
 
       pg = c.newPage(NaN, NaN).canvas
-      expect(pg.width).toBe(W)
-      expect(pg.height).toBe(H)
+      assert.equal(pg.width, W)
+      assert.equal(pg.height, H)
     })
 
     test("export file formats", async () => {
-      expect(() => canvas.toFile(`${TMP}/output.gif`) ).toThrow('Unsupported file format');
-      expect(() => canvas.toFile(`${TMP}/output.targa`) ).toThrow('Unsupported file format');
-      expect(() => canvas.toFile(`${TMP}/output`) ).toThrow('Cannot determine image format');
-      expect(() => canvas.toFile(`${TMP}/`) ).toThrow('Cannot determine image format');
-      await expect(canvas.toFile(`${TMP}/output`, {format:'png'}) ).resolves.not.toThrow();
+      assert.throws(() => canvas.toFile(`${TMP}/output.gif`) , /Unsupported file format/);
+      assert.throws(() => canvas.toFile(`${TMP}/output.targa`) , /Unsupported file format/);
+      assert.throws(() => canvas.toFile(`${TMP}/output`) , /Cannot determine image format/);
+      assert.throws(() => canvas.toFile(`${TMP}/`) , /Cannot determine image format/);
+      await canvas.toFile(`${TMP}/output`, {format:'png'});
     })
 
   })
@@ -170,7 +182,7 @@ describe("Canvas", ()=>{
       let magic = MAGIC.jpg
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
-        expect(header.equals(magic)).toBe(true)
+        assert(header.equals(magic))
       }
     })
 
@@ -185,7 +197,7 @@ describe("Canvas", ()=>{
       let magic = MAGIC.png
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
-        expect(header.equals(magic)).toBe(true)
+        assert(header.equals(magic))
       }
     })
 
@@ -200,7 +212,7 @@ describe("Canvas", ()=>{
       let magic = MAGIC.webp
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
-        expect(header.equals(magic)).toBe(true)
+        assert(header.equals(magic))
       }
     })
 
@@ -214,7 +226,7 @@ describe("Canvas", ()=>{
 
       for (let path of findTmp(`*`)){
         let svg = fs.readFileSync(path, 'utf-8')
-        expect(svg).toMatch(/^<\?xml version/)
+        assert.match(svg, /^<\?xml version/)
       }
     })
 
@@ -229,7 +241,7 @@ describe("Canvas", ()=>{
       let magic = MAGIC.pdf
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
-        expect(header.equals(magic)).toBe(true)
+        assert(header.equals(magic))
       }
     })
 
@@ -245,7 +257,7 @@ describe("Canvas", ()=>{
       ctx.fillRect(1,1,1,1)
 
       let rgba = ctx.getImageData(0, 0, 2, 2)
-      expect(rgba.data).toEqual(new Uint8ClampedArray([
+      assert.deepEqual(rgba.data, new Uint8ClampedArray([
         255, 0,   0,   255,
         0,   255, 0,   255,
         0,   0,   255, 255,
@@ -253,7 +265,7 @@ describe("Canvas", ()=>{
       ]))
 
       let bgra = ctx.getImageData(0, 0, 2, 2, {colorType:"bgra"})
-      expect(bgra.data).toEqual(new Uint8ClampedArray([
+      assert.deepEqual(bgra.data, new Uint8ClampedArray([
         0,   0,   255, 255,
         0,   255, 0,   255,
         255, 0,   0,   255,
@@ -270,25 +282,25 @@ describe("Canvas", ()=>{
         ctx.fillStyle = color
         ctx.arc(100, 100, 25, 0, Math.PI + Math.PI/colors.length*(i+1))
         ctx.fill()
-        expect(ctx.canvas.height).toEqual(dim)
-        expect(ctx.canvas.width).toEqual(dim)
+        assert.equal(ctx.canvas.height, dim)
+        assert.equal(ctx.canvas.width, dim)
       })
 
       await canvas.toFile(`${TMP}/output-{2}.png`)
 
       let files = findTmp(`output-0?.png`)
-      expect(files.length).toEqual(colors.length+1)
+      assert.equal(files.length, colors.length+1)
 
       for (const [i, fn] of files.entries()){
         let img = new Image()
         img.src = fn
         await img.decode()
-        expect(img.complete).toBe(true)
+        assert.equal(img.complete, true)
 
         // second page inherits the first's size, then they increase
         let dim = i<2 ? 512 : 512 + 100 * (i-1)
-        expect(img.width).toEqual(dim)
-        expect(img.height).toEqual(dim)
+        assert.equal(img.width, dim)
+        assert.equal(img.height, dim)
       }
 
     })
@@ -308,7 +320,7 @@ describe("Canvas", ()=>{
       await canvas.toFile(path)
 
       let header = fs.readFileSync(path).slice(0, MAGIC.pdf.length)
-      expect(header.equals(MAGIC.pdf)).toBe(true)
+      assert(header.equals(MAGIC.pdf))
     })
 
     test("image Buffers", async () => {
@@ -316,20 +328,20 @@ describe("Canvas", ()=>{
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = await canvas.toBuffer(ext)
-        expect(buf).toBeInstanceOf(Buffer)
+        assert(buf instanceof Buffer)
 
         fs.writeFileSync(path, buf)
         let header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
-        expect(header.equals(MAGIC[ext])).toBe(true)
+        assert(header.equals(MAGIC[ext]))
 
         // use mime to specify type
         path = `${TMP}/bymime.${ext}`
         buf = await canvas.toBuffer(MIME[ext])
-        expect(buf).toBeInstanceOf(Buffer)
+        assert(buf instanceof Buffer)
 
         fs.writeFileSync(path, buf)
         header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
-        expect(header.equals(MAGIC[ext])).toBe(true)
+        assert(header.equals(MAGIC[ext]))
       }
     })
 
@@ -343,9 +355,9 @@ describe("Canvas", ()=>{
             ]),
             header = `data:${mime};base64,`,
             data = Buffer.from(extURL.substr(header.length), 'base64')
-        expect(extURL).toEqual(mimeURL)
-        expect(extURL.startsWith(header)).toBe(true)
-        expect(data.slice(0, magic.length)).toEqual(magic)
+        assert.equal(extURL, mimeURL)
+        assert.equal(extURL.startsWith(header), true)
+        assert(data.slice(0, magic.length).equals(magic))
       }
     })
 
@@ -354,14 +366,13 @@ describe("Canvas", ()=>{
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
       // invalid path
-      await expect(canvas.toFile(`${TMP}/deep/path/that/doesn/not/exist.pdf`))
-                  .rejects.toThrow()
+      await assert.rejects(canvas.toFile(`${TMP}/deep/path/that/doesn/not/exist.pdf`))
 
       // canvas has a zero dimension
       let width = 0, height = 128
       Object.assign(canvas, {width, height})
-      expect(canvas).toMatchObject({width, height})
-      await expect(canvas.toFile(`${TMP}/zeroed.png`)).rejects.toThrow("must be non-zero")
+      assert.matchesSubset(canvas, {width, height})
+      await assert.rejects(canvas.toFile(`${TMP}/zeroed.png`), /must be non-zero/)
     })
   })
 
@@ -387,7 +398,7 @@ describe("Canvas", ()=>{
       let magic = MAGIC.jpg
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
-        expect(header.equals(magic)).toBe(true)
+        assert(header.equals(magic))
       }
     })
 
@@ -400,7 +411,7 @@ describe("Canvas", ()=>{
       let magic = MAGIC.png
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
-        expect(header.equals(magic)).toBe(true)
+        assert(header.equals(magic))
       }
     })
 
@@ -415,7 +426,7 @@ describe("Canvas", ()=>{
       let magic = MAGIC.webp
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
-        expect(header.equals(magic)).toBe(true)
+        assert(header.equals(magic))
       }
     })
 
@@ -427,7 +438,7 @@ describe("Canvas", ()=>{
 
       for (let path of findTmp(`*`)){
         let svg = fs.readFileSync(path, 'utf-8')
-        expect(svg).toMatch(/^<\?xml version/)
+        assert.match(svg, /^<\?xml version/)
       }
     })
 
@@ -440,7 +451,7 @@ describe("Canvas", ()=>{
       let magic = MAGIC.pdf
       for (let path of findTmp(`*`)){
         let header = fs.readFileSync(path).slice(0, magic.length)
-        expect(header.equals(magic)).toBe(true)
+        assert(header.equals(magic))
       }
     })
 
@@ -452,25 +463,25 @@ describe("Canvas", ()=>{
         ctx.fillStyle = color
         ctx.arc(100, 100, 25, 0, Math.PI + Math.PI/colors.length*(i+1))
         ctx.fill()
-        expect(ctx.canvas.height).toEqual(dim)
-        expect(ctx.canvas.width).toEqual(dim)
+        assert.equal(ctx.canvas.height, dim)
+        assert.equal(ctx.canvas.width, dim)
       })
 
       canvas.toFileSync(`${TMP}/output-{2}.png`)
 
       let files = findTmp(`output-0?.png`)
-      expect(files.length).toEqual(colors.length+1)
+      assert.equal(files.length, colors.length+1)
 
       for (const [i, fn] of files.entries()){
         let img = new Image()
         img.src = fn
         await img.decode()
-        expect(img.complete).toBe(true)
+        assert.equal(img.complete, true)
 
         // second page inherits the first's size, then they increase
         let dim = i<2 ? 512 : 512 + 100 * (i-1)
-        expect(img.width).toEqual(dim)
-        expect(img.height).toEqual(dim)
+        assert.equal(img.width, dim)
+        assert.equal(img.height, dim)
       }
     })
 
@@ -487,10 +498,10 @@ describe("Canvas", ()=>{
       })
 
       let path = `${TMP}/multipage.pdf`
-      expect(() => canvas.toFileSync(path) ).not.toThrow()
+      assert.doesNotThrow(() => canvas.toFileSync(path) )
 
       let header = fs.readFileSync(path).slice(0, MAGIC.pdf.length)
-      expect(header.equals(MAGIC.pdf)).toBe(true)
+      assert(header.equals(MAGIC.pdf))
     })
 
     test("image Buffers", () => {
@@ -498,20 +509,20 @@ describe("Canvas", ()=>{
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = canvas.toBufferSync(ext)
-        expect(buf).toBeInstanceOf(Buffer)
+        assert(buf instanceof Buffer)
 
         fs.writeFileSync(path, buf)
         let header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
-        expect(header.equals(MAGIC[ext])).toBe(true)
+        assert(header.equals(MAGIC[ext]))
 
         // use mime to specify type
         path = `${TMP}/bymime.${ext}`
         buf = canvas.toBufferSync(MIME[ext])
-        expect(buf).toBeInstanceOf(Buffer)
+        assert(buf instanceof Buffer)
 
         fs.writeFileSync(path, buf)
         header = fs.readFileSync(path).slice(0, MAGIC[ext].length)
-        expect(header.equals(MAGIC[ext])).toBe(true)
+        assert(header.equals(MAGIC[ext]))
       }
     })
 
@@ -525,11 +536,11 @@ describe("Canvas", ()=>{
             asyncURL = await canvas.toURL(ext),
             header = `data:${mime};base64,`,
             data = Buffer.from(extURL.substr(header.length), 'base64')
-        expect(extURL).toEqual(mimeURL)
-        expect(extURL).toEqual(stdURL)
-        expect(extURL).toEqual(asyncURL)
-        expect(extURL.startsWith(header)).toBe(true)
-        expect(data.slice(0, magic.length)).toEqual(magic)
+        assert.equal(extURL, mimeURL)
+        assert.equal(extURL, stdURL)
+        assert.equal(extURL, asyncURL)
+        assert(extURL.startsWith(header))
+        assert(data.slice(0, magic.length).equals(magic))
       }
     })
 
@@ -538,20 +549,18 @@ describe("Canvas", ()=>{
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
       // invalid path
-      expect(() =>
-        canvas.toFileSync(`${TMP}/deep/path/that/doesn/not/exist.pdf`)
-      ).toThrow()
+      assert.throws(() => canvas.toFileSync(`${TMP}/deep/path/that/doesn/not/exist.pdf`))
 
       // canvas has a zero dimension
       let width = 0, height = 128
       Object.assign(canvas, {width, height})
-      expect(canvas).toMatchObject({width, height})
-      expect( () => canvas.toFileSync(`${TMP}/zeroed.png`)).toThrow("must be non-zero")
+      assert.matchesSubset(canvas, {width, height})
+      assert.throws( () => canvas.toFileSync(`${TMP}/zeroed.png`), /must be non-zero/)
     })
 
     test("an image even without a ctx", () => {
       let canvas = new Canvas(200, 200)
-      expect( () => canvas.toURLSync("png") ).not.toThrow()
+      assert.doesNotThrow( () => canvas.toURLSync("png") )
     })
   })
 

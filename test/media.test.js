@@ -1,27 +1,40 @@
 // @ts-check
 
-const fs = require('fs'),
-      path = require('path'),
+"use strict"
+
+const path = require('path'),
       os = require('os'),
+      fs = require('fs'),
+      assert = require('node:assert'),
+      nock = require('nock'),
+      {describe, test, beforeEach, afterEach} = require('node:test'),
       {pathToFileURL, fileURLToPath} = require('url'),
       {globSync:glob} = require('fast-glob'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
 
-jest.mock('../lib/urls.js', () => ({
-  ...jest.requireActual('../lib/urls.js'),
-  fetchURL: (src, opts, ok, fail) => {
-    const fs = require('fs')
-    let path = src.replace(/^https?:\//, process.cwd())
-    fs.readFile(path, (err, data) => {
-      if (err) fail(Error(`Failed to load image from "${src}" (HTTP error 404)`))
-      else ok(data)
-    })
-  },
-}))
+assert.contains = (actual, expected) => assert((actual || []).includes(expected))
+assert.doesNotContain = (actual, expected) => assert(!((actual || [expected]).includes(expected)))
+assert.matchesSubset = (actual, expected) => Object.entries(expected).forEach(([key, val]) => assert.equal(actual[key], val))
+assert.nearEqual = (actual, expected) => assert.ok(
+  Math.abs(expected - actual) < Math.pow(10, -2) / 2,
+  new assert.AssertionError({actual, expected, operator:"≈"})
+)
+
+const scope = nock('http://_h_o_s_t_')
+  .persist()
+  .get(/.*/)
+  .reply((uri, requestBody) => {
+    try{
+      return [200, fs.readFileSync(process.cwd() + uri)]
+    }catch(e){
+      return [404, `Failed to load image from "${uri}" (HTTP error 404)`]
+    }
+
+  })
 
 describe("Image", () => {
   var PATH = 'test/assets/pentagon.png',
-      URI = `https://${PATH}`,
+      URI = `http://_h_o_s_t_/${PATH}`,
       BUFFER = fs.readFileSync(PATH),
       DATA_URI = `data:image/png;base64,${BUFFER.toString('base64')}`,
       FILE_URL = pathToFileURL(PATH),
@@ -30,7 +43,7 @@ describe("Image", () => {
       FORMAT = 'test/assets/image/format',
       PARSED = {complete:true, width:60, height:60},
       SVG_PATH = `${FORMAT}.svg`,
-      SVG_URI = `https://${SVG_PATH}`,
+      SVG_URI = `http://_h_o_s_t_/${SVG_PATH}`,
       SVG_BUFFER = fs.readFileSync(SVG_PATH),
       SVG_DATA_URI = `data:image/svg;base64,${SVG_BUFFER.toString('base64')}`,
       SVG_FILE_URL = pathToFileURL(SVG_PATH),
@@ -41,186 +54,186 @@ describe("Image", () => {
   describe("can initialize bitmaps from", () => {
     test("buffer", async () => {
       img = new Image(BUFFER)
-      expect(img).toMatchObject(LOADED)
-      expect(img.src).toEqual("::Buffer::")
+      assert.matchesSubset(img, LOADED)
+      assert.equal(img.src, "::Buffer::")
 
       let fakeSrc = 'arbitrary*src*string'
       img = new Image(BUFFER, fakeSrc)
-      expect(img.src).toEqual(fakeSrc)
+      assert.equal(img.src, fakeSrc)
 
       img = new Image()
       img.src = BUFFER
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
     })
 
     test("data uri", () => {
       img.src = DATA_URI
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
 
       img = new Image(DATA_URI)
-      expect(img).toMatchObject(LOADED)
-      expect(img.src).toEqual(DATA_URI)
+      assert.matchesSubset(img, LOADED)
+      assert.equal(img.src, DATA_URI)
 
       let fakeSrc = 'arbitrary*src*string'
       img = new Image(DATA_URI, fakeSrc)
-      expect(img.src).toEqual(fakeSrc)
+      assert.equal(img.src, fakeSrc)
     })
 
     test("local file", async () => {
-      expect(img).toMatchObject(FRESH)
+      assert.matchesSubset(img, FRESH)
       img.src = PATH
       await img.decode()
-      expect(img).toMatchObject(LOADED)
-      expect(img.src).toEqual(PATH)
+      assert.matchesSubset(img, LOADED)
+      assert.equal(img.src, PATH)
 
-      expect(() => new Image(PATH)).toThrow("Expected a valid data URL")
+      assert.throws(() => new Image(PATH), /Expected a valid data URL/)
     })
 
     test("file url", async () => {
-      expect(img).toMatchObject(FRESH)
+      assert.matchesSubset(img, FRESH)
       img.src = FILE_URL
       await img.decode()
-      expect(img).toMatchObject(LOADED)
-      expect(img.src).toEqual(fileURLToPath(FILE_URL))
+      assert.matchesSubset(img, LOADED)
+      assert.equal(img.src, fileURLToPath(FILE_URL))
 
-      expect(() => new Image(FILE_URL)).toThrow("Expected a valid data URL")
+      assert.throws(() => new Image(FILE_URL), /Expected a valid data URL/)
     })
 
-    test("http url", done => {
-      expect(img).toMatchObject(FRESH)
+    test("http url", (t, done) => {
+      assert.matchesSubset(img, FRESH)
       img.onload = loaded => {
-        expect(loaded).toBe(img)
-        expect(img).toMatchObject(LOADED)
+        assert.equal(loaded, img)
+        assert.matchesSubset(img, LOADED)
         done()
       }
       img.src = URI
 
-      expect(() => new Image(URI)).toThrow("Expected a valid data URL")
+      assert.throws(() => new Image(URI), /Expected a valid data URL/)
     })
 
     test("loadImage call", async () => {
-      expect(img).toMatchObject(FRESH)
+      assert.matchesSubset(img, FRESH)
 
       img = await loadImage(URI)
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
 
       img = await loadImage(BUFFER)
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
 
       img = await loadImage(DATA_URI)
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
 
       img = await loadImage(PATH)
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
 
       img = await loadImage(SVG_PATH)
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
 
       img = await loadImage(new URL(URI))
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
 
       img = await loadImage(new URL(DATA_URI))
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
 
       img = await loadImage(new URL(`file:${__dirname}/../`+PATH))
-      expect(img).toMatchObject(LOADED)
+      assert.matchesSubset(img, LOADED)
 
       img = await loadImage(new URL(`file:${__dirname}/../`+SVG_PATH))
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
 
-      expect(loadImage("http://nonesuch")).rejects.toThrow("HTTP error 404")
+      await assert.rejects(loadImage("http://_h_o_s_t_/nonesuch"), /HTTP error 404/)
     })
   })
 
   describe("can initialize SVGs from", () => {
     test("buffer", () => {
-      expect(img).toMatchObject(FRESH)
+      assert.matchesSubset(img, FRESH)
       img = new Image(SVG_BUFFER)
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
 
       img = new Image()
       img.src = SVG_BUFFER
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
     })
 
     test("data uri", async () => {
-      expect(img).toMatchObject(FRESH)
+      assert.matchesSubset(img, FRESH)
       img.src = SVG_DATA_URI
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
     })
 
     test("local file", async () => {
-      expect(img).toMatchObject(FRESH)
+      assert.matchesSubset(img, FRESH)
       img.src = SVG_PATH
-      expect(img.complete).toBeFalsy()
+      assert(!img.complete)
       await img.decode()
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
     })
 
     test("file url", async () => {
-      expect(img).toMatchObject(FRESH)
+      assert.matchesSubset(img, FRESH)
       img.src = SVG_FILE_URL
-      expect(img.complete).toBeFalsy()
+      assert(!img.complete)
       await img.decode()
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
     })
 
-    test("http url", done => {
-      expect(img).toMatchObject(FRESH)
+    test("http url", (t, done) => {
+      assert.matchesSubset(img, FRESH)
       img.onload = loaded => {
-        expect(loaded).toBe(img)
-        expect(img).toMatchObject(PARSED)
+        assert.equal(loaded, img)
+        assert.matchesSubset(img, PARSED)
         done()
       }
       img.src = SVG_URI
-      expect(img.complete).toBeFalsy()
+      assert(!img.complete)
     })
   })
 
   describe("sends notifications through", () => {
     test(".complete flag", async () => {
-      expect(img.complete).toEqual(false)
+      assert(!img.complete)
 
       img.src = PATH
       await img.decode()
-      expect(img.complete).toEqual(true)
+      assert(img.complete)
     })
 
-    test(".onload callback", done => {
+    test(".onload callback", (t, done) => {
       // ensure that the fetch process can be overwritten while in flight
       img.onload = loaded => { throw Error("should not be called") }
       img.src = URI
 
       img.onload = function(){
         // confirm that `this` is set correctly
-        expect(this).toBe(img)
+        assert.equal(this, img)
         done()
       }
-      img.src = 'http://test/assets/globe.jpg'
+      img.src = 'http://_h_o_s_t_/test/assets/globe.jpg'
     })
 
-    test(".onerror callback", done => {
+    test(".onerror callback", (t, done) => {
       img.onerror = err => {
-        expect(err.message).toMatch("HTTP error 404")
+        assert.match(err.message, /HTTP error 404/)
         done()
       }
-      img.src = 'http://nonesuch'
+      img.src = 'http://_h_o_s_t_/nonesuch'
     })
 
     test(".decode promise", async () => {
-      expect(()=> img.decode() ).rejects.toEqual(new Error('Image source not set'))
+      await assert.rejects(()=> img.decode(), /Image source not set/)
 
       img.src = URI
       let decoded = await img.decode()
-      expect(decoded).toBe(img)
+      assert.equal(decoded, img)
 
       // can load new data into existing Image
-      img.src = 'http://test/assets/image/format.png'
+      img.src = 'http://_h_o_s_t_/test/assets/image/format.png'
       decoded = await img.decode()
-      expect(decoded).toBe(img)
+      assert.equal(decoded, img)
 
       // autoresolves once loaded
-      expect(img.decode()).resolves.toEqual(img)
+      assert.equal(await img.decode(), img)
     })
   })
 
@@ -240,15 +253,15 @@ describe("Image", () => {
       let img = new Image()
       img.src = path
       await img.decode()
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
 
       img = new Image()
       img.src = asDataURI(path)
       await img.decode()
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
 
       img = new Image(asBuffer(path))
-      expect(img).toMatchObject(PARSED)
+      assert.matchesSubset(img, PARSED)
     }
 
     test("PNG", async () => await testFormat("png") )
@@ -270,16 +283,14 @@ describe("ImageData", () => {
     test("buffer", () => {
       let buffer = fs.readFileSync(FORMAT)
       let imgData = new ImageData(buffer, 60, 60)
-      expect(imgData).toMatchObject(RGBA)
+      assert.matchesSubset(imgData, RGBA)
 
-      expect(() => new ImageData(buffer, 60, 59))
-        .toThrow("ImageData dimensions must match buffer length")
+      assert.throws(() => new ImageData(buffer, 60, 59), /ImageData dimensions must match buffer length/)
     })
 
-    test("loadImageData call", done => {
-      loadImageData(FORMAT, 60, 60).then(imgData => {
-        expect(imgData).toMatchObject(RGBA)
-        done()
+    test("loadImageData call", async () => {
+      await loadImageData(FORMAT, 60, 60).then(imgData => {
+        assert.matchesSubset(imgData, RGBA)
       })
     })
 
@@ -287,9 +298,9 @@ describe("ImageData", () => {
       let canvas = new Canvas(60, 60),
           ctx = canvas.getContext("2d")
       let rgbaData = ctx.getImageData(0, 0, 60, 60)
-      expect(rgbaData).toMatchObject(RGBA)
+      assert.matchesSubset(rgbaData, RGBA)
       let bgraData = ctx.getImageData(0, 0, 60, 60, {colorType:'bgra'})
-      expect(bgraData).toMatchObject(BGRA)
+      assert.matchesSubset(bgraData, BGRA)
     })
   })
 })
@@ -316,14 +327,14 @@ describe("FontLibrary", ()=>{
         sorted = fams.slice().sort(),
         unique = [...new Set(sorted)];
 
-    expect(fams.indexOf("Arial")>=0 || fams.indexOf("DejaVu Sans")>=0).toBe(true)
-    expect(fams).toEqual(sorted)
-    expect(fams).toEqual(unique)
+    assert(fams.indexOf("Arial")>=0 || fams.indexOf("DejaVu Sans") >= 0)
+    assert.deepEqual(fams, sorted)
+    assert.deepEqual(fams, unique)
   })
 
   test("can check for a family", ()=>{
-    expect(FontLibrary.has("Arial") || FontLibrary.has("DejaVu Sans")).toBe(true)
-    expect(FontLibrary.has("_n_o_n_e_s_u_c_h_")).toBe(false)
+    assert(FontLibrary.has("Arial") || FontLibrary.has("DejaVu Sans"))
+    assert(!FontLibrary.has("_n_o_n_e_s_u_c_h_"))
   })
 
   test("can describe a family", ()=>{
@@ -333,14 +344,14 @@ describe("FontLibrary", ()=>{
 
     if (fam){
       let info = FontLibrary.family(fam)
-      expect(info).toBeTruthy()
-      expect(info).toHaveProperty('family')
-      expect(info).toHaveProperty('weights')
-      expect(info && typeof info.weights[0]).toBe('number');
-      expect(info).toHaveProperty('widths')
-      expect(info && typeof info.widths[0]).toBe('string');
-      expect(info).toHaveProperty('styles')
-      expect(info && typeof info.styles[0]).toBe('string');
+      assert(info)
+      assert(Object.hasOwn(info, 'family'))
+      assert(Object.hasOwn(info, 'weights'))
+      assert.equal(info && typeof info.weights[0], 'number');
+      assert(Object.hasOwn(info, 'widths'))
+      assert.equal(info && typeof info.widths[0], 'string');
+      assert(Object.hasOwn(info, 'styles'))
+      assert.equal(info && typeof info.styles[0], 'string');
     }
   })
 
@@ -350,34 +361,34 @@ describe("FontLibrary", ()=>{
         alias = "PseudonymousBosch";
 
     // with real name
-    expect(() => FontLibrary.use(ttf)).not.toThrow()
-    expect(FontLibrary.has(name)).toBe(true)
-    expect((FontLibrary.family(name) || {}).weights).toContain(400)
+    assert.doesNotThrow(() => FontLibrary.use(ttf))
+    assert(FontLibrary.has(name))
+    assert.contains((FontLibrary.family(name) || {}).weights, 400)
 
     // with alias
-    expect(() => FontLibrary.use(alias, ttf)).not.toThrow()
-    expect(FontLibrary.has(alias)).toBe(true)
-    expect((FontLibrary.family(alias) || {}).weights).toContain(400)
+    assert.doesNotThrow(() => FontLibrary.use(alias, ttf))
+    assert(FontLibrary.has(alias))
+    assert.contains((FontLibrary.family(alias) || {}).weights, 400)
 
     // fonts disappear after reset
     FontLibrary.reset()
-    expect(FontLibrary.has(name)).toBe(false)
-    expect(FontLibrary.has(alias)).toBe(false)
+    assert(!FontLibrary.has(name))
+    assert(!FontLibrary.has(alias))
   })
 
   test("can render woff2 fonts", ()=>{
     for (const ext of ['woff', 'woff2']){
       let woff = findFont("Monoton-Regular." + ext),
           name = "Monoton"
-      expect(() => FontLibrary.use(woff)).not.toThrow()
-      expect(FontLibrary.has(name)).toBe(true)
+      assert.doesNotThrow(() => FontLibrary.use(woff))
+      assert(FontLibrary.has(name))
 
       ctx.font = '256px Monoton'
       ctx.fillText('G', 128, 256)
 
       // look for one of the gaps between the inline strokes of the G
       let bmp = ctx.getImageData(300, 172, 1, 1)
-      expect(Array.from(bmp.data)).toEqual([0,0,0,0])
+      assert.deepEqual(Array.from(bmp.data), [0,0,0,0])
     }
   })
 
@@ -389,33 +400,33 @@ describe("FontLibrary", ()=>{
 
     FONTS_DIR = normalizePath(FONTS_DIR)
     ASSETS_DIR = normalizePath(ASSETS_DIR)
-    expect( FontLibrary.use(glob(`${FONTS_DIR}/montserrat*/montserrat-v30-latin-italic.woff2`)) ).toHaveLength(1)
-    expect( FontLibrary.use(glob(`${FONTS_DIR}/montserrat-latin/*700*.woff2`)) ).toHaveLength(2)
-    expect( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat-v30-latin-italic.woff2`)) ).toHaveLength(1)
-    expect( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat*italic.*`)) ).toHaveLength(3)
+    assert.equal( FontLibrary.use(glob(`${FONTS_DIR}/montserrat*/montserrat-v30-latin-italic.woff2`)).length, 1)
+    assert.equal( FontLibrary.use(glob(`${FONTS_DIR}/montserrat-latin/*700*.woff2`)).length, 2)
+    assert.equal( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat-v30-latin-italic.woff2`)).length, 1)
+    assert.equal( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat*italic.*`)).length, 3)
 
     // `**` must be standalone (i.e., can't be attached to a file extension)
-    expect( FontLibrary.use(glob(`${ASSETS_DIR}/**.woff2`)) ).toHaveLength(0)
-    expect( FontLibrary.use(glob(`${ASSETS_DIR}/**/*.woff2`)) ).toHaveLength(7)
+    assert.equal( FontLibrary.use(glob(`${ASSETS_DIR}/**.woff2`)).length, 0)
+    assert.equal( FontLibrary.use(glob(`${ASSETS_DIR}/**/*.woff2`)).length, 7)
 
     // single alias
-    expect( FontLibrary.use("Montmartre", glob(`${ASSETS_DIR}/**/montserrat*italic.*`)) ).toHaveLength(3)
+    assert.equal( FontLibrary.use("Montmartre", glob(`${ASSETS_DIR}/**/montserrat*italic.*`)).length, 3)
 
     // multiple aliases (array of patterns)
     let { Monaton, Montserrat } = FontLibrary.use({
       Monaton: glob(`${FONTS_DIR}/*.woff2`),
       Montserrat: glob([`${FONTS_DIR}/montserrat-latin/*italic.woff2`, `${FONTS_DIR}/**/montserrat-latin/*700.woff2`])
     })
-    expect(Monaton).toHaveLength(1)
-    expect(Montserrat).toHaveLength(4)
+    assert.equal(Monaton.length, 1)
+    assert.equal(Montserrat.length, 4)
 
     // multiple aliases (bare-string pattern)
     let { MonatonNowrap, MontserratNowrap  } = FontLibrary.use({
       MonatonNowrap: glob(`${FONTS_DIR}/*.woff2`)[0],
       MontserratNowrap: glob(`${FONTS_DIR}/montserrat-latin/*.woff2`)
     })
-    expect(MonatonNowrap).toHaveLength(1)
-    expect(MontserratNowrap).toHaveLength(6)
+    assert.equal(MonatonNowrap.length, 1)
+    assert.equal(MontserratNowrap.length, 6)
   })
 
 })

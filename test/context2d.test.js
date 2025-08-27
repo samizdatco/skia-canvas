@@ -2,8 +2,18 @@
 
 "use strict"
 
-const {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../lib'),
-      css = require('../lib/classes/css');
+const assert = require('node:assert'),
+      {describe, test, beforeEach, afterEach} = require('node:test'),
+      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../lib'),
+      css = require('../lib/classes/css')
+
+assert.contains = (actual, expected) => assert((actual || []).includes(expected))
+assert.doesNotContain = (actual, expected) => assert(!((actual || [expected]).includes(expected)))
+assert.matchesSubset = (actual, expected) => Object.entries(expected).forEach(([key, val]) => assert.deepEqual(actual[key], val))
+assert.nearEqual = (actual, expected) => assert.ok(
+  Math.abs(expected - actual) < Math.pow(10, -2) / 2,
+  new assert.AssertionError({actual, expected, operator:"≈"})
+)
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -36,40 +46,40 @@ describe("Context2D", ()=>{
       ctx.scale(0.1, 0.3)
       let matrix = ctx.currentTransform
       _each({a:0.1, b:0, c:0, d:0.3, e:0, f:0}, (val, term) =>
-        expect(matrix[term]).toBeCloseTo(val)
+        assert.nearEqual(matrix[term], val)
       )
 
       ctx.resetTransform()
       _each({a:1, d:1}, (val, term) =>
-        expect(ctx.currentTransform[term]).toBeCloseTo(val)
+        assert.nearEqual(ctx.currentTransform[term], val)
       )
 
       ctx.currentTransform = matrix
       _each({a:0.1, d:0.3}, (val, term) =>
-        expect(ctx.currentTransform[term]).toBeCloseTo(val)
+        assert.nearEqual(ctx.currentTransform[term], val)
       )
     })
 
     test('font', () => {
-      expect(ctx.font).toBe('10px sans-serif')
+      assert.equal(ctx.font, '10px sans-serif')
       let font = '16px Baskerville, serif',
           canonical = css.font(font).canonical;
       ctx.font = font
-      expect(ctx.font).toBe(canonical)
+      assert.equal(ctx.font, canonical)
       ctx.font = 'invalid'
-      expect(ctx.font).toBe(canonical)
+      assert.equal(ctx.font, canonical)
     })
 
     test('globalAlpha', () => {
-      expect(ctx.globalAlpha).toBe(1)
+      assert.equal(ctx.globalAlpha, 1)
       ctx.globalAlpha = 0.25
-      expect(ctx.globalAlpha).toBeCloseTo(0.25)
+      assert.nearEqual(ctx.globalAlpha, 0.25)
       ctx.globalAlpha = -1
-      expect(ctx.globalAlpha).toBeCloseTo(0.25)
+      assert.nearEqual(ctx.globalAlpha, 0.25)
       ctx.globalAlpha = 3
-      expect(ctx.globalAlpha).toBeCloseTo(0.25)
+      assert.nearEqual(ctx.globalAlpha, 0.25)
       ctx.globalAlpha = 0
-      expect(ctx.globalAlpha).toBe(0)
+      assert.equal(ctx.globalAlpha, 0)
     })
 
     test('globalCompositeOperation', () => {
@@ -80,93 +90,93 @@ describe("Context2D", ()=>{
                  "hard-light", "soft-light", "difference", "exclusion", "hue",
                  "saturation", "color", "luminosity"]
 
-      expect(ctx.globalCompositeOperation).toBe('source-over')
+      assert.equal(ctx.globalCompositeOperation, 'source-over')
       ctx.globalCompositeOperation = 'invalid'
-      expect(ctx.globalCompositeOperation).toBe('source-over')
+      assert.equal(ctx.globalCompositeOperation, 'source-over')
 
       for (let op of ops){
         ctx.globalCompositeOperation = op
-        expect(ctx.globalCompositeOperation).toBe(op)
+        assert.equal(ctx.globalCompositeOperation, op)
       }
     })
 
     test('imageSmoothingEnabled', () => {
-      expect(ctx.imageSmoothingEnabled).toBe(true)
+      assert.equal(ctx.imageSmoothingEnabled, true)
       ctx.imageSmoothingEnabled = false
-      expect(ctx.imageSmoothingEnabled).toBe(false)
+      assert.equal(ctx.imageSmoothingEnabled, false)
     })
 
 
     test('imageSmoothingQuality', () => {
       let vals = ["low", "medium", "high"]
 
-      expect(ctx.imageSmoothingQuality).toBe('low')
+      assert.equal(ctx.imageSmoothingQuality, 'low')
       ctx.imageSmoothingQuality = 'invalid'
-      expect(ctx.imageSmoothingQuality).toBe('low')
+      assert.equal(ctx.imageSmoothingQuality, 'low')
 
       for (let val of vals){
         ctx.imageSmoothingQuality = val
-        expect(ctx.imageSmoothingQuality).toBe(val)
+        assert.equal(ctx.imageSmoothingQuality, val)
       }
     })
 
     test('lineCap', () => {
       let vals = ["butt", "square", "round"]
 
-      expect(ctx.lineCap).toBe('butt')
+      assert.equal(ctx.lineCap, 'butt')
       ctx.lineCap = 'invalid'
-      expect(ctx.lineCap).toBe('butt')
+      assert.equal(ctx.lineCap, 'butt')
 
       for (let val of vals){
         ctx.lineCap = val
-        expect(ctx.lineCap).toBe(val)
+        assert.equal(ctx.lineCap, val)
       }
     })
 
     test('lineDash', () => {
-      expect(ctx.getLineDash()).toEqual([])
+      assert.deepEqual(ctx.getLineDash(), [])
       ctx.setLineDash([1,2,3,4])
-      expect(ctx.getLineDash()).toEqual([1,2,3,4])
+      assert.deepEqual(ctx.getLineDash(), [1,2,3,4])
       ctx.setLineDash([NaN])
-      expect(ctx.getLineDash()).toEqual([1,2,3,4])
+      assert.deepEqual(ctx.getLineDash(), [1,2,3,4])
     })
 
     test('lineJoin', () => {
       let vals = ["miter", "round", "bevel"]
 
-      expect(ctx.lineJoin).toBe('miter')
+      assert.equal(ctx.lineJoin, 'miter')
       ctx.lineJoin = 'invalid'
-      expect(ctx.lineJoin).toBe('miter')
+      assert.equal(ctx.lineJoin, 'miter')
 
       for (let val of vals){
         ctx.lineJoin = val
-        expect(ctx.lineJoin).toBe(val)
+        assert.equal(ctx.lineJoin, val)
       }
     })
 
     test('lineWidth', () => {
       ctx.lineWidth = 10.0;
-      expect(ctx.lineWidth).toBe(10)
+      assert.equal(ctx.lineWidth, 10)
       ctx.lineWidth = Infinity;
-      expect(ctx.lineWidth).toBe(10)
+      assert.equal(ctx.lineWidth, 10)
       ctx.lineWidth = -Infinity;
-      expect(ctx.lineWidth).toBe(10)
+      assert.equal(ctx.lineWidth, 10)
       ctx.lineWidth = -5;
-      expect(ctx.lineWidth).toBe(10)
+      assert.equal(ctx.lineWidth, 10)
       ctx.lineWidth = 0;
-      expect(ctx.lineWidth).toBe(10)
+      assert.equal(ctx.lineWidth, 10)
     })
 
     test('textAlign', () => {
       let vals = ["start", "end", "left", "center", "right", "justify"]
 
-      expect(ctx.textAlign).toBe('start')
+      assert.equal(ctx.textAlign, 'start')
       ctx.textAlign = 'invalid'
-      expect(ctx.textAlign).toBe('start')
+      assert.equal(ctx.textAlign, 'start')
 
       for (let val of vals){
         ctx.textAlign = val
-        expect(ctx.textAlign).toBe(val)
+        assert.equal(ctx.textAlign, val)
       }
     })
 
@@ -174,47 +184,47 @@ describe("Context2D", ()=>{
 
   describe("can create", ()=>{
     test('a context', () => {
-      expect(canvas.getContext("invalid")).toBe(null)
-      expect(canvas.getContext("2d")).toBe(ctx)
-      expect(canvas.pages[0]).toBe(ctx)
-      expect(ctx.canvas).toBe(canvas)
+      assert.strictEqual(canvas.getContext("invalid"), null)
+      assert.strictEqual(canvas.getContext("2d"), ctx)
+      assert.strictEqual(canvas.pages[0], ctx)
+      assert.strictEqual(ctx.canvas, canvas)
     })
 
     test('multiple pages', () => {
       let ctx2 = canvas.newPage(WIDTH*2, HEIGHT*2);
-      expect(canvas.width).toBe(WIDTH*2)
-      expect(canvas.height).toBe(HEIGHT*2)
-      expect(canvas.pages[0]).toBe(ctx)
-      expect(canvas.pages[1]).toBe(ctx2)
-      expect(ctx.canvas).toBe(canvas)
-      expect(ctx2.canvas).toBe(canvas)
+      assert.equal(canvas.width, WIDTH*2)
+      assert.equal(canvas.height, HEIGHT*2)
+      assert.strictEqual(canvas.pages[0], ctx)
+      assert.strictEqual(canvas.pages[1], ctx2)
+      assert.strictEqual(ctx.canvas, canvas)
+      assert.strictEqual(ctx2.canvas, canvas)
     })
 
     test("ImageData", () => {
       let [width, height] = [123, 456],
           bmp = ctx.createImageData(width, height);
-      expect(bmp.width).toBe(width)
-      expect(bmp.height).toBe(height)
-      expect(bmp.data.length).toBe(width * height * 4)
-      expect(Array.from(bmp.data.slice(0,4))).toEqual(CLEAR)
+      assert.equal(bmp.width, width)
+      assert.equal(bmp.height, height)
+      assert.equal(bmp.data.length, width * height * 4)
+      assert.deepEqual(Array.from(bmp.data.slice(0,4)), CLEAR)
 
       let blank = new ImageData(width, height)
-      expect(blank.width).toBe(width)
-      expect(blank.height).toBe(height)
-      expect(blank.data.length).toBe(width * height * 4)
-      expect(Array.from(blank.data.slice(0,4))).toEqual(CLEAR)
+      assert.equal(blank.width, width)
+      assert.equal(blank.height, height)
+      assert.equal(blank.data.length, width * height * 4)
+      assert.deepEqual(Array.from(blank.data.slice(0,4)), CLEAR)
 
       new ImageData(blank.data, width, height)
       new ImageData(blank.data, height, width)
       new ImageData(blank.data, width)
       new ImageData(blank.data, height)
-      expect(() => new ImageData(blank.data, width+1, height) ).toThrow()
-      expect(() => new ImageData(blank.data, width+1) ).toThrow()
+      assert.throws(() => new ImageData(blank.data, width+1, height) )
+      assert.throws(() => new ImageData(blank.data, width+1) )
 
       // @ts-ignore
       new ImageData(blank)
       // @ts-ignore
-      expect(() => new ImageData(blank.data) ).toThrow()
+      assert.throws(() => new ImageData(blank.data) )
     })
 
     describe("CanvasPattern", () => {
@@ -227,13 +237,12 @@ describe("Context2D", ()=>{
         ctx.fillStyle = pattern;
         ctx.fillRect(0,0,width,height)
 
-        expect.assertions(width * height) // check each pixel
-
         let bmp = ctx.getImageData(0,0,width,height)
         let blackPixel = true
+        assert.equal(bmp.data.length, width * height * 4)
         for (var i=0; i<bmp.data.length; i+=4){
           if (i % (bmp.width*4) != 0) blackPixel = !blackPixel
-          expect(Array.from(bmp.data.slice(i, i+4))).toEqual(
+          assert.deepEqual(Array.from(bmp.data.slice(i, i+4)),
             blackPixel ? BLACK : WHITE
           )
         }
@@ -262,7 +271,7 @@ describe("Context2D", ()=>{
         let blackPixel = true
         for (var i=0; i<bmp.data.length; i+=4){
           if (i % (bmp.width*4) != 0) blackPixel = !blackPixel
-          expect(Array.from(bmp.data.slice(i, i+4))).toEqual(
+          assert.deepEqual(Array.from(bmp.data.slice(i, i+4)),
             blackPixel ? BLACK : WHITE
           )
         }
@@ -289,7 +298,7 @@ describe("Context2D", ()=>{
         let blackPixel = true
         for (var i=0; i<bmp.data.length; i+=4){
           if (i % (bmp.width*4) != 0) blackPixel = !blackPixel
-          expect(Array.from(bmp.data.slice(i, i+4))).toEqual(
+          assert.deepEqual(Array.from(bmp.data.slice(i, i+4)),
             blackPixel ? BLACK : WHITE
           )
         }
@@ -324,7 +333,7 @@ describe("Context2D", ()=>{
           let bmp = ctx.getImageData(0, 0, w, h);
           eachPixel(bmp, (i, clr) => {
             let px = Array.from(bmp.data.slice(i, i+4))
-            expect(px).toEqual([clr,clr,clr, 255])
+            assert.deepEqual(px, [clr,clr,clr, 255])
           })
         }
 
@@ -340,9 +349,9 @@ describe("Context2D", ()=>{
           mat = new DOMMatrix().scale(mag);
           pat.setTransform(mat);
           // make sure the alternative matrix syntaxes also work
-          expect(() => {pat.setTransform(mag, 0, 0, mag, 0, 0)}).not.toThrow()
-          expect(() => {pat.setTransform([mag, 0, 0, mag, 0, 0])}).not.toThrow()
-          expect(() => {pat.setTransform({a:mag, b:0, c:0, d:mag, e:0, f:0})}).not.toThrow()
+          assert.doesNotThrow(() => {pat.setTransform(mag, 0, 0, mag, 0, 0)})
+          assert.doesNotThrow(() => {pat.setTransform([mag, 0, 0, mag, 0, 0])})
+          assert.doesNotThrow(() => {pat.setTransform({a:mag, b:0, c:0, d:mag, e:0, f:0})})
           ctx.fillRect(0,0, w*mag, h*mag);
           isCheckerboard(ctx, w*mag, h*mag);
         })
@@ -357,8 +366,8 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'#000');
         ctx.fillRect(0,0,21,1);
 
-        expect(pixel(0,0)).toEqual(WHITE)
-        expect(pixel(20,0)).toEqual(BLACK)
+        assert.deepEqual(pixel(0,0), WHITE)
+        assert.deepEqual(pixel(20,0), BLACK)
       })
 
       test("radial", () => {
@@ -373,11 +382,11 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'red');
         ctx.fillRect(0,0, 200,200)
 
-        expect(pixel(x, y)).toEqual(WHITE)
-        expect(pixel(x+inside, y)).toEqual(BLACK)
-        expect(pixel(x, y+inside)).toEqual(BLACK)
-        expect(pixel(x+outside, y)).toEqual([255,0,0,255])
-        expect(pixel(x, y+outside)).toEqual([255,0,0,255])
+        assert.deepEqual(pixel(x, y), WHITE)
+        assert.deepEqual(pixel(x+inside, y), BLACK)
+        assert.deepEqual(pixel(x, y+inside), BLACK)
+        assert.deepEqual(pixel(x+outside, y), [255,0,0,255])
+        assert.deepEqual(pixel(x, y+outside), [255,0,0,255])
       })
 
       test("conic", () => {
@@ -389,8 +398,8 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'#fff');
         ctx.fillRect(0,0,512,512);
 
-        expect(pixel(5, 256)).toEqual(BLACK)
-        expect(pixel(500, 256)).toEqual(WHITE)
+        assert.deepEqual(pixel(5, 256), BLACK)
+        assert.deepEqual(pixel(500, 256), WHITE)
 
         // rotate 90° so black is left and white is right
         gradient = ctx.createConicGradient(Math.PI/2, 256, 256);
@@ -400,8 +409,8 @@ describe("Context2D", ()=>{
         gradient.addColorStop(1,'#fff');
         ctx.fillRect(0,0,512,512);
 
-        expect(pixel(256, 500)).toEqual(WHITE)
-        expect(pixel(256, 5)).toEqual(BLACK)
+        assert.deepEqual(pixel(256, 500), WHITE)
+        assert.deepEqual(pixel(256, 5), BLACK)
       })
     })
 
@@ -441,10 +450,10 @@ describe("Context2D", ()=>{
         ctx.fillStyle = nylon
         ctx.fillRect(10, 10, 80, 80)
 
-        expect(pixel(26, 24)).toEqual(CLEAR)
-        expect(pixel(28, 26)).toEqual(BLACK)
-        expect(pixel(48, 48)).toEqual(BLACK)
-        expect(pixel(55, 40)).toEqual(CLEAR)
+        assert.deepEqual(pixel(26, 24), CLEAR)
+        assert.deepEqual(pixel(28, 26), BLACK)
+        assert.deepEqual(pixel(48, 48), BLACK)
+        assert.deepEqual(pixel(55, 40), CLEAR)
       })
 
       test("with stroked Path2D", async () => {
@@ -454,20 +463,20 @@ describe("Context2D", ()=>{
         ctx.lineTo(100, 100)
         ctx.stroke()
 
-        expect(pixel(10, 10)).toEqual(CLEAR)
-        expect(pixel(16, 16)).toEqual(BLACK)
-        expect(pixel(73, 73)).toEqual(BLACK)
-        expect(pixel(75, 75)).toEqual(CLEAR)
+        assert.deepEqual(pixel(10, 10), CLEAR)
+        assert.deepEqual(pixel(16, 16), BLACK)
+        assert.deepEqual(pixel(73, 73), BLACK)
+        assert.deepEqual(pixel(75, 75), CLEAR)
       })
 
       test("with lines", async () => {
         ctx.fillStyle = lines
         ctx.fillRect(10, 10, 80, 80)
 
-        expect(pixel(22, 22)).toEqual(CLEAR)
-        expect(pixel(25, 25)).toEqual(BLACK)
-        expect(pixel(73, 73)).toEqual(CLEAR)
-        expect(pixel(76, 76)).toEqual(BLACK)
+        assert.deepEqual(pixel(22, 22), CLEAR)
+        assert.deepEqual(pixel(25, 25), BLACK)
+        assert.deepEqual(pixel(73, 73), CLEAR)
+        assert.deepEqual(pixel(76, 76), BLACK)
       })
     })
   })
@@ -480,7 +489,7 @@ describe("Context2D", ()=>{
       // make sure chains of filters compose correctly <https://codepen.io/sosuke/pen/Pjoqqp>
       ctx.filter = 'blur(5px) invert(56%) sepia(63%) saturate(4837%) hue-rotate(163deg) brightness(96%) contrast(101%)'
       ctx.fillRect(0,0,20,20)
-      expect(pixel(10, 10)).toEqual([0, 162, 213, 245])
+      assert.deepEqual(pixel(10, 10), [0, 162, 213, 245])
       canvas.gpu = gpu
     })
 
@@ -498,7 +507,7 @@ describe("Context2D", ()=>{
       ctx.fillRect(25, 25, 65, 10)
 
       // ensure that the shadow is actually fuzzy despite the transforms
-      expect(pixel(143, 117)).not.toEqual(BLACK)
+      assert.notEqual(pixel(143, 117), BLACK)
     })
 
     test("clip()", () => {
@@ -518,10 +527,10 @@ describe("Context2D", ()=>{
       ctx.fillRect(0, 0, 2, 2)
       ctx.restore()
 
-      expect(pixel(0, 0)).toEqual(BLACK)
-      expect(pixel(1, 0)).toEqual(WHITE)
-      expect(pixel(0, 1)).toEqual(WHITE)
-      expect(pixel(1, 1)).toEqual(BLACK)
+      assert.deepEqual(pixel(0, 0), BLACK)
+      assert.deepEqual(pixel(1, 0), WHITE)
+      assert.deepEqual(pixel(0, 1), WHITE)
+      assert.deepEqual(pixel(1, 1), BLACK)
 
       // b | b
       // -----
@@ -532,10 +541,10 @@ describe("Context2D", ()=>{
       ctx.fillRect(0, 0, 2, 2)
       ctx.restore()
 
-      expect(pixel(0, 0)).toEqual(BLACK)
-      expect(pixel(1, 0)).toEqual(BLACK)
-      expect(pixel(0, 1)).toEqual(WHITE)
-      expect(pixel(1, 1)).toEqual(BLACK)
+      assert.deepEqual(pixel(0, 0), BLACK)
+      assert.deepEqual(pixel(1, 0), BLACK)
+      assert.deepEqual(pixel(0, 1), WHITE)
+      assert.deepEqual(pixel(1, 1), BLACK)
 
       // test intersection of sequential clips while incorporating transform
       ctx.fillStyle = 'black'
@@ -556,11 +565,11 @@ describe("Context2D", ()=>{
       ctx.fillRect(0,0,WIDTH,HEIGHT)
       ctx.restore()
 
-      expect(pixel(10, 10)).toEqual(BLACK)
-      expect(pixel(90, 90)).toEqual(BLACK)
-      expect(pixel(22, 22)).toEqual(GREEN)
-      expect(pixel(48, 48)).toEqual(GREEN)
-      expect(pixel(52, 52)).toEqual(WHITE)
+      assert.deepEqual(pixel(10, 10), BLACK)
+      assert.deepEqual(pixel(90, 90), BLACK)
+      assert.deepEqual(pixel(22, 22), GREEN)
+      assert.deepEqual(pixel(48, 48), GREEN)
+      assert.deepEqual(pixel(52, 52), WHITE)
 
       // non-overlapping clips & empty clips should prevent drawing altogether
       ctx.beginPath()
@@ -585,7 +594,7 @@ describe("Context2D", ()=>{
       ctx.fillRect(0,0,WIDTH,HEIGHT)
       ctx.restore()
 
-      expect(pixel(30, 30)).toEqual(BLACK)
+      assert.deepEqual(pixel(30, 30), BLACK)
     })
 
     test("fill()", () => {
@@ -601,19 +610,19 @@ describe("Context2D", ()=>{
       // -----
       // w | b
       ctx.fill('evenodd')
-      expect(pixel(0, 0)).toEqual(BLACK)
-      expect(pixel(1, 0)).toEqual(WHITE)
-      expect(pixel(0, 1)).toEqual(WHITE)
-      expect(pixel(1, 1)).toEqual(BLACK)
+      assert.deepEqual(pixel(0, 0), BLACK)
+      assert.deepEqual(pixel(1, 0), WHITE)
+      assert.deepEqual(pixel(0, 1), WHITE)
+      assert.deepEqual(pixel(1, 1), BLACK)
 
       // b | b
       // -----
       // w | b
       ctx.fill() // nonzero
-      expect(pixel(0, 0)).toEqual(BLACK)
-      expect(pixel(1, 0)).toEqual(BLACK)
-      expect(pixel(0, 1)).toEqual(WHITE)
-      expect(pixel(1, 1)).toEqual(BLACK)
+      assert.deepEqual(pixel(0, 0), BLACK)
+      assert.deepEqual(pixel(1, 0), BLACK)
+      assert.deepEqual(pixel(0, 1), WHITE)
+      assert.deepEqual(pixel(1, 1), BLACK)
     })
 
     test("fillText()", () => {
@@ -633,7 +642,7 @@ describe("Context2D", ()=>{
         ctx.textBaseline = 'middle'
         ctx.textAlign = 'center'
         ctx.fillText(...args)
-        expect(ctx.getImageData(0, 0, 20, 20).data.some(a => a)).toBe(shouldDraw)
+        assert.equal(ctx.getImageData(0, 0, 20, 20).data.some(a => a), shouldDraw)
       })
     })
 
@@ -651,17 +660,17 @@ describe("Context2D", ()=>{
       let on = [ [5,5], [dim-17, dim-17], [dim-9, 3], [9, dim-9] ]
 
       for (const [x, y] of on){
-        expect(pixel(x, y)).toEqual(BLACK)
-        expect(pixel(x, HEIGHT - y - 1)).toEqual(BLACK)
-        expect(pixel(WIDTH - x - 1, y)).toEqual(BLACK)
-        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(BLACK)
+        assert.deepEqual(pixel(x, y), BLACK)
+        assert.deepEqual(pixel(x, HEIGHT - y - 1), BLACK)
+        assert.deepEqual(pixel(WIDTH - x - 1, y), BLACK)
+        assert.deepEqual(pixel(WIDTH - x - 1, HEIGHT - y - 1), BLACK)
       }
 
       for (const [x, y] of off){
-        expect(pixel(x, y)).toEqual(CLEAR)
-        expect(pixel(x, HEIGHT - y - 1)).toEqual(CLEAR)
-        expect(pixel(WIDTH - x - 1, y)).toEqual(CLEAR)
-        expect(pixel(WIDTH - x - 1, HEIGHT - y - 1)).toEqual(CLEAR)
+        assert.deepEqual(pixel(x, y), CLEAR)
+        assert.deepEqual(pixel(x, HEIGHT - y - 1), CLEAR)
+        assert.deepEqual(pixel(WIDTH - x - 1, y), CLEAR)
+        assert.deepEqual(pixel(WIDTH - x - 1, HEIGHT - y - 1), CLEAR)
       }
     })
 
@@ -679,25 +688,25 @@ describe("Context2D", ()=>{
           bmp1 = ctx.getImageData(0,0, width,height),
           bmp2 = ctx.getImageData(width,height,-width,-height) // negative dimensions shift origin
       for (const bmp of [bmp1, bmp2]){
-        expect(bmp.width).toBe(width)
-        expect(bmp.height).toBe(height)
-        expect(bmp.data.length).toBe(width * height * 4)
-        expect(Array.from(bmp.data.slice(0,4))).toEqual([255,0,0,64])
-        expect(Array.from(bmp.data.slice(4,8))).toEqual([0,255,0,128])
-        expect(Array.from(bmp.data.slice(8,12))).toEqual([0,0,255,191])
+        assert.equal(bmp.width, width)
+        assert.equal(bmp.height, height)
+        assert.equal(bmp.data.length, width * height * 4)
+        assert.deepEqual(Array.from(bmp.data.slice(0,4)), [255,0,0,64])
+        assert.deepEqual(Array.from(bmp.data.slice(4,8)), [0,255,0,128])
+        assert.deepEqual(Array.from(bmp.data.slice(8,12)), [0,0,255,191])
         for(var x=0; x<width; x++){
           for(var y=0; y<height; y++){
             let i = 4 * (y*width + x)
             let px = Array.from(bmp.data.slice(i,i+4))
-            expect(pixel(x,y)).toEqual(px)
+            assert.deepEqual(pixel(x,y), px)
           }
         }
       }
     })
 
     test('putImageData()', () => {
-      expect(() => ctx.putImageData({}, 0, 0)).toThrow()
-      expect(() => ctx.putImageData(undefined, 0, 0)).toThrow()
+      assert.throws(() => ctx.putImageData({}, 0, 0))
+      assert.throws(() => ctx.putImageData(undefined, 0, 0))
 
       var srcImageData = ctx.createImageData(2,2)
       srcImageData.data.set([
@@ -707,7 +716,7 @@ describe("Context2D", ()=>{
 
       ctx.putImageData(srcImageData, -1, -1);
       var resImageData = ctx.getImageData(0, 0, 2, 2);
-      expect(Array.from(resImageData.data)).toEqual([
+      assert.deepEqual(Array.from(resImageData.data), [
         4,5,6,255, 0,0,0,0,
         0,0,0,0,   0,0,0,0
       ])
@@ -716,7 +725,7 @@ describe("Context2D", ()=>{
       ctx.reset()
       ctx.putImageData(srcImageData, 0, 0, 1, 1, 1, 1);
       resImageData = ctx.getImageData(0, 0, 2, 2);
-      expect(Array.from(resImageData.data)).toEqual([
+      assert.deepEqual(Array.from(resImageData.data), [
         0,0,0,0, 0,0,0,0,
         0,0,0,0, 4,5,6,255
       ])
@@ -725,7 +734,7 @@ describe("Context2D", ()=>{
       ctx.reset()
       ctx.putImageData(srcImageData, 0, 0, 1, 1, -1, -1);
       resImageData = ctx.getImageData(0, 0, 2, 2);
-      expect(Array.from(resImageData.data)).toEqual([
+      assert.deepEqual(Array.from(resImageData.data), [
         1,2,3,255, 0,0,0,0,
         0,0,0,0,   0,0,0,0
       ])
@@ -739,14 +748,14 @@ describe("Context2D", ()=>{
       ctx.rect(100,100,100,100)
       ctx.lineWidth = 12
 
-      expect(ctx.isPointInPath(...inStroke)).toBe(false)
-      expect(ctx.isPointInStroke(...inStroke)).toBe(true)
+      assert.equal(ctx.isPointInPath(...inStroke), false)
+      assert.equal(ctx.isPointInStroke(...inStroke), true)
 
-      expect(ctx.isPointInPath(...inFill)).toBe(true)
-      expect(ctx.isPointInStroke(...inFill)).toBe(false)
+      assert.equal(ctx.isPointInPath(...inFill), true)
+      assert.equal(ctx.isPointInStroke(...inFill), false)
 
-      expect(ctx.isPointInPath(...inBoth)).toBe(true)
-      expect(ctx.isPointInStroke(...inBoth)).toBe(true)
+      assert.equal(ctx.isPointInPath(...inBoth), true)
+      assert.equal(ctx.isPointInStroke(...inBoth), true)
     })
 
     test("isPointInPath(Path2D)", () => {
@@ -758,14 +767,14 @@ describe("Context2D", ()=>{
       path.rect(100,100,100,100)
       ctx.lineWidth = 12
 
-      expect(ctx.isPointInPath(path, ...inStroke)).toBe(false)
-      expect(ctx.isPointInStroke(path, ...inStroke)).toBe(true)
+      assert.equal(ctx.isPointInPath(path, ...inStroke), false)
+      assert.equal(ctx.isPointInStroke(path, ...inStroke), true)
 
-      expect(ctx.isPointInPath(path, ...inFill)).toBe(true)
-      expect(ctx.isPointInStroke(path, ...inFill)).toBe(false)
+      assert.equal(ctx.isPointInPath(path, ...inFill), true)
+      assert.equal(ctx.isPointInStroke(path, ...inFill), false)
 
-      expect(ctx.isPointInPath(path, ...inBoth)).toBe(true)
-      expect(ctx.isPointInStroke(path, ...inBoth)).toBe(true)
+      assert.equal(ctx.isPointInPath(path, ...inBoth), true)
+      assert.equal(ctx.isPointInStroke(path, ...inBoth), true)
     })
 
     test("letterSpacing", () => {
@@ -780,18 +789,18 @@ describe("Context2D", ()=>{
         ctx.fillText(text, x, y)
 
         // there should be no initial added space indenting the beginning of the line
-        expect(ctx.getImageData(x, y-size, 10, size).data.some(a => a)).toBe(true)
+        assert.equal(ctx.getImageData(x, y-size, 10, size).data.some(a => a), true)
 
         // there should be whitespace between the first and second characters
-        expect(ctx.getImageData(x+28, y-size, 18, size).data.some(a => a)).toBe(false)
+        assert.equal(ctx.getImageData(x+28, y-size, 18, size).data.some(a => a), false)
 
         // check whether upstream has fixed the indent bug and our compensation is now outdenting
-        expect(ctx.getImageData(x-20, y-size, 18, size).data.some(a => a)).toBe(false)
+        assert.equal(ctx.getImageData(x-20, y-size, 18, size).data.some(a => a), false)
 
         // make sure the extra space skia adds to the beginning/end have been subtracted
-        expect(ctx.measureText(text).width).toBeCloseTo(74)
+        assert.nearEqual(ctx.measureText(text).width, 74)
         ctx.textWrap = true
-        expect(ctx.measureText(text).width).toBeCloseTo(74)
+        assert.nearEqual(ctx.measureText(text).width, 74)
     })
 
     test("measureText()", () => {
@@ -804,46 +813,46 @@ describe("Context2D", ()=>{
           foobar = ctx.measureText('foobar').width,
           __foo = ctx.measureText('  foo').width,
           __foo__ = ctx.measureText('  foo  ').width
-      expect(ø).toBeLessThan(_)
-      expect(_).toBeLessThan(__)
-      expect(foo).toBeLessThan(foobar)
-      expect(__foo).toBeGreaterThan(foo)
-      expect(__foo__).toBeGreaterThan(__foo)
+      assert(ø < _)
+      assert(_ < __)
+      assert(foo < foobar)
+      assert(__foo > foo)
+      assert(__foo__ > __foo)
 
       // start from the default, alphabetic baseline
       let msg = "Lordran gypsum",
           metrics = ctx.measureText(msg)
 
       // + means up, - means down when it comes to baselines
-      expect(metrics.alphabeticBaseline).toBe(0)
-      expect(metrics.hangingBaseline).toBeGreaterThan(0)
-      expect(metrics.ideographicBaseline).toBeLessThan(0)
+      assert.equal(metrics.alphabeticBaseline, 0)
+      assert(metrics.hangingBaseline > 0)
+      assert(metrics.ideographicBaseline < 0)
 
       // for ascenders + means up, for descenders + means down
-      expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(0)
-      expect(metrics.actualBoundingBoxDescent).toBeGreaterThan(0)
-      expect(metrics.actualBoundingBoxAscent).toBeGreaterThan(metrics.actualBoundingBoxDescent)
+      assert(metrics.actualBoundingBoxAscent > 0)
+      assert(metrics.actualBoundingBoxDescent > 0)
+      assert(metrics.actualBoundingBoxAscent > metrics.actualBoundingBoxDescent)
 
       // make sure the polarity has flipped for 'top' baseline
       ctx.textBaseline = "top"
       metrics = ctx.measureText("Lordran gypsum")
-      expect(metrics.alphabeticBaseline).toBeLessThan(0)
-      expect(metrics.hangingBaseline).toBeLessThan(0)
-      expect(metrics.actualBoundingBoxAscent).toBeLessThan(0)
-      expect(metrics.actualBoundingBoxDescent).toBeGreaterThan(0)
+      assert(metrics.alphabeticBaseline < 0)
+      assert(metrics.hangingBaseline < 0)
+      assert(metrics.actualBoundingBoxAscent < 0)
+      assert(metrics.actualBoundingBoxDescent > 0)
 
       // width calculations should be the same (modulo rounding) for any alignment
       let [lft, cnt, rgt] = ['left', 'center', 'right'].map(align => {
         ctx.textAlign = align
         return ctx.measureText(msg).width
       })
-      expect(lft).toBeCloseTo(cnt)
-      expect(cnt).toBeCloseTo(rgt)
+      assert.nearEqual(lft, cnt)
+      assert.nearEqual(cnt, rgt)
 
       // make sure string indices account for trailing whitespace and non-8-bit characters
       let text = ' 石 ',
           {startIndex, endIndex} = ctx.measureText(text).lines[0]
-      expect(text.substring(startIndex, endIndex)).toBe(text)
+      assert.equal(text.substring(startIndex, endIndex), text)
     })
 
 
@@ -867,19 +876,19 @@ describe("Context2D", ()=>{
       ctx.resetTransform()
 
       let x = WIDTH/2, y = HEIGHT/2 + 2
-      expect(pixel(x, y - 5)).toEqual(CLEAR)
-      expect(pixel(x + 25, y)).toEqual(GREEN)
-      expect(pixel(x + 75, y)).toEqual(CLEAR)
-      expect(pixel(x - 25, y)).toEqual(WHITE)
-      expect(pixel(x - 75, y)).toEqual(BLACK)
-      expect(pixel(x - 100, y)).toEqual(CLEAR)
+      assert.deepEqual(pixel(x, y - 5), CLEAR)
+      assert.deepEqual(pixel(x + 25, y), GREEN)
+      assert.deepEqual(pixel(x + 75, y), CLEAR)
+      assert.deepEqual(pixel(x - 25, y), WHITE)
+      assert.deepEqual(pixel(x - 75, y), BLACK)
+      assert.deepEqual(pixel(x - 100, y), CLEAR)
 
       y = HEIGHT*.9 - 2
-      expect(pixel(x + 100, y)).toEqual(GREEN)
-      expect(pixel(x + 130, y)).toEqual(CLEAR)
-      expect(pixel(x - 75, y)).toEqual(WHITE)
-      expect(pixel(x - 200, y)).toEqual(BLACK)
-      expect(pixel(0, y)).toEqual(CLEAR)
+      assert.deepEqual(pixel(x + 100, y), GREEN)
+      assert.deepEqual(pixel(x + 130, y), CLEAR)
+      assert.deepEqual(pixel(x - 75, y), WHITE)
+      assert.deepEqual(pixel(x - 200, y), BLACK)
+      assert.deepEqual(pixel(0, y), CLEAR)
     })
 
     test('drawImage()', async () => {
@@ -887,14 +896,14 @@ describe("Context2D", ()=>{
       ctx.imageSmoothingEnabled = false
 
       ctx.drawImage(image, 0,0)
-      expect(pixel(0, 0)).toEqual(BLACK)
-      expect(pixel(1, 0)).toEqual(WHITE)
-      expect(pixel(0, 1)).toEqual(WHITE)
-      expect(pixel(1, 1)).toEqual(BLACK)
+      assert.deepEqual(pixel(0, 0), BLACK)
+      assert.deepEqual(pixel(1, 0), WHITE)
+      assert.deepEqual(pixel(0, 1), WHITE)
+      assert.deepEqual(pixel(1, 1), BLACK)
 
       ctx.drawImage(image,-256,-256,512,512)
-      expect(pixel(0, 0)).toEqual(BLACK)
-      expect(pixel(149, 149)).toEqual(BLACK)
+      assert.deepEqual(pixel(0, 0), BLACK)
+      assert.deepEqual(pixel(149, 149), BLACK)
 
       ctx.clearRect(0,0,WIDTH,HEIGHT)
       ctx.save()
@@ -902,12 +911,12 @@ describe("Context2D", ()=>{
       ctx.rotate(.25*Math.PI)
       ctx.drawImage(image,-256,-256,512,512)
       ctx.restore()
-      expect(pixel(0, 0)).toEqual(CLEAR)
-      expect(pixel(WIDTH/2, HEIGHT*.25)).toEqual(BLACK)
-      expect(pixel(WIDTH/2, HEIGHT*.75)).toEqual(BLACK)
-      expect(pixel(WIDTH*.25, HEIGHT/2)).toEqual(WHITE)
-      expect(pixel(WIDTH*.75, HEIGHT/2)).toEqual(WHITE)
-      expect(pixel(WIDTH-1, HEIGHT-1)).toEqual(CLEAR)
+      assert.deepEqual(pixel(0, 0), CLEAR)
+      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), BLACK)
+      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), BLACK)
+      assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), WHITE)
+      assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), WHITE)
+      assert.deepEqual(pixel(WIDTH-1, HEIGHT-1), CLEAR)
 
       let srcCanvas = new Canvas(3, 3),
           srcCtx = srcCanvas.getContext("2d");
@@ -916,15 +925,15 @@ describe("Context2D", ()=>{
       srcCtx.clearRect(1,1,1,1)
 
       ctx.drawImage(srcCanvas, 0,0)
-      expect(pixel(0, 0)).toEqual(GREEN)
-      expect(pixel(1, 1)).toEqual(CLEAR)
-      expect(pixel(2, 2)).toEqual(GREEN)
+      assert.deepEqual(pixel(0, 0), GREEN)
+      assert.deepEqual(pixel(1, 1), CLEAR)
+      assert.deepEqual(pixel(2, 2), GREEN)
 
       ctx.clearRect(0,0,WIDTH,HEIGHT)
       ctx.drawImage(srcCanvas,-2,-2,6,6)
-      expect(pixel(0, 0)).toEqual(CLEAR)
-      expect(pixel(2, 0)).toEqual(GREEN)
-      expect(pixel(2, 2)).toEqual(GREEN)
+      assert.deepEqual(pixel(0, 0), CLEAR)
+      assert.deepEqual(pixel(2, 0), GREEN)
+      assert.deepEqual(pixel(2, 2), GREEN)
 
       ctx.clearRect(0,0,WIDTH,HEIGHT)
       ctx.save()
@@ -932,11 +941,11 @@ describe("Context2D", ()=>{
       ctx.rotate(.25*Math.PI)
       ctx.drawImage(srcCanvas,-256,-256,512,512)
       ctx.restore()
-      expect(pixel(WIDTH/2, HEIGHT*.25)).toEqual(GREEN)
-      expect(pixel(WIDTH/2, HEIGHT*.75)).toEqual(GREEN)
-      expect(pixel(WIDTH*.25, HEIGHT/2)).toEqual(GREEN)
-      expect(pixel(WIDTH*.75, HEIGHT/2)).toEqual(GREEN)
-      expect(pixel(WIDTH/2, HEIGHT/2)).toEqual(CLEAR)
+      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), GREEN)
+      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), GREEN)
+      assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), GREEN)
+      assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), GREEN)
+      assert.deepEqual(pixel(WIDTH/2, HEIGHT/2), CLEAR)
     })
 
     test('drawCanvas()', async () => {
@@ -947,15 +956,15 @@ describe("Context2D", ()=>{
       srcCtx.clearRect(1,1,1,1)
 
       ctx.drawCanvas(srcCanvas, 0,0)
-      expect(pixel(0, 0)).toEqual(GREEN)
-      expect(pixel(1, 1)).toEqual(CLEAR)
-      expect(pixel(2, 2)).toEqual(GREEN)
+      assert.deepEqual(pixel(0, 0), GREEN)
+      assert.deepEqual(pixel(1, 1), CLEAR)
+      assert.deepEqual(pixel(2, 2), GREEN)
 
       ctx.clearRect(0,0,WIDTH,HEIGHT)
       ctx.drawCanvas(srcCanvas,-2,-2,6,6)
-      expect(pixel(0, 0)).toEqual(CLEAR)
-      expect(pixel(2, 0)).toEqual(GREEN)
-      expect(pixel(2, 2)).toEqual(GREEN)
+      assert.deepEqual(pixel(0, 0), CLEAR)
+      assert.deepEqual(pixel(2, 0), GREEN)
+      assert.deepEqual(pixel(2, 2), GREEN)
 
       ctx.clearRect(0,0,WIDTH,HEIGHT)
       ctx.save()
@@ -963,21 +972,21 @@ describe("Context2D", ()=>{
       ctx.rotate(.25*Math.PI)
       ctx.drawCanvas(srcCanvas,-256,-256,512,512)
       ctx.restore()
-      expect(pixel(WIDTH/2, HEIGHT*.25)).toEqual(GREEN)
-      expect(pixel(WIDTH/2, HEIGHT*.75)).toEqual(GREEN)
-      expect(pixel(WIDTH*.25, HEIGHT/2)).toEqual(GREEN)
-      expect(pixel(WIDTH*.75, HEIGHT/2)).toEqual(GREEN)
-      expect(pixel(WIDTH/2, HEIGHT/2)).toEqual(CLEAR)
+      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), GREEN)
+      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), GREEN)
+      assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), GREEN)
+      assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), GREEN)
+      assert.deepEqual(pixel(WIDTH/2, HEIGHT/2), CLEAR)
 
       ctx.clearRect(0,0,WIDTH,HEIGHT)
       ctx.drawCanvas(srcCanvas, 1,1,2,2, 0,0,2,2)
-      expect(pixel(0, 0)).toEqual(CLEAR)
-      expect(pixel(0, 1)).toEqual(GREEN)
-      expect(pixel(1, 0)).toEqual(GREEN)
-      expect(pixel(1, 1)).toEqual(GREEN)
+      assert.deepEqual(pixel(0, 0), CLEAR)
+      assert.deepEqual(pixel(0, 1), GREEN)
+      assert.deepEqual(pixel(1, 0), GREEN)
+      assert.deepEqual(pixel(1, 1), GREEN)
 
       let image = await loadAsset('checkers.png')
-      expect( () => ctx.drawCanvas(image, 0, 0) ).not.toThrow()
+      assert.doesNotThrow( () => ctx.drawCanvas(image, 0, 0) )
     })
 
     test('reset()', async () => {
@@ -986,21 +995,21 @@ describe("Context2D", ()=>{
       ctx.translate(0, -HEIGHT/4)
 
       ctx.fillRect(WIDTH/4, HEIGHT/4, WIDTH/8, HEIGHT/8)
-      expect(pixel(WIDTH * .5 + 1, 0)).toEqual(GREEN)
-      expect(pixel(WIDTH * .75 - 1, 0)).toEqual(GREEN)
+      assert.deepEqual(pixel(WIDTH * .5 + 1, 0), GREEN)
+      assert.deepEqual(pixel(WIDTH * .75 - 1, 0), GREEN)
 
       ctx.beginPath()
       ctx.rect(WIDTH/4, HEIGHT/2, 100, 100)
       ctx.reset()
       ctx.fill()
-      expect(pixel(WIDTH/2 + 1, HEIGHT/2 + 1)).toEqual(CLEAR)
-      expect(pixel(WIDTH * .5 + 1, 0)).toEqual(CLEAR)
-      expect(pixel(WIDTH * .75 - 1, 0)).toEqual(CLEAR)
+      assert.deepEqual(pixel(WIDTH/2 + 1, HEIGHT/2 + 1), CLEAR)
+      assert.deepEqual(pixel(WIDTH * .5 + 1, 0), CLEAR)
+      assert.deepEqual(pixel(WIDTH * .75 - 1, 0), CLEAR)
 
       ctx.globalAlpha = 0.4
       ctx.reset()
       ctx.fillRect(WIDTH/2, HEIGHT/2, 3, 3)
-      expect(pixel(WIDTH/2 + 1, HEIGHT/2 + 1)).toEqual(BLACK)
+      assert.deepEqual(pixel(WIDTH/2 + 1, HEIGHT/2 + 1), BLACK)
     })
 
     describe("transform()", ()=>{
@@ -1010,7 +1019,7 @@ describe("Context2D", ()=>{
         ctx.transform(a, b, c, d, e, f)
         let matrix = ctx.currentTransform
         _each({a, b, c, d, e, f}, (val, term) =>
-          expect(matrix[term]).toBeCloseTo(val)
+          assert.nearEqual(matrix[term], val)
         )
       })
 
@@ -1018,7 +1027,7 @@ describe("Context2D", ()=>{
         ctx.transform(new DOMMatrix().scale(0.1, 0.3));
         let matrix = ctx.currentTransform
         _each({a, b, c, d, e, f}, (val, term) =>
-          expect(matrix[term]).toBeCloseTo(val)
+          assert.nearEqual(matrix[term], val)
         )
       })
 
@@ -1026,7 +1035,7 @@ describe("Context2D", ()=>{
         ctx.transform({a, b, c, d, e, f});
         let matrix = ctx.currentTransform
         _each({a, b, c, d, e, f}, (val, term) =>
-          expect(matrix[term]).toBeCloseTo(val)
+          assert.nearEqual(matrix[term], val)
         )
       })
 
@@ -1063,22 +1072,22 @@ describe("Context2D", ()=>{
         for (const input in transforms){
           let matrix = new DOMMatrix(input),
               roundtrip = new DOMMatrix(matrix.toString())
-          expect(matrix.toString()).toEqual(transforms[input])
-          expect(roundtrip.toString()).toEqual(transforms[input])
+          assert.equal(matrix.toString(), transforms[input])
+          assert.equal(roundtrip.toString(), transforms[input])
         }
 
         // check that the context can also take a string
         ctx.transform(`scale(${a}, ${d})`);
         let matrix = ctx.currentTransform
         _each({a, b, c, d, e, f}, (val, term) =>
-          expect(matrix[term]).toBeCloseTo(val)
+          assert.nearEqual(matrix[term], val)
         )
       })
 
       test('rejects invalid args', () => {
-        expect( () => ctx.transform("nonesuch")).toThrow("Invalid transform matrix")
-        expect( () => ctx.transform(0, 0, 0)).toThrow("not enough arguments")
-        expect( () => ctx.transform(0, 0, 0, NaN, 0, 0)).not.toThrow()
+        assert.throws( () => ctx.transform("nonesuch"), /Invalid transform matrix/)
+        assert.throws( () => ctx.transform(0, 0, 0), /not enough arguments/)
+        assert.doesNotThrow( () => ctx.transform(0, 0, 0, NaN, 0, 0))
       })
 
     })
@@ -1118,160 +1127,160 @@ describe("Context2D", ()=>{
       _each(cases, (spec, font) => {
         let expected = {style:"normal", stretch:"normal", variant:"normal", ...spec},
             parsed = css.font(font);
-        expect(parsed).toMatchObject(expected)
+        assert.matchesSubset(parsed, expected)
       })
 
     })
 
     test('colors', () => {
       ctx.fillStyle = '#ffccaa';
-      expect(ctx.fillStyle).toBe('#ffccaa');
+      assert.equal(ctx.fillStyle, '#ffccaa');
 
       ctx.fillStyle = '#FFCCAA';
-      expect(ctx.fillStyle).toBe('#ffccaa');
+      assert.equal(ctx.fillStyle, '#ffccaa');
 
       ctx.fillStyle = '#FCA';
-      expect(ctx.fillStyle).toBe('#ffccaa');
+      assert.equal(ctx.fillStyle, '#ffccaa');
 
       ctx.fillStyle = '#0ff';
       ctx.fillStyle = '#FGG';
-      expect(ctx.fillStyle).toBe('#00ffff');
+      assert.equal(ctx.fillStyle, '#00ffff');
 
       ctx.fillStyle = '#fff';
       ctx.fillStyle = 'afasdfasdf';
-      expect(ctx.fillStyle).toBe('#ffffff');
+      assert.equal(ctx.fillStyle, '#ffffff');
 
       // #rgba and #rrggbbaa
 
       ctx.fillStyle = '#ffccaa80'
-      expect(ctx.fillStyle).toBe('rgba(255, 204, 170, 0.502)')
+      assert.equal(ctx.fillStyle, 'rgba(255, 204, 170, 0.502)')
 
       ctx.fillStyle = '#acf8'
-      expect(ctx.fillStyle).toBe('rgba(170, 204, 255, 0.533)')
+      assert.equal(ctx.fillStyle, 'rgba(170, 204, 255, 0.533)')
 
       ctx.fillStyle = '#BEAD'
-      expect(ctx.fillStyle).toBe('rgba(187, 238, 170, 0.867)')
+      assert.equal(ctx.fillStyle, 'rgba(187, 238, 170, 0.867)')
 
       ctx.fillStyle = 'rgb(255,255,255)';
-      expect(ctx.fillStyle).toBe('#ffffff');
+      assert.equal(ctx.fillStyle, '#ffffff');
 
       ctx.fillStyle = 'rgb(0,0,0)';
-      expect(ctx.fillStyle).toBe('#000000');
+      assert.equal(ctx.fillStyle, '#000000');
 
       ctx.fillStyle = 'rgb( 0  ,   0  ,  0)';
-      expect(ctx.fillStyle).toBe('#000000');
+      assert.equal(ctx.fillStyle, '#000000');
 
       ctx.fillStyle = 'rgba( 0  ,   0  ,  0, 1)';
-      expect(ctx.fillStyle).toBe('#000000');
+      assert.equal(ctx.fillStyle, '#000000');
 
       ctx.fillStyle = 'rgba( 255, 200, 90, 0.5)';
-      expect(ctx.fillStyle).toBe('rgba(255, 200, 90, 0.502)');
+      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.502)');
 
       ctx.fillStyle = 'rgba( 255, 200, 90, 0.75)';
-      expect(ctx.fillStyle).toBe('rgba(255, 200, 90, 0.749)');
+      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.749)');
 
       ctx.fillStyle = 'rgba( 255, 200, 90, 0.7555)';
-      expect(ctx.fillStyle).toBe('rgba(255, 200, 90, 0.757)');
+      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.757)');
 
       ctx.fillStyle = 'rgba( 255, 200, 90, .7555)';
-      expect(ctx.fillStyle).toBe('rgba(255, 200, 90, 0.757)');
+      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.757)');
 
       ctx.fillStyle = 'rgb(0, 0, 9000)';
-      expect(ctx.fillStyle).toBe('#0000ff');
+      assert.equal(ctx.fillStyle, '#0000ff');
 
       ctx.fillStyle = 'rgba(0, 0, 0, 42.42)';
-      expect(ctx.fillStyle).toBe('#000000');
+      assert.equal(ctx.fillStyle, '#000000');
 
       // hsl / hsla tests
 
       ctx.fillStyle = 'hsl(0, 0%, 0%)';
-      expect(ctx.fillStyle).toBe('#000000');
+      assert.equal(ctx.fillStyle, '#000000');
 
       ctx.fillStyle = 'hsl(3600, -10%, -10%)';
-      expect(ctx.fillStyle).toBe('#000000');
+      assert.equal(ctx.fillStyle, '#000000');
 
       ctx.fillStyle = 'hsl(10, 100%, 42%)';
-      expect(ctx.fillStyle).toBe('#d62400');
+      assert.equal(ctx.fillStyle, '#d62400');
 
       ctx.fillStyle = 'hsl(370, 120%, 42%)';
-      expect(ctx.fillStyle).toBe('#d62400');
+      assert.equal(ctx.fillStyle, '#d62400');
 
       ctx.fillStyle = 'hsl(0, 100%, 100%)';
-      expect(ctx.fillStyle).toBe('#ffffff');
+      assert.equal(ctx.fillStyle, '#ffffff');
 
       ctx.fillStyle = 'hsl(0, 150%, 150%)';
-      expect(ctx.fillStyle).toBe('#ffffff');
+      assert.equal(ctx.fillStyle, '#ffffff');
 
       ctx.fillStyle = 'hsl(237, 76%, 25%)';
-      expect(ctx.fillStyle).toBe('#0f1470');
+      assert.equal(ctx.fillStyle, '#0f1470');
 
       ctx.fillStyle = 'hsl(240, 73%, 25%)';
-      expect(ctx.fillStyle).toBe('#11116e');
+      assert.equal(ctx.fillStyle, '#11116e');
 
       ctx.fillStyle = 'hsl(262, 32%, 42%)';
-      expect(ctx.fillStyle).toBe('#62498d');
+      assert.equal(ctx.fillStyle, '#62498d');
 
       ctx.fillStyle = 'hsla(0, 0%, 0%, 1)';
-      expect(ctx.fillStyle).toBe('#000000');
+      assert.equal(ctx.fillStyle, '#000000');
 
       ctx.fillStyle = 'hsla(0, 100%, 100%, 1)';
-      expect(ctx.fillStyle).toBe('#ffffff');
+      assert.equal(ctx.fillStyle, '#ffffff');
 
       ctx.fillStyle = 'hsla(120, 25%, 75%, 0.5)';
-      expect(ctx.fillStyle).toBe('rgba(175, 207, 175, 0.502)');
+      assert.equal(ctx.fillStyle, 'rgba(175, 207, 175, 0.502)');
 
       ctx.fillStyle = 'hsla(240, 75%, 25%, 0.75)';
-      expect(ctx.fillStyle).toBe('rgba(16, 16, 112, 0.749)');
+      assert.equal(ctx.fillStyle, 'rgba(16, 16, 112, 0.749)');
 
       ctx.fillStyle = 'hsla(172.0, 33.00000e0%, 42%, 1)';
-      expect(ctx.fillStyle).toBe('#488e85');
+      assert.equal(ctx.fillStyle, '#488e85');
 
       ctx.fillStyle = 'hsl(124.5, 76.1%, 47.6%)';
-      expect(ctx.fillStyle).toBe('#1dd62b');
+      assert.equal(ctx.fillStyle, '#1dd62b');
 
       ctx.fillStyle = 'hsl(1.24e2, 760e-1%, 4.7e1%)';
-      expect(ctx.fillStyle).toBe('#1dd329');
+      assert.equal(ctx.fillStyle, '#1dd329');
 
       // case-insensitive css names
 
       ctx.fillStyle = "sILveR";
-      expect(ctx.fillStyle).toBe("#c0c0c0");
+      assert.equal(ctx.fillStyle, "#c0c0c0");
 
       // wrong type args
 
       let transparent = 'rgba(0, 0, 0, 0)'
       ctx.fillStyle = 'transparent'
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
       ctx.fillStyle = null
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
       ctx.fillStyle = NaN
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
       ctx.fillStyle = [undefined, 255, false]
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
       ctx.fillStyle = true
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
       ctx.fillStyle = {}
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
       // objects with .toString methods
 
       ctx.fillStyle = {toString:() => 'red'}
-      expect(ctx.fillStyle).toBe('#ff0000');
+      assert.equal(ctx.fillStyle, '#ff0000');
 
       ctx.fillStyle = 'transparent'
       ctx.fillStyle = {toString:'red'}
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
       ctx.fillStyle = {toString:() => 'gobbledygook'}
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
       ctx.fillStyle = {toString:() => NaN}
-      expect(ctx.fillStyle).toBe(transparent);
+      assert.equal(ctx.fillStyle, transparent);
 
     });
   })
@@ -1288,140 +1297,140 @@ describe("Context2D", ()=>{
     })
 
     test('not enough arguments', async () => {
-      let ERR = "not enough arguments"
-      expect(() => ctx.transform()).toThrow(ERR)
-      expect(() => ctx.transform(0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.setTransform(0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.translate(0)).toThrow(ERR)
-      expect(() => ctx.scale(0)).toThrow(ERR)
-      expect(() => ctx.rotate()).toThrow(ERR)
-      expect(() => ctx.rect(0,0,0)).toThrow(ERR)
-      expect(() => ctx.arc(0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.arcTo(0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.ellipse(0,0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.moveTo(0)).toThrow(ERR)
-      expect(() => ctx.lineTo(0)).toThrow(ERR)
-      expect(() => ctx.bezierCurveTo(0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.quadraticCurveTo(0,0,0)).toThrow(ERR)
-      expect(() => ctx.conicCurveTo(0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.roundRect(0,0,0)).toThrow(ERR)
-      expect(() => ctx.fillRect(0,0,0)).toThrow(ERR)
-      expect(() => ctx.strokeRect(0,0,0)).toThrow(ERR)
-      expect(() => ctx.clearRect(0,0,0)).toThrow(ERR)
-      expect(() => ctx.fillText("text",0)).toThrow(ERR)
-      expect(() => ctx.isPointInPath(10)).toThrow(ERR)
-      expect(() => ctx.isPointInStroke(10)).toThrow(ERR)
-      expect(() => ctx.createLinearGradient(0,0,1)).toThrow(ERR)
-      expect(() => ctx.createRadialGradient(0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.createConicGradient(0,0)).toThrow(ERR)
-      expect(() => ctx.setLineDash()).toThrow(ERR)
-      expect(() => ctx.createImageData()).toThrow(ERR)
-      expect(() => ctx.createPattern(img)).toThrow(ERR)
-      expect(() => ctx.createTexture()).toThrow(ERR)
-      expect(() => ctx.getImageData(1,1,10)).toThrow(ERR)
-      expect(() => ctx.putImageData({},0)).toThrow(ERR)
-      expect(() => ctx.putImageData(id,0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.drawImage(img)).toThrow(ERR)
-      expect(() => ctx.drawImage(img,0)).toThrow(ERR)
-      expect(() => ctx.drawImage(img,0,0,0)).toThrow(ERR)
-      expect(() => ctx.drawImage(img,0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.drawImage(img,0,0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.drawImage(img,0,0,0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.drawCanvas(canvas)).toThrow(ERR)
-      expect(() => ctx.drawCanvas(canvas,0)).toThrow(ERR)
-      expect(() => ctx.drawCanvas(canvas,0,0,0)).toThrow(ERR)
-      expect(() => ctx.drawCanvas(canvas,0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.drawCanvas(canvas,0,0,0,0,0,0)).toThrow(ERR)
-      expect(() => ctx.drawCanvas(canvas,0,0,0,0,0,0,0)).toThrow(ERR)
-      expect(() => g.addColorStop(0)).toThrow(ERR)
+      let ERR =  /not enough arguments/
+      assert.throws(() => ctx.transform(), ERR)
+      assert.throws(() => ctx.transform(0,0,0,0,0), ERR)
+      assert.throws(() => ctx.setTransform(0,0,0,0,0), ERR)
+      assert.throws(() => ctx.translate(0), ERR)
+      assert.throws(() => ctx.scale(0), ERR)
+      assert.throws(() => ctx.rotate(), ERR)
+      assert.throws(() => ctx.rect(0,0,0), ERR)
+      assert.throws(() => ctx.arc(0,0,0,0), ERR)
+      assert.throws(() => ctx.arcTo(0,0,0,0), ERR)
+      assert.throws(() => ctx.ellipse(0,0,0,0,0,0), ERR)
+      assert.throws(() => ctx.moveTo(0), ERR)
+      assert.throws(() => ctx.lineTo(0), ERR)
+      assert.throws(() => ctx.bezierCurveTo(0,0,0,0,0), ERR)
+      assert.throws(() => ctx.quadraticCurveTo(0,0,0), ERR)
+      assert.throws(() => ctx.conicCurveTo(0,0,0,0), ERR)
+      assert.throws(() => ctx.roundRect(0,0,0), ERR)
+      assert.throws(() => ctx.fillRect(0,0,0), ERR)
+      assert.throws(() => ctx.strokeRect(0,0,0), ERR)
+      assert.throws(() => ctx.clearRect(0,0,0), ERR)
+      assert.throws(() => ctx.fillText("text",0), ERR)
+      assert.throws(() => ctx.isPointInPath(10), ERR)
+      assert.throws(() => ctx.isPointInStroke(10), ERR)
+      assert.throws(() => ctx.createLinearGradient(0,0,1), ERR)
+      assert.throws(() => ctx.createRadialGradient(0,0,0,0,0), ERR)
+      assert.throws(() => ctx.createConicGradient(0,0), ERR)
+      assert.throws(() => ctx.setLineDash(), ERR)
+      assert.throws(() => ctx.createImageData(), ERR)
+      assert.throws(() => ctx.createPattern(img), ERR)
+      assert.throws(() => ctx.createTexture(), ERR)
+      assert.throws(() => ctx.getImageData(1,1,10), ERR)
+      assert.throws(() => ctx.putImageData({},0), ERR)
+      assert.throws(() => ctx.putImageData(id,0,0,0,0,0), ERR)
+      assert.throws(() => ctx.drawImage(img), ERR)
+      assert.throws(() => ctx.drawImage(img,0), ERR)
+      assert.throws(() => ctx.drawImage(img,0,0,0), ERR)
+      assert.throws(() => ctx.drawImage(img,0,0,0,0,0), ERR)
+      assert.throws(() => ctx.drawImage(img,0,0,0,0,0,0), ERR)
+      assert.throws(() => ctx.drawImage(img,0,0,0,0,0,0,0), ERR)
+      assert.throws(() => ctx.drawCanvas(canvas), ERR)
+      assert.throws(() => ctx.drawCanvas(canvas,0), ERR)
+      assert.throws(() => ctx.drawCanvas(canvas,0,0,0), ERR)
+      assert.throws(() => ctx.drawCanvas(canvas,0,0,0,0,0), ERR)
+      assert.throws(() => ctx.drawCanvas(canvas,0,0,0,0,0,0), ERR)
+      assert.throws(() => ctx.drawCanvas(canvas,0,0,0,0,0,0,0), ERR)
+      assert.throws(() => g.addColorStop(0), ERR)
     })
 
     test('value errors', async () => {
-      expect(() => ctx.ellipse(0,0,-10,-10,0,0,0,false)).toThrow("Radius value must be positive")
-      expect(() => ctx.arcTo(0,0,0,0,-10)).toThrow("Radius value must be positive")
-      expect(() => ctx.roundRect(0,0,0,0,-10)).toThrow("Corner radius cannot be negative")
-      expect(() => ctx.createImageData(1,0)).toThrow("Dimensions must be non-zero")
-      expect(() => ctx.getImageData(1,1,NaN,10)).toThrow("Expected a number")
-      expect(() => ctx.getImageData(1,NaN,10,10)).toThrow("Expected a number")
-      expect(() => ctx.createImageData(1,{})).toThrow("Dimensions must be non-zero")
-      expect(() => ctx.createImageData(1,NaN)).toThrow("Dimensions must be non-zero")
-      expect(() => ctx.putImageData(id,NaN,0)).toThrow("Expected a number")
-      expect(() => ctx.putImageData(id,0,0,0,0,NaN,0)).toThrow("Expected a number for `dirtyWidth`")
-      expect(() => ctx.putImageData({},0,0)).toThrow("Expected an ImageData as 1st arg")
-      expect(() => ctx.drawImage()).toThrow("Expected an Image or a Canvas")
-      expect(() => ctx.drawCanvas()).toThrow("Expected an Image or a Canvas")
-      expect(() => ctx.fill(NaN)).toThrow("Expected `fillRule`")
-      expect(() => ctx.clip(NaN)).toThrow("Expected `fillRule`")
-      expect(() => ctx.stroke(NaN)).toThrow("Expected a Path2D")
-      expect(() => ctx.fill(NaN, "evenodd")).toThrow("Expected a Path2D")
-      expect(() => ctx.clip(NaN, "evenodd")).toThrow("Expected a Path2D")
-      expect(() => ctx.fill(p2d, {})).toThrow("Expected `fillRule`")
-      expect(() => ctx.createTexture([1, NaN])).toThrow("Expected a number or array")
-      expect(() => ctx.createTexture(1, {path:null})).toThrow("Expected a Path2D")
-      expect(() => ctx.createTexture(20, {line:{}})).toThrow("Expected a number for `line`")
-      expect(() => ctx.createTexture(20, {angle:{}})).toThrow("Expected a number for `angle`")
-      expect(() => ctx.createTexture(20, {offset:{}})).toThrow("Expected a number or array")
-      expect(() => ctx.createTexture(20, {cap:{}})).toThrow("Expected a string")
-      expect(() => ctx.createTexture(20, {cap:""})).toThrow("Expected \"butt\", \"square\"")
-      expect(() => ctx.createTexture(20, {offset:[1, NaN]})).toThrow("Expected a number or array")
-      expect(() => ctx.isPointInPath(0, 10, 10)).toThrow("Expected `fillRule`")
-      expect(() => ctx.isPointInPath(false, 10, 10)).toThrow("Expected `fillRule`")
-      expect(() => ctx.isPointInPath({}, 10, 10)).toThrow("Expected `fillRule`")
-      expect(() => ctx.isPointInPath({}, 10, 10, "___")).toThrow("Expected a Path2D")
-      expect(() => ctx.isPointInPath({}, 10, 10, "evenodd")).toThrow("Expected a Path2D")
-      expect(() => ctx.isPointInPath(10, 10, "___")).toThrow("Expected `fillRule`")
-      expect(() => ctx.isPointInPath(p2d, 10, 10, "")).toThrow("Expected `fillRule`")
-      expect(() => ctx.createLinearGradient(0,0,NaN,1)).toThrow("Expected a number for")
-      expect(() => ctx.createRadialGradient(0,0,NaN,0,0,0)).toThrow("Expected a number for")
-      expect(() => ctx.createConicGradient(0,NaN,0)).toThrow("Expected a number for")
-      expect(() => ctx.createPattern(img, "___")).toThrow("Expected `repetition`")
-      expect(() => g.addColorStop(NaN, '#000')).toThrow("Expected a number")
-      expect(() => g.addColorStop(0, {})).toThrow("Could not be parsed as a color")
-      expect(() => ctx.setLineDash(NaN)).toThrow("Value is not a sequence")
+      assert.throws(() => ctx.ellipse(0,0,-10,-10,0,0,0,false), /Radius value must be positive/)
+      assert.throws(() => ctx.arcTo(0,0,0,0,-10), /Radius value must be positive/)
+      assert.throws(() => ctx.roundRect(0,0,0,0,-10), /Corner radius cannot be negative/)
+      assert.throws(() => ctx.createImageData(1,0), /Dimensions must be non-zero/)
+      assert.throws(() => ctx.getImageData(1,1,NaN,10), /Expected a number/)
+      assert.throws(() => ctx.getImageData(1,NaN,10,10), /Expected a number/)
+      assert.throws(() => ctx.createImageData(1,{}), /Dimensions must be non-zero/)
+      assert.throws(() => ctx.createImageData(1,NaN), /Dimensions must be non-zero/)
+      assert.throws(() => ctx.putImageData(id,NaN,0), /Expected a number/)
+      assert.throws(() => ctx.putImageData(id,0,0,0,0,NaN,0), /Expected a number for `dirtyWidth`/)
+      assert.throws(() => ctx.putImageData({},0,0), /Expected an ImageData as 1st arg/)
+      assert.throws(() => ctx.drawImage(), /Expected an Image or a Canvas/)
+      assert.throws(() => ctx.drawCanvas(), /Expected an Image or a Canvas/)
+      assert.throws(() => ctx.fill(NaN), /Expected `fillRule`/)
+      assert.throws(() => ctx.clip(NaN), /Expected `fillRule`/)
+      assert.throws(() => ctx.stroke(NaN), /Expected a Path2D/)
+      assert.throws(() => ctx.fill(NaN, "evenodd"), /Expected a Path2D/)
+      assert.throws(() => ctx.clip(NaN, "evenodd"), /Expected a Path2D/)
+      assert.throws(() => ctx.fill(p2d, {}), /Expected `fillRule`/)
+      assert.throws(() => ctx.createTexture([1, NaN]), /Expected a number or array/)
+      assert.throws(() => ctx.createTexture(1, {path:null}), /Expected a Path2D/)
+      assert.throws(() => ctx.createTexture(20, {line:{}}), /Expected a number for `line`/)
+      assert.throws(() => ctx.createTexture(20, {angle:{}}), /Expected a number for `angle`/)
+      assert.throws(() => ctx.createTexture(20, {offset:{}}), /Expected a number or array/)
+      assert.throws(() => ctx.createTexture(20, {cap:{}}), /Expected a string/)
+      assert.throws(() => ctx.createTexture(20, {cap:""}), /Expected \"butt\", \"square\"/)
+      assert.throws(() => ctx.createTexture(20, {offset:[1, NaN]}), /Expected a number or array/)
+      assert.throws(() => ctx.isPointInPath(0, 10, 10), /Expected `fillRule`/)
+      assert.throws(() => ctx.isPointInPath(false, 10, 10), /Expected `fillRule`/)
+      assert.throws(() => ctx.isPointInPath({}, 10, 10), /Expected `fillRule`/)
+      assert.throws(() => ctx.isPointInPath({}, 10, 10, "___"), /Expected a Path2D/)
+      assert.throws(() => ctx.isPointInPath({}, 10, 10, "evenodd"), /Expected a Path2D/)
+      assert.throws(() => ctx.isPointInPath(10, 10, "___"), /Expected `fillRule`/)
+      assert.throws(() => ctx.isPointInPath(p2d, 10, 10, ""), /Expected `fillRule`/)
+      assert.throws(() => ctx.createLinearGradient(0,0,NaN,1), /Expected a number for/)
+      assert.throws(() => ctx.createRadialGradient(0,0,NaN,0,0,0), /Expected a number for/)
+      assert.throws(() => ctx.createConicGradient(0,NaN,0), /Expected a number for/)
+      assert.throws(() => ctx.createPattern(img, "___"), /Expected `repetition`/)
+      assert.throws(() => g.addColorStop(NaN, '#000'), /Expected a number/)
+      assert.throws(() => g.addColorStop(0, {}), /Could not be parsed as a color/)
+      assert.throws(() => ctx.setLineDash(NaN), /Value is not a sequence/)
     })
 
     test('NaN arguments', async () => {
       // silently fail
-      expect(() => ctx.setTransform({})).not.toThrow()
-      expect(() => ctx.setTransform(0,0,0,NaN,0,0)).not.toThrow()
-      expect(() => ctx.translate(NaN,0)).not.toThrow()
-      expect(() => ctx.scale(NaN,0)).not.toThrow()
-      expect(() => ctx.rotate(NaN)).not.toThrow()
-      expect(() => ctx.rect(0,0,NaN,0)).not.toThrow()
-      expect(() => ctx.arc(0,0,NaN,0,0)).not.toThrow()
-      expect(() => ctx.arc(0,0,NaN,0,0,false)).not.toThrow()
-      expect(() => ctx.arc(0,0,NaN,0,0,new Date())).not.toThrow()
-      expect(() => ctx.ellipse(0,0,0,NaN,0,0,0)).not.toThrow()
-      expect(() => ctx.moveTo(NaN,0)).not.toThrow()
-      expect(() => ctx.lineTo(NaN,0)).not.toThrow()
-      expect(() => ctx.arcTo(0,0,0,0,NaN)).not.toThrow()
-      expect(() => ctx.bezierCurveTo(0,0,0,0,NaN,0)).not.toThrow()
-      expect(() => ctx.quadraticCurveTo(0,0,NaN,0)).not.toThrow()
-      expect(() => ctx.conicCurveTo(0,0,NaN,0,1)).not.toThrow()
-      expect(() => ctx.roundRect(0,0,0,0,NaN)).not.toThrow()
-      expect(() => ctx.fillRect(0,0,NaN,0)).not.toThrow()
-      expect(() => ctx.strokeRect(0,0,NaN,0)).not.toThrow()
-      expect(() => ctx.clearRect(0,0,NaN,0)).not.toThrow()
-      expect(() => ctx.fillText("text", 0, NaN)).not.toThrow()
-      expect(() => ctx.fillText("text", 0, 0, NaN)).not.toThrow()
-      expect(() => ctx.strokeText("text", 0, NaN)).not.toThrow()
-      expect(() => ctx.strokeText("text", 0, 0, NaN)).not.toThrow()
-      expect(() => ctx.setLineDash([NaN, 0, 0])).not.toThrow()
-      expect(() => ctx.outlineText("text", NaN)).not.toThrow()
-      expect(() => ctx.drawImage(img,NaN,0)).not.toThrow()
-      expect(() => ctx.drawImage(img,0,0,NaN,0)).not.toThrow()
-      expect(() => ctx.drawImage(img,0,0,0,0,NaN,0,0,0)).not.toThrow()
-      expect(() => ctx.drawCanvas(canvas,NaN,0)).not.toThrow()
-      expect(() => ctx.drawCanvas(canvas,0,0,NaN,0)).not.toThrow()
-      expect(() => ctx.drawCanvas(canvas,0,0,0,0,NaN,0,0,0)).not.toThrow()
+      assert.doesNotThrow(() => ctx.setTransform({}))
+      assert.doesNotThrow(() => ctx.setTransform(0,0,0,NaN,0,0))
+      assert.doesNotThrow(() => ctx.translate(NaN,0))
+      assert.doesNotThrow(() => ctx.scale(NaN,0))
+      assert.doesNotThrow(() => ctx.rotate(NaN))
+      assert.doesNotThrow(() => ctx.rect(0,0,NaN,0))
+      assert.doesNotThrow(() => ctx.arc(0,0,NaN,0,0))
+      assert.doesNotThrow(() => ctx.arc(0,0,NaN,0,0,false))
+      assert.doesNotThrow(() => ctx.arc(0,0,NaN,0,0,new Date()))
+      assert.doesNotThrow(() => ctx.ellipse(0,0,0,NaN,0,0,0))
+      assert.doesNotThrow(() => ctx.moveTo(NaN,0))
+      assert.doesNotThrow(() => ctx.lineTo(NaN,0))
+      assert.doesNotThrow(() => ctx.arcTo(0,0,0,0,NaN))
+      assert.doesNotThrow(() => ctx.bezierCurveTo(0,0,0,0,NaN,0))
+      assert.doesNotThrow(() => ctx.quadraticCurveTo(0,0,NaN,0))
+      assert.doesNotThrow(() => ctx.conicCurveTo(0,0,NaN,0,1))
+      assert.doesNotThrow(() => ctx.roundRect(0,0,0,0,NaN))
+      assert.doesNotThrow(() => ctx.fillRect(0,0,NaN,0))
+      assert.doesNotThrow(() => ctx.strokeRect(0,0,NaN,0))
+      assert.doesNotThrow(() => ctx.clearRect(0,0,NaN,0))
+      assert.doesNotThrow(() => ctx.fillText("text", 0, NaN))
+      assert.doesNotThrow(() => ctx.fillText("text", 0, 0, NaN))
+      assert.doesNotThrow(() => ctx.strokeText("text", 0, NaN))
+      assert.doesNotThrow(() => ctx.strokeText("text", 0, 0, NaN))
+      assert.doesNotThrow(() => ctx.setLineDash([NaN, 0, 0]))
+      assert.doesNotThrow(() => ctx.outlineText("text", NaN))
+      assert.doesNotThrow(() => ctx.drawImage(img,NaN,0))
+      assert.doesNotThrow(() => ctx.drawImage(img,0,0,NaN,0))
+      assert.doesNotThrow(() => ctx.drawImage(img,0,0,0,0,NaN,0,0,0))
+      assert.doesNotThrow(() => ctx.drawCanvas(canvas,NaN,0))
+      assert.doesNotThrow(() => ctx.drawCanvas(canvas,0,0,NaN,0))
+      assert.doesNotThrow(() => ctx.drawCanvas(canvas,0,0,0,0,NaN,0,0,0))
 
       // no error, returns false
-      expect(ctx.isPointInPath(10, NaN, "evenodd")).toEqual(false)
-      expect(ctx.isPointInPath(p2d, 10, NaN, "evenodd")).toEqual(false)
-      expect(ctx.isPointInPath(p2d, 10)).toEqual(false)
-      expect(ctx.isPointInStroke(10, NaN)).toEqual(false)
-      expect(ctx.isPointInStroke(p2d, 10, NaN)).toEqual(false)
-      expect(ctx.isPointInStroke(p2d, 10)).toEqual(false)
+      assert.equal(ctx.isPointInPath(10, NaN, "evenodd"), false)
+      assert.equal(ctx.isPointInPath(p2d, 10, NaN, "evenodd"), false)
+      assert.equal(ctx.isPointInPath(p2d, 10), false)
+      assert.equal(ctx.isPointInStroke(10, NaN), false)
+      assert.equal(ctx.isPointInStroke(p2d, 10, NaN), false)
+      assert.equal(ctx.isPointInStroke(p2d, 10), false)
     })
 
   })
