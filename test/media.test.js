@@ -9,7 +9,6 @@ const path = require('path'),
       nock = require('nock'),
       {describe, test, beforeEach, afterEach} = require('node:test'),
       {pathToFileURL, fileURLToPath} = require('url'),
-      {globSync:glob} = require('fast-glob'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../lib')
 
 assert.contains = (actual, expected) => assert((actual || []).includes(expected))
@@ -400,33 +399,42 @@ describe("FontLibrary", ()=>{
 
     FONTS_DIR = normalizePath(FONTS_DIR)
     ASSETS_DIR = normalizePath(ASSETS_DIR)
-    assert.equal( FontLibrary.use(glob(`${FONTS_DIR}/montserrat*/montserrat-v30-latin-italic.woff2`)).length, 1)
-    assert.equal( FontLibrary.use(glob(`${FONTS_DIR}/montserrat-latin/*700*.woff2`)).length, 2)
-    assert.equal( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat-v30-latin-italic.woff2`)).length, 1)
-    assert.equal( FontLibrary.use(glob(`${ASSETS_DIR}/**/montserrat*italic.*`)).length, 3)
 
-    // `**` must be standalone (i.e., can't be attached to a file extension)
-    assert.equal( FontLibrary.use(glob(`${ASSETS_DIR}/**.woff2`)).length, 0)
-    assert.equal( FontLibrary.use(glob(`${ASSETS_DIR}/**/*.woff2`)).length, 7)
+    const amstel = `${FONTS_DIR}/AmstelvarAlpha-VF.ttf`
+    const monoton = [
+      `${FONTS_DIR}/Monoton-Regular.woff`,
+      `${FONTS_DIR}/Monoton-Regular.woff2`,
+    ]
+    const montserrat = [
+      `${FONTS_DIR}/montserrat-latin/montserrat-v30-latin-200.woff2`,
+      `${FONTS_DIR}/montserrat-latin/montserrat-v30-latin-700italic.woff2`,
+      `${FONTS_DIR}/montserrat-latin/montserrat-v30-latin-200italic.woff2`,
+      `${FONTS_DIR}/montserrat-latin/montserrat-v30-latin-italic.woff2`,
+      `${FONTS_DIR}/montserrat-latin/montserrat-v30-latin-700.woff2`,
+      `${FONTS_DIR}/montserrat-latin/montserrat-v30-latin-regular.woff2`,
+    ]
 
-    // single alias
-    assert.equal( FontLibrary.use("Montmartre", glob(`${ASSETS_DIR}/**/montserrat*italic.*`)).length, 3)
+    // list with multiple families
+    assert.equal(FontLibrary.use([amstel, ...monoton]).length, 3)
 
-    // multiple aliases (array of patterns)
-    let { Monaton, Montserrat } = FontLibrary.use({
-      Monaton: glob(`${FONTS_DIR}/*.woff2`),
-      Montserrat: glob([`${FONTS_DIR}/montserrat-latin/*italic.woff2`, `${FONTS_DIR}/**/montserrat-latin/*700.woff2`])
+    // alias for single family
+    assert.equal(FontLibrary.use("Montmartre", montserrat).length, 6)
+
+    // multiple family aliases (single-face per family)
+    let single = FontLibrary.use({
+      Monaton: monoton[0],
+      Montserrat: montserrat[0]
     })
-    assert.equal(Monaton.length, 1)
-    assert.equal(Montserrat.length, 4)
+    assert.equal((single.Monaton || []).length, 1)
+    assert.equal((single.Montserrat || []).length, 1)
 
-    // multiple aliases (bare-string pattern)
-    let { MonatonNowrap, MontserratNowrap  } = FontLibrary.use({
-      MonatonNowrap: glob(`${FONTS_DIR}/*.woff2`)[0],
-      MontserratNowrap: glob(`${FONTS_DIR}/montserrat-latin/*.woff2`)
+    // multiple aliases (lists of faces)
+    let multiple = FontLibrary.use({
+      Monaton: [monoton[1]],
+      Montserrat: montserrat.slice(1, -1)
     })
-    assert.equal(MonatonNowrap.length, 1)
-    assert.equal(MontserratNowrap.length, 6)
+    assert.equal((multiple.Monaton || []).length, 1)
+    assert.equal((multiple.Montserrat || []).length, 4)
   })
 
 })

@@ -4,7 +4,7 @@
 
 const fs = require('fs'),
       tmp = require('tmp'),
-      glob = require('fast-glob').globSync,
+      path = require('path'),
       assert = require('node:assert'),
       {describe, test, beforeEach, afterEach} = require('node:test'),
       {Canvas, Image} = require('../lib');
@@ -41,7 +41,10 @@ describe("Canvas", ()=>{
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
 
   let TMP,
-      findTmp = pattern => glob(pattern, {cwd:TMP, absolute:true});
+      tmpFiles = () =>  fs.readdirSync(TMP)
+        .map(fn =>  path.join(TMP, fn) )
+        .filter(fn => fs.lstatSync(fn).isFile())
+
 
   beforeEach(()=>{
     canvas = new Canvas(WIDTH, HEIGHT)
@@ -180,7 +183,7 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.jpg
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
@@ -195,7 +198,7 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.png
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
@@ -210,7 +213,7 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.webp
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
@@ -224,7 +227,7 @@ describe("Canvas", ()=>{
         canvas.toFile(`${TMP}/output4.jpeg`, {format:'svg'}),
       ])
 
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let svg = fs.readFileSync(path, 'utf-8')
         assert.match(svg, /^<\?xml version/)
       }
@@ -239,7 +242,7 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.pdf
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
@@ -288,7 +291,7 @@ describe("Canvas", ()=>{
 
       await canvas.toFile(`${TMP}/output-{2}.png`)
 
-      let files = findTmp(`output-0?.png`)
+      let files = tmpFiles()
       assert.equal(files.length, colors.length+1)
 
       for (const [i, fn] of files.entries()){
@@ -396,7 +399,7 @@ describe("Canvas", ()=>{
       canvas.toFileSync(`${TMP}/output6.png`, {format:'jpeg'})
 
       let magic = MAGIC.jpg
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
@@ -409,7 +412,7 @@ describe("Canvas", ()=>{
       canvas.toFileSync(`${TMP}/output4.svg`, {format:'png'})
 
       let magic = MAGIC.png
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
@@ -424,7 +427,7 @@ describe("Canvas", ()=>{
       ])
 
       let magic = MAGIC.webp
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
@@ -436,7 +439,7 @@ describe("Canvas", ()=>{
       canvas.toFileSync(`${TMP}/output3`, {format:'svg'})
       canvas.toFileSync(`${TMP}/output4.jpeg`, {format:'svg'})
 
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let svg = fs.readFileSync(path, 'utf-8')
         assert.match(svg, /^<\?xml version/)
       }
@@ -449,7 +452,7 @@ describe("Canvas", ()=>{
       canvas.toFileSync(`${TMP}/output4.jpg`, {format:'pdf'})
 
       let magic = MAGIC.pdf
-      for (let path of findTmp(`*`)){
+      for (let path of tmpFiles()){
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
@@ -469,7 +472,7 @@ describe("Canvas", ()=>{
 
       canvas.toFileSync(`${TMP}/output-{2}.png`)
 
-      let files = findTmp(`output-0?.png`)
+      let files = tmpFiles()
       assert.equal(files.length, colors.length+1)
 
       for (const [i, fn] of files.entries()){
