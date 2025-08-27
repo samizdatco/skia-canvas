@@ -1,5 +1,5 @@
 /*
-Usage: node[mon] test/visual/index.js [port #] [options]
+Usage: node test/visual/index.js [port #] [options]
    ex: node test/visual/index.js 8081 -g 1
    ex: node test/visual/index.js -p 8081 -w 300
 
@@ -16,10 +16,14 @@ All options besides 'port' can also be set via URL parameters using their full n
 */
 "use strict";
 
-var path = require('path')
-var express = require('express')
-var {Canvas} = require('../../lib')
-var tests = require('./tests')
+const fs = require('fs/promises'),
+      path = require('path'),
+      {Hono} = require('hono'),
+      {serve} = require('@hono/node-server'),
+      {serveStatic} = require('@hono/node-server/serve-static'),
+      {getCookie, setCookie} = require('hono/cookie'),
+      {Canvas} = require('../../lib'),
+      tests = require('./tests')
 
 
 // Default options
@@ -31,111 +35,99 @@ const defaults = {
   gpu: undefined,    // use gpu
 }
 
+const MIME = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  pdf: "application/pdf",
+  svg: "image/svg+xml",
+}
+
 var port = 4000  // server listening port
 
 // Runtime options
 const option = {}
 
-function renderTest (canvas, name, cb) {
+function renderTest(canvas, name, option, format) {
   if (!tests[name]) {
     throw new Error('Unknown test: ' + name)
   }
 
-  try{
-    var ctx = canvas.getContext('2d')
-    var initialFillStyle = ctx.fillStyle
-    ctx.fillStyle = option.cc
-    ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.fillStyle = initialFillStyle
-    ctx.imageSmoothingEnabled = true
-    if (tests[name].length === 2) {
-      tests[name](ctx, cb)
-    } else {
-      tests[name](ctx)
-      cb(null)
+  return new Promise((res, rej) => {
+    let cb = async (err) => err ? rej(err) : res(await canvas.toBuffer(format))
+
+    if (option.gpu != undefined)
+      canvas.gpu = option.gpu
+
+    try{
+      var ctx = canvas.getContext('2d')
+      var initialFillStyle = ctx.fillStyle
+      ctx.fillStyle = option.cc
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.fillStyle = initialFillStyle
+      ctx.imageSmoothingEnabled = true
+      if (tests[name].length === 2) {
+        tests[name](ctx, cb)
+      } else {
+        tests[name](ctx)
+        cb(null)
+      }
+    }catch(e){
+      console.error(e)
+      cb(e)
     }
-  }catch(e){
-    console.error(e)
-    cb(e)
-  }
+  })
+
 }
 
-function setOptionsFromQuery(query) {
-  if (query.width == null) {
-    // full reset when no query string for initial request or 'reset' button
-    Object.assign(option, defaults)
-    return
-  }
-  option.width = parseInt(query.width) || defaults.width
-  option.height = parseInt(query.height) || defaults.height
-  option.gpu = query.gpu && query.gpu != 'null' ? !!parseInt(query.gpu) : defaults.gpu
-  option.cc = query.cc ? decodeURIComponent(query.cc) : defaults.cc
-  if (query.alpha != null && option.cc.length == 7 && option.cc[0] == '#') {
-    // add alpha component into overall color (because browser's color input doesn't do alpha)
-    const a = Math.max(Math.min(Math.round(255 * parseFloat(query.alpha)), 255), 0)
-    if (Number.isFinite(a))
-      option.cc += a.toString(16).padStart(2, '0')
-  }
-  option.bc_default = query.bc_default != null
-  if (query.bc)
-    option.bc = decodeURIComponent(query.bc)
-  // console.log(option)
-}
-
-var app = express()
+var app = new Hono()
 
 // must go before static routes
-app.get('/', function (req, res) {
-  setOptionsFromQuery(req.query)
-  res.cookie("renderOptions", JSON.stringify(option), { sameSite: 'Strict' })
-  res.sendFile(path.join(__dirname, 'index.html'))
+app.get('/', async (c) => {
+  // update renderOptions cookie based on presence/absence of query args
+  let query = c.req.query()
+  if (Object.keys(query).length == 0) {
+    // full reset when no query string for initial request or 'reset' button
+    setCookie(c, "renderOptions", JSON.stringify(defaults))
+  }else{
+    let opts = {}
+    opts.width = parseInt(query.width) || defaults.width
+    opts.height = parseInt(query.height) || defaults.height
+    opts.gpu = query.gpu && query.gpu != 'null' ? !!parseInt(query.gpu) : defaults.gpu
+    opts.cc = query.cc ? decodeURIComponent(query.cc) : defaults.cc
+    if (query.alpha != null && opts.cc.length == 7 && opts.cc[0] == '#') {
+      // add alpha component into overall color (because browser's color input doesn't do alpha)
+      const a = Math.max(Math.min(Math.round(255 * parseFloat(query.alpha)), 255), 0)
+      if (Number.isFinite(a))
+        opts.cc += a.toString(16).padStart(2, '0')
+    }
+    opts.bc_default = query.bc_default != null
+    if (query.bc) option.bc = decodeURIComponent(query.bc)
+    setCookie(c, "renderOptions", JSON.stringify(opts))
+  }
+
+  return c.html(await fs.readFile(path.join(__dirname, 'index.html')))
 })
 
-app.use(express.static(path.join(__dirname, '../assets')))
-app.use(express.static(path.join(__dirname)))
+// merge tests.js and assets dir contents into root
+app.use('/tests.js', serveStatic({ root: __dirname }))
+app.use('/*', serveStatic({ root: path.join(__dirname, '../assets') }))
 
-app.get('/render', async function (req, res, next) {
-  var canvas = new Canvas(option.width, option.height)
-  if (option.gpu != undefined)
-    canvas.gpu = option.gpu
-
-  renderTest(canvas, req.query.name, async function (err) {
-    if (err) return next(err)
-
-    let data = await canvas.png
-    res.contentType('image/png');
-    res.send(data)
-  })
-})
-
-app.get('/pdf', async function (req, res, next) {
-  var canvas = new Canvas(option.width, option.height)
-
-  renderTest(canvas, req.query.name, async function (err) {
-    if (err) return next(err)
-
-    let data = await canvas.pdf
-    res.contentType('application/pdf');
-    res.send(data)
-  })
-})
-
-app.get('/svg', async function (req, res, next) {
-  var canvas = new Canvas(option.width, option.height)
-
-  renderTest(canvas, req.query.name, async function (err) {
-    if (err) return next(err)
-
-    let data = await canvas.svg
-    res.contentType('image/svg+xml');
-    res.send(data)
-  })
+app.get('/:format{(png|jpg|webp|pdf|svg)}', async (c) => {
+  let cookie = getCookie(c, "renderOptions")
+  let opts = cookie ? JSON.parse(cookie) : {...defaults}
+  let {format} = c.req.param()
+  let test = c.req.query('name')
+  var canvas = new Canvas(opts.width, opts.height)
+  let data = await renderTest(canvas, test, opts, format)
+  return c.body(data, 200, {'Content-Type': MIME[format]})
 })
 
 // Handle CLI arguments; these set default options
 for (let i=2; i < process.argv.length; ++i) {
   const arg = process.argv[i];
-  if   (typeof arg == 'number')   port = arg;
+  if (i==2 && parseInt(arg))      port = parseInt(arg);
   else if ((/^-?p/i).test(arg))   port = parseInt(process.argv[++i]) || port;
   else if ((/^-?g/i).test(arg))   defaults.gpu = !!parseInt(process.argv[++i]);
   else if ((/^-?w/i).test(arg))   defaults.width = parseInt(process.argv[++i]) || defaults.width;
@@ -145,7 +137,8 @@ for (let i=2; i < process.argv.length; ++i) {
   else console.log("Ignoring unknown argument:", arg)
 }
 
-app.listen(port, function () {
-  console.log('=> http://localhost:%d/', port)
-  // console.log('   with options:', defaults)
+console.log('=> http://localhost:%d/', port)
+serve({
+  fetch: app.fetch,
+  port: port,
 })

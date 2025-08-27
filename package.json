@@ -34,10 +34,11 @@
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
+    "@hono/node-server": "^1.19.0",
     "@types/node": "^24.2.1",
     "cargo-cp-artifact": "^0.1",
-    "express": "^5.1.0",
     "fast-glob": "^3.3.3",
+    "hono": "^4.9.4",
     "nock": "^14.0.10",
     "tmp": "^0.2.5"
   },

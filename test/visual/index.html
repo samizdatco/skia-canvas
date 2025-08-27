@@ -326,7 +326,7 @@
               img.onload = function () {
                 getDifference(canvas, img, canvasOuput)
               }
-              img.src = '/render?name=' + encodeURIComponent(name)
+              img.src = '/png?name=' + encodeURIComponent(name)
             })
             return create('tr', {}, [
               create('td', {}, [create('h3', { textContent: name }),
@@ -355,7 +355,6 @@
       }
 
       function populateForm() {
-        // console.log(opt)
         const form = document.getElementById('optionsForm')
         form.width.value = opt.width.toFixed(0)
         form.height.value = opt.height.toFixed(0)
