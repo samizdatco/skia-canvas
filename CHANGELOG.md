@@ -1,6 +1,8 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!--## 🥚 ⟩ [Unreleased]-->
+
+## 📦 ⟩ [v3.0.5] ⟩ Aug 28, 2025
 
 ### Misc. Improvements
 - Decreased memory usage when drawing one canvas's contents onto another (via [drawImage][mdn_drawImage] or [drawCanvas][drawCanvas]).
@@ -558,7 +560,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.4...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.5...HEAD
+[v3.0.5]: https://github.com/samizdatco/skia-canvas/compare/v3.0.4...v3.0.5
 [v3.0.4]: https://github.com/samizdatco/skia-canvas/compare/v3.0.3...v3.0.4
 [v3.0.3]: https://github.com/samizdatco/skia-canvas/compare/v3.0.2...v3.0.3
 [v3.0.2]: https://github.com/samizdatco/skia-canvas/compare/v3.0.1...v3.0.2
