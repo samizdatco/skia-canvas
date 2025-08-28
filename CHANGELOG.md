@@ -2,6 +2,11 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
+## 📦 ⟩ [v3.0.6] ⟩ Aug 28, 2025
+
+### Bugfix
+- Fixed Windows CI build
+
 ## 📦 ⟩ [v3.0.5] ⟩ Aug 28, 2025
 
 ### Misc. Improvements
@@ -560,7 +565,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.5...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.6...HEAD
+[v3.0.6]: https://github.com/samizdatco/skia-canvas/compare/v3.0.5...v3.0.6
 [v3.0.5]: https://github.com/samizdatco/skia-canvas/compare/v3.0.4...v3.0.5
 [v3.0.4]: https://github.com/samizdatco/skia-canvas/compare/v3.0.3...v3.0.4
 [v3.0.3]: https://github.com/samizdatco/skia-canvas/compare/v3.0.2...v3.0.3
