@@ -3,7 +3,12 @@
 ## 🥚 ⟩ [Unreleased]
 
 ### Misc. Improvements
-- Decreased memory usage when drawing one canvas's contents onto another (via [drawImage][mdn_drawImage] or [drawCanvas][[drawCanvas]]).
+- Decreased memory usage when drawing one canvas's contents onto another (via [drawImage][mdn_drawImage] or [drawCanvas][drawCanvas]).
+- Reduced dependency footprint (from 294 to 22 modules when installed with `devDependencies` included):
+  - replaced `nodemon` with `node --watch`
+  - replaced `jest` with `node --test` for unit tests
+  - replaced `express` with `hono` for visual tests
+  - dropped `lodash` and `fast-glob` usage in test suite
 
 ## 📦 ⟩ [v3.0.4] ⟩ Aug 22, 2025
 
