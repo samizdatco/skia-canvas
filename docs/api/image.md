@@ -202,10 +202,10 @@ Note that you can pass a wide variety of image sources to the `loadImage` helper
 When loading a URL over HTTP(S) you may also include a second argument containing options to be used when the library makes its web request behind the scenes.
 
 The supported options include:
-- `method`: the http ‘verb’ to use (defaults to `GET`)
+- `method`: the http ‘verb’ to use (defaults to `"GET"`)
 - `headers`: an object mapping request header names to values
 - `body`: a string or buffer to be sent to the server if the method is set to `POST` or `PUT`
-- `auth`: credentials for Basic Auth in the format `"user:password"` which will be used to construct the `Authorization` header (if not supplied)
+- `auth`: a string with credentials for Basic Auth in the format `"user:password"` which will be used to construct the `Authorization` header (if not supplied)
 - `signal`: an [AbortSignal][AbortSignal] to allow the request to be cancelled
 - `agent`: an [http.Agent][http_agent] used to customize the connection or `false` to disable the [default agent](https://www.npmjs.com/package/https-proxy-agent) which uses the url in the `HTTP_PROXY` environment variable (if defined) as a proxy server
 - any other option supported by Node’s [http.request][http_request] call
