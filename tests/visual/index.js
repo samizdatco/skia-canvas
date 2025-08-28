@@ -115,12 +115,13 @@ app.use('/tests.js', serveStatic({ root: __dirname }))
 app.use('/*', serveStatic({ root: path.join(__dirname, '../assets') }))
 
 app.get('/:format{(png|jpg|webp|pdf|svg)}', async (c) => {
-  let cookie = getCookie(c, "renderOptions")
-  let opts = cookie ? JSON.parse(cookie) : {...defaults}
-  let {format} = c.req.param()
-  let test = c.req.query('name')
-  var canvas = new Canvas(opts.width, opts.height)
-  let data = await renderTest(canvas, test, opts, format)
+  let cookie = getCookie(c, "renderOptions"),
+      opts = cookie ? JSON.parse(cookie) : {...defaults},
+      {format} = c.req.param(),
+      test = c.req.query('name')
+
+  let canvas = new Canvas(opts.width, opts.height),
+      data = await renderTest(canvas, test, opts, format)
   return c.body(data, 200, {'Content-Type': MIME[format]})
 })
 
