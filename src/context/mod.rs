@@ -263,7 +263,7 @@ impl Context2D{
 
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
-        if let Some(pict) = layer_recorder.finish_recording_as_picture(Some(&self.bounds)){
+        if let Some(pict) = layer_recorder.finish_recording_as_picture(None){
           self.with_canvas(|canvas| {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
