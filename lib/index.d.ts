@@ -1021,6 +1021,7 @@ export class Window extends EventEmitter<{
   visible: boolean
   fullscreen: boolean
   borderless: boolean
+  resizable: boolean
   title: string
   cursor: CursorStyle
   fit: FitStyle
