@@ -953,6 +953,7 @@ export type WindowOptions = {
   background?: string
   fullscreen?: boolean
   borderless?: boolean
+  resizable?: boolean
   visible?: boolean
   cursor?: CursorStyle
   canvas?: Canvas
@@ -1020,6 +1021,7 @@ export class Window extends EventEmitter<{
   visible: boolean
   fullscreen: boolean
   borderless: boolean
+  resizable: boolean
   title: string
   cursor: CursorStyle
   fit: FitStyle
