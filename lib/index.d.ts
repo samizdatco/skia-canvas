@@ -953,6 +953,7 @@ export type WindowOptions = {
   background?: string
   fullscreen?: boolean
   borderless?: boolean
+  resizable?: boolean
   visible?: boolean
   cursor?: CursorStyle
   canvas?: Canvas
