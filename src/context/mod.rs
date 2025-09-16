@@ -288,9 +288,13 @@ impl Context2D{
   }
 
   pub fn map_points(&self, coords:&[f32]) -> Vec<Point>{
-    coords.chunks_exact(2)
-          .map(|pair| self.state.matrix.map_xy(pair[0], pair[1]))
-          .collect()
+    // treat the flat array of floats as x/y pairs
+    coords
+      .chunks_exact(2)
+      .map(|pair|
+        self.state.matrix.map_point(Point::new(pair[0], pair[1]))
+      )
+      .collect()
   }
 
   pub fn reset_size(&mut self, dims: impl Into<Size>) {
