@@ -25,6 +25,12 @@ impl Default for Path2D {
   }
 }
 
+impl From<PathBuilder> for Path2D{
+  fn from(builder: PathBuilder) -> Self {
+    Self{path:builder.into()}
+  }
+}
+
 impl Path2D{
   pub fn scoot(&mut self, x: f32, y: f32){
     if self.path.is_empty(){
@@ -389,7 +395,7 @@ pub fn round(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 
   if let Some(rounder) = PathEffect::corner_path(radius){
     if let Some((path, _)) = rounder.filter_path(&this.path, &stroke_rec, bounds){
-      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+      return Ok(cx.boxed(RefCell::new(Path2D::from(path))))
     }
   }
 
@@ -410,7 +416,7 @@ pub fn trim(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 
   if let Some(trimmer) = PathEffect::trim(begin, end, mode){
     if let Some((path, _)) = trimmer.filter_path(&this.path, &stroke_rec, bounds){
-      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+      return Ok(cx.boxed(RefCell::new(Path2D::from(path))))
     }
   }
 
@@ -430,7 +436,7 @@ pub fn jitter(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 
   if let Some(trimmer) = PathEffect::discrete(seg_len, std_dev, Some(seed)){
     if let Some((path, _)) = trimmer.filter_path(&this.path, &stroke_rec, bounds){
-      return Ok(cx.boxed(RefCell::new(Path2D{path})))
+      return Ok(cx.boxed(RefCell::new(Path2D::from(path))))
     }
   }
 
