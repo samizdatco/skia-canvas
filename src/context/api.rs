@@ -2,8 +2,8 @@
 use std::f32::consts::PI;
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::{Matrix, PaintStyle, Point, RRect, Rect, Size};
-use skia_safe::path::{AddPathMode::{Extend}, Direction::{CCW, CW}, Path};
+use skia_safe::{Matrix, PaintStyle, Point, RRect, Rect, Size, Path, PathDirection};
+use skia_safe::path::AddPathMode::{Extend};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
@@ -241,7 +241,7 @@ pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
     let rrect = RRect::new_rect_radii(rect, &[radii[0], radii[1], radii[2], radii[3]]);
-    let direction = if w.signum() == h.signum(){ CW }else{ CCW };
+    let direction = if w.signum() == h.signum(){ PathDirection::CW }else{ PathDirection::CCW };
 
     let matrix = this.state.matrix;
     let path = Path::rrect(rrect, Some(direction));
