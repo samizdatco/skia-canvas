@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::{
   Canvas as SkCanvas, Paint, Path, PathOp, Image, Contains,
-  Rect, IRect, Point, Size, Color, Color4f, ColorSpace,
+  Rect, IRect, Point, Size, Color, Color4f, ColorSpace, PathFillType,
   PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture,
   images, image_filters, dash_path_effect, path_1d_path_effect,
   matrix::{ Matrix, TypeMask },
@@ -11,7 +11,6 @@ use skia_safe::{
   canvas::SrcRectConstraint::Strict,
   path_utils::fill_path_with_paint,
   font_style::{FontStyle, Width},
-  path::FillType,
 };
 
 pub mod api;
@@ -339,13 +338,13 @@ impl Context2D{
     }
   }
 
-  pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<FillType>){
+  pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<PathFillType>){
     let mut path = path.unwrap_or_else(|| {
       // the current path has already incorporated its transform state
       let inverse = self.state.matrix.invert().unwrap_or_default();
       self.path.with_transform(&inverse)
     });
-    path.set_fill_type(rule.unwrap_or(FillType::Winding));
+    path.set_fill_type(rule.unwrap_or(PathFillType::Winding));
 
     // if path will fill the whole canvas and paint/blend are fully opaque...
     if matches!(style, PaintStyle::Fill | PaintStyle::StrokeAndFill) &&
@@ -408,7 +407,7 @@ impl Context2D{
     });
   }
 
-  pub fn clip_path(&mut self, path: Option<Path>, rule:FillType){
+  pub fn clip_path(&mut self, path: Option<Path>, rule:PathFillType){
     let mut clip = match path{
       Some(path) => path.with_transform(&self.state.matrix),
       None => self.path.clone()
@@ -430,10 +429,10 @@ impl Context2D{
     });
   }
 
-  pub fn hit_test_path(&mut self, path: &mut Path, point:impl Into<Point>, rule:Option<FillType>, style: PaintStyle) -> bool {
+  pub fn hit_test_path(&mut self, path: &mut Path, point:impl Into<Point>, rule:Option<PathFillType>, style: PaintStyle) -> bool {
     let point = point.into();
     let point = self.in_local_coordinates(point.x, point.y);
-    let rule = rule.unwrap_or(FillType::Winding);
+    let rule = rule.unwrap_or(PathFillType::Winding);
     let prev_rule = path.fill_type();
     path.set_fill_type(rule);
 

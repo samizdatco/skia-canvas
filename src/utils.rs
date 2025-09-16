@@ -932,9 +932,9 @@ pub fn from_1d_style(mode:path_1d_path_effect::Style) -> String{
   }.to_string()
 }
 
-use skia_safe::path::FillType;
+use skia_safe::PathFillType;
 
-pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> NeonResult<FillType>{
+pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> NeonResult<PathFillType>{
   let err_msg = format!("Expected `fillRule` to be \"nonzero\" or \"evenodd\" for {} arg", arg_num(idx));
 
   // if arg is provided, verify that it's a string (if absent use default val)
@@ -948,8 +948,8 @@ pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> 
 
 
   match mode.as_str(){
-    "nonzero" => Ok(FillType::Winding),
-    "evenodd" => Ok(FillType::EvenOdd),
+    "nonzero" => Ok(PathFillType::Winding),
+    "evenodd" => Ok(PathFillType::EvenOdd),
     _ => cx.throw_type_error(&err_msg)
   }
 }

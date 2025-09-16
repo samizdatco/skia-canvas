@@ -8,7 +8,7 @@ use std::f32::{EPSILON, consts::PI};
 use neon::prelude::*;
 use skia_safe::{Path, Point, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, PathOp, StrokeRec};
 use skia_safe::{PathEffect, trim_path_effect};
-use skia_safe::path::{self, AddPathMode, Verb, FillType};
+use skia_safe::path::{self, AddPathMode, Verb};
 
 use crate::utils::*;
 
@@ -345,7 +345,7 @@ pub fn unwind(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let mut this = this.borrow_mut();
 
-  this.path.set_fill_type(FillType::EvenOdd);
+  this.path.set_fill_type(PathFillType::EvenOdd);
 
   let new_path = Path2D{
     path:match this.path.as_winding(){
