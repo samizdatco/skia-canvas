@@ -30,7 +30,7 @@ debug: $(LIB)
 	node --test --watch
 
 visual: $(LIB)
-	@node --watch-path lib --watch-path test/visual test/visual
+	@node --watch-path lib --watch-path tests/visual tests/visual
 
 check:
 	cargo check
