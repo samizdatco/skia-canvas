@@ -218,7 +218,7 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
     let bounds = Rect::from_size(size);
     let mut compositor = PictureRecorder::new();
     dom.set_container_size(bounds.size());
-    dom.render(compositor.begin_recording(bounds, None));
+    dom.render(compositor.begin_recording(bounds, true));
     this.content = match compositor.finish_recording_as_picture(None){
       Some(picture) => Content::Vector(picture),
       None => Content::Broken

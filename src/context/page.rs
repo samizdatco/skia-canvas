@@ -45,8 +45,7 @@ impl PageRecorder{
     PageCache::add(id);
 
     let mut rec = PictureRecorder::new();
-    rec.begin_recording(bounds, None);
-    rec.recording_canvas().unwrap().save(); // start at depth 2
+    rec.begin_recording(bounds, true).save(); // start at depth 2
 
     PageRecorder{
       current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id,
@@ -118,14 +117,14 @@ impl PageRecorder{
         .finish_recording_as_drawable()
         .and_then(|mut drawable|{
           let mut wrapper = PictureRecorder::new();
-          wrapper.begin_recording(self.bounds, None).draw_drawable(&mut drawable, None);
+          wrapper.begin_recording(self.bounds, true).draw_drawable(&mut drawable, None);
           wrapper.finish_recording_as_picture(None)
         }).map(|pict|
           self.layers.push(pict)
         );
 
       // resume recording
-      self.current.begin_recording(self.bounds, None);
+      self.current.begin_recording(self.bounds, true);
       self.changed = false;
       self.restore();
     }
@@ -304,14 +303,10 @@ impl Page{
 
   pub fn get_picture(&self, matte:Option<Color>) -> Option<Picture> {
     let mut compositor = PictureRecorder::new();
-    compositor.begin_recording(self.bounds, None);
-    if let Some(output) = compositor.recording_canvas() {
-      matte.map(|c| output.clear(c));
-      for pict in self.layers.iter(){
-        pict.playback(output);
-      }
-    }
-    compositor.finish_recording_as_picture(Some(&self.bounds))
+    let output = compositor.begin_recording(self.bounds, true);
+    matte.map(|c| output.clear(c));
+    self.layers.iter().for_each(|pict| pict.playback(output));
+    compositor.finish_recording_as_picture(None)
   }
 
   pub fn encoded_as(&self, options:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String> {

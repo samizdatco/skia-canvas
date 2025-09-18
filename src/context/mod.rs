@@ -251,7 +251,7 @@ impl Context2D{
         let mut layer_paint = paint.clone();
         layer_paint.set_blend_mode(BlendMode::SrcOver);
         let mut layer_recorder = PictureRecorder::new();
-        layer_recorder.begin_recording(self.bounds, None);
+        layer_recorder.begin_recording(self.bounds, true);
         if let Some(layer) = layer_recorder.recording_canvas() {
           // draw the dropshadow (if applicable)
           render_shadow(layer, &layer_paint);
