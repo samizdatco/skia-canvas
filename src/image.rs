@@ -28,7 +28,7 @@ impl Default for Image{
 
 pub enum Content{
   Bitmap(SkImage),
-  Vector(Picture),
+  Vector(Picture, Size),
   Loading,
   Broken,
 }
@@ -43,7 +43,7 @@ impl Clone for Content{
   fn clone(&self) -> Self {
       match self{
         Content::Bitmap(img) => Content::Bitmap(img.clone()),
-        Content::Vector(pict) => Content::Vector(pict.clone()),
+        Content::Vector(pict, size) => Content::Vector(pict.clone(), size.clone()),
         _ => Content::default()
       }
   }
@@ -52,7 +52,7 @@ impl Clone for Content{
 impl Content{
   pub fn from_context(ctx:&mut Context2D, use_vector:bool) -> Self{
     match use_vector{
-      true => ctx.get_picture().map(|p| Content::Vector(p)),
+      true => ctx.get_picture().map(|p| Content::Vector(p, ctx.bounds.size())),
       false => ctx.get_image().map(|i| Content::Bitmap(i)),
     }.unwrap_or_default()
   }
@@ -67,7 +67,7 @@ impl Content{
   pub fn size(&self) -> Size {
     match &self {
       Content::Bitmap(img) => img.dimensions().into(),
-      Content::Vector(pict) => pict.cull_rect().size().to_ceil().into(), // really cull_rect?
+      Content::Vector(_, size) => *size,
       _ => Size::new_empty()
     }
   }
@@ -220,7 +220,7 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
     dom.set_container_size(bounds.size());
     dom.render(compositor.begin_recording(bounds, true));
     this.content = match compositor.finish_recording_as_picture(None){
-      Some(picture) => Content::Vector(picture),
+      Some(picture) => Content::Vector(picture, size),
       None => Content::Broken
     };
   }else{

@@ -759,11 +759,10 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     content.snap_rects_to_bounds(src, dst);
     let mut this = this.borrow_mut();
     this.draw_image(&img, &src, &dst);
-  } else if let Content::Vector(pict) = &content {
+  } else if let Content::Vector(pict, pict_size) = &content {
     let image = source.downcast::<BoxedImage, _>(&mut cx).unwrap();
     let fit_to_canvas = image.borrow().autosized;
-    let pict_size = content.size();
-    let (mut src, mut dst) = _layout_rects(&mut cx, pict_size, &nums)?;
+    let (mut src, mut dst) = _layout_rects(&mut cx, *pict_size, &nums)?;
 
     // for SVG images with no intrinsic size, use the canvas size as a default scale
     if fit_to_canvas && nums.len() != 4 {
@@ -798,8 +797,8 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let nums = float_args_or_bail_at(&mut cx, 2, &arg_names[..argc-2])?;
 
   let content = Content::from_context(&mut context.borrow_mut(), true);
-  if let Content::Vector(pict) = &content{
-    let (src, dst) = _layout_rects(&mut cx, content.size(), &nums)?;
+  if let Content::Vector(pict, size) = &content{
+    let (src, dst) = _layout_rects(&mut cx, *size, &nums)?;
     let (src, dst) = content.snap_rects_to_bounds(src, dst);
     this.borrow_mut().draw_picture(&pict, &src, &dst);
     Ok(cx.undefined())

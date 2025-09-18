@@ -2,7 +2,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use neon::prelude::*;
-use skia_safe::{Shader, TileMode, Size, Matrix, FilterMode};
+use skia_safe::{Shader, TileMode, Size, Rect, Matrix, FilterMode};
 
 use crate::utils::*;
 use crate::image::{BoxedImage, Content};
@@ -34,8 +34,9 @@ impl CanvasPattern{
         image.to_shader(stamp.repeat, image_filter.sampling(), None).map(|shader|
           shader.with_local_matrix(&stamp.matrix)
         ),
-      Content::Vector(pict) => {
-        let shader = pict.to_shader(stamp.repeat, FilterMode::Linear, None, None);
+      Content::Vector(pict, ..) => {
+        let tile_rect = Rect::from_size(stamp.dims);
+        let shader = pict.to_shader(stamp.repeat, FilterMode::Linear, None, Some(&tile_rect));
         Some(shader.with_local_matrix(&stamp.matrix))
       },
       _ => None
@@ -64,7 +65,7 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
 
   let src = src.borrow();
   let content = src.content.clone();
-  let dims:Size = src.content.size().into();
+  let dims = src.content.size();
   let mut matrix = Matrix::new_identity();
 
   if src.autosized && !dims.is_empty() {
@@ -99,11 +100,11 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let repeat = repetition_arg(&mut cx, 2)?;
 
   let mut ctx = src.borrow_mut();
-  let content = ctx.get_picture()
-    .map(|picture| Content::Vector(picture))
-    .unwrap_or_default();
   let dims = ctx.bounds.size();
   let matrix = Matrix::new_identity();
+  let content = ctx.get_picture()
+    .map(|picture| Content::Vector(picture, dims))
+    .unwrap_or_default();
 
   let stamp = Stamp{content, dims, repeat, matrix};
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
