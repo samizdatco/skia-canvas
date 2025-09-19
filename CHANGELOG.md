@@ -2,6 +2,12 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
+## 📦 ⟩ [v3.0.7] ⟩ Sep 19, 2025
+
+### Misc. Improvements
+- Upgraded Skia to [milestone 140](https://github.com/rust-skia/rust-skia/releases/tag/0.88.0)
+- Added a bounding box hierarchy cache to further speed up canvas-to-canvas drawing via [drawImage][mdn_drawImage] or [drawCanvas][drawCanvas] (thanks to @Shiranuit #261)
+
 ## 📦 ⟩ [v3.0.6] ⟩ Aug 28, 2025
 
 ### Bugfix
@@ -565,7 +571,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.6...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.7...HEAD
+[v3.0.7]: https://github.com/samizdatco/skia-canvas/compare/v3.0.6...v3.0.7
 [v3.0.6]: https://github.com/samizdatco/skia-canvas/compare/v3.0.5...v3.0.6
 [v3.0.5]: https://github.com/samizdatco/skia-canvas/compare/v3.0.4...v3.0.5
 [v3.0.4]: https://github.com/samizdatco/skia-canvas/compare/v3.0.3...v3.0.4
