@@ -4,7 +4,7 @@ description: Direct pixel access to image and canvas contents
 
 # ImageData
 
-> The `ImageData` object offers a convenient container that bundled raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard **ImageData**][ImageData]'s structure and behavior, but extends it in a few ways.
+> The `ImageData` object offers a convenient container that bundles raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard **ImageData**][ImageData]'s structure and behavior, but extends it in a few ways.
 
 | Dimensions                 | Format                                     | Pixel Data                    |
 | --                         | --                                         | --                            |
@@ -26,7 +26,7 @@ let id = new ImageData(800, 600)
 
 ### Choosing a `colorType`
 
-By default ImageData represents bitmaps using an `rgba` ordering of color channels in subsequent bytes of the buffer, but there are quite a few other ways of arranging pixel data to choose from. You can specify one by passing an optional settings object with a `colorType` field when creating the object:
+By default ImageData represents bitmaps using an `rgba` ordering of color channels in sequential bytes of the buffer, but there are quite a few other ways of arranging pixel data to choose from. You can specify one by passing an optional settings object with a `colorType` field when creating the object:
 
 ```js
 let bgraData = new ImageData(128, 128, {colorType:'bgra'})
@@ -54,9 +54,9 @@ for (let i=0; i<id.data.length; i+=id.bytesPerPixel) {
 
 ### Drawing to the Canvas
 
-According to the standard, the only way to draw ImageData to a canvas is through the [putImageData()][putImageData()] method, which copies either the entire ImageData or a rectangle within it to the canvas, pixel-for-pixel. Since this is *copying* rather than *drawing*, the operation ignores the current context state, including any transformations, filter, or global opacity options that have been set.
+According to the standard, the only way to draw ImageData to a canvas is through the [putImageData()][putImageData()] method, which copies either the entire ImageData or a rectangle within it to the canvas, pixel-for-pixel. Since this is *copying* rather than *drawing*, the operation ignores the current context state, including any transformations, filters, or global opacity options that have been set.
 
-Skia Canvas, however, allows you to ImageData and Image objects interchangably when dealing with the canvas. If you pass an ImageData to the [drawImage()][drawImage()] method, its contents will be drawn to the canvas while honoring the context settings that are ignored by `putImageData()`. You may also pass ImageData objects to the [createPattern()][createPattern()] method.
+Skia Canvas, however, allows you to use ImageData and Image objects interchangably when dealing with the canvas. If you pass an ImageData to the [drawImage()][drawImage()] method, its contents will be drawn to the canvas while honoring the context settings that are ignored by `putImageData()`. You may also pass ImageData objects to the [createPattern()][createPattern()] method.
 
 
 ## Constructor

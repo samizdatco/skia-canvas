@@ -255,9 +255,9 @@ By default, textures are drawn to the canvas using a using a [clipping path][cli
 
 <details>
   <summary>
-Sample [[Code: CanvasTexture
+Sample Code: CanvasTexture
 
-![examp]]le using createTexture to make vector patterns for filling & stroking paths](../assets/createTexture@2x.png)
+![example using createTexture to make vector patterns for filling & stroking paths](../assets/createTexture@2x.png)
 
   </summary>
 
@@ -331,22 +331,6 @@ texturesDemo()
 ```
 </details>
 
-### `drawImage()`
-```js
-drawImage(img, x, y)
-drawImage(img, x, y, width, height)
-drawImage(img, srcX, srcY, srcWidth, srcHeight, x, y, width, height)
-```
-
-This method behaves identically to the standard [`drawImage()`][drawImage()] function, but accepts ImageData objects as well as Image and Canvas objects as its first argument.
-
-:::info[Note]
-Image objects loaded from SVG files that don't have an [intrinsic size][img_size] have some behavioral quirks to keep in mind when drawing:
-- When passed to `drawImage()` without size arguments, the SVG will be scaled to a size that fits within the Canvas's current bounds (using an approach akin to CSS's `object-fit: contain`).
-- When using the 9-argument version of `drawImage()`, the ‘crop’ arguments (`srcX`, `srcY`, `srcWidth`, & `srcHeight`) will correspond to this scaled-to-fit size, *not* the Image's reported `width` & `height`.
-:::
-
-
 ### `createImageData()` & `getImageData()`
 ```js returns="ImageData"
 createImageData(width, height)
@@ -367,6 +351,20 @@ The `getImageData()` method also accepts a handful of rendering options which ha
 Calling `getImageData` involves copying bitmaps between the GPU and main memory. If you're invoking it frequently in your code (e.g., within a tight loop), you may get better performance by disabling the [`gpu` property][canvas_gpu] for that canvas to avoid this overhead.
 :::
 
+### `drawImage()`
+```js
+drawImage(img, x, y)
+drawImage(img, x, y, width, height)
+drawImage(img, srcX, srcY, srcWidth, srcHeight, x, y, width, height)
+```
+
+This method behaves identically to the standard [`drawImage()`][drawImage()] function, but accepts ImageData objects as well as Image and Canvas objects as its first argument.
+
+:::info[Note]
+Image objects loaded from SVG files that don't have an [intrinsic size][img_size] have some behavioral quirks to keep in mind when drawing:
+- When passed to `drawImage()` without size arguments, the SVG will be scaled to a size that fits within the Canvas's current bounds (using an approach akin to CSS's `object-fit: contain`).
+- When using the 9-argument version of `drawImage()`, the ‘crop’ arguments (`srcX`, `srcY`, `srcWidth`, & `srcHeight`) will correspond to this scaled-to-fit size, *not* the Image's reported `width` & `height`.
+:::
 
 ### `drawCanvas()`
 ```js
