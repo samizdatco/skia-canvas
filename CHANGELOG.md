@@ -4,6 +4,9 @@
 
 ## 📦 ⟩ [v3.0.7] ⟩ Sep 19, 2025
 
+### Bugfix
+- Added missing TypeScript definitions for `resizable` property (thanks to @goldenratio #265)
+
 ### Misc. Improvements
 - Upgraded Skia to [milestone 140](https://github.com/rust-skia/rust-skia/releases/tag/0.88.0)
 - Added a bounding box hierarchy cache to further speed up canvas-to-canvas drawing via [drawImage][mdn_drawImage] or [drawCanvas][drawCanvas] (thanks to @Shiranuit #261)
