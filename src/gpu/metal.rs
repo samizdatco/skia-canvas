@@ -251,10 +251,12 @@ impl MetalRenderer{
         let sync = self.cache.state == Resizing;
 
         let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, &props, |canvas| {
-            // draw raster background
-            canvas.clear(matte);
+            // draw background (either use raster cache or set to window’s background color)
+            canvas.clear(Color::TRANSPARENT);
             if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
                 canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
+            }else{
+                canvas.clear(matte);
             }
 
             // draw newly added vector layers

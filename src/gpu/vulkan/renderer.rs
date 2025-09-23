@@ -171,10 +171,12 @@ impl VulkanRenderer {
         let dpr = self.window.scale_factor() as f32;
 
         self.backend.render_frame(&self.window, &props, |canvas|{
-            // draw raster background
-            canvas.clear(matte);
+            // draw background (either use raster cache or set to window’s background color)
+            canvas.clear(Color::TRANSPARENT);
             if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
                 canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
+            }else{
+                canvas.clear(matte);
             }
 
             // draw newly added vector layers
