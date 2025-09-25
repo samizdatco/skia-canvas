@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "3.0.7",
+  "version": "3.0.8",
   "description": "A multi-threaded, GPU-accelerated, Canvas API for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
@@ -28,13 +28,13 @@
     "test": "node --test"
   },
   "dependencies": {
-    "detect-libc": "^2.1.0",
+    "detect-libc": "^2.1.1",
     "follow-redirects": "^1.15.11",
     "https-proxy-agent": "^7.0.6",
     "string-split-by": "^1.0.0"
   },
   "devDependencies": {
-    "@hono/node-server": "^1.19.3",
+    "@hono/node-server": "^1.19.4",
     "@types/node": "^24.5.2",
     "cargo-cp-artifact": "^0.1",
     "hono": "^4.9.8",

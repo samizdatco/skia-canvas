@@ -2,6 +2,11 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
+## 📦 ⟩ [v3.0.8] ⟩ Sep 25, 2025
+
+### Bugfix
+- Fix rendering to windows with semi-transparent backgrounds
+
 ## 📦 ⟩ [v3.0.7] ⟩ Sep 19, 2025
 
 ### Bugfix
@@ -574,7 +579,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.7...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.8...HEAD
+[v3.0.8]: https://github.com/samizdatco/skia-canvas/compare/v3.0.7...v3.0.8
 [v3.0.7]: https://github.com/samizdatco/skia-canvas/compare/v3.0.6...v3.0.7
 [v3.0.6]: https://github.com/samizdatco/skia-canvas/compare/v3.0.5...v3.0.6
 [v3.0.5]: https://github.com/samizdatco/skia-canvas/compare/v3.0.4...v3.0.5
