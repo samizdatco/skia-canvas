@@ -152,52 +152,51 @@ await canvas.saveAs('mosaic.png')
 ## Benchmarks
 In these benchmarks, Skia Canvas is tested running in two modes: serial and async. When running serially, each rendering operation is awaited before continuing to the next test iteration. When running asynchronously, all the test iterations are begun at once and are executed in parallel using the library’s multi-threading support.
 
-[See full results here…](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/index.md)
+[See full results here…](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/index.md)
 
 ### [Startup latency](https://github.com/samizdatco/canvas-benchmarks/tree/main/tests/cold-start.js)
 | Library              | Per Run   | Total Time (100 iterations)                   |
 | -------------------- | --------- | --------------------------------------------- |
-| *canvaskit-wasm*     | `  25 ms` | ` 2.46 s` ![ ](./assets/benchmarks.svg#cold-start_wasm)      |
-| *canvas*             | `  88 ms` | ` 8.76 s` ![ ](./assets/benchmarks.svg#cold-start_canvas)    |
-| *@napi-rs/canvas*    | `  73 ms` | ` 7.30 s` ![ ](./assets/benchmarks.svg#cold-start_napi)      |
+| *canvaskit-wasm*     | `  25 ms` | ` 2.47 s` ![ ](./assets/benchmarks.svg#cold-start_wasm)      |
+| *canvas*             | `  88 ms` | ` 8.77 s` ![ ](./assets/benchmarks.svg#cold-start_canvas)    |
+| *@napi-rs/canvas*    | `  69 ms` | ` 6.87 s` ![ ](./assets/benchmarks.svg#cold-start_napi)      |
 | *skia-canvas*        | `  <1 ms` | `  33 ms` ![ ](./assets/benchmarks.svg#cold-start_skia-sync) |
 
 ### [Bezier curves](https://github.com/samizdatco/canvas-benchmarks/tree/main/tests/beziers.js)
 | Library                                                       | Per Run   | Total Time (20 iterations)                  |
 | ------------------------------------------------------------- | --------- | ------------------------------------------- |
-| *canvaskit-wasm* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/beziers_wasm.png)            | ` 789 ms` | `15.77 s` ![ ](./assets/benchmarks.svg#beziers_wasm)       |
-| *canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/beziers_canvas.png)                  | ` 488 ms` | ` 9.76 s` ![ ](./assets/benchmarks.svg#beziers_canvas)     |
-| *@napi-rs/canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/beziers_napi.png)           | ` 233 ms` | ` 4.65 s` ![ ](./assets/benchmarks.svg#beziers_napi)       |
-| *skia-canvas (serial)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/beziers_skia-sync.png) | ` 137 ms` | ` 2.74 s` ![ ](./assets/benchmarks.svg#beziers_skia-sync)  |
-| *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/beziers_skia-async.png) | `  28 ms` | ` 558 ms` ![ ](./assets/benchmarks.svg#beziers_skia-async) |
+| *canvaskit-wasm* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/beziers_wasm.png)            | ` 790 ms` | `15.81 s` ![ ](./assets/benchmarks.svg#beziers_wasm)       |
+| *canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/beziers_canvas.png)                  | ` 486 ms` | ` 9.72 s` ![ ](./assets/benchmarks.svg#beziers_canvas)     |
+| *@napi-rs/canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/beziers_napi.png)           | ` 230 ms` | ` 4.60 s` ![ ](./assets/benchmarks.svg#beziers_napi)       |
+| *skia-canvas (serial)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/beziers_skia-sync.png) | ` 137 ms` | ` 2.74 s` ![ ](./assets/benchmarks.svg#beziers_skia-sync)  |
+| *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/beziers_skia-async.png) | `  28 ms` | ` 558 ms` ![ ](./assets/benchmarks.svg#beziers_skia-async) |
 
 ### [SVG to PNG](https://github.com/samizdatco/canvas-benchmarks/tree/main/tests/from-svg.js)
 | Library                                                        | Per Run   | Total Time (100 iterations)                  |
 | -------------------------------------------------------------- | --------- | -------------------------------------------- |
 | canvaskit-wasm                                                 | ` ————— ` | ` ————— `   *not supported*                  |
-| *canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/from-svg_canvas.png)                  | ` 122 ms` | `12.20 s` ![ ](./assets/benchmarks.svg#from-svg_canvas)     |
-| *@napi-rs/canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/from-svg_napi.png)           | `  98 ms` | ` 9.76 s` ![ ](./assets/benchmarks.svg#from-svg_napi)       |
-| *skia-canvas (serial)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/from-svg_skia-sync.png) | `  59 ms` | ` 5.91 s` ![ ](./assets/benchmarks.svg#from-svg_skia-sync)  |
-| *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/from-svg_skia-async.png) | `  11 ms` | ` 1.06 s` ![ ](./assets/benchmarks.svg#from-svg_skia-async) |
+| *canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/from-svg_canvas.png)                  | ` 122 ms` | `12.16 s` ![ ](./assets/benchmarks.svg#from-svg_canvas)     |
+| *@napi-rs/canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/from-svg_napi.png)           | `  84 ms` | ` 8.42 s` ![ ](./assets/benchmarks.svg#from-svg_napi)       |
+| *skia-canvas (serial)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/from-svg_skia-sync.png) | `  58 ms` | ` 5.83 s` ![ ](./assets/benchmarks.svg#from-svg_skia-sync)  |
+| *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/from-svg_skia-async.png) | `  11 ms` | ` 1.08 s` ![ ](./assets/benchmarks.svg#from-svg_skia-async) |
 
 ### [Scale/rotate images](https://github.com/samizdatco/canvas-benchmarks/tree/main/tests/image-blit.js)
 | Library                                                          | Per Run   | Total Time (50 iterations)                     |
 | ---------------------------------------------------------------- | --------- | ---------------------------------------------- |
-| *canvaskit-wasm* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/image-blit_wasm.png)            | ` 279 ms` | `13.95 s` ![ ](./assets/benchmarks.svg#image-blit_wasm)       |
-| *canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/image-blit_canvas.png)                  | ` 284 ms` | `14.21 s` ![ ](./assets/benchmarks.svg#image-blit_canvas)     |
-| *@napi-rs/canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/image-blit_napi.png)           | ` 116 ms` | ` 5.78 s` ![ ](./assets/benchmarks.svg#image-blit_napi)       |
-| *skia-canvas (serial)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/image-blit_skia-sync.png) | ` 100 ms` | ` 5.01 s` ![ ](./assets/benchmarks.svg#image-blit_skia-sync)  |
-| *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/image-blit_skia-async.png) | `  19 ms` | ` 937 ms` ![ ](./assets/benchmarks.svg#image-blit_skia-async) |
+| *canvaskit-wasm* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/image-blit_wasm.png)            | ` 274 ms` | `13.72 s` ![ ](./assets/benchmarks.svg#image-blit_wasm)       |
+| *canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/image-blit_canvas.png)                  | ` 283 ms` | `14.13 s` ![ ](./assets/benchmarks.svg#image-blit_canvas)     |
+| *@napi-rs/canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/image-blit_napi.png)           | ` 112 ms` | ` 5.60 s` ![ ](./assets/benchmarks.svg#image-blit_napi)       |
+| *skia-canvas (serial)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/image-blit_skia-sync.png) | ` 100 ms` | ` 5.00 s` ![ ](./assets/benchmarks.svg#image-blit_skia-sync)  |
+| *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/image-blit_skia-async.png) | `  19 ms` | ` 935 ms` ![ ](./assets/benchmarks.svg#image-blit_skia-async) |
 
 ### [Basic text](https://github.com/samizdatco/canvas-benchmarks/tree/main/tests/text.js)
 | Library                                                    | Per Run   | Total Time (200 iterations)              |
 | ---------------------------------------------------------- | --------- | ---------------------------------------- |
-| *canvaskit-wasm* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/text_wasm.png)            | `  24 ms` | ` 4.74 s` ![ ](./assets/benchmarks.svg#text_wasm)       |
-| *canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/text_canvas.png)                  | `  24 ms` | ` 4.86 s` ![ ](./assets/benchmarks.svg#text_canvas)     |
-| *@napi-rs/canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/text_napi.png)           | `  19 ms` | ` 3.82 s` ![ ](./assets/benchmarks.svg#text_napi)       |
-| *skia-canvas (serial)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/text_skia-sync.png) | `  21 ms` | ` 4.24 s` ![ ](./assets/benchmarks.svg#text_skia-sync)  |
-| *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-08-15/snapshots/text_skia-async.png) | `   4 ms` | ` 781 ms` ![ ](./assets/benchmarks.svg#text_skia-async) |
-
+| *canvaskit-wasm* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/text_wasm.png)            | `  24 ms` | ` 4.75 s` ![ ](./assets/benchmarks.svg#text_wasm)       |
+| *canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/text_canvas.png)                  | `  24 ms` | ` 4.88 s` ![ ](./assets/benchmarks.svg#text_canvas)     |
+| *@napi-rs/canvas* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/text_napi.png)           | `  19 ms` | ` 3.83 s` ![ ](./assets/benchmarks.svg#text_napi)       |
+| *skia-canvas (serial)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/text_skia-sync.png) | `  21 ms` | ` 4.26 s` ![ ](./assets/benchmarks.svg#text_skia-sync)  |
+| *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/text_skia-async.png) | `   4 ms` | ` 819 ms` ![ ](./assets/benchmarks.svg#text_skia-async) |
 
 <!-- references_begin -->
 [bool-ops]: api/path2d.md#complement-difference-intersect-union-and-xor

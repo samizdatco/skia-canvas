@@ -83,7 +83,7 @@ Skia Canvas depends on libraries that aren't present in the standard Lambda [run
 Alternatively, you can use the [`aws` command line tool](https://github.com/aws/aws-cli) to create the layer. This bash script will fetch the skia-canvas version of your choice and make it available to your Lambda functions.
 ```sh
 #!/usr/bin/env bash
-VERSION=3.0 # the skia-canvas version to include
+VERSION=3.0.8 # the skia-canvas version to include
 PLATFORM=arm64 # arm64 or x64
 
 curl -sLO https://github.com/samizdatco/skia-canvas/releases/download/v${VERSION}/aws-lambda-${PLATFORM}.zip
