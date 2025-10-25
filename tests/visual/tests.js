@@ -3041,3 +3041,16 @@ tests['transformed drawimage'] = function (ctx) {
   ctx.transform(1.2, 1, 1.8, 1.3, 0, 0)
   ctx.drawImage(ctx.canvas, 0, 0)
 }
+
+tests['clip path after image data'] = function (ctx) {
+  ctx.scale(10,10);
+  const data = ctx.getImageData(0,0,1,1);
+  ctx.putImageData(data,0,0);
+
+  ctx.rect(5,5,10,10);
+  ctx.clip();
+
+  ctx.rect(0,0,15,15);
+  ctx.fillStyle="black";
+  ctx.fill();
+}
