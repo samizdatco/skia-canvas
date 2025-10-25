@@ -72,9 +72,7 @@ impl PageRecorder{
 
   pub fn set_matrix(&mut self, matrix:Matrix){
     self.matrix = matrix;
-    if let Some(canvas) = self.current.recording_canvas() {
-      canvas.set_matrix(&matrix.into());
-    }
+    self.restore();
   }
 
   pub fn set_clip(&mut self, clip:&Option<Path>){
