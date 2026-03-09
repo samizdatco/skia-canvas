@@ -26,7 +26,11 @@ impl Canvas{
 
   pub fn engine(&mut self) -> gpu::RenderingEngine{
     self.engine.get_or_insert_with(||
-      gpu::RenderingEngine::default()
+      if self.gpu_disabled {
+        gpu::RenderingEngine::CPU
+      } else {
+        gpu::RenderingEngine::default()
+      }
     ).clone()
   }
 
