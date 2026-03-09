@@ -59,6 +59,12 @@ describe("Context2D", ()=>{
       assert.equal(ctx.font, canonical)
       ctx.font = 'invalid'
       assert.equal(ctx.font, canonical)
+
+      // valid CSS shorthand: `normal` should fill an unset slot, not overwrite italic style
+      let mixed = 'italic normal 80px Arial',
+          mixedCanonical = css.font(mixed).canonical;
+      ctx.font = mixed
+      assert.equal(ctx.font, mixedCanonical)
     })
 
     test('globalAlpha', () => {
