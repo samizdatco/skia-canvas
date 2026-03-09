@@ -25,13 +25,29 @@ impl Canvas{
   }
 
   pub fn engine(&mut self) -> gpu::RenderingEngine{
-    self.engine.get_or_insert_with(||
+    self.engine.get_or_insert_with(|| {
       if self.gpu_disabled {
-        gpu::RenderingEngine::CPU
-      } else {
-        gpu::RenderingEngine::default()
+        return gpu::RenderingEngine::CPU
       }
-    ).clone()
+
+      // Defensive default for Windows: avoid eager GPU initialization on systems
+      // where Vulkan/driver probing can crash the process (e.g. issue #274).
+      // Users can explicitly opt-in by setting SKIA_CANVAS_WINDOWS_GPU=1.
+      if cfg!(target_os = "windows") {
+        let allow_gpu = std::env::var("SKIA_CANVAS_WINDOWS_GPU")
+          .map(|v| {
+            let val = v.trim().to_ascii_lowercase();
+            matches!(val.as_str(), "1" | "true" | "yes" | "on")
+          })
+          .unwrap_or(false);
+
+        if !allow_gpu {
+          return gpu::RenderingEngine::CPU
+        }
+      }
+
+      gpu::RenderingEngine::default()
+    }).clone()
   }
 
   pub fn export_options(&self) -> ExportOptions{
