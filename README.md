@@ -80,6 +80,28 @@ Alternatively, you can add a [`pnpm.onlyBuiltDependencies`](https://pnpm.io/9.x/
 
 
 
+### Binary Mirror
+
+If your environment restricts access to GitHub (e.g., a corporate network or air-gapped CI), you can redirect the prebuilt binary download to an internal mirror. The mirror must serve files at the same path structure as GitHub Releases: `{host}/v{version}/{platform}-{arch}-{libc}.gz`.
+
+Set the mirror host via an environment variable:
+```bash
+SKIA_CANVAS_BINARY_HOST=https://your.internal.mirror/skia-canvas npm install skia-canvas
+```
+
+Or via an npm config flag:
+```bash
+npm install skia-canvas --skia_canvas_binary_host_mirror=https://your.internal.mirror/skia-canvas
+```
+
+If neither is set, the default GitHub Releases URL is used.
+
+For authenticated mirrors (e.g., Artifactory), embed credentials in the URL:
+```bash
+SKIA_CANVAS_BINARY_HOST=https://user:token@artifactory.example.com/skia-canvas npm install skia-canvas
+```
+
+
 ## Platform Support
 
 Skia Canvas runs on Linux, macOS, or Windows as well as serverless platforms like Vercel and AWS Lambda. Precompiled versions of the library’s native code will be automatically downloaded in the appropriate architecture (`arm64` or `x64`) when you install it via npm.
