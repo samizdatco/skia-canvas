@@ -154,6 +154,9 @@ interface ImageDataExportSettings {
 
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType
+
+  /** Return pixel data in premultiplied-alpha form (defaults to false) */
+  premultiplied?: boolean
 }
 
 
@@ -309,6 +312,9 @@ export interface ExportOptions extends RenderOptions {
 
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType
+
+  /** Return pixel data in premultiplied-alpha form (only applies when exporting in "raw" format) */
+  premultiplied?: boolean
 }
 
 export interface SaveOptions extends ExportOptions {

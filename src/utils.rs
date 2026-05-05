@@ -218,6 +218,12 @@ pub fn bool_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str)
   }
 }
 
+pub fn opt_bool_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<bool>{
+  obj.get(cx, attr).ok()
+    .and_then(|val:Handle<JsValue>| val.downcast::<JsBoolean, _>(cx).ok() )
+    .map(|v| v.value(cx))
+}
+
 //
 // floats
 //
@@ -563,7 +569,7 @@ pub fn image_data_settings_arg(cx: &mut FunctionContext, idx:usize) -> (ColorTyp
   }
 }
 
-pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace, Option<Color>, f32, Option<usize>){
+pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace, Option<Color>, f32, Option<usize>, bool){
   match opt_object_arg(cx, idx){
     Some(obj) => {
       let color_type = opt_string_for_key(cx, &obj, "colorType").unwrap_or("rgba".to_string());
@@ -571,9 +577,10 @@ pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType,
       let matte = opt_color_for_key(cx, &obj, "matte");
       let density = opt_float_for_key(cx, &obj, "density").unwrap_or(1.0);
       let msaa = opt_float_for_key(cx, &obj, "msaa").map(|n| n as usize);
-      (to_color_type(&color_type), to_color_space(&color_space), matte, density, msaa)
+      let premultiplied = opt_bool_for_key(cx, &obj, "premultiplied").unwrap_or(false);
+      (to_color_type(&color_type), to_color_space(&color_space), matte, density, msaa, premultiplied)
     }
-    None => (ColorType::RGBA8888, ColorSpace::new_srgb(), None, 1.0, None)
+    None => (ColorType::RGBA8888, ColorSpace::new_srgb(), None, 1.0, None, false)
   }
 }
 
@@ -659,6 +666,7 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let quality = float_for_key(cx, &opts, "quality")?;
   let density = float_for_key(cx, &opts, "density")?;
   let jpeg_downsample = bool_for_key(cx, &opts, "downsample")?;
+  let premultiplied = bool_for_key(cx, &opts, "premultiplied")?;
   let matte = opt_color_for_key(cx, &opts, "matte");
   let msaa = opt_float_for_key(cx, &opts, "msaa")
     .map(|num| num.floor() as usize);
@@ -671,7 +679,8 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let color_space = ColorSpace::new_srgb();
 
   Ok(ExportOptions{
-    format, quality, density, outline, matte, msaa, color_type, color_space, jpeg_downsample, text_contrast, text_gamma
+    format, quality, density, outline, matte, msaa, color_type, color_space, jpeg_downsample, text_contrast, text_gamma,
+    premultiplied,
   })
 }
 
