@@ -813,7 +813,7 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let mut y = float_arg(&mut cx, 2, "y")?.floor();
   let mut w = float_arg(&mut cx, 3, "width")?.floor();
   let mut h = float_arg(&mut cx, 4, "height")?.floor();
-  let (color_type, color_space, matte, density, msaa) = image_data_export_arg(&mut cx, 5);
+  let (color_type, color_space, matte, density, msaa, premultiplied) = image_data_export_arg(&mut cx, 5);
   let parent = cx.argument::<BoxedCanvas>(6)?;
   let canvas = &mut parent.borrow_mut();
 
@@ -821,7 +821,7 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   if w < 0.0 { x += w; w *= -1.0; }
   if h < 0.0 { y += h; h *= -1.0; }
 
-  let opts = ExportOptions{matte, density, msaa, color_type, color_space, ..canvas.export_options()};
+  let opts = ExportOptions{matte, density, msaa, color_type, color_space, premultiplied, ..canvas.export_options()};
   let crop = Rect::from_point_and_size((x*density, y*density), (w*density, h*density)).round();
   let engine = canvas.engine();
 

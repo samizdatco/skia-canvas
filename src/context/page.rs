@@ -95,7 +95,8 @@ impl PageRecorder{
 
   pub fn get_pixels(&mut self, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String>{
     // return an empty buffer if the requested rect is entirely outside the canvas
-    let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), AlphaType::Unpremul, opts.color_space.clone());
+    let alpha_type = if opts.premultiplied { AlphaType::Premul } else { AlphaType::Unpremul };
+    let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), alpha_type, opts.color_space.clone());
     let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
     if !self.bounds.intersects(Rect::from_irect(crop)){
       return Ok(dst_buffer)
@@ -377,7 +378,8 @@ impl Page{
         // handle image encoding
         match format.as_str(){
           "raw" => {
-            let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
+            let alpha_type = if options.premultiplied { AlphaType::Premul } else { AlphaType::Unpremul };
+            let dst_info = ImageInfo::new(img_dims, color_type, alpha_type, Some(ColorSpace::new_srgb()));
             let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
             match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
               true => Some(buffer),
@@ -686,6 +688,7 @@ pub struct ExportOptions{
   pub jpeg_downsample: bool,
   pub text_contrast: f32,
   pub text_gamma: f32,
+  pub premultiplied: bool,
 }
 
 impl Default for ExportOptions{
@@ -694,6 +697,7 @@ impl Default for ExportOptions{
       format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
       jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
       color_type:ColorType::RGBA8888, color_space:ColorSpace::new_srgb(), outline:true,
+      premultiplied:false,
     }
   }
 }
