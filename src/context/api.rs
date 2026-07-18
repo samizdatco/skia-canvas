@@ -2,7 +2,8 @@
 use std::f32::consts::PI;
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::{Matrix, PaintStyle, Point, RRect, Rect, Size, Path, PathDirection};
+use neon::types::buffer::TypedArray;
+use skia_safe::{AlphaType, ImageInfo, Matrix, PaintStyle, Point, RRect, Rect, Size, Path, PathDirection};
 use skia_safe::path::AddPathMode::{Extend};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
@@ -825,8 +826,11 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let crop = Rect::from_point_and_size((x*density, y*density), (w*density, h*density)).round();
   let engine = canvas.engine();
 
-  let data = this.borrow_mut().get_pixels(crop, opts, engine).or_else(|e| cx.throw_error(e))?;
-  let buffer = JsBuffer::from_slice(&mut cx, &data)?;
+  let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type, AlphaType::Unpremul, opts.color_space.clone());
+  let mut buffer = cx.buffer(dst_info.compute_min_byte_size())?;
+  let dst = buffer.as_mut_slice(&mut cx);
+  let result = this.borrow_mut().write_pixels(dst, &dst_info, crop, opts, engine);
+  result.or_else(|e| cx.throw_error(e))?;
 
   Ok(buffer)
 }

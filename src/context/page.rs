@@ -93,19 +93,17 @@ impl PageRecorder{
     }
   }
 
-  pub fn get_pixels(&mut self, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String>{
-    // return an empty buffer if the requested rect is entirely outside the canvas
-    let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type.clone(), AlphaType::Unpremul, opts.color_space.clone());
-    let mut dst_buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
+  pub fn write_pixels(&mut self, dst_buffer:&mut [u8], dst_info:&ImageInfo, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<(), String>{
+    // dst_buffer must be zero-filled since regions of the crop outside the canvas bounds won't be updated
     if !self.bounds.intersects(Rect::from_irect(crop)){
-      return Ok(dst_buffer)
+      return Ok(())
     }
 
     let page = self.get_page();
     self.surface.update(&page, &opts, &engine);
 
-    match self.surface.copy_pixels(&dst_info, crop, &mut dst_buffer){
-      true => Ok(dst_buffer),
+    match self.surface.copy_pixels(dst_info, crop, dst_buffer){
+      true => Ok(()),
       false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
     }
   }
