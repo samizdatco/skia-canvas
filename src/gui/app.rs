@@ -7,11 +7,13 @@ use std::{
     time::{Duration, Instant},
 };
 use winit::{
+    application::ApplicationHandler,
     platform::pump_events::EventLoopExtPumpEvents,
     platform::run_on_demand::EventLoopExtRunOnDemand,
-    event::{ElementState, KeyEvent, Event, WindowEvent},
+    event::{ElementState, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopProxy, ActiveEventLoop, ControlFlow},
     keyboard::{PhysicalKey, KeyCode},
+    window::WindowId,
 };
 
 use crate::context::{page::Page, BoxedContext2D};
@@ -82,7 +84,6 @@ impl App{
         add_event(AppEvent::Quit);
     }
 
-    #[allow(deprecated)]
     pub fn activate(channel:Channel, deferred:neon::types::Deferred){
         std::thread::spawn(move || {
             loop{
@@ -99,15 +100,13 @@ impl App{
                         EVENT_LOOP.with_borrow_mut(|event_loop|{
                             match app.mode{
                                 LoopMode::Native => {
-                                    let handler = app.event_handler(dispatch);
                                     event_loop.set_control_flow(ControlFlow::Wait);
-                                    event_loop.run_on_demand(handler).ok();
+                                    event_loop.run_app_on_demand(&mut AppHandler{app, dispatch}).ok();
                                     Ok(false) // final window was closed
                                 }
                                 LoopMode::Node => {
                                     let poll_time = app.cadence.next_wakeup() - Instant::now();
-                                    let handler = app.event_handler(dispatch);
-                                    event_loop.pump_events(Some(poll_time), handler);
+                                    event_loop.pump_app_events(Some(poll_time), &mut AppHandler{app: &mut *app, dispatch});
                                     Ok(app.cadence.should_continue() || !app.windows.is_empty())
                                 }
                             }
@@ -168,88 +167,98 @@ impl App{
         Ok(())
     }
 
-    fn event_handler<F>(&mut self, mut dispatch:F) -> impl FnMut(Event<AppEvent>, &ActiveEventLoop) + use<'_, F>
-        where F:FnMut(Value, Option<&mut WindowManager>) -> NeonResult<()>
-    {
-        move |event, event_loop| match event {
-            Event::WindowEvent { event:ref win_event, window_id } => {
-                self.windows.find(&window_id, |win| win.sieve.capture(win_event) );
+}
 
-                match win_event {
-                    WindowEvent::Destroyed | WindowEvent::CloseRequested => {
-                        self.windows.remove(&window_id);
+// ephemeral event handler: borrows the persistent App state and a dispatch closure (which
+// holds the neon context for the current tick) only for the duration of a single pump/run call
+struct AppHandler<'a, F>{
+    app: &'a mut App,
+    dispatch: F,
+}
 
-                        // after the last window is closed, either exit (in run_on_demand mode)
-                        // or wait for the window destructor to run (in pump_events mode)
-                        if self.windows.is_empty(){ match self.mode{
-                            LoopMode::Native => event_loop.exit(),
-                            LoopMode::Node => self.cadence.loop_again(),
-                        }}
-                    }
+impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
+    where F:FnMut(Value, Option<&mut WindowManager>) -> NeonResult<()>
+{
+    fn resumed(&mut self, _event_loop:&ActiveEventLoop){}
 
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                physical_key: PhysicalKey::Code(KeyCode::Escape),
-                                state: ElementState::Pressed,
-                                repeat: false,
-                                ..
-                            },
-                        ..
-                    } => {
-                        self.windows.find(&window_id, |win| win.set_fullscreen(false) );
-                    }
+    fn window_event(&mut self, event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
+        let app = &mut *self.app;
+        app.windows.find(&window_id, |win| win.sieve.capture(&event) );
 
-                    WindowEvent::Moved(loc) => {
-                        self.windows.find(&window_id, |win| win.did_move(*loc) );
-                    }
+        match event {
+            WindowEvent::Destroyed | WindowEvent::CloseRequested => {
+                app.windows.remove(&window_id);
 
-                    WindowEvent::Resized(size) => {
-                        self.windows.find(&window_id, |win| win.did_resize(*size) );
-                    }
-
-                    #[cfg(target_os = "macos")]
-                    WindowEvent::Occluded(is_hidden) => {
-                        self.windows.find(&window_id, |win| win.set_redrawing_suspended(*is_hidden) );
-                    }
-
-                    WindowEvent::RedrawRequested => {
-                        self.windows.find(&window_id, |win| win.redraw() );
-                    }
-
-                    _ => {}
-                }
-            },
-
-
-            Event::UserEvent(app_event) => match app_event{
-                AppEvent::Open(spec, page) => {
-                    self.windows.add(event_loop, spec, page);
-                    dispatch(self.windows.get_geometry(), Some(&mut self.windows)).ok();
-                }
-                AppEvent::Close(token) => {
-                    self.windows.remove_by_token(token);
-                }
-                AppEvent::FrameRate(fps) => {
-                    self.cadence.set_frame_rate(fps)
-                }
-                AppEvent::Quit => {
-                    event_loop.exit();
-                }
-            },
-
-
-            Event::AboutToWait => {
-                event_loop.set_control_flow(
-                    // let the cadence decide when to switch to poll-mode or sleep the thread
-                    self.cadence.on_next_frame(self.mode, || {
-                        // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                        dispatch(self.windows.get_ui_changes(), Some(&mut self.windows)).ok();
-                    })
-                );
+                // after the last window is closed, either exit (in run_app_on_demand mode)
+                // or wait for the window destructor to run (in pump_app_events mode)
+                if app.windows.is_empty(){ match app.mode{
+                    LoopMode::Native => event_loop.exit(),
+                    LoopMode::Node => app.cadence.loop_again(),
+                }}
             }
+
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(KeyCode::Escape),
+                        state: ElementState::Pressed,
+                        repeat: false,
+                        ..
+                    },
+                ..
+            } => {
+                app.windows.find(&window_id, |win| win.set_fullscreen(false) );
+            }
+
+            WindowEvent::Moved(loc) => {
+                app.windows.find(&window_id, |win| win.did_move(loc) );
+            }
+
+            WindowEvent::Resized(size) => {
+                app.windows.find(&window_id, |win| win.did_resize(size) );
+            }
+
+            #[cfg(target_os = "macos")]
+            WindowEvent::Occluded(is_hidden) => {
+                app.windows.find(&window_id, |win| win.set_redrawing_suspended(is_hidden) );
+            }
+
+            WindowEvent::RedrawRequested => {
+                app.windows.find(&window_id, |win| win.redraw() );
+            }
+
             _ => {}
         }
+    }
+
+    fn user_event(&mut self, event_loop:&ActiveEventLoop, event:AppEvent){
+        let Self{app, dispatch} = self;
+        match event{
+            AppEvent::Open(spec, page) => {
+                app.windows.add(event_loop, spec, page);
+                dispatch(app.windows.get_geometry(), Some(&mut app.windows)).ok();
+            }
+            AppEvent::Close(token) => {
+                app.windows.remove_by_token(token);
+            }
+            AppEvent::FrameRate(fps) => {
+                app.cadence.set_frame_rate(fps)
+            }
+            AppEvent::Quit => {
+                event_loop.exit();
+            }
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop:&ActiveEventLoop){
+        let Self{app, dispatch} = self;
+        event_loop.set_control_flow(
+            // let the cadence decide when to switch to poll-mode or sleep the thread
+            app.cadence.on_next_frame(app.mode, || {
+                // relay UI-driven state changes to js and render the next frame in the (active) cadence
+                dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+            })
+        );
     }
 }
 
