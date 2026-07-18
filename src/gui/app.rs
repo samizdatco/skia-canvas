@@ -182,7 +182,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
     fn resumed(&mut self, _event_loop:&ActiveEventLoop){}
 
     fn window_event(&mut self, event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
-        let app = &mut *self.app;
+        let Self{app, dispatch} = self;
         app.windows.find(&window_id, |win| win.sieve.capture(&event) );
 
         match event {
@@ -216,6 +216,12 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
 
             WindowEvent::Resized(size) => {
                 app.windows.find(&window_id, |win| win.did_resize(size) );
+
+                // dispatch the resize to js and repaint with the updated canvas content before
+                // returning: during a live-resize the OS runs a modal loop, so waiting for the
+                // next frame tick would leave the window contents lagging behind the new size
+                dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+                app.windows.find(&window_id, |win| win.redraw() );
             }
 
             #[cfg(target_os = "macos")]

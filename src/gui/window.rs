@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, time::{Instant, Duration}};
+use std::{str::FromStr, sync::Arc};
 use skia_safe::{Matrix, Color, SurfaceProps, SurfacePropsFlags, PixelGeometry};
 use serde::{Serialize, Deserialize};
 use winit::{
@@ -49,9 +49,6 @@ pub enum Cursor {
     SResize, SwResize, Text, VerticalText, Wait, WResize, ZoomIn, ZoomOut,
 }
 
-// timeout for triggering a full vector re-render after the last resize event
-static RESIZE_CLEANUP_INTERVAL:Duration = Duration::from_millis(100);
-
 pub struct Window {
     pub handle: Arc<WinitWindow>,
     pub spec: WindowSpec,
@@ -60,7 +57,6 @@ pub struct Window {
     background: Color,
     page: Page,
     suspended: bool,
-    resized_at: Option<Instant>,
 }
 
 impl Window {
@@ -95,7 +91,7 @@ impl Window {
             handle.set_outer_position(LogicalPosition::new(left, top));
         }
 
-        Self{ spec, handle, sieve, renderer, page:page.clone(), suspended:false, resized_at:None, background}
+        Self{ spec, handle, sieve, renderer, page:page.clone(), suspended:false, background}
     }
 
     pub fn id(&self) -> WindowId {
@@ -103,7 +99,6 @@ impl Window {
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>){
-        self.resized_at = Some(Instant::now());
         self.renderer.resize(size);
         self.reposition_ime(size);
         self.update_fit();
@@ -259,15 +254,6 @@ impl Window {
 
     pub fn did_resize(&mut self, size:PhysicalSize<u32>){
         self.resize(size);
-    }
-
-    pub fn redraw_if_resized(&mut self){
-        if let Some(resize) = self.resized_at{
-            if resize.elapsed() > RESIZE_CLEANUP_INTERVAL{
-                self.resized_at = None;
-                self.handle.request_redraw();
-            }
-        }
     }
 
     pub fn set_redrawing_suspended(&mut self, suspended:bool){

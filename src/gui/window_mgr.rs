@@ -128,9 +128,6 @@ impl WindowManager {
                 ui.insert(win.spec.id.to_string(), win.sieve.collect());
             }
             state.insert(win.spec.id.to_string(), json!(win.spec));
-
-            // rerender frame from vector sources after using bitmap cache during resize
-            win.redraw_if_resized();
         });
         json!({ "ui": ui, "state": state })
     }
