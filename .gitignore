@@ -1,15 +1,16 @@
 .DS_Store
 .vscode
 .env
-_arc
+/_*
 lib/*.node
 node_modules
 target
-test/assets/Oswald
-test/assets/Raleway
+tests/assets/fonts/oswald
+tests/assets/fonts/raleway
 
 /*.*
-!/*.md
+!/README.md
+!/CHANGELOG.md
 !/package*.json
 !/Cargo.{toml,lock}
 !/.gitignore
