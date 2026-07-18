@@ -169,7 +169,7 @@ impl MetalContext{
 
 #[cfg(feature = "window")]
 use {
-    skia_safe::{Matrix, Color, Paint, SurfaceProps, canvas::SrcRectConstraint},
+    skia_safe::{Matrix, Color, Paint, BlendMode, SurfaceProps, canvas::SrcRectConstraint},
     raw_window_metal::Layer,
     core_graphics_types::geometry::CGSize,
     objc::{msg_send, sel, sel_impl, runtime::{self, Object}},
@@ -251,12 +251,13 @@ impl MetalRenderer{
         let sync = self.cache.state == Resizing;
 
         let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, &props, |canvas| {
-            // draw background (either use raster cache or set to window’s background color)
-            canvas.clear(Color::TRANSPARENT);
+            // fill the full surface (including any letterboxing) with the window’s background
+            // color, then lay the raster cache (if any) over the content area
+            canvas.clear(matte);
             if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
-                canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
-            }else{
-                canvas.clear(matte);
+                let mut paint = Paint::default();
+                paint.set_blend_mode(BlendMode::Src); // cached frame already includes the matte
+                canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &paint);
             }
 
             // draw newly added vector layers

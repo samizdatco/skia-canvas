@@ -16,7 +16,7 @@ use vulkano::{
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
     canvas::SrcRectConstraint,
-    Color, Matrix, Image, Paint, SurfaceProps
+    Color, Matrix, Image, Paint, BlendMode, SurfaceProps
 };
 use winit::{
     dpi::PhysicalSize,
@@ -171,12 +171,13 @@ impl VulkanRenderer {
         let dpr = self.window.scale_factor() as f32;
 
         self.backend.render_frame(&self.window, &props, |canvas|{
-            // draw background (either use raster cache or set to window’s background color)
-            canvas.clear(Color::TRANSPARENT);
+            // fill the full surface (including any letterboxing) with the window’s background
+            // color, then lay the raster cache (if any) over the content area
+            canvas.clear(matte);
             if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
-                canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
-            }else{
-                canvas.clear(matte);
+                let mut paint = Paint::default();
+                paint.set_blend_mode(BlendMode::Src); // cached frame already includes the matte
+                canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &paint);
             }
 
             // draw newly added vector layers
