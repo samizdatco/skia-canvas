@@ -94,12 +94,9 @@ impl VulkanEngine {
         std::thread::spawn(move || loop{
             std::thread::sleep(Duration::from_secs(1));
             rayon::spawn_broadcast(|_|{
-                // drop contexts that haven't been used in a while to free resources
+                // drop the context once it hasn't been used in a while to free resources
                 VK_CONTEXT.with_borrow_mut(|cell| {
-                    cell.take_if(|engine|{
-                        engine.cleanup(); // it's unclear how effective this is
-                        engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN
-                    });
+                    cell.take_if(|engine| engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN);
                 });
             });
         });
@@ -279,8 +276,4 @@ impl VulkanContext{
         )
     }
 
-    fn cleanup(&mut self){
-        self.context.free_gpu_resources();
-        self.context.perform_deferred_cleanup(Duration::from_secs(1), None);
-    }
 }

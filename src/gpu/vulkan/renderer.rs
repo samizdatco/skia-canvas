@@ -1,5 +1,5 @@
 use ash::vk::Handle;
-use std::{ptr, sync::Arc};
+use std::{ptr, sync::Arc, time::Duration};
 use vulkano::{
     device::{
         physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned, Queue, QueueCreateInfo, QueueFlags
@@ -404,7 +404,10 @@ impl VulkanBackend{
     fn flush_framebuffer(&mut self, window:&Window, image_index:u32, acquire_future:SwapchainAcquireFuture){
         // flush the canvas's contents to the framebuffer
         self.skia_ctx.flush_and_submit();
-        self.skia_ctx.free_gpu_resources();
+
+        // let the budgeted cache keep glyph atlases, images, etc. warm across frames,
+        // only purging resources that have gone unused for over a second
+        self.skia_ctx.perform_deferred_cleanup(Duration::from_secs(1), None);
 
         // reclaim leftover resources from the last frame
         self.last_render.as_mut().unwrap().cleanup_finished();

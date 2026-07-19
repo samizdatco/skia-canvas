@@ -71,12 +71,9 @@ impl MetalEngine {
             // run forever, watching the other threads in the pool
             std::thread::sleep(Duration::from_secs(1));
             rayon::spawn_broadcast(|_|{
-                // drop contexts that haven't been used in a while to free resources
+                // drop the context once it hasn't been used in a while to free resources
                 MTL_CONTEXT.with_borrow_mut(|cell| {
-                    cell.take_if(|engine|{
-                        engine.cleanup(); // it's unclear how effective this is...
-                        engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN
-                    });
+                    cell.take_if(|engine| engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN);
                 });
             });
         });
@@ -157,10 +154,6 @@ impl MetalContext{
         )
     }
 
-    fn cleanup(&mut self){
-        self.context.free_gpu_resources();
-        self.context.perform_deferred_cleanup(Duration::from_secs(1), None);
-    }
 }
 
 //
@@ -278,12 +271,6 @@ pub struct MetalBackend {
     queue: CommandQueue,
 }
 
-impl Drop for MetalBackend{
-    fn drop(&mut self) {
-        self.skia_ctx.abandon();
-    }
-}
-
 impl MetalBackend {
     pub fn for_layer(layer:&MetalLayer) -> Self{
         let queue = layer.device().new_command_queue();
@@ -331,7 +318,7 @@ impl MetalBackend {
         f(surface.canvas());
 
         self.skia_ctx.flush_and_submit();
-        self.skia_ctx.free_gpu_resources();
+        self.skia_ctx.perform_deferred_cleanup(Duration::from_secs(1), None);
 
         window.pre_present_notify();
         let command_buffer = self.queue.new_command_buffer();
