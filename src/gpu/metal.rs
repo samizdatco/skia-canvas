@@ -189,6 +189,7 @@ pub struct MetalRenderer {
     backend: MetalBackend,
     layer: MetalLayer,
     cache: RenderCache,
+    last_page_id: usize, // previous frame's page id — render-loop history, not cache state
 }
 
 #[cfg(feature = "window")]
@@ -229,7 +230,7 @@ impl MetalRenderer{
         let backend = MetalBackend::for_layer(&layer);
         let cache = RenderCache::default();
 
-        Self{window, layer, backend, cache}
+        Self{window, layer, backend, cache, last_page_id:0}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
@@ -242,8 +243,9 @@ impl MetalRenderer{
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
         let sync = self.cache.state == Resizing;
+        let take_snapshot = self.cache.wants_snapshot(&page, matte, dpr, self.last_page_id);
 
-        let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, &props, |canvas| {
+        let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, take_snapshot, &props, |canvas| {
             // fill the full surface (including any letterboxing) with the window’s background
             // color, then lay the raster cache (if any) over the content area
             canvas.clear(matte);
@@ -263,6 +265,7 @@ impl MetalRenderer{
 
         // cache frame contents for use as background of next render pass
         self.cache.update(frame, &page, matte, dpr, clip);
+        self.last_page_id = page.id;
     }
 }
 
@@ -284,7 +287,7 @@ impl MetalBackend {
         Self { skia_ctx, queue }
     }
 
-    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, props:&SurfaceProps, f:F) -> Result<Image, String>
+    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, snapshot:bool, props:&SurfaceProps, f:F) -> Result<Option<Image>, String>
         where F:FnOnce(&skia_safe::Canvas)
     {
         let drawable = layer
@@ -328,7 +331,8 @@ impl MetalBackend {
         // during resizes, ensure drawing is complete before returning
         if sync{ command_buffer.wait_until_completed(); }
 
-        Ok(surface.image_snapshot())
+        // copy the frame contents (for the RenderCache) only when they'll be reused
+        Ok(snapshot.then(|| surface.image_snapshot()))
     }
 
 }

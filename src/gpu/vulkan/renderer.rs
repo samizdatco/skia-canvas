@@ -31,6 +31,7 @@ pub struct VulkanRenderer{
     window: Arc<Window>,
     cache: RenderCache, // must be listed before backend to ensure proper drop order
     backend: VulkanBackend,
+    last_page_id: usize, // previous frame's page id — render-loop history, not cache state
 }
 
 impl VulkanRenderer {
@@ -157,7 +158,7 @@ impl VulkanRenderer {
             .unwrap()
         };
 
-        Self{window, backend:VulkanBackend::new(queue, swapchain), cache:RenderCache::default()}
+        Self{window, backend:VulkanBackend::new(queue, swapchain), cache:RenderCache::default(), last_page_id:0}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
@@ -169,8 +170,9 @@ impl VulkanRenderer {
     pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
+        let take_snapshot = self.cache.wants_snapshot(&page, matte, dpr, self.last_page_id);
 
-        self.backend.render_frame(&self.window, &props, |canvas|{
+        self.backend.render_frame(&self.window, &props, take_snapshot, |canvas|{
             // fill the full surface (including any letterboxing) with the window’s background
             // color, then lay the raster cache (if any) over the content area
             canvas.clear(matte);
@@ -189,6 +191,7 @@ impl VulkanRenderer {
         }).map(|frame| {
             // cache frame contents for use as background of next render pass
             self.cache.update(frame, &page, matte, dpr, clip);
+            self.last_page_id = page.id;
         });
     }
 }
@@ -314,7 +317,8 @@ impl VulkanBackend{
         }
     }
 
-    fn render_frame<F>(&mut self, window:&Window, props:&SurfaceProps, f:F) -> Option<Image>
+    // outer Option is whether a frame was actually rendered, inner is the image
+    fn render_frame<F>(&mut self, window:&Window, props:&SurfaceProps, take_snapshot:bool, f:F) -> Option<Option<Image>>
         where F:FnOnce(&skia_safe::Canvas)
     {
         // make sure the framebuffers match the current window size
@@ -328,8 +332,8 @@ impl VulkanBackend{
             // pass the suface's canvas to the user-provided callback
             f(surface.canvas());
 
-            // save a copy of the bitmap for the cache
-            let image = surface.image_snapshot();
+            // save a copy of the frame bitmap for the cache (but only if requested)
+            let image = take_snapshot.then(|| surface.image_snapshot());
 
             // display the result
             self.flush_framebuffer(window, image_index, acquire_future);
