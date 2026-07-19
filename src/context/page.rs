@@ -402,7 +402,13 @@ impl Page{
           }
 
           "png" => {
-            let png_opts = png_encoder::Options::default();
+            let mut png_opts = png_encoder::Options::default();
+            png_opts.filter_flags = png_encoder::FilterFlag::NONE;
+            png_opts.z_lib_level = match quality{
+              // use `quality` to control zlib 'effort' (defaulting to 6)
+              q if q < 0.925 => ((q / 0.92 * 6.0).round() as i32).clamp(1, 6),
+              q => (7.0 + (q - 0.925) / 0.075 * 2.0).round() as i32
+            };
 
             png_encoder::encode_image(context, &image, &png_opts).map(|data|{
               let mut bytes = data.as_bytes().to_vec();
