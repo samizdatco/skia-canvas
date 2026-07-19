@@ -253,7 +253,9 @@ impl RecordingSurface{
 
   pub fn snapshot_if_valid(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> Option<SkImage>{
     match !(self.is_config_stale(&opts) || self.is_surface_stale(&page, &opts, &engine) || self.depth==0){
-      true => self.surface.as_mut().map(|surface| surface.image_snapshot()),
+      true => self.surface.as_mut().and_then(|surface|
+        surface.image_snapshot_with_bounds(surface.image_info().bounds())
+      ),
       false => None,
     }
   }
@@ -359,7 +361,9 @@ impl Page{
 
         // extract the results
         let context = &mut surface.direct_context();
-        let image = surface.make_temporary_image().unwrap_or_else(|| surface.image_snapshot());
+        let image = surface.make_temporary_image()
+          .or_else(|| surface.image_snapshot_with_bounds(img_info.bounds()))
+          .ok_or("Could not read canvas contents (GPU context lost)".to_string())?;
 
         // update cache
         if self.depth() > cache_depth{

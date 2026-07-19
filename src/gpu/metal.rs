@@ -335,7 +335,9 @@ impl MetalBackend {
         if sync{ command_buffer.wait_until_completed(); }
 
         // copy the frame contents (for the RenderCache) only when they'll be reused
-        RenderOutcome::Rendered(snapshot.then(|| surface.image_snapshot()))
+        RenderOutcome::Rendered(snapshot.then(||
+          surface.image_snapshot_with_bounds(surface.image_info().bounds())).flatten()
+        )
     }
 
 }

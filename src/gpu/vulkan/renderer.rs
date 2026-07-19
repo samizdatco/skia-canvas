@@ -341,7 +341,7 @@ impl VulkanBackend{
         f(surface.canvas());
 
         // save a copy of the frame bitmap for the cache (but only if requested)
-        let image = take_snapshot.then(|| surface.image_snapshot());
+        let image = take_snapshot.then(|| surface.image_snapshot_with_bounds(surface.image_info().bounds())).flatten();
 
         // display the result
         self.flush_framebuffer(window, image_index, acquire_future);
