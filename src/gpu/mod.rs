@@ -2,6 +2,7 @@
 use skia_safe::{gpu::DirectContext, ImageInfo, Image, Rect, Matrix, Color, Surface, surfaces};
 use serde_json::{json, Value};
 use crate::context::page::{Page, ExportOptions};
+use crate::utils::catch_panic;
 
 // reject `window` without a backend also being selected
 #[cfg(all(feature = "window", not(any(feature = "metal", feature = "vulkan"))))]
@@ -61,8 +62,9 @@ mod render_thread{
                 IS_RENDER_THREAD.set(true);
                 loop{
                     match rx.recv_timeout(Duration::from_secs(1)){
-                        // a panicking job takes its response-channel with it, waking the caller;
-                        // the thread itself survives for subsequent renders
+                        // jobs from post() have no return channel, so their errors are printed to
+                        // stderr by the default hook then caught here so the thread keeps running.
+                        // jobs from run() catch their own panics and relay an Err through their rx.
                         Ok(job) => { catch_unwind(AssertUnwindSafe(job)).ok(); },
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             if Engine::context_is_idle(){
@@ -80,21 +82,22 @@ mod render_thread{
         })
     }
 
-    pub fn run<R, F>(f:F) -> R
-        where F:FnOnce() -> R + Send + 'static, R:Send + 'static
+    // run closure on the render thread and block until results arrive on response channel
+    pub fn run<T, F>(f:F) -> Result<T, String>
+        where F:FnOnce() -> Result<T, String> + Send + 'static, T:Send + 'static
     {
         if IS_RENDER_THREAD.get(){
             return f() // don't deadlock on re-entrant calls from within a render job
         }
         let (tx, rx) = mpsc::channel();
-        sender().send(Box::new(move || { tx.send(f()).ok(); })).expect("Render thread unavailable");
-        rx.recv().expect("Render thread could not complete job")
+        sender().send(Box::new(move || {
+            tx.send(super::catch_panic(f)).ok();
+        })).expect("Render thread unavailable");
+        rx.recv().unwrap_or_else(|_| Err("Render thread unavailable".to_string()))
     }
 
-    // fire-and-forget: run a job on the render thread without blocking for it. If the thread
-    // was never spawned no gpu resources can exist, so the job is correctly a no-op and is
-    // dropped rather than spawning a thread just to run it. The channel is FIFO, so a posted
-    // job is guaranteed to precede any subsequently-submitted render.
+    // send a closure to the render thread without waiting for a response (primarily used
+    // for performing deallocations of gpu objects on the same thread as the context)
     pub fn post<F>(f:F)
         where F:FnOnce() + Send + 'static
     {
@@ -142,13 +145,14 @@ impl RenderingEngine{
         }
     }
 
-    // run a closure on the rendering thread (GPU) or current thread (CPU)
-    pub fn render<R, F>(&self, f:F) -> R
-        where F:FnOnce() -> R + Send + 'static, R:Send + 'static
+    // run a closure on the rendering thread (GPU) or current thread (CPU) and convert panics
+    // into Err values that can be sent back to js as promise rejections
+    pub fn render<T, F>(&self, f:F) -> Result<T, String>
+        where F:FnOnce() -> Result<T, String> + Send + 'static, T:Send + 'static
     {
         match self {
             Self::GPU => render_thread::run(f),
-            Self::CPU => f()
+            Self::CPU => catch_panic(f)
         }
     }
 

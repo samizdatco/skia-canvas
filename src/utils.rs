@@ -7,6 +7,23 @@ use css_color::Rgba;
 use skia_safe::{ Path, Matrix, Point, Color, RGB, Data };
 
 //
+// panic recovery
+//
+
+// runs a closure and turns any panic into `Err(message)` instead of letting it unwind propagate
+pub fn catch_panic<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String>{
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|payload|{
+        Err(match payload.downcast::<&str>(){
+            Ok(msg) => msg.to_string(),
+            Err(payload) => match payload.downcast::<String>(){
+                Ok(msg) => *msg,
+                Err(_) => "render thread panicked".to_string(),
+            }
+        })
+    })
+}
+
+//
 // meta-helpers
 //
 
