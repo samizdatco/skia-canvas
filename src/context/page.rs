@@ -1,4 +1,6 @@
 use std::fs;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::Path as FilePath;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -22,6 +24,17 @@ use crate::gpu::RenderingEngine;
 
 static CACHE: OnceLock<Arc<DashMap<usize, PageCache>>> = OnceLock::new();
 
+thread_local!(
+  // gpu-backed RecordingSurfaces, keyed by PageRecorder id (to be handed off to render_thread)
+  static RECORDING_SURFACES: RefCell<HashMap<usize, RecordingSurface>> = RefCell::new(HashMap::new());
+);
+
+// called by the render thread just before it drops an idle gpu context: everything derived
+// from that context (cached textures, gpu recording surfaces) must be released first
+pub fn evict_render_resources(){
+  RECORDING_SURFACES.with_borrow_mut(|surfaces| surfaces.clear());
+  PageCache::evict_textures();
+}
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -100,11 +113,33 @@ impl PageRecorder{
     }
 
     let page = self.get_page();
-    self.surface.update(&page, &opts, &engine);
+    match engine{
+      // use the render-thread to rasterize (using the cached surface for this page)
+      // then copy the pixels into the js-owned buffer
+      RenderingEngine::GPU => {
+        let dst_info = dst_info.clone();
+        let pixels = engine.render(move ||{
+          RECORDING_SURFACES.with_borrow_mut(|surfaces|{
+            let surface = surfaces.entry(page.id).or_default();
+            surface.update(&page, &opts, &engine);
+            let mut pixels = vec![0u8; dst_info.compute_min_byte_size()];
+            match surface.copy_pixels(&dst_info, crop, &mut pixels){
+              true => Ok(pixels),
+              false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
+            }
+          })
+        })?;
+        dst_buffer.copy_from_slice(&pixels);
+        Ok(())
+      }
 
-    match self.surface.copy_pixels(dst_info, crop, dst_buffer){
-      true => Ok(()),
-      false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
+      RenderingEngine::CPU => {
+        self.surface.update(&page, &opts, &engine);
+        match self.surface.copy_pixels(dst_info, crop, dst_buffer){
+          true => Ok(()),
+          false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
+        }
+      }
     }
   }
 
@@ -138,8 +173,27 @@ impl PageRecorder{
     // update the PageCache with the surface bitmap (if it's valid for this export)
     let page = self.get_page();
     if opts.is_raster(){
-      if let Some(image) = self.surface.snapshot_if_valid(&page, &opts, &engine){
-        PageCache::set(self.id, image, &opts, self.surface.depth);
+      match engine{
+        RenderingEngine::GPU => {
+          // use the render-thread to rasterize (using the cached surface for this page)
+          // then save a snapshot to the PageCache. (uses render_soon because any subsequent
+          // export is guaranteed to run after this since the render-thread's queue is FIFO)
+          let (page, opts) = (page.clone(), opts.clone());
+          crate::gpu::render_soon(move ||{
+            RECORDING_SURFACES.with_borrow_mut(|surfaces|{
+              if let Some(surface) = surfaces.get_mut(&page.id){
+                if let Some(image) = surface.snapshot_if_valid(&page, &opts, &RenderingEngine::GPU){
+                  PageCache::set(page.id, image, &opts, surface.depth);
+                }
+              }
+            })
+          });
+        }
+        RenderingEngine::CPU => {
+          if let Some(image) = self.surface.snapshot_if_valid(&page, &opts, engine){
+            PageCache::set(self.id, image, &opts, self.surface.depth);
+          }
+        }
       }
     }
     page
@@ -161,6 +215,12 @@ impl PageRecorder{
 impl Drop for PageRecorder{
   fn drop(&mut self) {
     PageCache::drop(self.id);
+
+    // release any gpu surface registered under this id (on the thread that owns it)
+    let id = self.id;
+    crate::gpu::render_soon(move ||{
+      RECORDING_SURFACES.with_borrow_mut(|surfaces|{ surfaces.remove(&id); })
+    });
   }
 }
 
@@ -228,7 +288,7 @@ impl RecordingSurface{
 
     if let Some(surface) = self.surface.as_mut(){
       let canvas = surface.canvas();
-      let (cache_image, cache_depth) = PageCache::get(page.id, &opts, page.depth());
+      let (cache_image, cache_depth) = PageCache::get(page.id, &opts, page.depth(), matches!(engine, RenderingEngine::GPU));
 
       if let Some(image) = cache_image{
         // use the cached bitmap as the background (if present)
@@ -349,7 +409,7 @@ impl Page{
           let mut surface = engine.make_surface(&img_info, &opts)?;
           let canvas = surface.canvas();
 
-          let (cache_image, cache_depth) = PageCache::get(page.id, &opts, page.depth());
+          let (cache_image, cache_depth) = PageCache::get(page.id, &opts, page.depth(), matches!(engine, RenderingEngine::GPU));
           if let Some(image) = cache_image{
             // use the cached bitmap as the background
             canvas.draw_image(image, (0,0), None);
@@ -364,22 +424,23 @@ impl Page{
             pict.playback(canvas);
           }
 
-          // extract the results, moving the bitmap off the GPU so it can leave this thread
+          // extract the results (potentially texture-backed)
           let image = surface.make_temporary_image()
             .or_else(|| surface.image_snapshot_with_bounds(img_info.bounds()))
             .ok_or("Could not read canvas contents (GPU context lost)".to_string())?;
-          let raster = match image.is_texture_backed(){
-            true => image.make_non_texture_image(&mut surface.direct_context())
-              .ok_or("Could not read canvas contents (GPU context lost)".to_string())?,
-            false => image
-          };
 
-          // update cache
+          // update the cache with the snapshot itself: texture-backed images stay resident,
+          // since the cache is only ever read back on this thread
           if page.depth() > cache_depth{
-            PageCache::set(page.id, raster.clone(), &opts, page.depth());
+            PageCache::set(page.id, image.clone(), &opts, page.depth());
           }
 
-          Ok::<SkImage, String>(raster)
+          // hand a raster copy back for encoding on the calling thread
+          match image.is_texture_backed(){
+            true => image.make_non_texture_image(&mut surface.direct_context())
+              .ok_or("Could not read canvas contents (GPU context lost)".to_string()),
+            false => Ok(image)
+          }
         })?;
 
         // handle image encoding (image is always raster-backed, so no gpu context is needed)
@@ -522,13 +583,6 @@ impl PageSequence{
     self.pages.len()
   }
 
-  pub fn materialize(&mut self, engine:&RenderingEngine, options:&ExportOptions){
-    if !options.is_raster(){ return }
-    for page in self.pages.iter_mut(){
-      PageCache::materialize(page.id, &engine, &options);
-    }
-  }
-
   pub fn as_pdf(&self, options:ExportOptions) -> Result<Vec<u8>, String>{
     let ExportOptions{ quality, density, matte, .. } = options;
     let mut pdf_bytes = Vec::new();
@@ -603,9 +657,11 @@ impl PageCache{
     Self::shared().remove(&id).unwrap();
   }
 
-  pub fn get(id:usize, opts:&ExportOptions, depth:usize) -> (Option<SkImage>, usize){
+  pub fn get(id:usize, opts:&ExportOptions, depth:usize, gpu:bool) -> (Option<SkImage>, usize){
     Self::shared().get(&id).map(|cache|{
-      match cache.is_valid(opts) && depth >= cache.depth{
+      // only give access to texture-backed entries is called from the gpu context's thread
+      let compatible = gpu || !cache.image.as_ref().map(|img| img.is_texture_backed()).unwrap_or(false);
+      match compatible && cache.is_valid(opts) && depth >= cache.depth{
         true => (cache.image.clone(), cache.depth),
         false => (None, 0)
       }
@@ -622,20 +678,12 @@ impl PageCache{
     });
   }
 
-  pub fn materialize(id:usize, engine:&RenderingEngine, options:&ExportOptions){
-    Self::shared().get_mut(&id).map(|mut cache|{
-      // nothing to be done if the image isn't currently in GPU memory
-      // or if the options have changed (so the cache is invalid anyway)
-      if let Some(ref img) = cache.image{
-        if !cache.is_valid(options) || !img.is_texture_backed(){ return }
+  pub fn evict_textures(){
+    Self::shared().iter_mut().for_each(|mut cache|{
+      if cache.image.as_ref().map(|img| img.is_texture_backed()).unwrap_or(false){
+        cache.image = None;
+        cache.depth = 0;
       }
-
-      // otherwise move the image to main memory
-      engine.with_direct_context(|context|
-        cache.image = cache.image.as_ref().and_then(|img|
-          img.make_non_texture_image(context)
-        )
-      );
     });
   }
 

@@ -116,6 +116,13 @@ impl VulkanEngine {
         Self::with_context(|ctx| ctx.surface(image_info, opts) )
     }
 
+    // allow the render thread to check how long the context has gone unused
+    pub fn context_is_idle() -> bool{
+        VK_CONTEXT.with_borrow(|cell|
+            cell.as_ref().map(|engine| engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN).unwrap_or(false)
+        )
+    }
+
     // called by the render thread when idle to drop the context & free gpu resources
     pub fn evict_idle(){
         VK_CONTEXT.with_borrow_mut(|cell| {

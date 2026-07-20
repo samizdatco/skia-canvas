@@ -38,6 +38,7 @@ impl Engine {
     // (see the RenderingEngine methods for their inline implementation when in CPU mode)
     pub fn make_surface(_info: &ImageInfo, _opts:&ExportOptions) -> Result<Surface, String>{ panic!() }
     pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
+    pub fn context_is_idle() -> bool{ false }
     pub fn evict_idle(){ }
 }
 
@@ -63,7 +64,14 @@ mod render_thread{
                         // a panicking job takes its response-channel with it, waking the caller;
                         // the thread itself survives for subsequent renders
                         Ok(job) => { catch_unwind(AssertUnwindSafe(job)).ok(); },
-                        Err(mpsc::RecvTimeoutError::Timeout) => Engine::evict_idle(),
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            if Engine::context_is_idle(){
+                                // everything derived from the idle context (cached textures,
+                                // recording surfaces) must be released along with it
+                                crate::context::page::evict_render_resources();
+                                Engine::evict_idle();
+                            }
+                        },
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     }
                 }
@@ -82,6 +90,27 @@ mod render_thread{
         sender().send(Box::new(move || { tx.send(f()).ok(); })).expect("Render thread unavailable");
         rx.recv().expect("Render thread could not complete job")
     }
+
+    // fire-and-forget: run a job on the render thread without blocking for it. If the thread
+    // was never spawned no gpu resources can exist, so the job is correctly a no-op and is
+    // dropped rather than spawning a thread just to run it. The channel is FIFO, so a posted
+    // job is guaranteed to precede any subsequently-submitted render.
+    pub fn post<F>(f:F)
+        where F:FnOnce() + Send + 'static
+    {
+        if IS_RENDER_THREAD.get(){
+            return f()
+        }
+        if let Some(tx) = SENDER.get(){
+            tx.send(Box::new(f)).ok();
+        }
+    }
+}
+
+// fire-and-forget access to the render thread for maintenance of gpu-resident resources
+// (cache seeding, registry removal) from threads that shouldn't block on render traffic
+pub fn render_soon(f: impl FnOnce() + Send + 'static){
+    render_thread::post(f)
 }
 
 #[derive(Copy, Clone, Debug)]
