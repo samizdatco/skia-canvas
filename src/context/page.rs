@@ -374,9 +374,8 @@ impl Page{
       return Err("Width and height must be non-zero to generate an image".to_string())
     }
 
-    let ExportOptions{ ref format, quality, density, matte, color_type, .. } = options;
+    let ExportOptions{ ref format, quality, density, matte, .. } = options;
     let size = self.bounds.size();
-    let img_dims = self.scaled_dimensions(density);
     let img_quality = ((quality*100.0) as u32).clamp(0, 100);
 
     match format.as_str(){
@@ -404,7 +403,9 @@ impl Page{
         // concurrent exports can still parallelize the compression work
         let page = self.clone();
         let opts = options.clone();
-        let image = engine.render(move || {
+
+        enum Rendered{ Encodable(SkImage), Raw(Vec<u8>) }
+        let rendered = engine.render(move || {
           let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(ColorSpace::new_srgb()));
           let mut surface = engine.make_surface(&img_info, &opts)?;
           let canvas = surface.canvas();
@@ -435,25 +436,37 @@ impl Page{
             PageCache::set(page.id, image.clone(), &opts, page.depth());
           }
 
-          // hand a raster copy back for encoding on the calling thread
-          match image.is_texture_backed(){
-            true => image.make_non_texture_image(&mut surface.direct_context())
-              .ok_or("Could not read canvas contents (GPU context lost)".to_string()),
-            false => Ok(image)
+          match opts.format.as_str() {
+            "raw" => {
+              // return a Rendered::Raw buffer of pixels converted to destination color type
+              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
+              let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
+              match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
+                true => Ok(Rendered::Raw(buffer)),
+                false => Err(format!("Could not encode as raw ({:?})", opts.color_type))
+              }
+            }
+            _ => {
+              // return a Rendered::Encodable image that's been moved off the GPU
+              match image.is_texture_backed(){
+                true => image.make_non_texture_image(&mut surface.direct_context())
+                  .ok_or("Could not read canvas contents (GPU context lost)".to_string()),
+                false => Ok(image)
+              }.map(Rendered::Encodable)
+            }
           }
         })?;
+
+        // "raw" is already-converted pixel bytes; everything else is a raster image to compress
+        let image = match rendered{
+          Rendered::Raw(buffer) => return Ok(buffer),
+          Rendered::Encodable(image) => image,
+        };
 
         // handle image encoding (image is always raster-backed, so no gpu context is needed)
         let context: Option<&mut skia_safe::gpu::DirectContext> = None;
         match format.as_str(){
-          "raw" => {
-            let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
-            let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
-            match image.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0), CachingHint::Allow){
-              true => Some(buffer),
-              false => return Err(format!("Could not encode as {} ({:?})", format, color_type))
-            }
-          }
+          "raw" => unreachable!("raw handled on the render thread"),
 
           "jpg" | "jpeg" => {
             let jpg_opts = jpeg_encoder::Options {
