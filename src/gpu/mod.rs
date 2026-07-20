@@ -38,6 +38,50 @@ impl Engine {
     // (see the RenderingEngine methods for their inline implementation when in CPU mode)
     pub fn make_surface(_info: &ImageInfo, _opts:&ExportOptions) -> Result<Surface, String>{ panic!() }
     pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
+    pub fn evict_idle(){ }
+}
+
+// the single thread that serializes jobs bound for the GPU (and its one, shared Context)
+mod render_thread{
+    use std::cell::Cell;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::sync::{mpsc, OnceLock};
+    use std::time::Duration;
+    use super::Engine;
+
+    type Job = Box<dyn FnOnce() + Send>;
+    static SENDER: OnceLock<mpsc::Sender<Job>> = OnceLock::new();
+    thread_local!( static IS_RENDER_THREAD: Cell<bool> = const { Cell::new(false) }; );
+
+    fn sender() -> &'static mpsc::Sender<Job>{
+        SENDER.get_or_init(||{
+            let (tx, rx) = mpsc::channel::<Job>();
+            std::thread::spawn(move ||{
+                IS_RENDER_THREAD.set(true);
+                loop{
+                    match rx.recv_timeout(Duration::from_secs(1)){
+                        // a panicking job takes its response-channel with it, waking the caller;
+                        // the thread itself survives for subsequent renders
+                        Ok(job) => { catch_unwind(AssertUnwindSafe(job)).ok(); },
+                        Err(mpsc::RecvTimeoutError::Timeout) => Engine::evict_idle(),
+                        Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+            });
+            tx
+        })
+    }
+
+    pub fn run<R, F>(f:F) -> R
+        where F:FnOnce() -> R + Send + 'static, R:Send + 'static
+    {
+        if IS_RENDER_THREAD.get(){
+            return f() // don't deadlock on re-entrant calls from within a render job
+        }
+        let (tx, rx) = mpsc::channel();
+        sender().send(Box::new(move || { tx.send(f()).ok(); })).expect("Render thread unavailable");
+        rx.recv().expect("Render thread could not complete job")
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -66,6 +110,16 @@ impl RenderingEngine{
             Self::GPU => Engine::make_surface(image_info, opts),
             Self::CPU => surfaces::raster(image_info, None, Some(&opts.surface_props()))
                 .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
+        }
+    }
+
+    // run a closure on the rendering thread (GPU) or current thread (CPU)
+    pub fn render<R, F>(&self, f:F) -> R
+        where F:FnOnce() -> R + Send + 'static, R:Send + 'static
+    {
+        match self {
+            Self::GPU => render_thread::run(f),
+            Self::CPU => f()
         }
     }
 

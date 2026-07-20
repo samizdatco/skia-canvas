@@ -317,9 +317,7 @@ impl Page{
     let ExportOptions{ ref format, quality, density, matte, color_type, .. } = options;
     let size = self.bounds.size();
     let img_dims = self.scaled_dimensions(density);
-    let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
     let img_quality = ((quality*100.0) as u32).clamp(0, 100);
-    let img_scale = Matrix::scale((density, density)).into();
 
     match format.as_str(){
       "pdf" => {
@@ -341,47 +339,56 @@ impl Page{
 
       // handle bitmap formats using (potentially gpu-backed) rasterizer
       _ => {
-        let mut surface = engine.make_surface(&img_info, &options)?;
-        let canvas = surface.canvas();
+        // rasterize on the shared render thread (or inline when CPU-based), returning a
+        // non-texture-backed snapshot; encoding happens back on the calling thread so
+        // concurrent exports can still parallelize the compression work
+        let page = self.clone();
+        let opts = options.clone();
+        let image = engine.render(move || {
+          let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(ColorSpace::new_srgb()));
+          let mut surface = engine.make_surface(&img_info, &opts)?;
+          let canvas = surface.canvas();
 
-        let (cache_image, cache_depth) = PageCache::get(self.id, &options, self.depth());
-        if let Some(image) = cache_image{
-          // use the cached bitmap as the background
-          canvas.draw_image(image, (0,0), None);
-        }else if let Some(color) = options.matte{
-          // otherwise, fill the canvas if requested
-          canvas.clear(color);
-        }
-
-        // draw newly added layers and cache the full-canvas bitmap
-        canvas.set_matrix(&img_scale);
-        for pict in self.layers.iter().skip(cache_depth){
-          pict.playback(canvas);
-        }
-
-        // extract the results
-        let context = &mut surface.direct_context();
-        let image = surface.make_temporary_image()
-          .or_else(|| surface.image_snapshot_with_bounds(img_info.bounds()))
-          .ok_or("Could not read canvas contents (GPU context lost)".to_string())?;
-
-        // update cache
-        if self.depth() > cache_depth{
-          if rayon::current_thread_index().is_some(){
-            // move bitmap off GPU if we're in a background thread and need to share
-            image.make_non_texture_image(&mut surface.direct_context())
-              .map(|raster| PageCache::set(self.id, raster, &options, self.depth()) );
-          }else{
-            PageCache::set(self.id, image.clone(), &options, self.depth());
+          let (cache_image, cache_depth) = PageCache::get(page.id, &opts, page.depth());
+          if let Some(image) = cache_image{
+            // use the cached bitmap as the background
+            canvas.draw_image(image, (0,0), None);
+          }else if let Some(color) = opts.matte{
+            // otherwise, fill the canvas if requested
+            canvas.clear(color);
           }
-        }
 
-        // handle image encoding
+          // draw newly added layers and cache the full-canvas bitmap
+          canvas.set_matrix(&Matrix::scale((opts.density, opts.density)).into());
+          for pict in page.layers.iter().skip(cache_depth){
+            pict.playback(canvas);
+          }
+
+          // extract the results, moving the bitmap off the GPU so it can leave this thread
+          let image = surface.make_temporary_image()
+            .or_else(|| surface.image_snapshot_with_bounds(img_info.bounds()))
+            .ok_or("Could not read canvas contents (GPU context lost)".to_string())?;
+          let raster = match image.is_texture_backed(){
+            true => image.make_non_texture_image(&mut surface.direct_context())
+              .ok_or("Could not read canvas contents (GPU context lost)".to_string())?,
+            false => image
+          };
+
+          // update cache
+          if page.depth() > cache_depth{
+            PageCache::set(page.id, raster.clone(), &opts, page.depth());
+          }
+
+          Ok::<SkImage, String>(raster)
+        })?;
+
+        // handle image encoding (image is always raster-backed, so no gpu context is needed)
+        let context: Option<&mut skia_safe::gpu::DirectContext> = None;
         match format.as_str(){
           "raw" => {
             let dst_info = ImageInfo::new(img_dims, color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
             let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
-            match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
+            match image.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0), CachingHint::Allow){
               true => Some(buffer),
               false => return Err(format!("Could not encode as {} ({:?})", format, color_type))
             }

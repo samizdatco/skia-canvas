@@ -54,8 +54,6 @@ impl VulkanEngine {
 
             match context {
                 Ok(context) => {
-                    Self::spawn_idle_watcher(); // watch for inactive contexts and deallocate them
-
                     let device_props = context.physical_device.properties();
                     let gpu_type = match device_props.device_type {
                         PhysicalDeviceType::IntegratedGpu => Some("Integrated GPU"),
@@ -89,19 +87,6 @@ impl VulkanEngine {
         }).clone()
     }
 
-    fn spawn_idle_watcher(){
-        // use a non-rayon thread so as not to compete with the worker threads
-        std::thread::spawn(move || loop{
-            std::thread::sleep(Duration::from_secs(1));
-            rayon::spawn_broadcast(|_|{
-                // drop the context once it hasn't been used in a while to free resources
-                VK_CONTEXT.with_borrow_mut(|cell| {
-                    cell.take_if(|engine| engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN);
-                });
-            });
-        });
-    }
-
     pub fn with_context<T, F>(f:F) -> Result<T, String>
         where F:FnOnce(&mut VulkanContext) -> Result<T, String>
     {
@@ -129,6 +114,13 @@ impl VulkanEngine {
 
     pub fn make_surface(image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
         Self::with_context(|ctx| ctx.surface(image_info, opts) )
+    }
+
+    // called by the render thread when idle to drop the context & free gpu resources
+    pub fn evict_idle(){
+        VK_CONTEXT.with_borrow_mut(|cell| {
+            cell.take_if(|engine| engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN);
+        });
     }
 }
 

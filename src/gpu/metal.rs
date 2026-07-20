@@ -38,8 +38,6 @@ impl MetalEngine {
             // test whether a context can be created and do some one-time init if so
             match MetalContext::new(){
                 Some(context) => {
-                    Self::spawn_idle_watcher(); // watch for inactive contexts and deallocate them
-
                     let device_name = format!("{} ({})", match context.device.location(){
                         MTLDeviceLocation::BuiltIn => "Integrated GPU",
                         MTLDeviceLocation::Slot => "Discrete GPU",
@@ -63,20 +61,6 @@ impl MetalEngine {
                 })
             }
         }).clone()
-    }
-
-    fn spawn_idle_watcher(){
-        // use a non-rayon thread so as not to compete with the worker threads
-        std::thread::spawn(move || loop{
-            // run forever, watching the other threads in the pool
-            std::thread::sleep(Duration::from_secs(1));
-            rayon::spawn_broadcast(|_|{
-                // drop the context once it hasn't been used in a while to free resources
-                MTL_CONTEXT.with_borrow_mut(|cell| {
-                    cell.take_if(|engine| engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN);
-                });
-            });
-        });
     }
 
     pub fn with_context<T, F>(f:F) -> Result<T, String>
@@ -107,6 +91,13 @@ impl MetalEngine {
 
     pub fn make_surface(image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
         Self::with_context(|ctx| ctx.surface(image_info, opts) )
+    }
+
+    // called by the render thread when idle to drop the context & free gpu resources
+    pub fn evict_idle(){
+        MTL_CONTEXT.with_borrow_mut(|cell| {
+            cell.take_if(|engine| engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN);
+        });
     }
 }
 
