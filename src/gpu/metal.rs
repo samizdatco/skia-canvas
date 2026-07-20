@@ -4,7 +4,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Instant, Duration};
 use metal::{
     foreign_types::{ForeignType, ForeignTypeRef},
-    CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
+    CommandQueue, Device, DeviceRef, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
 };
 use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
 use skia_safe::gpu::{
@@ -108,6 +108,18 @@ impl MetalEngine {
     }
 }
 
+// create a Skia rendering context for use by either on- or offscreen renderers
+fn make_direct_context(device:&DeviceRef) -> Option<(CommandQueue, DirectContext)>{
+    let queue = device.new_command_queue();
+    let backend = unsafe {
+        mtl::BackendContext::new(
+            device.as_ptr() as mtl::Handle,
+            queue.as_ptr() as mtl::Handle,
+        )
+    };
+    direct_contexts::make_metal(&backend, None).map(|context| (queue, context))
+}
+
 pub struct MetalContext {
     device: Device,
     context: DirectContext,
@@ -119,19 +131,12 @@ impl MetalContext{
     fn new() -> Option<Self>{
         autoreleasepool(|| {
             Device::system_default().and_then(|device|{
-                let queue = device.new_command_queue();
-                let backend = unsafe {
-                    mtl::BackendContext::new(
-                        device.as_ptr() as mtl::Handle,
-                        queue.as_ptr() as mtl::Handle,
-                    )
-                };
                 let last_use = Instant::now() + MTL_CONTEXT_LIFESPAN;
                 let msaa:Vec<usize> = [0,2,4,8,16,32].into_iter().filter(|s|{
                     *s==0 || device.supports_texture_sample_count(*s as _)
                 }).collect();
-                direct_contexts::make_metal(&backend, None)
-                    .map(|context| MetalContext{device, context, msaa, last_use})
+                make_direct_context(&device)
+                    .map(|(_queue, context)| MetalContext{device, context, msaa, last_use})
             })
         })
     }
@@ -276,14 +281,8 @@ pub struct MetalBackend {
 
 impl MetalBackend {
     pub fn for_layer(layer:&MetalLayer) -> Self{
-        let queue = layer.device().new_command_queue();
-        let backend_ctx = unsafe {
-            mtl::BackendContext::new(
-                layer.device().as_ptr() as mtl::Handle,
-                queue.as_ptr() as mtl::Handle,
-            )
-        };
-        let skia_ctx = direct_contexts::make_metal(&backend_ctx, None).unwrap();
+        let (queue, skia_ctx) = make_direct_context(&layer.device())
+            .expect("Metal: Failed to create Skia direct context");
         Self { skia_ctx, queue }
     }
 

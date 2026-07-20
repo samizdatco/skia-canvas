@@ -1,20 +1,19 @@
 use ash::vk::Handle;
-use std::{ptr, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 use vulkano::{
     device::{
-        physical::PhysicalDeviceType, Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned, Queue, QueueCreateInfo, QueueFlags
+        Device, DeviceCreateInfo, DeviceExtensions, DeviceOwned, Queue, QueueCreateInfo
     },
     image::{view::ImageView, ImageUsage},
-    instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
     render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass},
     swapchain::{
         acquire_next_image, CompositeAlpha, Surface, Swapchain, SwapchainAcquireFuture, SwapchainCreateInfo, SwapchainPresentInfo
     },
     sync::{self, GpuFuture},
-    Validated, VulkanError, VulkanLibrary, VulkanObject,
+    Validated, VulkanError, VulkanObject,
 };
 use skia_safe::{
-    gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
+    gpu::{self, backend_render_targets, surfaces, vk},
     canvas::SrcRectConstraint,
     Color, Matrix, Paint, BlendMode, SurfaceProps
 };
@@ -25,7 +24,7 @@ use winit::{
 };
 use crate::context::page::Page;
 use crate::gpu::{RenderOutcome, RenderCache, RenderState::Resizing};
-use super::{VK_FORMATS, to_sk_format};
+use super::{VK_FORMATS, to_sk_format, VulkanShared, make_direct_context};
 
 pub struct VulkanRenderer{
     window: Arc<Window>,
@@ -35,68 +34,25 @@ pub struct VulkanRenderer{
 }
 
 impl VulkanRenderer {
-    pub fn for_window(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
-        let instance = {
-            let library = VulkanLibrary::new().expect("Vulkan libraries not found on system");
-            let required_extensions = Surface::required_extensions(event_loop);
+    pub fn for_window(_event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
+        // all windows and the offscreen engine share one instance/physical-device; each window
+        // keeps its own swapchain, logical device, queue, and Skia DirectContext
+        let shared = VulkanShared::get().expect("Vulkan initialization failed");
+        let instance = shared.instance.clone();
 
-            Instance::new(
-                library,
-                InstanceCreateInfo {
-                    flags: InstanceCreateFlags::ENUMERATE_PORTABILITY, // support MoltenVK
-                    enabled_extensions: required_extensions,
-                    ..Default::default()
-                },
-            )
-            .expect(&format!("Vulkan: could not create instance supporting: {:?}", required_extensions))
-        };
-
-        let device_extensions = DeviceExtensions {
-            khr_swapchain: true, // we need a swapchain to manage repainting the window
-            ..DeviceExtensions::empty()
-        };
-
+        // use the window's surface to find a physical device that can draw to it
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
+        let (physical_device, queue_family_index) = shared.screen_device(&surface)
+            .expect("Vulkan: no device can present to this window");
 
-        // Collect the list of available devices & queues then select ‘best’ one for our needs
-        let (physical_device, queue_family_index) = instance
-            .enumerate_physical_devices()
-            .unwrap()
-            .filter(|p| {
-                // omit devices that don't support our swapchain requirement
-                p.supported_extensions().contains(&device_extensions)
-            })
-            .filter_map(|p| {
-                // for each device, find a graphics queue family that can handle our surface type
-                // and filter out any devices that don't have one
-                p.queue_family_properties()
-                    .iter()
-                    .enumerate()
-                    .position(|(i, q)| {
-                        q.queue_flags.intersects(QueueFlags::GRAPHICS)
-                            && p.surface_support(i as u32, &surface).unwrap_or(false)
-                        //  && p.presentation_support(_i as u32, event_loop).unwrap() // unreleased
-                    })
-                    .map(|i| (p, i as u32))
-            })
-            .min_by_key(|(p, _)| {
-                // Sort the list of acceptible devices/queues to try to find the fastest
-                match p.properties().device_type {
-                    PhysicalDeviceType::DiscreteGpu => 0,
-                    PhysicalDeviceType::IntegratedGpu => 1,
-                    PhysicalDeviceType::VirtualGpu => 2,
-                    PhysicalDeviceType::Cpu => 3,
-                    PhysicalDeviceType::Other => 4,
-                    _ => 5,
-                }
-            })
-            .expect("Vulkan: no suitable physical device found");
-
-        // Use the physical device we selected to initialize a device with a single queue
+        // give this window its own logical device (with swapchain support) and queue
         let (device, mut queues) = Device::new(
             physical_device.clone(),
             DeviceCreateInfo {
-                enabled_extensions: device_extensions,
+                enabled_extensions: DeviceExtensions {
+                    khr_swapchain: true, // we need a swapchain to manage repainting the window
+                    ..DeviceExtensions::empty()
+                },
                 queue_create_infos: vec![QueueCreateInfo {
                     queue_family_index,
                     ..Default::default()
@@ -111,7 +67,6 @@ impl VulkanRenderer {
         // Create a swapchain to manage frame buffers and vsync
         let (swapchain, _images) = {
             // inspect the window to determine the type of framebuffer needed
-            let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
             let surface_capabilities = physical_device
                 .surface_capabilities(&surface, Default::default())
                 .unwrap();
@@ -219,8 +174,6 @@ impl Drop for VulkanBackend{
 impl VulkanBackend{
     fn new(queue:Arc<Queue>, swapchain:Arc<Swapchain>) -> Self{
         let device = queue.device();
-        let instance = device.instance();
-        let library = instance.library();
 
         // Define the layout of the framebuffers and their role in the graphics pipeline
         let render_pass = vulkano::single_pass_renderpass!(
@@ -249,44 +202,8 @@ impl VulkanBackend{
         let last_render = Some(sync::now(device.clone()).boxed());
 
         // Create a DirectContext that will let us use a surface & canvas to draw into framebuffers
-        let skia_ctx = unsafe {
-            let get_proc = |gpo| {
-                let get_device_proc_addr = instance.fns().v1_0.get_device_proc_addr;
-
-                match gpo {
-                    vk::GetProcOf::Instance(instance, name) => {
-                        let vk_instance = ash::vk::Instance::from_raw(instance as _);
-                        library.get_instance_proc_addr(vk_instance, name)
-                    }
-                    vk::GetProcOf::Device(device, name) => {
-                        let vk_device = ash::vk::Device::from_raw(device as _);
-                        get_device_proc_addr(vk_device, name)
-                    }
-                }
-                .map(|f| f as _)
-                .unwrap_or_else(|| {
-                    println!("Vulkan: failed to resolve {}", gpo.name().to_str().unwrap());
-                    ptr::null()
-                })
-            };
-
-            let direct_context = direct_contexts::make_vulkan(
-                &vk::BackendContext::new(
-                    instance.handle().as_raw() as _,
-                    device.physical_device().handle().as_raw() as _,
-                    device.handle().as_raw() as _,
-                    (
-                        queue.handle().as_raw() as _,
-                        queue.queue_family_index() as usize,
-                    ),
-                    &get_proc,
-                ),
-                None,
-            )
+        let skia_ctx = make_direct_context(device, &queue)
             .expect("Vulkan: Failed to create Skia direct context");
-
-            direct_context
-        };
 
         Self{queue, framebuffers, render_pass, swapchain, swapchain_is_valid, last_render, skia_ctx}
     }

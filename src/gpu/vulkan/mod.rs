@@ -1,5 +1,17 @@
-use vulkano::format::Format as VkFormat;
-use skia_safe::{ gpu::vk, ColorType };
+use std::{ptr, sync::{Arc, OnceLock}};
+use ash::vk::Handle;
+use vulkano::{
+    device::{
+        physical::{PhysicalDevice, PhysicalDeviceType},
+        Device, Queue, QueueFlags,
+    },
+    format::Format as VkFormat,
+    instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions},
+    VulkanLibrary, VulkanObject,
+};
+#[cfg(feature = "window")]
+use vulkano::swapchain::Surface;
+use skia_safe::{ gpu::{vk, direct_contexts, DirectContext}, ColorType };
 
 pub mod engine;
 
@@ -66,5 +78,149 @@ fn to_sk_format(vulkano_format:&VkFormat) -> Option<(vk::Format, ColorType)>{
         VkFormat::R16G16B16A16_UNORM => Some(( vk::Format::R16G16B16A16_UNORM, ColorType::R16G16B16A16UNorm )),
         VkFormat::R16G16_SFLOAT => Some(( vk::Format::R16G16_SFLOAT, ColorType::R16G16Float )),
         _ => None
+    }
+}
+
+// immutable base components that can be shared across threads
+struct VulkanShared {
+    library: Arc<VulkanLibrary>,
+    instance: Arc<Instance>,
+    // the offscreen device+queue can be memoized since all exports will run through it
+    offscreen_physical_device: Arc<PhysicalDevice>,
+    offscreen_queue_family_index: u32,
+}
+
+static VK_SHARED: OnceLock<Result<VulkanShared, String>> = OnceLock::new();
+
+impl VulkanShared {
+    fn get() -> Result<&'static VulkanShared, String> {
+        VK_SHARED.get_or_init(VulkanShared::new).as_ref().map_err(|err| err.clone())
+    }
+
+    fn new() -> Result<Self, String> {
+        let library = VulkanLibrary::new().or(Err("Vulkan libraries not found on system"))?;
+
+        // include window extensions (if enabled) so the instance can also be used for onscreen renderers
+        let enabled_extensions = {
+            #[cfg(feature = "window")]
+            {
+                let mut wsi = InstanceExtensions{ khr_surface: true, ..InstanceExtensions::empty() };
+                #[cfg(target_os = "macos")] {
+                  wsi.ext_metal_surface = true;
+                }
+                #[cfg(target_os = "linux")] {
+                    wsi.khr_xlib_surface = true;
+                    wsi.khr_xcb_surface = true;
+                    wsi.khr_wayland_surface = true;
+                }
+                #[cfg(target_os = "windows")] {
+                  wsi.khr_win32_surface = true;
+                }
+                wsi.intersection(library.supported_extensions())
+            }
+            #[cfg(not(feature = "window"))]
+            { InstanceExtensions::empty() }
+        };
+
+        let instance = Instance::new(
+            library.clone(),
+            InstanceCreateInfo {
+                flags: InstanceCreateFlags::ENUMERATE_PORTABILITY, // support MoltenVK
+                enabled_extensions,
+                ..Default::default()
+            },
+        ).or(Err("Could not create Vulkan instance"))?;
+
+        // memoize an offscreen device + queue that will be reused for all exports
+        let (offscreen_physical_device, offscreen_queue_family_index) = instance
+            .enumerate_physical_devices()
+            .or(Err("Vulkan: No physical devices found"))?
+            .filter_map(|p| {
+                // find a graphics-capable queue family, skipping devices that lack one
+                p.queue_family_properties()
+                    .iter()
+                    .position(|q| q.queue_flags.intersects(QueueFlags::GRAPHICS))
+                    .map(|i| (p, i as u32))
+            })
+            .min_by_key(|(p, _)| device_type_rank(p))
+            .ok_or("No suitable Vulkan physical device found")?;
+
+        Ok(Self{ library, instance, offscreen_physical_device, offscreen_queue_family_index })
+    }
+
+    // memoized offscreen device with no presentability requirement (for display-less servers and software rasterizers).
+    fn offscreen_device(&self) -> (Arc<PhysicalDevice>, u32) {
+        (self.offscreen_physical_device.clone(), self.offscreen_queue_family_index)
+    }
+
+    // newly-created device that can render to a particular window surface (for hybrid gpu & multi-screen systems)
+    #[cfg(feature = "window")]
+    fn screen_device(&self, surface:&Arc<Surface>) -> Option<(Arc<PhysicalDevice>, u32)> {
+        self.instance
+            .enumerate_physical_devices()
+            .ok()?
+            .filter(|p| p.supported_extensions().khr_swapchain)
+            .filter_map(|p| {
+                // need a queue family that is both graphics-capable and can present to this surface
+                p.queue_family_properties()
+                    .iter()
+                    .enumerate()
+                    .position(|(i, q)|
+                        q.queue_flags.intersects(QueueFlags::GRAPHICS)
+                            && p.surface_support(i as u32, surface).unwrap_or(false)
+                    )
+                    .map(|i| (p, i as u32))
+            })
+            .min_by_key(|(p, _)| device_type_rank(p))
+    }
+}
+
+// choose the fastest general class of device
+fn device_type_rank(device: &PhysicalDevice) -> u8 {
+    match device.properties().device_type {
+        PhysicalDeviceType::DiscreteGpu => 0,
+        PhysicalDeviceType::IntegratedGpu => 1,
+        PhysicalDeviceType::VirtualGpu => 2,
+        PhysicalDeviceType::Cpu => 3,
+        PhysicalDeviceType::Other => 4,
+        _ => 5,
+    }
+}
+
+// create a Skia rendering context for use by either on- or offscreen renderers
+fn make_direct_context(device:&Arc<Device>, queue:&Arc<Queue>) -> Option<DirectContext>{
+    let instance = device.instance();
+    let library = instance.library();
+    unsafe {
+        let get_proc = |gpo| {
+            let get_device_proc_addr = instance.fns().v1_0.get_device_proc_addr;
+            match gpo {
+                vk::GetProcOf::Instance(instance_handle, name) => {
+                    let vk_instance = ash::vk::Instance::from_raw(instance_handle as _);
+                    library.get_instance_proc_addr(vk_instance, name)
+                }
+                vk::GetProcOf::Device(device_handle, name) => {
+                    let vk_device = ash::vk::Device::from_raw(device_handle as _);
+                    get_device_proc_addr(vk_device, name)
+                }
+            }
+            .map(|f| f as _)
+            .unwrap_or_else(|| {
+                eprintln!("Vulkan: failed to resolve {}", gpo.name().to_str().unwrap());
+                ptr::null()
+            })
+        };
+
+        let backend_context = vk::BackendContext::new(
+            instance.handle().as_raw() as _,
+            device.physical_device().handle().as_raw() as _,
+            device.handle().as_raw() as _,
+            (
+                queue.handle().as_raw() as _,
+                queue.queue_family_index() as usize,
+            ),
+            &get_proc,
+        );
+        direct_contexts::make_vulkan(&backend_context, None)
     }
 }
