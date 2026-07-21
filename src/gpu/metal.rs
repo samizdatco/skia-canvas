@@ -1,14 +1,14 @@
 #![allow(unexpected_cfgs)]
 use std::cell::RefCell;
-use std::sync::{Arc, OnceLock};
+use std::sync::OnceLock;
 use std::time::{Instant, Duration};
 use metal::{
-    foreign_types::{ForeignType, ForeignTypeRef},
-    CommandQueue, Device, DeviceRef, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
+    foreign_types::ForeignTypeRef,
+    CommandQueue, Device, DeviceRef, MTLDeviceLocation,
 };
-use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
+use skia_safe::{ImageInfo, Surface};
 use skia_safe::gpu::{
-    mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
+    mtl, direct_contexts, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
 use objc::rc::autoreleasepool;
 use serde_json::{json, Value};
@@ -165,7 +165,10 @@ impl MetalContext{
 
 #[cfg(feature = "window")]
 use {
-    skia_safe::{Matrix, Color, Paint, BlendMode, SurfaceProps, canvas::SrcRectConstraint},
+    std::sync::Arc,
+    metal::{foreign_types::ForeignType, MTLPixelFormat, MetalLayer},
+    skia_safe::{scalar, ColorType, Size, Matrix, Color, Paint, BlendMode, SurfaceProps, canvas::SrcRectConstraint},
+    skia_safe::gpu::backend_render_targets,
     raw_window_metal::Layer,
     core_graphics_types::geometry::CGSize,
     objc::{msg_send, sel, sel_impl, runtime::{self, Object}},
@@ -179,6 +182,7 @@ use {
     super::{RenderOutcome, RenderCache, RenderState::Resizing},
 };
 
+#[cfg(feature = "window")]
 #[allow(non_upper_case_globals)]
 #[link(name = "QuartzCore", kind = "framework")]
 extern "C" {
@@ -274,11 +278,13 @@ impl MetalRenderer{
     }
 }
 
+#[cfg(feature = "window")]
 pub struct MetalBackend {
     skia_ctx: DirectContext,
     queue: CommandQueue,
 }
 
+#[cfg(feature = "window")]
 impl MetalBackend {
     pub fn for_layer(layer:&MetalLayer) -> Self{
         let (queue, skia_ctx) = make_direct_context(&layer.device())
