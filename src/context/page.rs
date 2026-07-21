@@ -214,11 +214,11 @@ impl PageRecorder{
 
 impl Drop for PageRecorder{
   fn drop(&mut self) {
-    PageCache::drop(self.id);
-
     // release any gpu surface registered under this id (on the thread that owns it)
     let id = self.id;
+    let cache = PageCache::drop(id);
     crate::gpu::render_soon(move ||{
+      drop(cache);
       RECORDING_SURFACES.with_borrow_mut(|surfaces|{ surfaces.remove(&id); })
     });
   }
@@ -666,8 +666,9 @@ impl PageCache{
     Self::shared().insert(id, PageCache::default());
   }
 
-  pub fn drop(id:usize){
-    Self::shared().remove(&id).unwrap();
+  // remove the entry but also return it (in case it contains textures that need to be dropped on the render thread)
+  pub fn drop(id:usize) -> Option<PageCache>{
+    Self::shared().remove(&id).map(|(_, cache)| cache)
   }
 
   pub fn get(id:usize, opts:&ExportOptions, depth:usize, gpu:bool) -> (Option<SkImage>, usize){
