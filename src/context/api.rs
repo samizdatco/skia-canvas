@@ -72,6 +72,12 @@ pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  this.borrow_mut().dispose();
+  Ok(cx.undefined())
+}
+
 //
 // Grid State
 //

@@ -65,6 +65,12 @@ pub fn get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
   Ok(cx.number(width as f64))
 }
 
+pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  this.borrow_mut().engine = None; // potentially release gpu rendering context
+  Ok(cx.undefined())
+}
+
 pub fn get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let height = this.borrow().height;

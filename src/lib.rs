@@ -104,6 +104,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- Canvas ------------------------------------------------------------------------------------
 
   cx.export_function("Canvas_new", canvas::new)?;
+  cx.export_function("Canvas_dispose", canvas::dispose)?;
 
   cx.export_function("Canvas_get_engine", canvas::get_engine)?;
   cx.export_function("Canvas_set_engine", canvas::set_engine)?;
@@ -126,6 +127,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_get_size", ctx::get_size)?;
   cx.export_function("CanvasRenderingContext2D_set_size", ctx::set_size)?;
   cx.export_function("CanvasRenderingContext2D_reset", ctx::reset)?;
+  cx.export_function("CanvasRenderingContext2D_dispose", ctx::dispose)?;
 
   // grid state
   cx.export_function("CanvasRenderingContext2D_save", ctx::save)?;

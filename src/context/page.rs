@@ -41,13 +41,14 @@ pub fn evict_render_resources(){
 //
 
 pub struct PageRecorder{
-  current: PictureRecorder,
+  current: Option<PictureRecorder>,
   layers: Vec<Picture>,
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
   surface: RecordingSurface,
   changed: bool,
+  disposed: bool, // flag that drawing ops should be ignored after PictureRecorder has been dropped
   id: usize,
   has_gpu_surface: bool, // flag that drops need to happen on render thread
 }
@@ -58,11 +59,9 @@ impl PageRecorder{
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
     PageCache::add(id);
 
-    let mut rec = PictureRecorder::new();
-    rec.begin_recording(bounds, true).save(); // start at depth 2
-
     PageRecorder{
-      current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id,
+      current:None, layers:vec![], changed:false, disposed:false,
+      matrix:Matrix::default(), clip:None, bounds, id,
       surface:RecordingSurface::default(), has_gpu_surface:false,
     }
   }
@@ -70,7 +69,17 @@ impl PageRecorder{
   pub fn append<F>(&mut self, f:F)
     where F:FnOnce(&SkCanvas)
   {
-    if let Some(canvas) = self.current.recording_canvas() {
+    if self.disposed{
+      return // post-dispose draws must be ignored
+    }else if self.current.is_none() {
+      // allocate lazily on first draw op
+      let mut rec = PictureRecorder::new();
+      rec.begin_recording(self.bounds, true);
+      self.current = Some(rec);
+      self.restore();
+    }
+
+    if let Some(canvas) = self.current.as_mut().and_then(|rec| rec.recording_canvas()) {
       f(canvas);
       self.changed = true;
     }
@@ -86,7 +95,7 @@ impl PageRecorder{
 
   pub fn set_matrix(&mut self, matrix:Matrix){
     self.matrix = matrix;
-    if let Some(canvas) = self.current.recording_canvas() {
+    if let Some(canvas) = self.current.as_mut().and_then(|rec| rec.recording_canvas()) {
       canvas.set_matrix(&matrix.into());
     }
   }
@@ -97,7 +106,7 @@ impl PageRecorder{
   }
 
   pub fn restore(&mut self){
-    if let Some(canvas) = self.current.recording_canvas() {
+    if let Some(canvas) = self.current.as_mut().and_then(|rec| rec.recording_canvas()) {
       canvas.restore_to_count(1);
       canvas.save();
       if let Some(clip) = &self.clip{
@@ -148,19 +157,19 @@ impl PageRecorder{
   pub fn get_page(&mut self) -> Page{
     if self.changed {
       // store layer as a drawable (so copies are deduplicated) wrapped in a picture (so it can be sent to other threads)
-      self.current
-        .finish_recording_as_drawable()
-        .and_then(|mut drawable|{
-          let mut wrapper = PictureRecorder::new();
-          wrapper.begin_recording(self.bounds, true).draw_drawable(&mut drawable, None);
-          wrapper.finish_recording_as_picture(None)
-        }).map(|pict|
-          self.layers.push(pict)
-        );
+      let layer = self.current.as_mut().and_then(|rec| rec.finish_recording_as_drawable());
+      if let Some(mut drawable) = layer{
+        let mut wrapper = PictureRecorder::new();
+        wrapper.begin_recording(self.bounds, true).draw_drawable(&mut drawable, None);
+        if let Some(pict) = wrapper.finish_recording_as_picture(None){
+          self.layers.push(pict);
+        }
+      }
 
-      // resume recording
-      self.current.begin_recording(self.bounds, true);
-      self.changed = false;
+      if let Some(rec) = self.current.as_mut(){
+        rec.begin_recording(self.bounds, true);
+      }
+      self.changed = false; // recorder is clean
       self.restore();
     }
 
@@ -214,14 +223,20 @@ impl PageRecorder{
   }
 }
 
-impl Drop for PageRecorder{
-  fn drop(&mut self) {
-    // release any gpu surface registered under this id (on the thread that owns it)
-    let id = self.id;
-    let cache = PageCache::drop(self.id);
+impl PageRecorder{
+  // synchronously release all internal Skia state (rather than waiting until for the next event
+  // loop tick gets around to calling Drop)
+  pub fn release(&mut self){
+    if self.disposed { return; }
+    self.disposed = true;
+    self.current = None;
+    self.layers.clear();
+    self.surface = RecordingSurface::default();
 
     // if the cached page image is gpu-backed (or an export has used a gpu surface)
     // the buffers can only be dropped on the render thread
+    let id = self.id;
+    let cache = PageCache::drop(self.id);
     let is_texture_backed = cache.as_ref()
       .and_then(|c| c.image.as_ref())
       .map(|img| img.is_texture_backed())
@@ -232,7 +247,14 @@ impl Drop for PageRecorder{
         drop(cache);
         RECORDING_SURFACES.with_borrow_mut(|surfaces|{ surfaces.remove(&id); })
       });
+      self.has_gpu_surface = false;
     }
+  }
+}
+
+impl Drop for PageRecorder{
+  fn drop(&mut self) {
+    self.release();
   }
 }
 
