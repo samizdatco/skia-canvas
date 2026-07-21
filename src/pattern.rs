@@ -20,6 +20,12 @@ pub struct Stamp{
   matrix:Matrix
 }
 
+impl Drop for Stamp{
+  fn drop(&mut self) {
+    self.content.release();
+  }
+}
+
 #[derive(Clone)]
 pub struct CanvasPattern{
   pub stamp:Rc<RefCell<Stamp>>

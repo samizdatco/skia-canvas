@@ -26,6 +26,12 @@ impl Default for Image{
   }
 }
 
+impl Drop for Image{
+  fn drop(&mut self) {
+    self.content.release();
+  }
+}
+
 pub enum Content{
   Bitmap(SkImage),
   Vector(Picture, Size),
@@ -62,6 +68,22 @@ impl Content{
     images::raster_from_data(&info, &image_data.buffer, info.min_row_bytes())
       .map(|image| Content::Bitmap(image) )
       .unwrap_or_default()
+  }
+
+  // drop the current content safely (on the render-)
+  pub fn release(&mut self){
+    let content = std::mem::take(self);
+    if let Content::Bitmap(img) = &content{
+      if img.is_texture_backed(){
+        crate::gpu::render_soon(move || drop(content));
+      }
+    }
+  }
+
+  // Swap in new content, releasing whatever was there before.
+  pub fn replace(&mut self, next: Content){
+    self.release();
+    *self = next;
   }
 
   pub fn size(&self) -> Size {
@@ -178,15 +200,15 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
   let buffer = cx.argument::<JsBuffer>(1)?;
   let data = Data::new_copy(buffer.as_slice(&cx));
 
-  if let Some(raw_info) = opt_image_info_arg(&mut cx, 2)?{
+  let new_content = if let Some(raw_info) = opt_image_info_arg(&mut cx, 2)?{
     // First, check for an optional dims argument and interpret the buffer as raw rgba if present
-    this.content = match images::raster_from_data(&raw_info, data, raw_info.min_row_bytes()){
+    match images::raster_from_data(&raw_info, data, raw_info.min_row_bytes()){
       Some(image) => Content::Bitmap(image),
       None => Content::Broken
     }
   }else if let Some(image) = images::deferred_from_encoded_data(&data, None){
     // Next, try interpreting the data as an encoded bitmap
-    this.content = Content::Bitmap(image);
+    Content::Bitmap(image)
   }else if let Ok(mut dom) = svg::Dom::from_bytes(&data, FontLibrary::with_shared(|lib| lib.font_mgr())){
     // Finally, try parsing as SVG
     let root = dom.root();
@@ -219,14 +241,15 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
     let mut compositor = PictureRecorder::new();
     dom.set_container_size(bounds.size());
     dom.render(compositor.begin_recording(bounds, true));
-    this.content = match compositor.finish_recording_as_picture(None){
+    match compositor.finish_recording_as_picture(None){
       Some(picture) => Content::Vector(picture, size),
       None => Content::Broken
-    };
+    }
   }else{
-    this.content = Content::Broken
-  }
+    Content::Broken
+  };
 
+  this.content.replace(new_content);
   Ok(cx.boolean(this.content.is_drawable()))
 }
 
