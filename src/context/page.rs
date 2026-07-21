@@ -49,6 +49,7 @@ pub struct PageRecorder{
   surface: RecordingSurface,
   changed: bool,
   id: usize,
+  has_gpu_surface: bool, // flag that drops need to happen on render thread
 }
 
 impl PageRecorder{
@@ -62,7 +63,7 @@ impl PageRecorder{
 
     PageRecorder{
       current:rec, layers:vec![], changed:false, matrix:Matrix::default(), clip:None, bounds, id,
-      surface:RecordingSurface::default(),
+      surface:RecordingSurface::default(), has_gpu_surface:false,
     }
   }
 
@@ -117,6 +118,7 @@ impl PageRecorder{
       // use the render-thread to rasterize (using the cached surface for this page)
       // then copy the pixels into the js-owned buffer
       RenderingEngine::GPU => {
+        self.has_gpu_surface = true; // remember to free the gpu-backed export surface
         let dst_info = dst_info.clone();
         let pixels = engine.render(move ||{
           RECORDING_SURFACES.with_borrow_mut(|surfaces|{
@@ -216,11 +218,21 @@ impl Drop for PageRecorder{
   fn drop(&mut self) {
     // release any gpu surface registered under this id (on the thread that owns it)
     let id = self.id;
-    let cache = PageCache::drop(id);
-    crate::gpu::render_soon(move ||{
-      drop(cache);
-      RECORDING_SURFACES.with_borrow_mut(|surfaces|{ surfaces.remove(&id); })
-    });
+    let cache = PageCache::drop(self.id);
+
+    // if the cached page image is gpu-backed (or an export has used a gpu surface)
+    // the buffers can only be dropped on the render thread
+    let is_texture_backed = cache.as_ref()
+      .and_then(|c| c.image.as_ref())
+      .map(|img| img.is_texture_backed())
+      .unwrap_or(false);
+
+    if is_texture_backed || self.has_gpu_surface{
+      crate::gpu::render_soon(move ||{
+        drop(cache);
+        RECORDING_SURFACES.with_borrow_mut(|surfaces|{ surfaces.remove(&id); })
+      });
+    }
   }
 }
 
