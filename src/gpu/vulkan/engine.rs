@@ -127,6 +127,8 @@ impl VulkanEngine {
             cell.take_if(|engine| engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN);
         });
     }
+
+    pub fn with_cleanup<T>(f: impl FnOnce() -> T) -> T { f() }
 }
 
 

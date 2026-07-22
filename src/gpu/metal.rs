@@ -106,6 +106,11 @@ impl MetalEngine {
             cell.take_if(|engine| engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN);
         });
     }
+
+    // create a job-specific autorelease pool for each pass through the render-thread
+    pub fn with_cleanup<T>(f: impl FnOnce() -> T) -> T {
+        autoreleasepool(f)
+    }
 }
 
 // create a Skia rendering context for use by either on- or offscreen renderers
@@ -295,6 +300,7 @@ impl MetalBackend {
     fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, snapshot:bool, props:&SurfaceProps, f:F) -> RenderOutcome
         where F:FnOnce(&skia_safe::Canvas)
     {
+      autoreleasepool(||{
         // if layer pool is exhausted, just drop the frame and try again next tick
         let Some(drawable) = layer.next_drawable() else {
             return RenderOutcome::Skipped;
@@ -341,6 +347,7 @@ impl MetalBackend {
         RenderOutcome::Rendered(snapshot.then(||
           surface.image_snapshot_with_bounds(surface.image_info().bounds())).flatten()
         )
+      })
     }
 
 }

@@ -15,7 +15,6 @@ use crate::gpu::metal::MetalEngine as Engine;
 #[cfg(all(feature = "metal", feature = "window"))]
 pub use crate::gpu::metal::MetalRenderer as Renderer;
 
-
 #[cfg(feature = "vulkan")]
 mod vulkan;
 #[cfg(feature = "vulkan")]
@@ -41,6 +40,7 @@ impl Engine {
     pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
     pub fn context_is_idle() -> bool{ false }
     pub fn evict_idle(){ }
+    pub fn with_cleanup<T>(f: impl FnOnce() -> T) -> T { f() }
 }
 
 // the single thread that serializes jobs bound for the GPU (and its one, shared Context)
@@ -65,7 +65,7 @@ mod render_thread{
                         // jobs from post() have no return channel, so their errors are printed to
                         // stderr by the default hook then caught here so the thread keeps running.
                         // jobs from run() catch their own panics and relay an Err through their rx.
-                        Ok(job) => { catch_unwind(AssertUnwindSafe(job)).ok(); },
+                        Ok(job) => { Engine::with_cleanup(|| catch_unwind(AssertUnwindSafe(job)).ok()); },
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             if Engine::context_is_idle(){
                                 // everything derived from the idle context (cached textures,
@@ -115,6 +115,7 @@ mod render_thread{
 pub fn render_soon(f: impl FnOnce() + Send + 'static){
     render_thread::post(f)
 }
+
 
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
