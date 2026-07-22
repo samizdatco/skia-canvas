@@ -206,6 +206,7 @@ impl Context2D{
     self.recorder.borrow_mut().release();
     self.stack.clear();
     self.stack.shrink_to_fit();
+    self.state = State::default();
     self.path = Path::new();
   }
 
