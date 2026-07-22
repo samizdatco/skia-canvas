@@ -1,5 +1,5 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{gpu::DirectContext, ImageInfo, Image, Rect, Matrix, Color, Surface, surfaces};
+use skia_safe::{gpu::DirectContext, ImageInfo, Image, Rect, Matrix, Color, Surface};
 use serde_json::{json, Value};
 use crate::context::page::{Page, ExportOptions};
 use crate::utils::catch_panic;
@@ -21,6 +21,10 @@ mod vulkan;
 use crate::gpu::vulkan::engine::VulkanEngine as Engine;
 #[cfg(all(feature = "vulkan", feature = "window"))]
 pub use crate::gpu::vulkan::renderer::VulkanRenderer as Renderer;
+
+// caches for the render thread's gpu-backed page resources: live recording surfaces
+// (see context::page::RecordingSurface) and persistent snapshot bitmaps
+pub(crate) mod cache;
 
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 struct Engine { }
@@ -71,7 +75,7 @@ mod render_thread{
                             if Engine::context_is_idle(){
                                 // everything derived from the idle context (cached textures,
                                 // recording surfaces) must be released along with it
-                                crate::context::page::evict_render_resources();
+                                super::cache::evict_idle();
                                 Engine::evict_idle();
                             } else {
                                 Engine::purge_stale(); // trim oldest entries in skia cache
@@ -144,7 +148,7 @@ impl RenderingEngine{
     pub fn make_surface(&self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
         match self {
             Self::GPU => Engine::make_surface(image_info, opts),
-            Self::CPU => surfaces::raster(image_info, None, Some(&opts.surface_props()))
+            Self::CPU => skia_safe::surfaces::raster(image_info, None, Some(&opts.surface_props()))
                 .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
         }
     }
