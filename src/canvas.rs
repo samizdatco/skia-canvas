@@ -25,9 +25,10 @@ impl Canvas{
   }
 
   pub fn engine(&mut self) -> gpu::RenderingEngine{
-    self.engine.get_or_insert_with(||
-      gpu::RenderingEngine::default()
-    ).clone()
+    self.engine.get_or_insert_with(|| match self.gpu_disabled{
+      true => gpu::RenderingEngine::CPU,
+      false => gpu::RenderingEngine::default(),
+    }).clone()
   }
 
   pub fn export_options(&self) -> ExportOptions{
