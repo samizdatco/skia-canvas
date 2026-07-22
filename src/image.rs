@@ -253,6 +253,15 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
   Ok(cx.boolean(this.content.is_drawable()))
 }
 
+pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  // Synchronously release decoded/loaded content (rather than waiting until for the next event
+  // loop tick gets around to calling Drop). Using the image after disposal is caught by js
+  let this = cx.argument::<BoxedImage>(0)?;
+  let mut this = this.borrow_mut();
+  std::mem::take(&mut this.content).release();
+  Ok(cx.undefined())
+}
+
 pub fn get_width(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedImage>(0)?;
   let this = this.borrow();
