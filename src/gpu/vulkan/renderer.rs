@@ -16,7 +16,7 @@ use vulkano::{
 use skia_safe::{
     gpu::{self, backend_render_targets, direct_contexts, surfaces, vk},
     canvas::SrcRectConstraint,
-    Color, Matrix, Image, Paint, BlendMode, SurfaceProps
+    Color, Matrix, Paint, BlendMode, SurfaceProps
 };
 use winit::{
     dpi::PhysicalSize,
@@ -24,7 +24,7 @@ use winit::{
     window::Window,
 };
 use crate::context::page::Page;
-use crate::gpu::{RenderCache, RenderState::Resizing};
+use crate::gpu::{RenderOutcome, RenderCache, RenderState::Resizing};
 use super::{VK_FORMATS, to_sk_format};
 
 pub struct VulkanRenderer{
@@ -172,7 +172,7 @@ impl VulkanRenderer {
         let dpr = self.window.scale_factor() as f32;
         let take_snapshot = self.cache.wants_snapshot(&page, matte, dpr, self.last_page_id);
 
-        self.backend.render_frame(&self.window, &props, take_snapshot, |canvas|{
+        let outcome = self.backend.render_frame(&self.window, &props, take_snapshot, |canvas|{
             // fill the full surface (including any letterboxing) with the window’s background
             // color, then lay the raster cache (if any) over the content area
             canvas.clear(matte);
@@ -188,11 +188,14 @@ impl VulkanRenderer {
             for pict in page.layers.iter().skip(self.cache.depth()){
                 canvas.draw_picture(pict, Some(&matrix), None);
             }
-        }).map(|frame| {
-            // cache frame contents for use as background of next render pass
-            self.cache.update(frame, &page, matte, dpr, clip);
-            self.last_page_id = page.id;
         });
+
+        // cache frame contents for use as background of next render pass (a skipped frame leaves
+        // the cache as-is and gets retried on the next redraw)
+        if let RenderOutcome::Rendered(image) = outcome{
+            self.cache.update(image, &page, matte, dpr, clip);
+            self.last_page_id = page.id;
+        }
     }
 }
 
@@ -318,28 +321,32 @@ impl VulkanBackend{
     }
 
     // outer Option is whether a frame was actually rendered, inner is the image
-    fn render_frame<F>(&mut self, window:&Window, props:&SurfaceProps, take_snapshot:bool, f:F) -> Option<Option<Image>>
+    fn render_frame<F>(&mut self, window:&Window, props:&SurfaceProps, take_snapshot:bool, f:F) -> RenderOutcome
         where F:FnOnce(&skia_safe::Canvas)
     {
         // make sure the framebuffers match the current window size
         self.prepare_swapchain(self.swapchain.image_extent().into());
 
-        self.get_next_frame().map(|(image_index, acquire_future)| {
-            // pull the appropriate framebuffer and create a skia Surface that renders to it
-            let framebuffer = self.framebuffers[image_index as usize].clone();
-            let mut surface = self.surface_for_framebuffer(framebuffer.clone(), props);
+        // no framebuffer available right now (swapchain out of date or suboptimal): skip this
+        // frame and retry on the next redraw once the swapchain has been recreated
+        let Some((image_index, acquire_future)) = self.get_next_frame() else {
+            return RenderOutcome::Skipped;
+        };
 
-            // pass the suface's canvas to the user-provided callback
-            f(surface.canvas());
+        // pull the appropriate framebuffer and create a skia Surface that renders to it
+        let framebuffer = self.framebuffers[image_index as usize].clone();
+        let mut surface = self.surface_for_framebuffer(framebuffer.clone(), props);
 
-            // save a copy of the frame bitmap for the cache (but only if requested)
-            let image = take_snapshot.then(|| surface.image_snapshot());
+        // pass the suface's canvas to the user-provided callback
+        f(surface.canvas());
 
-            // display the result
-            self.flush_framebuffer(window, image_index, acquire_future);
+        // save a copy of the frame bitmap for the cache (but only if requested)
+        let image = take_snapshot.then(|| surface.image_snapshot());
 
-            image
-        })
+        // display the result
+        self.flush_framebuffer(window, image_index, acquire_future);
+
+        RenderOutcome::Rendered(image)
     }
 
     fn get_next_frame(&mut self) -> Option<(u32, SwapchainAcquireFuture)> {

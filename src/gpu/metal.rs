@@ -6,7 +6,7 @@ use metal::{
     foreign_types::{ForeignType, ForeignTypeRef},
     CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
 };
-use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface, Image};
+use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface};
 use skia_safe::gpu::{
     mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
@@ -173,7 +173,7 @@ use {
         event_loop::ActiveEventLoop,
     },
     crate::context::page::Page,
-    super::{RenderCache, RenderState::Resizing},
+    super::{RenderOutcome, RenderCache, RenderState::Resizing},
 };
 
 #[allow(non_upper_case_globals)]
@@ -245,7 +245,7 @@ impl MetalRenderer{
         let sync = self.cache.state == Resizing;
         let take_snapshot = self.cache.wants_snapshot(&page, matte, dpr, self.last_page_id);
 
-        let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, take_snapshot, &props, |canvas| {
+        let outcome = self.backend.render_to_layer(&self.layer, &self.window, sync, take_snapshot, &props, |canvas| {
             // fill the full surface (including any letterboxing) with the window’s background
             // color, then lay the raster cache (if any) over the content area
             canvas.clear(matte);
@@ -261,11 +261,13 @@ impl MetalRenderer{
             for pict in page.layers.iter().skip(self.cache.depth()){
                 canvas.draw_picture(pict, Some(&matrix), None);
             }
-        }).unwrap();
+        });
 
         // cache frame contents for use as background of next render pass
-        self.cache.update(frame, &page, matte, dpr, clip);
-        self.last_page_id = page.id;
+        if let RenderOutcome::Rendered(image) = outcome{
+            self.cache.update(image, &page, matte, dpr, clip);
+            self.last_page_id = page.id;
+        }
     }
 }
 
@@ -287,12 +289,13 @@ impl MetalBackend {
         Self { skia_ctx, queue }
     }
 
-    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, snapshot:bool, props:&SurfaceProps, f:F) -> Result<Option<Image>, String>
+    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, snapshot:bool, props:&SurfaceProps, f:F) -> RenderOutcome
         where F:FnOnce(&skia_safe::Canvas)
     {
-        let drawable = layer
-            .next_drawable()
-            .ok_or("MetalBackend: could not allocate framebuffer".to_string())?;
+        // if layer pool is exhausted, just drop the frame and try again next tick
+        let Some(drawable) = layer.next_drawable() else {
+            return RenderOutcome::Skipped;
+        };
 
         let drawable_size = {
             let size = layer.drawable_size();
@@ -315,7 +318,7 @@ impl MetalBackend {
             ColorType::BGRA8888,
             None,
             Some(props),
-        ).ok_or("MetalBackend: could not create render target")?;
+        ).expect("MetalBackend: could not create render target");
 
         // pass the suface's canvas to the user-provided callback
         f(surface.canvas());
@@ -332,7 +335,7 @@ impl MetalBackend {
         if sync{ command_buffer.wait_until_completed(); }
 
         // copy the frame contents (for the RenderCache) only when they'll be reused
-        Ok(snapshot.then(|| surface.image_snapshot()))
+        RenderOutcome::Rendered(snapshot.then(|| surface.image_snapshot()))
     }
 
 }

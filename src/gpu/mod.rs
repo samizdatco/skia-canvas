@@ -3,6 +3,10 @@ use skia_safe::{gpu::DirectContext, ImageInfo, Image, Rect, Matrix, Color, Surfa
 use serde_json::{json, Value};
 use crate::context::page::{Page, ExportOptions};
 
+// reject `window` without a backend also being selected
+#[cfg(all(feature = "window", not(any(feature = "metal", feature = "vulkan"))))]
+compile_error!("the `window` feature requires enabling `metal` or `vulkan`");
+
 #[cfg(feature = "metal")]
 mod metal;
 #[cfg(feature = "metal")]
@@ -178,4 +182,10 @@ pub enum RenderState{
     Clean,
     Dirty,
     Resizing
+}
+
+#[cfg(feature = "window")] // only the windowed renderers produce these
+pub enum RenderOutcome {
+    Skipped, // surface wasn't available in time so couldn't redraw
+    Rendered(Option<Image>), // succeded (including snapshot if requested)
 }
