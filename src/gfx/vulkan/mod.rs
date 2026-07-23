@@ -13,10 +13,10 @@ use vulkano::{
 use vulkano::swapchain::Surface;
 use skia_safe::{ gpu::{vk, direct_contexts, DirectContext}, ColorType };
 
-pub mod engine;
+pub mod offscreen;
 
 #[cfg(feature = "window")]
-pub mod renderer;
+pub mod window;
 
 static VK_FORMATS: &'static [VkFormat] = &[
     VkFormat::R8G8B8A8_UNORM,

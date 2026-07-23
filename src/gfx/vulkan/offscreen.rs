@@ -20,17 +20,7 @@ thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCe
 static VK_STATUS: OnceLock<Value> = OnceLock::new();
 static VK_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5); // rebuilds can take ~70ms on a 3060, so use a long lifespan
 
-#[derive(Debug)]
-#[allow(dead_code)]
-pub struct VulkanEngine {
-    context: DirectContext,
-    library: Arc<VulkanLibrary>,
-    instance: Arc<Instance>,
-    physical_device: Arc<PhysicalDevice>,
-    device: Arc<Device>,
-    queue: Arc<Queue>,
-    last_use: Instant,
-}
+pub struct VulkanEngine;
 
 impl VulkanEngine {
     pub fn api() -> Option<String>{

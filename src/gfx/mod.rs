@@ -11,16 +11,16 @@ compile_error!("the `window` feature requires enabling `metal` or `vulkan`");
 #[cfg(feature = "metal")]
 mod metal;
 #[cfg(feature = "metal")]
-use crate::gfx::metal::MetalEngine as Engine;
+use crate::gfx::metal::offscreen::MetalEngine as Engine;
 #[cfg(all(feature = "metal", feature = "window"))]
-pub use crate::gfx::metal::MetalRenderer as Renderer;
+pub use crate::gfx::metal::window::MetalRenderer as Renderer;
 
 #[cfg(feature = "vulkan")]
 mod vulkan;
 #[cfg(feature = "vulkan")]
-use crate::gfx::vulkan::engine::VulkanEngine as Engine;
+use crate::gfx::vulkan::offscreen::VulkanEngine as Engine;
 #[cfg(all(feature = "vulkan", feature = "window"))]
-pub use crate::gfx::vulkan::renderer::VulkanRenderer as Renderer;
+pub use crate::gfx::vulkan::window::VulkanRenderer as Renderer;
 
 // caches for the render thread's gpu-backed page resources: live recording surfaces
 // (see context::page::RecordingSurface) and persistent snapshot bitmaps
