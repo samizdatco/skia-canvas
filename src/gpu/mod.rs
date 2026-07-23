@@ -40,6 +40,7 @@ impl Engine {
     pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
     pub fn context_is_idle() -> bool{ false }
     pub fn evict_idle(){ }
+    pub fn purge_stale(){ }
     pub fn with_cleanup<T>(f: impl FnOnce() -> T) -> T { f() }
 }
 
@@ -72,6 +73,8 @@ mod render_thread{
                                 // recording surfaces) must be released along with it
                                 crate::context::page::evict_render_resources();
                                 Engine::evict_idle();
+                            } else {
+                                Engine::purge_stale(); // trim oldest entries in skia cache
                             }
                         },
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,

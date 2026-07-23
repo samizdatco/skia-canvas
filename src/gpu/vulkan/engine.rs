@@ -18,7 +18,7 @@ use super::{VulkanShared, make_direct_context};
 
 thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );
 static VK_STATUS: OnceLock<Value> = OnceLock::new();
-static VK_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
+static VK_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5); // rebuilds can take ~70ms on a 3060, so use a long lifespan
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -125,6 +125,15 @@ impl VulkanEngine {
     pub fn evict_idle(){
         VK_CONTEXT.with_borrow_mut(|cell| {
             cell.take_if(|engine| engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN);
+        });
+    }
+
+    // called by the render thread between jobs to expire skia's internal caches
+    pub fn purge_stale(){
+        VK_CONTEXT.with_borrow_mut(|cell| {
+            if let Some(engine) = cell.as_mut(){
+                engine.context.perform_deferred_cleanup(Duration::from_secs(1), None);
+            }
         });
     }
 

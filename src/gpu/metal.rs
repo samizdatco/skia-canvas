@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use crate::context::page::ExportOptions;
 
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
-static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
+static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_millis(2500); // rebuild is cheap, so use a short lifespan
 static MTL_STATUS: OnceLock<Value> = OnceLock::new();
 
 //
@@ -104,6 +104,17 @@ impl MetalEngine {
     pub fn evict_idle(){
         MTL_CONTEXT.with_borrow_mut(|cell| {
             cell.take_if(|engine| engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN);
+        });
+    }
+
+    // called by the render thread between jobs to expire skia's internal caches
+    pub fn purge_stale(){
+        MTL_CONTEXT.with_borrow_mut(|cell| {
+            if let Some(engine) = cell.as_mut(){
+                autoreleasepool(||
+                    engine.context.perform_deferred_cleanup(Duration::from_secs(1), None)
+                );
+            }
         });
     }
 
