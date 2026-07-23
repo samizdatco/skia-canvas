@@ -13,7 +13,7 @@ mod texture;
 mod font_library;
 mod typography;
 mod utils;
-mod gpu;
+mod gfx;
 #[cfg(feature = "window")]
 mod gui;
 

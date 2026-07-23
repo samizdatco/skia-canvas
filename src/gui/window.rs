@@ -8,7 +8,7 @@ use winit::{
 };
 
 use crate::utils::css_to_color;
-use crate::gpu::Renderer;
+use crate::gfx::Renderer;
 use crate::context::page::Page;
 use super::event::Sieve;
 

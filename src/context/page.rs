@@ -16,8 +16,8 @@ const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 
 use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
-use crate::gpu::RenderingEngine;
-use crate::gpu::cache::{SurfaceCache, FrameCache};
+use crate::gfx::RenderingEngine;
+use crate::gfx::cache::{SurfaceCache, FrameCache};
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -172,7 +172,7 @@ impl PageRecorder{
           // then save a snapshot to the FrameCache. (uses render_soon because any subsequent
           // export is guaranteed to run after this since the render-thread's queue is FIFO)
           let (page, opts) = (page.clone(), opts.clone());
-          crate::gpu::render_soon(move ||{
+          crate::gfx::render_soon(move ||{
             SurfaceCache::with_existing(page.id, |surface|{
               if let Some(image) = surface.snapshot_if_valid(&page, &opts, &RenderingEngine::GPU){
                 FrameCache::set(page.id, image, &opts, surface.depth);
@@ -222,7 +222,7 @@ impl PageRecorder{
       .unwrap_or(false);
 
     if texture_backed || self.has_gpu_surface{
-      crate::gpu::render_soon(move ||{
+      crate::gfx::render_soon(move ||{
         drop(cache); // may release a texture-backed SkImage — must happen here, on the render thread
         SurfaceCache::drop(id);
       });

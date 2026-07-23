@@ -971,7 +971,7 @@ pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> 
   }
 }
 
-use crate::gpu::RenderingEngine;
+use crate::gfx::RenderingEngine;
 pub fn to_engine(engine_name:&str) -> Option<RenderingEngine>{
   let mode = match engine_name.to_lowercase().as_str(){
     "gpu" => RenderingEngine::GPU,

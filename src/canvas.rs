@@ -5,7 +5,7 @@ use skia_safe::SurfaceProps;
 use serde_json::json;
 use crate::utils::*;
 use crate::context::page::{ExportOptions, pages_arg};
-use crate::gpu;
+use crate::gfx;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -16,7 +16,7 @@ pub struct Canvas{
   pub text_contrast: f64,
   pub text_gamma: f64,
   pub gpu_disabled: bool,
-  engine: Option<gpu::RenderingEngine>,
+  engine: Option<gfx::RenderingEngine>,
 }
 
 impl Canvas{
@@ -24,10 +24,10 @@ impl Canvas{
     Canvas{width:300.0, height:150.0, text_contrast, text_gamma, gpu_disabled, engine:None}
   }
 
-  pub fn engine(&mut self) -> gpu::RenderingEngine{
+  pub fn engine(&mut self) -> gfx::RenderingEngine{
     self.engine.get_or_insert_with(|| match self.gpu_disabled{
-      true => gpu::RenderingEngine::CPU,
-      false => gpu::RenderingEngine::default(),
+      true => gfx::RenderingEngine::CPU,
+      false => gfx::RenderingEngine::default(),
     }).clone()
   }
 
@@ -109,7 +109,7 @@ pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if let Some(engine_name) = opt_string_arg(&mut cx, 1){
     if let Some(new_engine) = to_engine(&engine_name){
       if new_engine.selectable() {
-        this.borrow_mut().gpu_disabled = matches!(new_engine, gpu::RenderingEngine::CPU);
+        this.borrow_mut().gpu_disabled = matches!(new_engine, gfx::RenderingEngine::CPU);
         this.borrow_mut().engine = Some(new_engine)
       }
     }

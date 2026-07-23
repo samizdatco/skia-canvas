@@ -24,7 +24,7 @@ use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
 use crate::image::ImageData;
-use crate::gpu::RenderingEngine;
+use crate::gfx::RenderingEngine;
 use page::{PageRecorder, Page, ExportOptions};
 
 const BLACK:Color = Color::BLACK;

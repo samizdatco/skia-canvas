@@ -75,7 +75,7 @@ impl Content{
     let content = std::mem::take(self);
     if let Content::Bitmap(img) = &content{
       if img.is_texture_backed(){
-        crate::gpu::render_soon(move || drop(content));
+        crate::gfx::render_soon(move || drop(content));
       }
     }
   }

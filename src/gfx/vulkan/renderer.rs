@@ -23,7 +23,7 @@ use winit::{
     window::Window,
 };
 use crate::context::page::Page;
-use crate::gpu::{RenderOutcome, RenderCache, RenderState::Resizing};
+use crate::gfx::{RenderOutcome, RenderCache, RenderState::Resizing};
 use super::{VK_FORMATS, to_sk_format, VulkanShared, make_direct_context};
 
 pub struct VulkanRenderer{

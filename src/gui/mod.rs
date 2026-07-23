@@ -5,7 +5,7 @@ use neon::prelude::*;
 
 use crate::utils::*;
 use crate::context::BoxedContext2D;
-use crate::gpu::RenderingEngine;
+use crate::gfx::RenderingEngine;
 
 pub mod app;
 use app::{App, LoopMode};
