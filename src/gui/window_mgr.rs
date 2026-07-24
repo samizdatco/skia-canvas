@@ -1,3 +1,4 @@
+use std::time::Duration;
 use serde_json::json;
 use serde_json::{Map, Value};
 use winit::{
@@ -142,6 +143,18 @@ impl WindowManager {
 
     pub fn is_empty(&self) -> bool {
         self.windows.len() == 0
+    }
+
+    pub fn refresh_interval(&self) -> Duration {
+        // pace against the first window's monitor; fall back to 60Hz when the platform
+        // can't report a refresh rate (multi-monitor phase handling is future work)
+        let hz = self.windows.first()
+            .and_then(|win| win.handle.current_monitor())
+            .and_then(|monitor| monitor.refresh_rate_millihertz())
+            .map(|millihertz| millihertz as f64 / 1000.0)
+            .filter(|hz| *hz > 0.0)
+            .unwrap_or(60.0);
+        Duration::from_secs_f64(1.0 / hz)
     }
 }
 

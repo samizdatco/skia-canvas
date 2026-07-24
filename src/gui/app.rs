@@ -1,7 +1,7 @@
 use neon::prelude::*;
 use serde_json::Value;
 use std::{
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, atomic::{AtomicBool, Ordering}},
     iter::zip,
     cell::RefCell,
     time::{Duration, Instant},
@@ -42,6 +42,7 @@ pub struct App{
     pub mode: LoopMode,
     windows: WindowManager,
     cadence: Cadence,
+    vsync: Option<VsyncSource>,
 }
 
 impl Default for App{
@@ -50,6 +51,7 @@ impl Default for App{
             windows: WindowManager::default(),
             cadence: Cadence::default(),
             mode: LoopMode::Native,
+            vsync: None,
         }
     }
 }
@@ -105,7 +107,9 @@ impl App{
                                     Ok(false) // final window was closed
                                 }
                                 LoopMode::Node => {
-                                    let poll_time = app.cadence.next_wakeup() - Instant::now();
+                                    // wait for events to arrive (unless interrupted by a vsync tick or `backstop`
+                                    // duration if windows are fully static) and then yield to node (for gc & timers)
+                                    let poll_time = Duration::from_nanos(1_000_000_000 / NODE_POLL_HZ);
                                     event_loop.pump_app_events(Some(poll_time), &mut AppHandler{app: &mut *app, dispatch});
                                     Ok(app.cadence.should_continue() || !app.windows.is_empty())
                                 }
@@ -191,10 +195,13 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
 
                 // after the last window is closed, either exit (in run_app_on_demand mode)
                 // or wait for the window destructor to run (in pump_app_events mode)
-                if app.windows.is_empty(){ match app.mode{
-                    LoopMode::Native => event_loop.exit(),
-                    LoopMode::Node => app.cadence.loop_again(),
-                }}
+                if app.windows.is_empty(){
+                    app.vsync = None; // stop ticking once no windows remain
+                    match app.mode{
+                        LoopMode::Native => event_loop.exit(),
+                        LoopMode::Node => app.cadence.loop_again(),
+                    }
+                }
             }
 
             WindowEvent::KeyboardInput {
@@ -243,6 +250,12 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             AppEvent::Open(spec, page) => {
                 app.windows.add(event_loop, spec, page);
                 dispatch(app.windows.get_geometry(), Some(&mut app.windows)).ok();
+
+                // only listen for vblank signals when a window is actually open
+                if app.vsync.is_none(){
+                    let proxy = PROXY.with_borrow(|proxy| proxy.clone());
+                    app.vsync = Some(VsyncSource::start(proxy, app.windows.refresh_interval()));
+                }
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
@@ -250,28 +263,60 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             AppEvent::FrameRate(fps) => {
                 app.cadence.set_frame_rate(fps)
             }
+            AppEvent::Tick{ at } => {
+                // a tick arrives every vblank and the cadence handles triggering roundtrips & redraws (at the target fps)
+                if app.cadence.tick(at){
+                    dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+                }
+            }
             AppEvent::Quit => {
+                app.vsync = None;
                 event_loop.exit();
             }
         }
     }
-
-    fn about_to_wait(&mut self, event_loop:&ActiveEventLoop){
-        let Self{app, dispatch} = self;
-        event_loop.set_control_flow(
-            // let the cadence decide when to switch to poll-mode or sleep the thread
-            app.cadence.on_next_frame(app.mode, || {
-                // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-            })
-        );
-    }
 }
 
 
+// how often the event_pump wakes to service node's event loop when no Tick has arrived in the meantime
+const NODE_POLL_HZ: u64 = 60;
+
+// The frame heartbeat: a per-platform source that fires a Tick at each display vblank.
+struct VsyncSource{
+    running: Arc<AtomicBool>,
+}
+
+impl VsyncSource{
+    fn start(proxy:EventLoopProxy<AppEvent>, interval:Duration) -> Self{
+        let running = Arc::new(AtomicBool::new(true));
+        let flag = running.clone();
+        std::thread::spawn(move ||{
+            while flag.load(Ordering::Relaxed){
+                spin_sleep::sleep(interval);
+                // stop spinning if the event loop has gone away
+                if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){
+                    break;
+                }
+            }
+        });
+        Self{ running }
+    }
+}
+
+impl Drop for VsyncSource{
+    fn drop(&mut self){
+        self.running.store(false, Ordering::Relaxed);
+    }
+}
+
+// uses the hardware vblank timing to trigger renders at the js App's target fps, tracking
+// fractional frames via `credit` to match the fps on average if it doesn't divide evenly
+// into vblank
 struct Cadence{
     rate: u64,
-    last: Instant,
+    credit: f64,
+    last_tick: Instant,
+    seeded: bool,
     needs_cleanup: Option<bool>,
 }
 
@@ -279,7 +324,9 @@ impl Default for Cadence {
     fn default() -> Self {
         Self{
             rate: 60,
-            last: Instant::now(),
+            credit: 0.0,
+            last_tick: Instant::now(),
+            seeded: false,
             needs_cleanup: Some(true), // ensure at least one post-Init loop
         }
     }
@@ -299,42 +346,26 @@ impl Cadence{
         self.rate = rate;
     }
 
-    pub fn next_wakeup(&self) -> Instant{
-        let frame_time = 1_000_000_000/self.rate.max(1);
-        let watch_interval = 1_500_000.min(frame_time/10);
-        let wakeup = Duration::from_nanos(frame_time - watch_interval);
-        self.last + wakeup
-    }
-
-    pub fn on_next_frame<F:FnMut()>(&mut self, mode:LoopMode, mut draw:F) -> ControlFlow{
-        // determine the upcoming deadlines for actually rendering and for spinning in preparation
-        let frame_time = 1_000_000_000/self.rate.max(1);
-        let watch_interval = 1_500_000.min(frame_time/10);
-        let render = Duration::from_nanos(frame_time);
-        let wakeup = Duration::from_nanos(frame_time - watch_interval);
-
-        // if node is handling the event loop, we can't use polling to wait for the render
-        // deadline. so instead we'll pause the thread for the last 10% of the inter-frame
-        // time (up to 1.5ms), making sure we can then draw immediately after
-        let dt = self.last.elapsed();
-        if matches!(mode, LoopMode::Node) && dt >= wakeup && dt < render{
-            if let Some(sleep_time) = render.checked_sub(self.last.elapsed()){
-                spin_sleep::sleep(sleep_time);
-            }
+    // report whether a frame is due (based on target fps) whenever a vblank tick arrives
+    fn tick(&mut self, at:Instant) -> bool{
+        // the first tick just establishes the time base (and draws immediately)
+        if !self.seeded{
+            self.seeded = true;
+            self.last_tick = at;
+            return true;
         }
 
-        // call the draw callback if it's time & make sure the next deadline is in the future
-        if self.last.elapsed() >= render{
-            draw();
-            while self.last < Instant::now() - render{
-                self.last += render
-            }
-        }
+        // compare the elapsed time since our last redraw to the target fps and see if it's time for another
+        let dt = at.saturating_duration_since(self.last_tick).as_secs_f64();
+        self.last_tick = at;
+        self.credit += self.rate as f64 * dt;
 
-        // if winit is in control, we can use waiting & polling to hit the deadline
-        match self.last.elapsed() < wakeup {
-            true => ControlFlow::WaitUntil(self.last + wakeup),
-            false => ControlFlow::Poll,
+        if self.credit >= 1.0 {
+            // preserve fractional remainder so non-perfect divisions will average out
+            self.credit = (self.credit - 1.0).min(1.0);
+            true
+        } else {
+            false
         }
     }
 }
