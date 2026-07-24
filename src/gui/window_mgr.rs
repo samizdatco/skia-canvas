@@ -116,6 +116,11 @@ impl WindowManager {
         self.windows.iter_mut().find(|win| win.id() == *id).map(f);
     }
 
+    pub fn request_redraw_all(&self){
+        // used to kick Wayland's redraw-driven frame-callback loop (incl. newly-opened windows)
+        self.windows.iter().for_each(|win| win.handle.request_redraw());
+    }
+
     pub fn has_ui_changes(&self) -> bool {
         self.windows.iter().any(|win| !win.sieve.is_empty() )
     }

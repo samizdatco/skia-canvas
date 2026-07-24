@@ -235,7 +235,17 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             }
 
             WindowEvent::RedrawRequested => {
-                app.windows.find(&window_id, |win| win.redraw() );
+                // on wayland, this event *is* the vsync, so it's time to run the js-roundtrip
+                // (all other platforms trigger the roundtrip through AppEvent::Tick)
+                if app.cadence.is_redraw_driven() && app.cadence.tick(Instant::now()){
+                    dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+                }
+                app.windows.find(&window_id, |win|{
+                    win.redraw(); // all platforms update the window
+
+                    // wayland also needs to request the next vsync callback
+                    if app.cadence.is_redraw_driven(){ win.handle.request_redraw(); }
+                });
             }
 
             _ => {}
@@ -252,6 +262,12 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // only listen for vblank signals when a window is actually open
                 let proxy = PROXY.with_borrow(|proxy| proxy.clone());
                 app.cadence.start(proxy, &app.windows);
+
+                // on wayland, request redraw to queue up the first vsync
+                if app.cadence.is_redraw_driven(){
+                    app.windows.request_redraw_all();
+                }
+
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
@@ -283,6 +299,7 @@ enum VsyncSource{
     Thread(SourceThread),
     #[cfg(target_os = "macos")]
     DisplayLink(corevideo_vsync::DisplayLink),
+    RedrawDriven, // Wayland uses winit's RedrawRequested rather than the thread
 }
 
 impl VsyncSource{
@@ -295,6 +312,11 @@ impl VsyncSource{
 
         // try to find a real vblank source or fall back to using an un-anchored timer
         if !force_timer{
+            #[cfg(all(unix, not(target_os = "macos")))]
+            if std::env::var_os("WAYLAND_DISPLAY").is_some(){
+                return debug_selected("wayland-frame-callback", VsyncSource::RedrawDriven);
+            }
+
             #[cfg(target_os = "macos")]
             if let Some(link) = windows.primary_display_id()
                 .and_then(|id| corevideo_vsync::start(proxy.clone(), id)){
@@ -591,6 +613,11 @@ impl Cadence{
 
     fn set_frame_rate(&mut self, rate:u64){
         self.rate = rate;
+    }
+
+    // Wayland's redraw-driven mode has no thread — the RedrawRequested handler runs the cadence
+    fn is_redraw_driven(&self) -> bool{
+        matches!(self.vsync, Some(VsyncSource::RedrawDriven))
     }
 
     // report whether a frame is due (based on target fps) whenever a vblank tick arrives
