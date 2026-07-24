@@ -127,6 +127,22 @@ impl App{
         });
     }
 
+    // creates a vsync source if animating and one doesn't exist, drops the source when idle
+    // (called after every js roundtrip, when the `animating` flag is updated)
+    fn ensure_vsync(&mut self){
+        let want = self.windows.is_animating() && !self.windows.is_empty();
+        if want && self.cadence.is_idle(){
+            let proxy = PROXY.with_borrow(|proxy| proxy.clone());
+            self.cadence.run(proxy, &self.windows);
+            if self.cadence.is_redraw_driven(){ self.windows.request_redraw_all(); }
+        }else if !want && !self.cadence.is_idle(){
+            if std::env::var_os("SKIA_CANVAS_VSYNC_DEBUG").is_some(){
+                eprintln!("[skia-canvas] vsync source: idle (paused)");
+            }
+            self.cadence.stop();
+        }
+    }
+
     fn dispatch_events(cx:&mut TaskContext, events:Value, window_mgr:Option<&mut WindowManager>) -> NeonResult<()>{
         // window_mgr is only present if it's time to collect updated canvas contents from js
         let is_render = window_mgr.is_some();
@@ -163,6 +179,13 @@ impl App{
                 zip(specs, pages)
                     .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
                     .for_each(|(spec, page)| window_mgr.update_window(spec, page) );
+
+                // note whether any window still has a frame/draw listener, so vsync can be paused when idle
+                let animating = response.get(2)
+                    .and_then(|val| val.downcast::<JsBoolean, _>(cx).ok())
+                    .map(|flag| flag.value(cx))
+                    .unwrap_or(true);
+                window_mgr.set_animating(animating);
             }
         };
 
@@ -226,6 +249,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // returning: during a live-resize the OS runs a modal loop, so waiting for the
                 // next frame tick would leave the window contents lagging behind the new size
                 dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+                app.ensure_vsync();
                 app.windows.find(&window_id, |win| win.redraw() );
             }
 
@@ -239,6 +263,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // (all other platforms trigger the roundtrip through AppEvent::Tick)
                 if app.cadence.is_redraw_driven() && app.cadence.tick(Instant::now()){
                     dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+                    app.ensure_vsync(); // may drop the source if the app just went idle
                 }
                 app.windows.find(&window_id, |win|{
                     win.redraw(); // all platforms update the window
@@ -250,6 +275,14 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
 
             _ => {}
         }
+
+        // when idle (no vsync source) the loop is event-driven: flush queued UI events to js and
+        // repaint right away, since no frame tick will arrive to do it. a handler may start
+        // animating, so reconcile the source afterward.
+        if app.cadence.is_idle(){
+            dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+            app.ensure_vsync();
+        }
     }
 
     fn user_event(&mut self, event_loop:&ActiveEventLoop, event:AppEvent){
@@ -258,16 +291,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             AppEvent::Open(spec, page) => {
                 app.windows.add(event_loop, spec, page);
                 dispatch(app.windows.get_geometry(), Some(&mut app.windows)).ok();
-
-                // only listen for vblank signals when a window is actually open
-                let proxy = PROXY.with_borrow(|proxy| proxy.clone());
-                app.cadence.start(proxy, &app.windows);
-
-                // on wayland, request redraw to queue up the first vsync
-                if app.cadence.is_redraw_driven(){
-                    app.windows.request_redraw_all();
-                }
-
+                app.ensure_vsync(); // only listen for vblank signals when a window is actually open
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
@@ -279,6 +303,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // a tick arrives every vblank and the cadence handles triggering roundtrips & redraws (at the target fps)
                 if app.cadence.tick(at){
                     dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+                    app.ensure_vsync(); // pause the source if the app just went idle
                 }
             }
             AppEvent::Quit => {
@@ -589,7 +614,7 @@ impl Default for Cadence {
 
 impl Cadence{
     // start up the vsync source if it's not already running
-    fn start(&mut self, proxy:EventLoopProxy<AppEvent>, windows:&WindowManager){
+    fn run(&mut self, proxy:EventLoopProxy<AppEvent>, windows:&WindowManager){
         if self.vsync.is_none(){
             self.vsync = Some(VsyncSource::start(proxy, windows));
         }
@@ -618,6 +643,10 @@ impl Cadence{
     // Wayland's redraw-driven mode has no thread — the RedrawRequested handler runs the cadence
     fn is_redraw_driven(&self) -> bool{
         matches!(self.vsync, Some(VsyncSource::RedrawDriven))
+    }
+
+    fn is_idle(&self) -> bool{
+        self.vsync.is_none()
     }
 
     // report whether a frame is due (based on target fps) whenever a vblank tick arrives
