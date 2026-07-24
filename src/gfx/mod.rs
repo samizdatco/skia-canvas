@@ -1,7 +1,9 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{gpu::DirectContext, ImageInfo, Image, Rect, Matrix, Color, Surface};
+use skia_safe::{gpu::DirectContext, ImageInfo, Surface};
+#[cfg(feature = "window")]
+use skia_safe::Image; // RenderOutcome carries a snapshot destined for the Frame cache
 use serde_json::{json, Value};
-use crate::context::page::{Page, ExportOptions};
+use crate::context::page::ExportOptions;
 use crate::utils::catch_panic;
 
 // reject `window` without a backend also being selected
@@ -196,87 +198,6 @@ impl RenderingEngine{
             }
         }
     }
-}
-
-#[allow(dead_code)]
-pub struct RenderCache {
-    image: Option<Image>,
-    content: Rect,
-    page: Page,
-    matte: Color,
-    dpr: f32,
-    state: RenderState,
-}
-
-impl Default for RenderCache{
-    fn default() -> Self {
-        Self{image:None, content:Rect::new_empty(), page:Page::default(), dpr:0.0, matte:Color::TRANSPARENT, state:RenderState::Clean}
-    }
-}
-
-#[allow(dead_code)]
-impl RenderCache{
-    pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32, clip:Rect) -> Option<(&Image, &Rect, Rect)>{
-        if
-            self.state == RenderState::Dirty ||
-            self.page.id != page.id ||
-            self.matte != matte ||
-            self.dpr != dpr
-        {
-            *self = Self::default();
-        }
-
-        self.image.as_ref().map(|img| {
-            let (dst, _) = Matrix::scale((dpr, dpr)).map_rect(clip);
-            (img, &self.content, dst)
-        })
-    }
-
-    pub fn depth(&self) -> usize {
-        self.page.layers.len()
-    }
-
-    pub fn wants_snapshot(&self, page:&Page, matte:Color, dpr:f32, last_id:usize) -> bool{
-        // decide (before rendering) whether the frame's snapshot would ever be drawn: skip the
-        // GPU→GPU copy when it would just be discarded
-        if self.state == RenderState::Resizing{
-            return false // update() drops the image during resizes
-        }
-
-        let cache_is_current = self.state == RenderState::Clean &&
-            self.image.is_some() &&
-            self.page.id == page.id &&
-            self.matte == matte &&
-            self.dpr == dpr;
-
-        match cache_is_current{
-            // only re-snapshot when new layers extend the cached content
-            true => page.depth() > self.page.depth(),
-            // otherwise snapshot only for pages that persist across frames (an id that churns
-            // frame-to-frame means full-page redraws that invalidate the cache before reuse)
-            false => page.id == last_id
-        }
-    }
-
-    pub fn update(&mut self, image:Option<Image>, page:&Page, matte:Color, dpr:f32, content:Rect){
-        if self.state==RenderState::Resizing{
-            // mark the framebuffer as needing a full redraw and skip updating cached image during resize
-            self.state = RenderState::Dirty;
-        }else if let Some(image) = image{
-            let state = RenderState::Clean;
-            let (content, _) = skia_safe::Matrix::scale((dpr, dpr)).map_rect(content);
-            *self = Self{image: Some(image), page:page.clone(), matte, dpr, content, state};
-        }
-        // frames without a snapshot leave any cached image in place (it's still a valid prefix
-        // of the current page)
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Copy)]
-pub enum RenderState{
-    Clean,
-    Dirty,
-    Resizing
 }
 
 #[cfg(feature = "window")] // only the windowed renderers produce these

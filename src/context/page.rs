@@ -17,7 +17,7 @@ const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
 use crate::gfx::RenderingEngine;
-use crate::gfx::cache::{SurfaceCache, FrameCache};
+use crate::gfx::cache::{SurfaceCache, RasterCache};
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -40,7 +40,7 @@ impl PageRecorder{
   pub fn new(bounds:Rect) -> Self {
     static COUNTER:AtomicUsize = AtomicUsize::new(1);
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-    FrameCache::add(id);
+    RasterCache::add(id);
 
     PageRecorder{
       current:None, layers:vec![], changed:false, disposed:false,
@@ -163,26 +163,26 @@ impl PageRecorder{
   }
 
   pub fn get_page_for_export(&mut self, opts:&ExportOptions, engine:&RenderingEngine) -> Page{
-    // update the FrameCache with the surface bitmap (if it's valid for this export)
+    // update the RasterCache with the surface bitmap (if it's valid for this export)
     let page = self.get_page();
     if opts.is_raster(){
       match engine{
         RenderingEngine::GPU => {
           // use the render-thread to rasterize (using the cached surface for this page)
-          // then save a snapshot to the FrameCache. (uses render_soon because any subsequent
+          // then save a snapshot to the RasterCache. (uses render_soon because any subsequent
           // export is guaranteed to run after this since the render-thread's queue is FIFO)
           let (page, opts) = (page.clone(), opts.clone());
           crate::gfx::render_soon(move ||{
             SurfaceCache::with_existing(page.id, |surface|{
               if let Some(image) = surface.snapshot_if_valid(&page, &opts, &RenderingEngine::GPU){
-                FrameCache::set(page.id, image, &opts, surface.depth);
+                RasterCache::set(page.id, image, &opts, surface.depth);
               }
             });
           });
         }
         RenderingEngine::CPU => {
           if let Some(image) = self.surface.snapshot_if_valid(&page, &opts, engine){
-            FrameCache::set(self.id, image, &opts, self.surface.depth);
+            RasterCache::set(self.id, image, &opts, self.surface.depth);
           }
         }
       }
@@ -216,7 +216,7 @@ impl PageRecorder{
     // if the cached page image is gpu-backed (or an export has used a gpu surface)
     // the buffers can only be dropped on the render thread
     let id = self.id;
-    let cache = FrameCache::drop(id);
+    let cache = RasterCache::drop(id);
     let texture_backed = cache.as_ref()
       .map(|c| c.is_texture_backed())
       .unwrap_or(false);
@@ -301,7 +301,7 @@ impl RecordingSurface{
 
     if let Some(surface) = self.surface.as_mut(){
       let canvas = surface.canvas();
-      let (cache_image, cache_depth) = FrameCache::get(page.id, &opts, page.depth(), matches!(engine, RenderingEngine::GPU));
+      let (cache_image, cache_depth) = RasterCache::get(page.id, &opts, page.depth(), matches!(engine, RenderingEngine::GPU));
 
       if let Some(image) = cache_image{
         // use the cached bitmap as the background (if present)
@@ -423,7 +423,7 @@ impl Page{
           let mut surface = engine.make_surface(&img_info, &opts)?;
           let canvas = surface.canvas();
 
-          let (cache_image, cache_depth) = FrameCache::get(page.id, &opts, page.depth(), matches!(engine, RenderingEngine::GPU));
+          let (cache_image, cache_depth) = RasterCache::get(page.id, &opts, page.depth(), matches!(engine, RenderingEngine::GPU));
           if let Some(image) = cache_image{
             // use the cached bitmap as the background
             canvas.draw_image(image, (0,0), None);
@@ -446,7 +446,7 @@ impl Page{
           // update the cache with the snapshot itself: texture-backed images stay resident,
           // since the cache is only ever read back on this thread
           if page.depth() > cache_depth{
-            FrameCache::set(page.id, image.clone(), &opts, page.depth());
+            RasterCache::set(page.id, image.clone(), &opts, page.depth());
           }
 
           match opts.format.as_str() {

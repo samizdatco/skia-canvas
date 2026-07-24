@@ -23,12 +23,13 @@ use winit::{
     window::Window,
 };
 use crate::context::page::Page;
-use crate::gfx::{RenderOutcome, RenderCache, RenderState::Resizing};
+use crate::gfx::RenderOutcome;
+use crate::gfx::cache::Frame;
 use super::{VK_FORMATS, to_sk_format, VulkanShared, make_direct_context};
 
 pub struct VulkanRenderer{
     window: Arc<Window>,
-    cache: RenderCache, // must be listed before backend to ensure proper drop order
+    frame: Frame, // must be listed before backend to ensure proper drop order
     backend: VulkanBackend,
     last_page_id: usize, // previous frame's page id — render-loop history, not cache state
 }
@@ -113,11 +114,11 @@ impl VulkanRenderer {
             .unwrap()
         };
 
-        Self{window, backend:VulkanBackend::new(queue, swapchain), cache:RenderCache::default(), last_page_id:0}
+        Self{window, backend:VulkanBackend::new(queue, swapchain), frame:Frame::default(), last_page_id:0}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.cache.state = Resizing;
+        self.frame.start_resizing();
         self.backend.swapchain_is_valid = false;
         self.backend.prepare_swapchain(size.into());
     }
@@ -125,13 +126,13 @@ impl VulkanRenderer {
     pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
-        let take_snapshot = self.cache.wants_snapshot(&page, matte, dpr, self.last_page_id);
+        let take_snapshot = self.frame.wants_snapshot(&page, matte, dpr, self.last_page_id);
 
         let outcome = self.backend.render_frame(&self.window, &props, take_snapshot, |canvas|{
             // fill the full surface (including any letterboxing) with the window’s background
             // color, then lay the raster cache (if any) over the content area
             canvas.clear(matte);
-            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
+            if let Some((image, src, dst)) = self.frame.validate(&page, matte, dpr, clip){
                 let mut paint = Paint::default();
                 paint.set_blend_mode(BlendMode::Src); // cached frame already includes the matte
                 canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &paint);
@@ -140,7 +141,7 @@ impl VulkanRenderer {
             // draw newly added vector layers
             canvas.scale((dpr, dpr))
                 .clip_rect(clip, None, Some(true));
-            for pict in page.layers.iter().skip(self.cache.depth()){
+            for pict in page.layers.iter().skip(self.frame.depth()){
                 canvas.draw_picture(pict, Some(&matrix), None);
             }
         });
@@ -148,7 +149,7 @@ impl VulkanRenderer {
         // cache frame contents for use as background of next render pass (a skipped frame leaves
         // the cache as-is and gets retried on the next redraw)
         if let RenderOutcome::Rendered(image) = outcome{
-            self.cache.update(image, &page, matte, dpr, clip);
+            self.frame.update(image, &page, matte, dpr, clip);
             self.last_page_id = page.id;
         }
     }

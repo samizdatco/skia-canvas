@@ -22,7 +22,8 @@ use winit::{
 };
 
 use crate::context::page::Page;
-use crate::gfx::{RenderOutcome, RenderCache, RenderState::Resizing};
+use crate::gfx::RenderOutcome;
+use crate::gfx::cache::Frame;
 use super::make_direct_context;
 
 #[allow(non_upper_case_globals)]
@@ -36,7 +37,7 @@ pub struct MetalRenderer {
     window: Arc<Window>,
     backend: MetalBackend,
     layer: MetalLayer,
-    cache: RenderCache,
+    frame: Frame,
     last_page_id: usize, // previous frame's page id — render-loop history, not cache state
 }
 
@@ -75,28 +76,28 @@ impl MetalRenderer{
         layer.set_drawable_size(CGSize::new(draw_size.width as f64, draw_size.height as f64));
 
         let backend = MetalBackend::for_layer(&layer);
-        let cache = RenderCache::default();
+        let frame = Frame::default();
 
-        Self{window, layer, backend, cache, last_page_id:0}
+        Self{window, layer, backend, frame, last_page_id:0}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         let cg_size = CGSize::new(size.width as f64, size.height as f64);
         self.layer.set_drawable_size(cg_size);
-        self.cache.state = Resizing;
+        self.frame.start_resizing();
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
-        let sync = self.cache.state == Resizing;
-        let take_snapshot = self.cache.wants_snapshot(&page, matte, dpr, self.last_page_id);
+        let sync = self.frame.is_resizing();
+        let take_snapshot = self.frame.wants_snapshot(&page, matte, dpr, self.last_page_id);
 
         let outcome = self.backend.render_to_layer(&self.layer, &self.window, sync, take_snapshot, &props, |canvas| {
             // fill the full surface (including any letterboxing) with the window’s background
             // color, then lay the raster cache (if any) over the content area
             canvas.clear(matte);
-            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
+            if let Some((image, src, dst)) = self.frame.validate(&page, matte, dpr, clip){
                 let mut paint = Paint::default();
                 paint.set_blend_mode(BlendMode::Src); // cached frame already includes the matte
                 canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &paint);
@@ -105,14 +106,14 @@ impl MetalRenderer{
             // draw newly added vector layers
             canvas.scale((dpr, dpr))
                 .clip_rect(clip, None, Some(true));
-            for pict in page.layers.iter().skip(self.cache.depth()){
+            for pict in page.layers.iter().skip(self.frame.depth()){
                 canvas.draw_picture(pict, Some(&matrix), None);
             }
         });
 
         // cache frame contents for use as background of next render pass
         if let RenderOutcome::Rendered(image) = outcome{
-            self.cache.update(image, &page, matte, dpr, clip);
+            self.frame.update(image, &page, matte, dpr, clip);
             self.last_page_id = page.id;
         }
     }
@@ -176,7 +177,7 @@ impl MetalBackend {
         // during resizes, ensure drawing is complete before returning
         if sync{ command_buffer.wait_until_completed(); }
 
-        // copy the frame contents (for the RenderCache) only when they'll be reused
+        // copy the frame contents (for the Frame cache) only when they'll be reused
         RenderOutcome::Rendered(snapshot.then(||
           surface.image_snapshot_with_bounds(surface.image_info().bounds())).flatten()
         )
