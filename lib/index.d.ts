@@ -1042,6 +1042,7 @@ export interface App extends EventEmitter<{
 }>{
   readonly windows: Window[]
   readonly running: boolean
+  /** @deprecated Event loop modes have been removed: the node event loop is now always available */
   eventLoop: EventLoopMode
   fps: number
 

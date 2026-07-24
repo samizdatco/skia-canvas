@@ -9,9 +9,8 @@ use std::{
 use winit::{
     application::ApplicationHandler,
     platform::pump_events::EventLoopExtPumpEvents,
-    platform::run_on_demand::EventLoopExtRunOnDemand,
     event::{ElementState, KeyEvent, WindowEvent},
-    event_loop::{EventLoop, EventLoopProxy, ActiveEventLoop, ControlFlow},
+    event_loop::{EventLoop, EventLoopProxy, ActiveEventLoop},
     keyboard::{PhysicalKey, KeyCode},
     window::WindowId,
 };
@@ -36,13 +35,7 @@ static RENDER_CALLBACK: OnceLock<Arc<Root<JsFunction>>> = OnceLock::new();
 // how often the event_pump wakes to service node's event loop when no Tick has arrived in the meantime
 const NODE_IDLE_WAKE_MS: u64 = 100;
 
-#[derive(Copy, Clone)]
-pub enum LoopMode{
-    Native, Node
-}
-
 pub struct App{
-    pub mode: LoopMode,
     windows: WindowManager,
     cadence: Cadence,
 }
@@ -52,7 +45,6 @@ impl Default for App{
         Self{
             windows: WindowManager::default(),
             cadence: Cadence::default(),
-            mode: LoopMode::Native,
         }
     }
 }
@@ -64,10 +56,6 @@ fn add_event(event: AppEvent){
 impl App{
     pub fn register(callback:Root<JsFunction>){
         RENDER_CALLBACK.get_or_init(|| Arc::new(callback));
-    }
-
-    pub fn set_mode(mode:LoopMode){
-        APP.with_borrow_mut(|app| app.mode = mode );
     }
 
     pub fn set_fps(fps:f32){
@@ -92,29 +80,18 @@ impl App{
             loop{
                 // schedule a callback on the node event loop
                 let keep_running = channel.send(move |mut cx| {
-
                     // define closure to relay events to js and receive canvas updates in return
                     let dispatch = |payload:Value, windows:Option<&mut WindowManager>| -> NeonResult<()>{
                         App::dispatch_events(&mut cx, payload, windows)
                     };
 
-                    // run the winit event loop (either once or until all windows are closed depending on mode)
+                    // wait for events to arrive (unless interrupted by a vsync tick or `backstop`
+                    // duration if windows are fully static) and then yield to node (for gc & timers)
                     APP.with_borrow_mut(|app| {
                         EVENT_LOOP.with_borrow_mut(|event_loop|{
-                            match app.mode{
-                                LoopMode::Native => {
-                                    event_loop.set_control_flow(ControlFlow::Wait);
-                                    event_loop.run_app_on_demand(&mut AppHandler{app, dispatch}).ok();
-                                    Ok(false) // final window was closed
-                                }
-                                LoopMode::Node => {
-                                    // wait for events to arrive (unless interrupted by a vsync tick or `backstop`
-                                    // duration if windows are fully static) and then yield to node (for gc & timers)
-                                    let backstop = Duration::from_millis(NODE_IDLE_WAKE_MS);
-                                    event_loop.pump_app_events(Some(backstop), &mut AppHandler{app: &mut *app, dispatch});
-                                    Ok(app.cadence.should_continue() || !app.windows.is_empty())
-                                }
-                            }
+                            let backstop = Duration::from_millis(NODE_IDLE_WAKE_MS);
+                            event_loop.pump_app_events(Some(backstop), &mut AppHandler{app: &mut *app, dispatch});
+                            Ok(app.cadence.should_continue() || !app.windows.is_empty())
                         })
                     })
                 }).join();
@@ -215,7 +192,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
 {
     fn resumed(&mut self, _event_loop:&ActiveEventLoop){}
 
-    fn window_event(&mut self, event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
+    fn window_event(&mut self, _event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
         let Self{app, dispatch} = self;
         app.windows.find(&window_id, |win| win.sieve.capture(&event) );
 
@@ -223,14 +200,10 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             WindowEvent::Destroyed | WindowEvent::CloseRequested => {
                 app.windows.remove(&window_id);
 
-                // after the last window is closed, either exit (in run_app_on_demand mode)
-                // or wait for the window destructor to run (in pump_app_events mode)
+                // after the last window is closed...
                 if app.windows.is_empty(){
                     app.cadence.stop(); // stop ticking once no windows remain
-                    match app.mode{
-                        LoopMode::Native => event_loop.exit(),
-                        LoopMode::Node => app.cadence.loop_again(),
-                    }
+                    app.cadence.loop_again(); // run one more cycle to let its destructor run
                 }
             }
 

@@ -251,7 +251,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("App_closeWindow", gui::close)?;
     cx.export_function("App_openWindow", gui::open)?;
     cx.export_function("App_setRate", gui::set_rate)?;
-    cx.export_function("App_setMode", gui::set_mode)?;
   }
 
   Ok(())
