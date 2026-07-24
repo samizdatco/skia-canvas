@@ -147,52 +147,58 @@ impl App{
     }
 
     fn dispatch_events(cx:&mut TaskContext, events:Value, window_mgr:Option<&mut WindowManager>) -> NeonResult<()>{
-        // window_mgr is only present if it's time to collect updated canvas contents from js
-        let is_render = window_mgr.is_some();
+        // run the per-frame javascript-roundtrip in its own scope to release the js<->rust payloads
+        // immediately rather than letting them accumulate in the pump_events scope
+        cx.execute_scoped(|mut cx| -> NeonResult<()> {
+            let cx = &mut cx;
 
-        // js callback is passed render flag & json-encoded event queue
-        let mut call = match RENDER_CALLBACK.get(){
-            None => return Ok(()),
-            Some(callback)=> callback.to_inner(cx).call_with(cx),
-        };
-        call.arg(cx.boolean(is_render))
-            .arg(cx.string(events.to_string()));
+            // window_mgr is only present if it's time to collect updated canvas contents from js
+            let is_render = window_mgr.is_some();
 
-        match window_mgr{
-            None => call.exec(cx)?, // if this is just a UI-event delivery, fire & forget
+            // js callback is passed render flag & json-encoded event queue
+            let mut call = match RENDER_CALLBACK.get(){
+                None => return Ok(()),
+                Some(callback)=> callback.to_inner(cx).call_with(cx),
+            };
+            call.arg(cx.boolean(is_render))
+                .arg(cx.string(events.to_string()));
 
-            Some(window_mgr) => {
-                // for a full roundtrip, first pass events to js
-                let response = call.apply::<JsValue, _>(cx)?
-                    .downcast::<JsArray, _>(cx).or_throw(cx)?
-                    .to_vec(cx)?;
+            match window_mgr{
+                None => call.exec(cx)?, // if this is just a UI-event delivery, fire & forget
 
-                // then unpack the returned window specs & contexts
-                let specs_json = response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
-                let specs:Vec<WindowSpec> = serde_json::from_str(&specs_json)
-                    .or_else(|err| cx.throw_error(format!("Malformed response from window event handler: {}", err)) )?;
+                Some(window_mgr) => {
+                    // for a full roundtrip, first pass events to js
+                    let response = call.apply::<JsValue, _>(cx)?
+                        .downcast::<JsArray, _>(cx).or_throw(cx)?
+                        .to_vec(cx)?;
 
-                let contexts = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
-                let pages = contexts.iter().map(|boxed|
-                    boxed.downcast::<BoxedContext2D, _>(cx).ok()
-                        .map(|ctx| ctx.borrow().get_page())
-                );
+                    // then unpack the returned window specs & contexts
+                    let specs_json = response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
+                    let specs:Vec<WindowSpec> = serde_json::from_str(&specs_json)
+                        .or_else(|err| cx.throw_error(format!("Malformed response from window event handler: {}", err)) )?;
 
-                // update each window with its new state & content
-                zip(specs, pages)
-                    .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
-                    .for_each(|(spec, page)| window_mgr.update_window(spec, page) );
+                    let contexts = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
+                    let pages = contexts.iter().map(|boxed|
+                        boxed.downcast::<BoxedContext2D, _>(cx).ok()
+                            .map(|ctx| ctx.borrow().get_page())
+                    );
 
-                // note whether any window still has a frame/draw listener, so vsync can be paused when idle
-                let animating = response.get(2)
-                    .and_then(|val| val.downcast::<JsBoolean, _>(cx).ok())
-                    .map(|flag| flag.value(cx))
-                    .unwrap_or(true);
-                window_mgr.set_animating(animating);
-            }
-        };
+                    // update each window with its new state & content
+                    zip(specs, pages)
+                        .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
+                        .for_each(|(spec, page)| window_mgr.update_window(spec, page) );
 
-        Ok(())
+                    // note whether any window still has a frame/draw listener, so vsync can be paused when idle
+                    let animating = response.get(2)
+                        .and_then(|val| val.downcast::<JsBoolean, _>(cx).ok())
+                        .map(|flag| flag.value(cx))
+                        .unwrap_or(true);
+                    window_mgr.set_animating(animating);
+                }
+            };
+
+            Ok(())
+        })
     }
 
 }
