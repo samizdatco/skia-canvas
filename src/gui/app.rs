@@ -33,6 +33,9 @@ thread_local!(
 
 static RENDER_CALLBACK: OnceLock<Arc<Root<JsFunction>>> = OnceLock::new();
 
+// how often the event_pump wakes to service node's event loop when no Tick has arrived in the meantime
+const NODE_IDLE_WAKE_MS: u64 = 100;
+
 #[derive(Copy, Clone)]
 pub enum LoopMode{
     Native, Node
@@ -107,8 +110,8 @@ impl App{
                                 LoopMode::Node => {
                                     // wait for events to arrive (unless interrupted by a vsync tick or `backstop`
                                     // duration if windows are fully static) and then yield to node (for gc & timers)
-                                    let poll_time = Duration::from_nanos(1_000_000_000 / NODE_POLL_HZ);
-                                    event_loop.pump_app_events(Some(poll_time), &mut AppHandler{app: &mut *app, dispatch});
+                                    let backstop = Duration::from_millis(NODE_IDLE_WAKE_MS);
+                                    event_loop.pump_app_events(Some(backstop), &mut AppHandler{app: &mut *app, dispatch});
                                     Ok(app.cadence.should_continue() || !app.windows.is_empty())
                                 }
                             }
@@ -291,7 +294,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             AppEvent::Open(spec, page) => {
                 app.windows.add(event_loop, spec, page);
                 dispatch(app.windows.get_geometry(), Some(&mut app.windows)).ok();
-                app.ensure_vsync(); // only listen for vblank signals when a window is actually open
+                app.ensure_vsync(); // only listen for vblank signals when ≥1 window is animating
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
@@ -314,9 +317,6 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
     }
 }
 
-
-// how often the event_pump wakes to service node's event loop when no Tick has arrived in the meantime
-const NODE_POLL_HZ: u64 = 60;
 
 // The frame heartbeat: a per-platform source that fires a Tick at each display vblank.
 enum VsyncSource{
