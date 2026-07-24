@@ -42,7 +42,6 @@ pub struct App{
     pub mode: LoopMode,
     windows: WindowManager,
     cadence: Cadence,
-    vsync: Option<VsyncSource>,
 }
 
 impl Default for App{
@@ -51,7 +50,6 @@ impl Default for App{
             windows: WindowManager::default(),
             cadence: Cadence::default(),
             mode: LoopMode::Native,
-            vsync: None,
         }
     }
 }
@@ -196,7 +194,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // after the last window is closed, either exit (in run_app_on_demand mode)
                 // or wait for the window destructor to run (in pump_app_events mode)
                 if app.windows.is_empty(){
-                    app.vsync = None; // stop ticking once no windows remain
+                    app.cadence.stop(); // stop ticking once no windows remain
                     match app.mode{
                         LoopMode::Native => event_loop.exit(),
                         LoopMode::Node => app.cadence.loop_again(),
@@ -252,10 +250,8 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 dispatch(app.windows.get_geometry(), Some(&mut app.windows)).ok();
 
                 // only listen for vblank signals when a window is actually open
-                if app.vsync.is_none(){
-                    let proxy = PROXY.with_borrow(|proxy| proxy.clone());
-                    app.vsync = Some(VsyncSource::start(proxy, app.windows.refresh_interval()));
-                }
+                let proxy = PROXY.with_borrow(|proxy| proxy.clone());
+                app.cadence.start(proxy, &app.windows);
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
@@ -270,7 +266,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 }
             }
             AppEvent::Quit => {
-                app.vsync = None;
+                app.cadence.stop();
                 event_loop.exit();
             }
         }
@@ -282,31 +278,268 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
 const NODE_POLL_HZ: u64 = 60;
 
 // The frame heartbeat: a per-platform source that fires a Tick at each display vblank.
-struct VsyncSource{
-    running: Arc<AtomicBool>,
+enum VsyncSource{
+    // any blocking-wait / timer source: DwmFlush, drmWaitVBlank, or the plain timer
+    Thread(SourceThread),
+    #[cfg(target_os = "macos")]
+    DisplayLink(corevideo_vsync::DisplayLink),
 }
 
 impl VsyncSource{
-    fn start(proxy:EventLoopProxy<AppEvent>, interval:Duration) -> Self{
+    fn start(proxy:EventLoopProxy<AppEvent>, windows:&WindowManager) -> Self{
+        let interval = windows.refresh_interval();
+
+        // SKIA_CANVAS_VSYNC=timer forces the fallback (validation aid: A/B a real source vs the
+        // timer on the same machine). SKIA_CANVAS_VSYNC_DEBUG=1 prints which source was chosen.
+        let force_timer = std::env::var_os("SKIA_CANVAS_VSYNC").map_or(false, |v| v == "timer");
+
+        // try to find a real vblank source or fall back to using an un-anchored timer
+        if !force_timer{
+            #[cfg(target_os = "macos")]
+            if let Some(link) = windows.primary_display_id()
+                .and_then(|id| corevideo_vsync::start(proxy.clone(), id)){
+                return debug_selected("CVDisplayLink", VsyncSource::DisplayLink(link));
+            }
+
+            #[cfg(target_os = "windows")]
+            if let Some(thread) = dwm_vsync::start(proxy.clone()){
+                return debug_selected("DwmFlush", VsyncSource::Thread(thread));
+            }
+
+            #[cfg(all(unix, not(target_os = "macos")))]
+            if let Some(thread) = drm_vsync::start(proxy.clone(), interval){
+                return debug_selected("drmWaitVBlank", VsyncSource::Thread(thread));
+            }
+        }
+
+        debug_selected("timer", VsyncSource::Thread(timer_thread(proxy, interval)))
+    }
+}
+
+// prints the selected source when SKIA_CANVAS_VSYNC_DEBUG is set (validation aid)
+fn debug_selected(name:&str, source:VsyncSource) -> VsyncSource{
+    if std::env::var_os("SKIA_CANVAS_VSYNC_DEBUG").is_some(){
+        eprintln!("[skia-canvas] vsync source: {}", name);
+    }
+    source
+}
+
+
+// a thread for use with vblank sources that block (DwmFlush, drmWaitVBlank, or a sleep)
+// to signal screen refresh. halts when dropped (e.g., when no windows are animating)
+struct SourceThread{
+    running: Arc<AtomicBool>,
+}
+
+impl SourceThread{
+    fn spawn<F>(body:F) -> Self where F:FnOnce(Arc<AtomicBool>) + Send + 'static{
         let running = Arc::new(AtomicBool::new(true));
         let flag = running.clone();
-        std::thread::spawn(move ||{
-            while flag.load(Ordering::Relaxed){
-                spin_sleep::sleep(interval);
-                // stop spinning if the event loop has gone away
-                if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){
-                    break;
-                }
-            }
-        });
+        std::thread::spawn(move || body(flag));
         Self{ running }
     }
 }
 
-impl Drop for VsyncSource{
+impl Drop for SourceThread{
     fn drop(&mut self){
         self.running.store(false, Ordering::Relaxed);
     }
+}
+
+// cross-platform fallback: sleep at the refresh interval, then post a Tick
+fn timer_thread(proxy:EventLoopProxy<AppEvent>, interval:Duration) -> SourceThread{
+    SourceThread::spawn(move |flag|{
+        while flag.load(Ordering::Relaxed){
+            spin_sleep::sleep(interval);
+            // stop spinning if the event loop has gone away
+            if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){
+                break;
+            }
+        }
+    })
+}
+
+// Windows: block on the DWM compositor's vblank (or fall back to the timer if composition is disabled)
+#[cfg(target_os = "windows")]
+mod dwm_vsync{
+    use std::sync::atomic::Ordering;
+    use std::time::Instant;
+    use winit::event_loop::EventLoopProxy;
+    use crate::gui::event::AppEvent;
+    use super::SourceThread;
+
+    #[link(name = "dwmapi")]
+    extern "system"{
+        fn DwmFlush() -> i32;
+        fn DwmIsCompositionEnabled(enabled:*mut i32) -> i32;
+    }
+
+    pub fn start(proxy:EventLoopProxy<AppEvent>) -> Option<SourceThread>{
+        // DwmFlush only tracks vblank while the compositor is running (always on for Win8+)
+        let mut enabled:i32 = 0;
+        if unsafe{ DwmIsCompositionEnabled(&mut enabled) } != 0 || enabled == 0{
+            return None;
+        }
+        Some(SourceThread::spawn(move |flag|{
+            while flag.load(Ordering::Relaxed){
+                // blocks until the next DWM vblank
+                if unsafe{ DwmFlush() } != 0{ break; } // composition turned off / error
+                if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){ break; }
+            }
+        }))
+    }
+}
+
+// X11/Linux: block on the GPU's vblank via DRM (or fall back to the timer if running headless, lacking device permission, etc.)
+#[cfg(all(unix, not(target_os = "macos")))]
+mod drm_vsync{
+    use std::fs::{File, OpenOptions};
+    use std::os::unix::io::{AsFd, BorrowedFd};
+    use std::sync::atomic::Ordering;
+    use std::time::{Duration, Instant};
+    use drm::{Device as DrmDevice, VblankWaitTarget, VblankWaitFlags};
+    use winit::event_loop::EventLoopProxy;
+    use crate::gui::event::AppEvent;
+    use super::SourceThread;
+
+    // minimal DRM device wrapper (per the drm crate's documented pattern)
+    struct Device(File);
+    impl AsFd for Device{
+        fn as_fd(&self) -> BorrowedFd<'_>{ self.0.as_fd() }
+    }
+    impl DrmDevice for Device{}
+
+    pub fn start(proxy:EventLoopProxy<AppEvent>, fallback:Duration) -> Option<SourceThread>{
+        // Wayland has its own (redraw-driven) source; DRM is for the X11 / no-compositor path
+        if std::env::var_os("WAYLAND_DISPLAY").is_some(){ return None; }
+
+        // open the first primary node whose vblank works (i.e., disregard headless GPUs)
+        let device = std::fs::read_dir("/dev/dri").ok()?
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().as_encoded_bytes().starts_with(b"card"))
+            .find_map(|entry|{
+                let file = OpenOptions::new().read(true).write(true).open(entry.path()).ok()?;
+                let device = Device(file);
+                device.wait_vblank(VblankWaitTarget::Relative(1), VblankWaitFlags::empty(), 0, 0).ok()?;
+                Some(device)
+            })?;
+
+        Some(SourceThread::spawn(move |flag|{
+            while flag.load(Ordering::Relaxed){
+                // block until the next vblank
+                if device.wait_vblank(VblankWaitTarget::Relative(1), VblankWaitFlags::empty(), 0, 0).is_err(){
+                    // on error, sleep at the refresh interval so ticks don't stop
+                    spin_sleep::sleep(fallback);
+                }
+                if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){ break; }
+            }
+        }))
+    }
+}
+
+// macOS: drive ticks from the display's actual vblank via CVDisplayLink (CoreVideo)
+#[cfg(target_os = "macos")]
+mod corevideo_vsync{
+    use std::ffi::c_void;
+    use std::time::{Instant, Duration};
+    use std::sync::OnceLock;
+    use winit::event_loop::EventLoopProxy;
+    use crate::gui::event::AppEvent;
+
+    type CVDisplayLinkRef = *mut c_void; // opaque handle
+    type CVReturn = i32;
+    type CGDirectDisplayID = u32;
+    type CVOptionFlags = u64;
+    const CV_RETURN_SUCCESS: CVReturn = 0;
+
+    type OutputCallback = unsafe extern "C" fn(
+        CVDisplayLinkRef, *const c_void, *const c_void, CVOptionFlags, *mut CVOptionFlags, *mut c_void,
+    ) -> CVReturn;
+
+    #[link(name = "CoreVideo", kind = "framework")]
+    extern "C" {
+        fn CVDisplayLinkCreateWithCGDisplay(display:CGDirectDisplayID, out:*mut CVDisplayLinkRef) -> CVReturn;
+        fn CVDisplayLinkSetOutputCallback(link:CVDisplayLinkRef, cb:OutputCallback, ctx:*mut c_void) -> CVReturn;
+        fn CVDisplayLinkStart(link:CVDisplayLinkRef) -> CVReturn;
+        fn CVDisplayLinkStop(link:CVDisplayLinkRef) -> CVReturn;
+        fn CVDisplayLinkRelease(link:CVDisplayLinkRef);
+    }
+
+    #[repr(C)]
+    struct CVTimeStamp{ version:u32, video_time_scale:i32, video_time:i64, host_time:u64 }
+
+    #[repr(C)]
+    struct MachTimebaseInfo{ numer:u32, denom:u32 }
+    extern "C" { fn mach_timebase_info(info:*mut MachTimebaseInfo) -> i32; }
+
+    pub struct DisplayLink{
+        link: CVDisplayLinkRef,
+        _proxy: Box<EventLoopProxy<AppEvent>>, // boxed so on_vblank gets a stable address
+    }
+
+    impl DisplayLink{
+        // fires on CVDisplayLink's own thread at each vblank
+        unsafe extern "C" fn on_vblank(
+            _link:CVDisplayLinkRef,
+            _now:*const c_void,
+            output_time:*const c_void,
+            _flags_in:CVOptionFlags,
+            _flags_out:*mut CVOptionFlags,
+            ctx:*mut c_void, // points to the boxed proxy
+        ) -> CVReturn {
+            let proxy = &*(ctx as *const EventLoopProxy<AppEvent>);
+            let at = if output_time.is_null(){
+                // fall back to using `now` only if there's been an error
+                Instant::now()
+            }else{
+                // Instants can't be created from raw timestamps, so cache an initial Instant & host_time,
+                // then return that Instant plus the (rate-scaled) delta between the current & cached host_times
+                let host_time = (*(output_time as *const CVTimeStamp)).host_time;
+                static BASE:OnceLock<(Instant, u64, u32, u32)> = OnceLock::new();
+                let (base_instant, base_host, numer, denom) = *BASE.get_or_init(||{
+                    let mut tb = MachTimebaseInfo{ numer:0, denom:0 };
+                    unsafe{ mach_timebase_info(&mut tb); } // record the *rate* that host_time passes at
+                    (Instant::now(), host_time, tb.numer.max(1), tb.denom.max(1))
+                });
+                let delta_ns = host_time.saturating_sub(base_host) as u128 * numer as u128 / denom as u128;
+                base_instant + Duration::from_nanos(delta_ns as u64)
+            };
+            let _ = proxy.send_event(AppEvent::Tick{ at });
+            CV_RETURN_SUCCESS
+        }
+    }
+
+    impl Drop for DisplayLink{
+        fn drop(&mut self){
+            unsafe{
+                CVDisplayLinkStop(self.link);
+                CVDisplayLinkRelease(self.link);
+            }
+        }
+    }
+
+    pub fn start(proxy:EventLoopProxy<AppEvent>, display_id:CGDirectDisplayID) -> Option<DisplayLink>{
+        unsafe{
+            // create the link
+            let mut link:CVDisplayLinkRef = std::ptr::null_mut();
+            if CVDisplayLinkCreateWithCGDisplay(display_id, &mut link) != CV_RETURN_SUCCESS || link.is_null(){
+                return None;
+            }
+
+            // connect the link to our on_vblank callback
+            let boxed = Box::new(proxy);
+            let ctx = (&*boxed as *const EventLoopProxy<AppEvent>) as *mut c_void;
+            if CVDisplayLinkSetOutputCallback(link, DisplayLink::on_vblank, ctx) != CV_RETURN_SUCCESS
+                || CVDisplayLinkStart(link) != CV_RETURN_SUCCESS
+            {
+                CVDisplayLinkRelease(link);
+                return None;
+            }
+
+            Some(DisplayLink{ link, _proxy: boxed })
+        }
+    }
+
 }
 
 // uses the hardware vblank timing to trigger renders at the js App's target fps, tracking
@@ -315,9 +548,9 @@ impl Drop for VsyncSource{
 struct Cadence{
     rate: u64,
     credit: f64,
-    last_tick: Instant,
-    seeded: bool,
-    needs_cleanup: Option<bool>,
+    last_tick: Option<Instant>, // None until the first tick seeds the time base
+    needs_cleanup: bool,
+    vsync: Option<VsyncSource>,
 }
 
 impl Default for Cadence {
@@ -325,21 +558,35 @@ impl Default for Cadence {
         Self{
             rate: 60,
             credit: 0.0,
-            last_tick: Instant::now(),
-            seeded: false,
-            needs_cleanup: Some(true), // ensure at least one post-Init loop
+            last_tick: None,
+            needs_cleanup: true, // ensure at least one post-Init loop
+            vsync: None,
         }
     }
 }
 
 impl Cadence{
+    // start up the vsync source if it's not already running
+    fn start(&mut self, proxy:EventLoopProxy<AppEvent>, windows:&WindowManager){
+        if self.vsync.is_none(){
+            self.vsync = Some(VsyncSource::start(proxy, windows));
+        }
+    }
+
+    // stop the source and clear pacing state so restarts don't use an ancient last_tick
+    fn stop(&mut self){
+        self.vsync = None;
+        self.last_tick = None;
+        self.credit = 0.0;
+    }
+
     fn loop_again(&mut self){
         // flag that a clean-up event-loop pass is necessary (e.g., for reflecting window closures)
-        self.needs_cleanup = Some(true)
+        self.needs_cleanup = true
     }
 
     fn should_continue(&mut self) -> bool{
-        self.needs_cleanup.take().is_some()
+        std::mem::take(&mut self.needs_cleanup)
     }
 
     fn set_frame_rate(&mut self, rate:u64){
@@ -349,15 +596,14 @@ impl Cadence{
     // report whether a frame is due (based on target fps) whenever a vblank tick arrives
     fn tick(&mut self, at:Instant) -> bool{
         // the first tick just establishes the time base (and draws immediately)
-        if !self.seeded{
-            self.seeded = true;
-            self.last_tick = at;
+        let Some(prev) = self.last_tick else {
+            self.last_tick = Some(at);
             return true;
-        }
+        };
 
         // compare the elapsed time since our last redraw to the target fps and see if it's time for another
-        let dt = at.saturating_duration_since(self.last_tick).as_secs_f64();
-        self.last_tick = at;
+        let dt = at.saturating_duration_since(prev).as_secs_f64();
+        self.last_tick = Some(at);
         self.credit += self.rate as f64 * dt;
 
         if self.credit >= 1.0 {

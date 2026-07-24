@@ -156,6 +156,15 @@ impl WindowManager {
             .unwrap_or(60.0);
         Duration::from_secs_f64(1.0 / hz)
     }
+
+    #[cfg(target_os = "macos")]
+    pub fn primary_display_id(&self) -> Option<u32> {
+        // CGDirectDisplayID of the first window's monitor, for CVDisplayLink
+        use winit::platform::macos::MonitorHandleExtMacOS;
+        self.windows.first()
+            .and_then(|win| win.handle.current_monitor())
+            .map(|monitor| monitor.native_id())
+    }
 }
 
 
