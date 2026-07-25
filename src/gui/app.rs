@@ -328,7 +328,7 @@ impl VsyncSource{
             }
 
             #[cfg(target_os = "windows")]
-            if let Some(thread) = dwm_vsync::start(proxy.clone()){
+            if let Some(thread) = dwm_vsync::start(proxy.clone(), interval){
                 return debug_selected("DwmFlush", VsyncSource::Thread(thread));
             }
 
@@ -389,7 +389,7 @@ fn timer_thread(proxy:EventLoopProxy<AppEvent>, interval:Duration) -> SourceThre
 #[cfg(target_os = "windows")]
 mod dwm_vsync{
     use std::sync::atomic::Ordering;
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
     use winit::event_loop::EventLoopProxy;
     use crate::gui::event::AppEvent;
     use super::SourceThread;
@@ -400,7 +400,7 @@ mod dwm_vsync{
         fn DwmIsCompositionEnabled(enabled:*mut i32) -> i32;
     }
 
-    pub fn start(proxy:EventLoopProxy<AppEvent>) -> Option<SourceThread>{
+    pub fn start(proxy:EventLoopProxy<AppEvent>, fallback:Duration) -> Option<SourceThread>{
         // DwmFlush only tracks vblank while the compositor is running (always on for Win8+)
         let mut enabled:i32 = 0;
         if unsafe{ DwmIsCompositionEnabled(&mut enabled) } != 0 || enabled == 0{
@@ -408,8 +408,11 @@ mod dwm_vsync{
         }
         Some(SourceThread::spawn(move |flag|{
             while flag.load(Ordering::Relaxed){
-                // blocks until the next DWM vblank
-                if unsafe{ DwmFlush() } != 0{ break; } // composition turned off / error
+                // block until the next DWM vblank
+                if unsafe{ DwmFlush() } != 0{
+                    // if composition drops out mid-run sleep at the refresh interval so ticks don't stop
+                    spin_sleep::sleep(fallback);
+                }
                 if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){ break; }
             }
         }))
