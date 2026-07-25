@@ -85,7 +85,7 @@ impl App{
                         App::dispatch_events(&mut cx, payload, windows)
                     };
 
-                    // wait for events to arrive (unless interrupted by a vsync tick or `backstop`
+                    // wait for events to arrive (unless interrupted by a vblank tick or `backstop`
                     // duration if windows are fully static) and then yield to node (for gc & timers)
                     APP.with_borrow_mut(|app| {
                         EVENT_LOOP.with_borrow_mut(|event_loop|{
@@ -107,9 +107,9 @@ impl App{
         });
     }
 
-    // creates a vsync source if animating and one doesn't exist, drops the source when idle
+    // creates a vblank source if animating and one doesn't exist, drops the source when idle
     // (called after every js roundtrip, when the `animating` flag is updated)
-    fn ensure_vsync(&mut self){
+    fn ensure_vblank(&mut self){
         let want = self.windows.is_animating() && !self.windows.is_empty();
         if want && self.cadence.is_idle(){
             let proxy = PROXY.with_borrow(|proxy| proxy.clone());
@@ -162,7 +162,7 @@ impl App{
                         .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
                         .for_each(|(spec, page)| window_mgr.update_window(spec, page) );
 
-                    // note whether any window still has a frame/draw listener, so vsync can be paused when idle
+                    // note whether any window still has a frame/draw listener, so vblank can be paused when idle
                     let animating = response.get(2)
                         .and_then(|val| val.downcast::<JsBoolean, _>(cx).ok())
                         .map(|flag| flag.value(cx))
@@ -228,7 +228,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // returning: during a live-resize the OS runs a modal loop, so waiting for the
                 // next frame tick would leave the window contents lagging behind the new size
                 dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-                app.ensure_vsync();
+                app.ensure_vblank();
                 app.windows.find(&window_id, |win| win.redraw() );
             }
 
@@ -238,16 +238,16 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             }
 
             WindowEvent::RedrawRequested => {
-                // on wayland, this event *is* the vsync, so it's time to run the js-roundtrip
+                // on wayland, this event *is* the vblank, so it's time to run the js-roundtrip
                 // (all other platforms trigger the roundtrip through AppEvent::Tick)
                 if app.cadence.is_redraw_driven() && app.cadence.tick(Instant::now()){
                     dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-                    app.ensure_vsync(); // may drop the source if the app just went idle
+                    app.ensure_vblank(); // may drop the source if the app just went idle
                 }
                 app.windows.find(&window_id, |win|{
                     win.redraw(); // all platforms update the window
 
-                    // wayland also needs to request the next vsync callback
+                    // wayland also needs to request the next vblank callback
                     if app.cadence.is_redraw_driven(){ win.handle.request_redraw(); }
                 });
             }
@@ -255,12 +255,12 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             _ => {}
         }
 
-        // when idle (no vsync source) the loop is event-driven: flush queued UI events to js and
+        // when idle (no vblank source) the loop is event-driven: flush queued UI events to js and
         // repaint right away, since no frame tick will arrive to do it. a handler may start
         // animating, so reconcile the source afterward.
         if app.cadence.is_idle(){
             dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-            app.ensure_vsync();
+            app.ensure_vblank();
         }
     }
 
@@ -270,7 +270,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             AppEvent::Open(spec, page) => {
                 app.windows.add(event_loop, spec, page);
                 dispatch(app.windows.get_geometry(), Some(&mut app.windows)).ok();
-                app.ensure_vsync(); // only listen for vblank signals when ≥1 window is animating
+                app.ensure_vblank(); // only listen for vblank signals when ≥1 window is animating
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
@@ -282,7 +282,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // a tick arrives every vblank and the cadence handles triggering roundtrips & redraws (at the target fps)
                 if app.cadence.tick(at){
                     dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-                    app.ensure_vsync(); // pause the source if the app just went idle
+                    app.ensure_vblank(); // pause the source if the app just went idle
                 }
             }
             AppEvent::Quit => {
@@ -295,43 +295,49 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
 
 
 // The frame heartbeat: a per-platform source that fires a Tick at each display vblank.
-enum VsyncSource{
+enum VblankSource{
     // any blocking-wait / timer source: DwmFlush, drmWaitVBlank, or the plain timer
     Thread(SourceThread),
     #[cfg(target_os = "macos")]
-    DisplayLink(corevideo_vsync::DisplayLink),
-    RedrawDriven, // Wayland uses winit's RedrawRequested rather than the thread
+    Callback(vblank_mac::DisplayLink),
+    RedrawEvent, // Wayland uses winit's RedrawRequested rather than the thread
 }
 
-impl VsyncSource{
+impl VblankSource{
     fn start(proxy:EventLoopProxy<AppEvent>, windows:&WindowManager) -> Self{
         let interval = windows.refresh_interval();
 
+        // SKIA_CANVAS_VBLANK=off (also 0/false) disables the real per-platform vblank source and
+        // drives frames from the plain refresh-rate timer (for debugging misbehaving systems)
+        let vblank_disabled = std::env::var("SKIA_CANVAS_VBLANK")
+            .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "0" | "false" | "off"))
+            .unwrap_or(false);
+
         // try to find a real vblank source or fall back to using an un-anchored timer
-        if !vsync_disabled{
+        if !vblank_disabled{
             #[cfg(all(unix, not(target_os = "macos")))]
             if std::env::var_os("WAYLAND_DISPLAY").is_some(){
-                return VsyncSource::RedrawDriven;
+                return VblankSource::RedrawEvent;
             }
 
             #[cfg(target_os = "macos")]
             if let Some(link) = windows.primary_display_id()
-                .and_then(|id| corevideo_vsync::start(proxy.clone(), id)){
-                return VsyncSource::DisplayLink(link);
+                .and_then(|id| vblank_mac::start(proxy.clone(), id)){
+                return VblankSource::Callback(link);
             }
 
             #[cfg(target_os = "windows")]
-            if let Some(thread) = dwm_vsync::start(proxy.clone(), interval){
-                return VsyncSource::Thread(thread);
+            if let Some(thread) = vblank_windows::start(proxy.clone(), interval){
+                return VblankSource::Thread(thread);
             }
 
             #[cfg(all(unix, not(target_os = "macos")))]
-            if let Some(thread) = drm_vsync::start(proxy.clone(), interval){
-                return VsyncSource::Thread(thread);
+            if let Some(thread) = vblank_linux::start(proxy.clone(), interval){
+                return VblankSource::Thread(thread);
             }
         }
 
-        VsyncSource::Thread(timer_thread(proxy, interval))
+        VblankSource::Thread(timer_thread(proxy, interval))
     }
 }
 
@@ -372,7 +378,7 @@ fn timer_thread(proxy:EventLoopProxy<AppEvent>, interval:Duration) -> SourceThre
 
 // Windows: block on the DWM compositor's vblank (or fall back to the timer if composition is disabled)
 #[cfg(target_os = "windows")]
-mod dwm_vsync{
+mod vblank_windows{
     use std::sync::atomic::Ordering;
     use std::time::{Duration, Instant};
     use winit::event_loop::EventLoopProxy;
@@ -406,7 +412,7 @@ mod dwm_vsync{
 
 // X11/Linux: block on the GPU's vblank via DRM (or fall back to the timer if running headless, lacking device permission, etc.)
 #[cfg(all(unix, not(target_os = "macos")))]
-mod drm_vsync{
+mod vblank_linux{
     use std::fs::{File, OpenOptions};
     use std::os::unix::io::{AsFd, BorrowedFd};
     use std::sync::atomic::Ordering;
@@ -453,7 +459,7 @@ mod drm_vsync{
 
 // macOS: drive ticks from the display's actual vblank via CVDisplayLink (CoreVideo)
 #[cfg(target_os = "macos")]
-mod corevideo_vsync{
+mod vblank_mac{
     use std::ffi::c_void;
     use std::time::{Instant, Duration};
     use std::sync::OnceLock;
@@ -564,7 +570,7 @@ struct Cadence{
     credit: f64,
     last_tick: Option<Instant>, // None until the first tick seeds the time base
     needs_cleanup: bool,
-    vsync: Option<VsyncSource>,
+    vblank: Option<VblankSource>,
 }
 
 impl Default for Cadence {
@@ -574,22 +580,22 @@ impl Default for Cadence {
             credit: 0.0,
             last_tick: None,
             needs_cleanup: true, // ensure at least one post-Init loop
-            vsync: None,
+            vblank: None,
         }
     }
 }
 
 impl Cadence{
-    // start up the vsync source if it's not already running
+    // start up the vblank source if it's not already running
     fn run(&mut self, proxy:EventLoopProxy<AppEvent>, windows:&WindowManager){
-        if self.vsync.is_none(){
-            self.vsync = Some(VsyncSource::start(proxy, windows));
+        if self.vblank.is_none(){
+            self.vblank = Some(VblankSource::start(proxy, windows));
         }
     }
 
     // stop the source and clear pacing state so restarts don't use an ancient last_tick
     fn stop(&mut self){
-        self.vsync = None;
+        self.vblank = None;
         self.last_tick = None;
         self.credit = 0.0;
     }
@@ -609,11 +615,11 @@ impl Cadence{
 
     // Wayland's redraw-driven mode has no thread — the RedrawRequested handler runs the cadence
     fn is_redraw_driven(&self) -> bool{
-        matches!(self.vsync, Some(VsyncSource::RedrawDriven))
+        matches!(self.vblank, Some(VblankSource::RedrawEvent))
     }
 
     fn is_idle(&self) -> bool{
-        self.vsync.is_none()
+        self.vblank.is_none()
     }
 
     // report whether a frame is due (based on target fps) whenever a vblank tick arrives
