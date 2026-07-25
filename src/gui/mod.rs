@@ -17,6 +17,8 @@ pub mod event;
 
 pub mod window_mgr;
 
+pub mod cadence;
+
 fn validate_gpu(cx:&mut FunctionContext) -> NeonResult<()>{
     // bail out if we can't draw to the screen
     if let Some(reason) = RenderingEngine::default().lacks_gpu_support(){
