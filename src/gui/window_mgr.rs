@@ -16,7 +16,6 @@ use super::window::{Window, WindowSpec};
 pub struct WindowManager {
     windows: Vec<Window>,
     last: Option<LogicalPosition<f32>>,
-    animating: bool, // true if any window has a frame/draw listener
 }
 
 impl WindowManager {
@@ -124,14 +123,6 @@ impl WindowManager {
 
     pub fn has_ui_changes(&self) -> bool {
         self.windows.iter().any(|win| !win.sieve.is_empty() )
-    }
-
-    pub fn set_animating(&mut self, flag:bool){
-        self.animating = flag;
-    }
-
-    pub fn is_animating(&self) -> bool {
-        self.animating
     }
 
     pub fn get_ui_changes(&mut self) -> Value {

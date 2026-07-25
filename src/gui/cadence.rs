@@ -31,6 +31,9 @@ impl Cadence{
     pub fn run(&mut self, proxy:EventLoopProxy<AppEvent>, windows:&WindowManager){
         if self.vblank.is_none(){
             self.vblank = Some(vblank::Source::start(proxy, windows));
+
+            // on Wayland we need to kick off an initial redraw request to start ticking
+            if self.is_redraw_driven(){ windows.request_redraw_all(); }
         }
     }
 

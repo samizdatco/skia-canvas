@@ -54,6 +54,10 @@ fn add_event(event: AppEvent){
     PROXY.with_borrow_mut(|proxy| proxy.send_event(event).ok() );
 }
 
+fn get_proxy() -> EventLoopProxy<AppEvent>{
+    PROXY.with_borrow_mut(|proxy| proxy.clone())
+}
+
 impl App{
     pub fn register(callback:Root<JsFunction>){
         RENDER_CALLBACK.get_or_init(|| Arc::new(callback));
@@ -80,18 +84,15 @@ impl App{
         std::thread::spawn(move || {
             loop{
                 // schedule a callback on the node event loop
-                let keep_running = channel.send(move |mut cx| {
-                    // define closure to relay events to js and receive canvas updates in return
-                    let dispatch = |payload:Value, windows:Option<&mut WindowManager>| -> NeonResult<()>{
-                        App::dispatch_events(&mut cx, payload, windows)
-                    };
-
-                    // wait for events to arrive (unless interrupted by a vblank tick or `backstop`
-                    // duration if windows are fully static) and then yield to node (for gc & timers)
+                let keep_running = channel.send(move |cx| {
+                    // wait for events to arrive (unless interrupted by a vblank tick or 'idle wake'
+                    // duration if windows are fully static) and then yield to node (for gc & timers).
                     APP.with_borrow_mut(|app| {
                         EVENT_LOOP.with_borrow_mut(|event_loop|{
-                            let backstop = Duration::from_millis(NODE_IDLE_WAKE_MS);
-                            event_loop.pump_app_events(Some(backstop), &mut AppHandler{app: &mut *app, dispatch});
+                            event_loop.pump_app_events(
+                              Some(Duration::from_millis(NODE_IDLE_WAKE_MS)), 
+                              &mut AppHandler{app: &mut *app, cx}
+                            );
                             Ok(app.cadence.should_continue() || !app.windows.is_empty())
                         })
                     })
@@ -108,90 +109,85 @@ impl App{
         });
     }
 
-    // creates a vblank source if animating and one doesn't exist, drops the source when idle
-    // (called after every js roundtrip, when the `animating` flag is updated)
-    fn ensure_vblank(&mut self){
-        let want = self.windows.is_animating() && !self.windows.is_empty();
-        if want && self.cadence.is_idle(){
-            let proxy = PROXY.with_borrow(|proxy| proxy.clone());
-            self.cadence.run(proxy, &self.windows);
-            if self.cadence.is_redraw_driven(){ self.windows.request_redraw_all(); }
-        }else if !want && !self.cadence.is_idle(){
-            self.cadence.stop();
-        }
-    }
+    // run the per-frame javascript call, passing a payload of queued changes and receiving back
+    // canvas contents (and possibly programmatic window state changes). also updates vblank status 
+    // based on whether any of the windows have `draw` or `frame` listeners    
+    fn roundtrip(&mut self, cx:&mut TaskContext, with_payload:With){
+        // collect the outbound payload (draining each window's sieve as a side effect)
+        let changes = match with_payload{
+            With::Events => self.windows.get_ui_changes(),
+            With::Geometry => self.windows.get_geometry(),
+        };
+        let windows = &mut self.windows;
 
-    fn dispatch_events(cx:&mut TaskContext, events:Value, window_mgr:Option<&mut WindowManager>) -> NeonResult<()>{
-        // run the per-frame javascript-roundtrip in its own scope to release the js<->rust payloads
-        // immediately rather than letting them accumulate in the pump_events scope
+        // track whether any windows have ongoing animations in need of vblank ticks
+        let mut is_animating = true; // to be updated with response from js
+
+        // enclose js<->rust bridging in a nested scope to release the js handles immediately rather 
+        // than letting them accumulate in the pump_events scope
         cx.execute_scoped(|mut cx| -> NeonResult<()> {
             let cx = &mut cx;
 
-            // window_mgr is only present if it's time to collect updated canvas contents from js
-            let is_render = window_mgr.is_some();
+            // pass the json-encoded event queue to the js callback and collect its response array
+            let Some(callback) = RENDER_CALLBACK.get() else { return Ok(()) };
+            let mut call = callback.to_inner(cx).call_with(cx);
+            call.arg(cx.string(changes.to_string()));
+            let response = call.apply::<JsValue, _>(cx)?
+                .downcast::<JsArray, _>(cx).or_throw(cx)?
+                .to_vec(cx)?;
 
-            // js callback is passed render flag & json-encoded event queue
-            let mut call = match RENDER_CALLBACK.get(){
-                None => return Ok(()),
-                Some(callback)=> callback.to_inner(cx).call_with(cx),
-            };
-            call.arg(cx.boolean(is_render))
-                .arg(cx.string(events.to_string()));
+            // unpack the returned window specs, contexts, and is_animating flag
+            let specs_json = response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
+            let specs:Vec<WindowSpec> = serde_json::from_str(&specs_json)
+                .or_else(|err| cx.throw_error(format!("Malformed response from window event handler: {}", err)) )?;
 
-            match window_mgr{
-                None => call.exec(cx)?, // if this is just a UI-event delivery, fire & forget
+            // extract page snapshots from the contexts
+            let contexts = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
+            let pages = contexts.iter().map(|boxed|
+                boxed.downcast::<BoxedContext2D, _>(cx).ok()
+                    .map(|ctx| ctx.borrow().get_page())
+            );
 
-                Some(window_mgr) => {
-                    // for a full roundtrip, first pass events to js
-                    let response = call.apply::<JsValue, _>(cx)?
-                        .downcast::<JsArray, _>(cx).or_throw(cx)?
-                        .to_vec(cx)?;
+            // update windows with the unpacked specs & pages
+            zip(specs, pages)
+                .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
+                .for_each(|(spec, page)| windows.update_window(spec, page) );
 
-                    // then unpack the returned window specs & contexts
-                    let specs_json = response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
-                    let specs:Vec<WindowSpec> = serde_json::from_str(&specs_json)
-                        .or_else(|err| cx.throw_error(format!("Malformed response from window event handler: {}", err)) )?;
-
-                    let contexts = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
-                    let pages = contexts.iter().map(|boxed|
-                        boxed.downcast::<BoxedContext2D, _>(cx).ok()
-                            .map(|ctx| ctx.borrow().get_page())
-                    );
-
-                    // update each window with its new state & content
-                    zip(specs, pages)
-                        .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
-                        .for_each(|(spec, page)| window_mgr.update_window(spec, page) );
-
-                    // note whether any window still has a frame/draw listener, so vblank can be paused when idle
-                    let animating = response.get(2)
-                        .and_then(|val| val.downcast::<JsBoolean, _>(cx).ok())
-                        .map(|flag| flag.value(cx))
-                        .unwrap_or(true);
-                    window_mgr.set_animating(animating);
-                }
-            };
+            // note whether any window still has a frame/draw listener, so vblank can be paused when idle
+            is_animating = response.get(2)
+                .and_then(|val| val.downcast::<JsBoolean, _>(cx).ok())
+                .map(|flag| flag.value(cx))
+                .unwrap_or(true);
 
             Ok(())
-        })
+        }).ok();
+
+        // check the updated animation status and only have the vblank source run if needed
+        if is_animating{
+            self.cadence.run(get_proxy(), &self.windows);
+        }else if !self.cadence.is_idle(){
+            self.cadence.stop();
+        }
     }
-
 }
 
-// ephemeral event handler: borrows the persistent App state and a dispatch closure (which
-// holds the neon context for the current tick) only for the duration of a single pump/run call
-struct AppHandler<'a, F>{
+// identify the app state that should be passed to the js side in a roundtrip() call
+enum With { Events, Geometry }
+
+// ephemeral event handler: borrows the persistent App state and holds the neon context for the
+// current tick, only for the duration of a single pump/run call. carrying `cx` here is what lets
+// winit event handlers make synchronous js roundtrips mid-pump (see `roundtrip`).
+struct AppHandler<'a, 'cx>{
     app: &'a mut App,
-    dispatch: F,
+    cx: TaskContext<'cx>,
 }
 
-impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
-    where F:FnMut(Value, Option<&mut WindowManager>) -> NeonResult<()>
-{
+
+impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
     fn resumed(&mut self, _event_loop:&ActiveEventLoop){}
 
     fn window_event(&mut self, _event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
-        let Self{app, dispatch} = self;
+        let Self{app, cx} = self;
         app.windows.find(&window_id, |win| win.sieve.capture(&event) );
 
         match event {
@@ -228,8 +224,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // dispatch the resize to js and repaint with the updated canvas content before
                 // returning: during a live-resize the OS runs a modal loop, so waiting for the
                 // next frame tick would leave the window contents lagging behind the new size
-                dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-                app.ensure_vblank();
+                app.roundtrip(cx, With::Events);
                 app.windows.find(&window_id, |win| win.redraw() );
             }
 
@@ -239,39 +234,42 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             }
 
             WindowEvent::RedrawRequested => {
-                // on wayland, this event *is* the vblank, so it's time to run the js-roundtrip
-                // (all other platforms trigger the roundtrip through AppEvent::Tick)
-                if app.cadence.is_redraw_driven() && app.cadence.tick(Instant::now()){
-                    dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-                    app.ensure_vblank(); // may drop the source if the app just went idle
-                }
-                app.windows.find(&window_id, |win|{
-                    win.redraw(); // all platforms update the window
+                if app.cadence.is_redraw_driven(){
+                    // on wayland, this event *is* the vblank, so it's time to run the js-roundtrip
+                    // (all other platforms trigger the roundtrip through AppEvent::Tick)
+                    if app.cadence.tick(Instant::now()){
+                        app.roundtrip(cx, With::Events); // may drop vblank need if app goes idle
+                    }
+                    app.windows.find(&window_id, |win|{
+                        win.redraw(); // update the window contents immediately
 
-                    // wayland also needs to request the next vblank callback
-                    if app.cadence.is_redraw_driven(){ win.handle.request_redraw(); }
-                });
+                        // only request the next vblank if the app is still animating post-roundtrip
+                        if app.cadence.is_redraw_driven(){
+                            win.handle.request_redraw(); 
+                        }
+                    });
+                }else{
+                    // on all other platforms just update the window
+                    app.windows.find(&window_id, |win|{ win.redraw(); });                    
+                }
             }
 
             _ => {}
         }
 
-        // when idle (no vblank source) the loop is event-driven: flush queued UI events to js and
-        // repaint right away, since no frame tick will arrive to do it. a handler may start
-        // animating, so reconcile the source afterward.
+        // when idle (no vblank source) the loop is event-driven: flush queued UI events
+        //  to js and repaint right away, since no Tick event will arrive to do it
         if app.cadence.is_idle(){
-            dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-            app.ensure_vblank();
+            app.roundtrip(cx, With::Events);
         }
     }
 
     fn user_event(&mut self, event_loop:&ActiveEventLoop, event:AppEvent){
-        let Self{app, dispatch} = self;
+        let Self{app, cx} = self;
         match event{
             AppEvent::Open(spec, page) => {
                 app.windows.add(event_loop, spec, page);
-                dispatch(app.windows.get_geometry(), Some(&mut app.windows)).ok();
-                app.ensure_vblank(); // only listen for vblank signals when ≥1 window is animating
+                app.roundtrip(cx, With::Geometry);
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
@@ -282,8 +280,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             AppEvent::Tick{ at } => {
                 // a tick arrives every vblank and the cadence handles triggering roundtrips & redraws (at the target fps)
                 if app.cadence.tick(at){
-                    dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-                    app.ensure_vblank(); // pause the source if the app just went idle
+                    app.roundtrip(cx, With::Events); // pause the source if the app just went idle
                 }
             }
             AppEvent::Quit => {
