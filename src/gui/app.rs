@@ -116,9 +116,6 @@ impl App{
             self.cadence.run(proxy, &self.windows);
             if self.cadence.is_redraw_driven(){ self.windows.request_redraw_all(); }
         }else if !want && !self.cadence.is_idle(){
-            if std::env::var_os("SKIA_CANVAS_VSYNC_DEBUG").is_some(){
-                eprintln!("[skia-canvas] vsync source: idle (paused)");
-            }
             self.cadence.stop();
         }
     }
@@ -310,44 +307,32 @@ impl VsyncSource{
     fn start(proxy:EventLoopProxy<AppEvent>, windows:&WindowManager) -> Self{
         let interval = windows.refresh_interval();
 
-        // SKIA_CANVAS_VSYNC=timer forces the fallback (validation aid: A/B a real source vs the
-        // timer on the same machine). SKIA_CANVAS_VSYNC_DEBUG=1 prints which source was chosen.
-        let force_timer = std::env::var_os("SKIA_CANVAS_VSYNC").map_or(false, |v| v == "timer");
-
         // try to find a real vblank source or fall back to using an un-anchored timer
-        if !force_timer{
+        if !vsync_disabled{
             #[cfg(all(unix, not(target_os = "macos")))]
             if std::env::var_os("WAYLAND_DISPLAY").is_some(){
-                return debug_selected("wayland-frame-callback", VsyncSource::RedrawDriven);
+                return VsyncSource::RedrawDriven;
             }
 
             #[cfg(target_os = "macos")]
             if let Some(link) = windows.primary_display_id()
                 .and_then(|id| corevideo_vsync::start(proxy.clone(), id)){
-                return debug_selected("CVDisplayLink", VsyncSource::DisplayLink(link));
+                return VsyncSource::DisplayLink(link);
             }
 
             #[cfg(target_os = "windows")]
             if let Some(thread) = dwm_vsync::start(proxy.clone(), interval){
-                return debug_selected("DwmFlush", VsyncSource::Thread(thread));
+                return VsyncSource::Thread(thread);
             }
 
             #[cfg(all(unix, not(target_os = "macos")))]
             if let Some(thread) = drm_vsync::start(proxy.clone(), interval){
-                return debug_selected("drmWaitVBlank", VsyncSource::Thread(thread));
+                return VsyncSource::Thread(thread);
             }
         }
 
-        debug_selected("timer", VsyncSource::Thread(timer_thread(proxy, interval)))
+        VsyncSource::Thread(timer_thread(proxy, interval))
     }
-}
-
-// prints the selected source when SKIA_CANVAS_VSYNC_DEBUG is set (validation aid)
-fn debug_selected(name:&str, source:VsyncSource) -> VsyncSource{
-    if std::env::var_os("SKIA_CANVAS_VSYNC_DEBUG").is_some(){
-        eprintln!("[skia-canvas] vsync source: {}", name);
-    }
-    source
 }
 
 
