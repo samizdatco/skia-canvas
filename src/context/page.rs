@@ -34,6 +34,7 @@ pub struct PageRecorder{
   disposed: bool, // flag that drawing ops should be ignored after PictureRecorder has been dropped
   id: usize,
   has_gpu_surface: bool, // flag that drops need to happen on render thread
+  approx_ops: usize, // draw ops recorded into `current` since the last get_page() flush (see release())
 }
 
 impl PageRecorder{
@@ -46,6 +47,7 @@ impl PageRecorder{
       current:None, layers:vec![], changed:false, disposed:false,
       matrix:Matrix::default(), clip:None, bounds, id,
       surface:RecordingSurface::default(), has_gpu_surface:false,
+      approx_ops:0,
     }
   }
 
@@ -65,6 +67,7 @@ impl PageRecorder{
     if let Some(canvas) = self.current.as_mut().and_then(|rec| rec.recording_canvas()) {
       f(canvas);
       self.changed = true;
+      self.approx_ops += 1;
     }
   }
 
@@ -146,6 +149,7 @@ impl PageRecorder{
         if let Some(pict) = wrapper.finish_recording_as_picture(None){
           self.layers.push(pict);
         }
+        self.approx_ops = 0; // flushed content is now measurable via the layer picture itself
       }
 
       if let Some(rec) = self.current.as_mut(){
@@ -209,6 +213,14 @@ impl PageRecorder{
   pub fn release(&mut self){
     if self.disposed { return; }
     self.disposed = true;
+
+    // track a rough estimate of memory use to calibrate malloc_trim calls
+    const BASE: usize = 16 * 1024; // size of an empty recorder
+    const APPROX_OP_BYTES: usize = 128; // based on a 2500-arc recording ≈ 300k
+    let estimated_bytes: usize = BASE
+      + self.layers.iter().map(|pict| pict.approximate_bytes_used()).sum::<usize>()
+      + self.approx_ops * APPROX_OP_BYTES;
+
     self.current = None;
     self.layers.clear();
     self.surface = RecordingSurface::default();
@@ -228,6 +240,8 @@ impl PageRecorder{
       });
       self.has_gpu_surface = false;
     }
+
+    super::trim::mark_reclaimable(estimated_bytes);
   }
 }
 
