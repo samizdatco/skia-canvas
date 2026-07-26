@@ -57,7 +57,6 @@ impl From<ModifiersState> for ModifierKeys{
 
 #[derive(Debug)]
 pub struct Sieve{
-  dpr: f64,
   queue: Vec<UiEvent>,
   key_modifiers: ModifierKeys,
   mouse_point: PhysicalPosition::<f64>,
@@ -69,9 +68,8 @@ pub struct Sieve{
 }
 
 impl Sieve{
-  pub fn new(dpr:f64) -> Self {
+  pub fn new() -> Self {
     Sieve{
-      dpr,
       queue: vec![],
       key_modifiers: Modifiers::default().state().into(),
       mouse_point: PhysicalPosition::default(),
@@ -91,9 +89,9 @@ impl Sieve{
     self.queue.push(UiEvent::Fullscreen(is_full));
   }
 
-  fn add_mouse_event(&mut self, event:&str){
+  fn add_mouse_event(&mut self, event:&str, dpr:f64){
     // helper to attach positions & keyboard modifiers for each type of mouse event
-    let raw_position = LogicalPosition::<f32>::from_physical(self.mouse_point, self.dpr);
+    let raw_position = LogicalPosition::<f32>::from_physical(self.mouse_point, dpr);
     let canvas_point = self.mouse_transform.map_point((raw_position.x, raw_position.y));
     let canvas_position = LogicalPosition::<f32>::new(canvas_point.x, canvas_point.y);
 
@@ -107,15 +105,15 @@ impl Sieve{
     })
   }
 
-  pub fn capture(&mut self, event:&WindowEvent){
+  pub fn capture(&mut self, event:&WindowEvent, dpr:f64){
     match event{
       WindowEvent::Moved(physical_pt) => {
-        let LogicalPosition{x, y} = physical_pt.to_logical(self.dpr);
+        let LogicalPosition{x, y} = physical_pt.to_logical(dpr);
         self.queue.push(UiEvent::Move{left:x, top:y});
       }
 
       WindowEvent::Resized(physical_size) => {
-        let logical_size = LogicalSize::from_physical(*physical_size, self.dpr);
+        let logical_size = LogicalSize::from_physical(*physical_size, dpr);
         self.queue.push(UiEvent::Resize(logical_size));
       }
 
@@ -128,24 +126,24 @@ impl Sieve{
       }
 
       WindowEvent::CursorEntered{..} => {
-        self.add_mouse_event("mouseenter");
+        self.add_mouse_event("mouseenter", dpr);
       }
 
       WindowEvent::CursorLeft{..} => {
-        self.add_mouse_event("mouseleave");
+        self.add_mouse_event("mouseleave", dpr);
       }
 
       WindowEvent::CursorMoved{position, ..} => {
         if *position != self.mouse_point{
           self.mouse_point = *position;
-          self.add_mouse_event("mousemove");
+          self.add_mouse_event("mousemove", dpr);
         }
       }
 
       WindowEvent::MouseWheel{delta, ..} => {
         let LogicalPosition{x, y} = match delta {
           MouseScrollDelta::PixelDelta(physical_pt) => {
-            LogicalPosition::from_physical(*physical_pt, self.dpr)
+            LogicalPosition::from_physical(*physical_pt, dpr)
           },
           MouseScrollDelta::LineDelta(h, v) => {
             LogicalPosition{x:*h, y:*v}
@@ -168,11 +166,11 @@ impl Sieve{
         match state {
           ElementState::Pressed => {
             self.mouse_buttons |= button_bits;
-            self.add_mouse_event("mousedown");
+            self.add_mouse_event("mousedown", dpr);
           },
           ElementState::Released => {
             self.mouse_buttons &= !button_bits;
-            self.add_mouse_event("mouseup");
+            self.add_mouse_event("mouseup", dpr);
             self.mouse_button = None;
           },
         }
@@ -294,4 +292,3 @@ impl Sieve{
     self.queue.is_empty()
   }
 }
-

@@ -90,7 +90,7 @@ impl App{
                     APP.with_borrow_mut(|app| {
                         EVENT_LOOP.with_borrow_mut(|event_loop|{
                             event_loop.pump_app_events(
-                              Some(Duration::from_millis(NODE_IDLE_WAKE_MS)), 
+                              Some(Duration::from_millis(NODE_IDLE_WAKE_MS)),
                               &mut AppHandler{app: &mut *app, cx}
                             );
                             Ok(app.cadence.should_continue() || !app.windows.is_empty())
@@ -110,8 +110,8 @@ impl App{
     }
 
     // run the per-frame javascript call, passing a payload of queued changes and receiving back
-    // canvas contents (and possibly programmatic window state changes). also updates vblank status 
-    // based on whether any of the windows have `draw` or `frame` listeners    
+    // canvas contents (and possibly programmatic window state changes). also updates vblank status
+    // based on whether any of the windows have `draw` or `frame` listeners
     fn roundtrip(&mut self, cx:&mut TaskContext, with_payload:With){
         // collect the outbound payload (draining each window's sieve as a side effect)
         let changes = match with_payload{
@@ -123,7 +123,7 @@ impl App{
         // track whether any windows have ongoing animations in need of vblank ticks
         let mut is_animating = true; // to be updated with response from js
 
-        // enclose js<->rust bridging in a nested scope to release the js handles immediately rather 
+        // enclose js<->rust bridging in a nested scope to release the js handles immediately rather
         // than letting them accumulate in the pump_events scope
         cx.execute_scoped(|mut cx| -> NeonResult<()> {
             let cx = &mut cx;
@@ -188,7 +188,10 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
 
     fn window_event(&mut self, _event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
         let Self{app, cx} = self;
-        app.windows.find(&window_id, |win| win.sieve.capture(&event) );
+        app.windows.find(&window_id, |win|{
+            let dpr = win.handle.scale_factor();
+            win.sieve.capture(&event, dpr);
+        });
 
         match event {
             WindowEvent::Destroyed | WindowEvent::CloseRequested => {
@@ -218,6 +221,12 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
                 app.windows.find(&window_id, |win| win.did_move(loc) );
             }
 
+            WindowEvent::ScaleFactorChanged{inner_size_writer: _, ..} => {
+                // ignore inner_size_writer and leave logical size unchanged while phys rescales.
+                // a Resized event won't always accompany this, so call update_fit just in case
+                app.windows.find(&window_id, |win| win.update_fit() );
+            }
+
             WindowEvent::Resized(size) => {
                 app.windows.find(&window_id, |win| win.did_resize(size) );
 
@@ -245,12 +254,12 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
 
                         // only request the next vblank if the app is still animating post-roundtrip
                         if app.cadence.is_redraw_driven(){
-                            win.handle.request_redraw(); 
+                            win.handle.request_redraw();
                         }
                     });
                 }else{
                     // on all other platforms just update the window
-                    app.windows.find(&window_id, |win|{ win.redraw(); });                    
+                    app.windows.find(&window_id, |win|{ win.redraw(); });
                 }
             }
 

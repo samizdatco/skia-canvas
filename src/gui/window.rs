@@ -81,7 +81,7 @@ impl Window {
 
         let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
         let renderer = Renderer::for_window(&event_loop, handle.clone());
-        let sieve = Sieve::new(handle.scale_factor());
+        let sieve = Sieve::new();
 
         let cursor_icon = CursorIcon::from_str(&spec.cursor).ok();
         handle.set_cursor(cursor_icon.unwrap_or_default());
