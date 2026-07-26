@@ -23,7 +23,7 @@
   },
   "scripts": {
     "build": "node lib/prebuild.mjs compile",
-    "install": "node lib/prebuild.mjs download --or-compile",
+    "download": "node lib/prebuild.mjs download --or-compile",
     "upload": "node lib/prebuild.mjs upload",
     "test": "node --test tests/suite/*"
   },

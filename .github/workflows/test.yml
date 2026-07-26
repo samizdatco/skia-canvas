@@ -49,3 +49,6 @@ jobs:
     - name: Run tests
       run: |
         npm test
+
+    - name: Verify npm packaging
+      run: node tests/packaging.mjs

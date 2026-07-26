@@ -2,6 +2,7 @@
 .vscode
 .env
 /_*
+/assets
 lib/*.node
 node_modules
 target
