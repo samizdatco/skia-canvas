@@ -3,6 +3,7 @@ use skia_safe::{Matrix, Color, SurfaceProps, SurfacePropsFlags, PixelGeometry};
 use serde::{Serialize, Deserialize};
 use winit::{
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
+    monitor::MonitorHandle,
     window::{CursorIcon, Fullscreen, Window as WinitWindow, WindowId},
     event_loop::ActiveEventLoop,
 };
@@ -53,6 +54,7 @@ pub struct Window {
     pub handle: Arc<WinitWindow>,
     pub spec: WindowSpec,
     pub sieve: Sieve,
+    pub monitor: Option<MonitorHandle>, // the display the window was on as of the last update_monitor
     renderer: Renderer,
     background: Color,
     page: Page,
@@ -91,11 +93,21 @@ impl Window {
             handle.set_outer_position(LogicalPosition::new(left, top));
         }
 
-        Self{ spec, handle, sieve, renderer, page:page.clone(), suspended:false, background}
+        let monitor = handle.current_monitor();
+        Self{ spec, handle, sieve, monitor, renderer, page:page.clone(), suspended:false, background}
     }
 
     pub fn id(&self) -> WindowId {
         self.handle.id()
+    }
+
+    // re-query which display the window is on; called from the event arms that can signal a
+    // monitor change (Moved, Resized, ScaleFactorChanged). a None result (transiently possible
+    // mid-move) leaves the previous value in place rather than clearing it
+    pub fn update_monitor(&mut self){
+        if let Some(monitor) = self.handle.current_monitor(){
+            self.monitor = Some(monitor);
+        }
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>){

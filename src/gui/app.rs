@@ -218,17 +218,26 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
             }
 
             WindowEvent::Moved(loc) => {
-                app.windows.find(&window_id, |win| win.did_move(loc) );
+                app.windows.find(&window_id, |win|{
+                    win.did_move(loc);
+                    win.update_monitor();
+                });
             }
 
             WindowEvent::ScaleFactorChanged{inner_size_writer: _, ..} => {
                 // ignore inner_size_writer and leave logical size unchanged while phys rescales.
                 // a Resized event won't always accompany this, so call update_fit just in case
-                app.windows.find(&window_id, |win| win.update_fit() );
+                app.windows.find(&window_id, |win|{
+                    win.update_fit();
+                    win.update_monitor();
+                });
             }
 
             WindowEvent::Resized(size) => {
-                app.windows.find(&window_id, |win| win.did_resize(size) );
+                app.windows.find(&window_id, |win|{
+                    win.did_resize(size);
+                    win.update_monitor(); // fullscreen moves can resize without a `Moved`
+                });
 
                 // dispatch the resize to js and repaint with the updated canvas content before
                 // returning: during a live-resize the OS runs a modal loop, so waiting for the
@@ -266,6 +275,13 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
             _ => {}
         }
 
+        // the global vblank is driven by the first window's monitor. if that 'main' monitor goes
+        // away (or the window moves to another monitor), drop the vblank source and let it be
+        // recreated (on the newly-main monitor) by the roundtrip below
+        if app.windows.main_monitor_changed() && !app.cadence.is_idle(){
+            app.cadence.stop();
+        }
+
         // when idle (no vblank source) the loop is event-driven: flush queued UI events
         //  to js and repaint right away, since no Tick event will arrive to do it
         if app.cadence.is_idle(){
@@ -282,6 +298,12 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
+
+                // closing the first window can shift which display the vblank source should pace against
+                if app.windows.main_monitor_changed() && !app.cadence.is_idle(){
+                    app.cadence.stop();
+                    app.roundtrip(cx, With::Events); // rebuilds the source if still animating
+                }
             }
             AppEvent::FrameRate(fps) => {
                 app.cadence.set_frame_rate(fps)

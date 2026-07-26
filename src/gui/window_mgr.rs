@@ -5,6 +5,7 @@ use winit::{
     dpi::{LogicalSize, LogicalPosition},
     event_loop::ActiveEventLoop,
     event::WindowEvent,
+    monitor::MonitorHandle,
     window::WindowId,
 };
 
@@ -16,6 +17,7 @@ use super::window::{Window, WindowSpec};
 pub struct WindowManager {
     windows: Vec<Window>,
     last: Option<LogicalPosition<f32>>,
+    vsync_monitor: Option<MonitorHandle>, // display the vblank source was keyed to at last check
 }
 
 impl WindowManager {
@@ -148,6 +150,17 @@ impl WindowManager {
 
     pub fn is_empty(&self) -> bool {
         self.windows.len() == 0
+    }
+
+    // compare the first window's current monitor (which drives the vblank source) to its cached value and
+    // flag when they differ (but ignore the transient None that can occur when dragging between monitors)
+    pub fn main_monitor_changed(&mut self) -> bool {
+        let current = self.windows.first().and_then(|win| win.monitor.clone());
+        let changed = matches!((&self.vsync_monitor, &current), (Some(prev), Some(now)) if prev != now);
+        if current.is_some(){
+            self.vsync_monitor = current;
+        }
+        changed
     }
 
     pub fn refresh_interval(&self) -> Duration {
