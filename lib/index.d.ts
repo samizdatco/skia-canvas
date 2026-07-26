@@ -1035,6 +1035,9 @@ export class Window extends EventEmitter<{
 
   open(): void
   close(): void
+
+  requestAnimationFrame(callback: (frame: number) => void): number
+  cancelAnimationFrame(id: number): void
 }
 
 export interface App extends EventEmitter<{
