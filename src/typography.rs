@@ -4,7 +4,7 @@ use std::ops::Range;
 use std::iter::zip;
 use neon::prelude::*;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, PathBuilder, Matrix, Color};
+use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, PathBuilder, Color};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
   Decoration, FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
@@ -208,10 +208,9 @@ impl Typesetter{
     origin.y -= headroom - offset;
 
     let mut path = PathBuilder::new();
-    let offset = Matrix::translate(origin);
     for idx in 0..paragraph.line_number(){
       let (_skipped, line) = paragraph.get_path_at(idx);
-      path.add_path_with_transform(&line, &offset, None);
+      path.add_path_with_offset(&line, origin, None);
     };
     path.detach()
   }

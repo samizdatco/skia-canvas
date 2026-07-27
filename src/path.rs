@@ -64,27 +64,7 @@ impl Path2D{
   }
 
   pub fn append_path(&mut self, src:&Path, matrix:&Matrix){
-    let builder = self.update();
-    if builder.is_empty(){
-      builder.add_path_with_transform(src, matrix, AddPathMode::Append);
-    }else{
-      // work around a skia m140 bug: add_path doesn't clear the builder's cached convexity,
-      // but replaying the verbs individually ensures the flag will be updated correctly
-      let mut weights = path::Iter::new(src, false);
-      for (verb, pts) in path::Iter::new(src, false){
-        weights.next();
-        let map = |pt:&Point| matrix.map_point(*pt);
-        match verb{
-          Verb::Move => { builder.move_to(map(&pts[0])); },
-          Verb::Line => { builder.line_to(map(&pts[1])); },
-          Verb::Quad => { builder.quad_to(map(&pts[1]), map(&pts[2])); },
-          Verb::Conic => { builder.conic_to(map(&pts[1]), map(&pts[2]), weights.conic_weight().unwrap()); },
-          Verb::Cubic => { builder.cubic_to(map(&pts[1]), map(&pts[2]), map(&pts[3])); },
-          Verb::Close => { builder.close(); },
-          _ => {}
-        }
-      }
-    }
+    self.update().add_path_with_transform(src, matrix, AddPathMode::Append);
   }
 
   pub fn conic_to(&mut self, p1:impl Into<Point>, p2:impl Into<Point>, weight:f32){
@@ -605,7 +585,7 @@ pub fn set_d(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
 
   if let Some(path) = Path::from_svg(svg_string){
-    this.update().reset().add_path(&path);
+    this.update().reset().add_path(&path, None);
     Ok(cx.undefined())
   }else{
     cx.throw_type_error("Expected a valid SVG path string")

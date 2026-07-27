@@ -2,8 +2,8 @@
 use std::cell::{RefCell};
 use std::rc::Rc;
 use neon::prelude::*;
-use skia_safe::{Shader, Color, Point, TileMode, Matrix};
-use skia_safe::{gradient_shader, gradient_shader::GradientShaderColors::Colors};
+use skia_safe::{Shader, Color, Color4f, Point, TileMode, Matrix};
+use skia_safe::gradient::{self, Colors as GradientColors, Interpolation};
 
 use crate::utils::*;
 
@@ -70,18 +70,25 @@ pub struct CanvasGradient{
 
 impl CanvasGradient{
   pub fn shader(&self) -> Option<Shader>{
-    match &*self.gradient.borrow(){
-      Gradient::Linear{start, end, stops, colors} => {
-        gradient_shader::linear((*start, *end), Colors(colors), Some(stops.as_slice()), TileMode::Clamp, None, None)
+    let gradient = self.gradient.borrow();
+    let colors:Vec<Color4f> = gradient.get_colors().iter().map(|c| Color4f::from(*c)).collect();
+    let stops = gradient.get_stops();
+    let spec = gradient::Gradient::new(
+      GradientColors::new(&colors, Some(stops.as_slice()), TileMode::Clamp, None),
+      Interpolation::default(), // matches the interpolation of the legacy u32-Color api
+    );
+
+    match &*gradient{
+      Gradient::Linear{start, end, ..} => {
+        gradient::shaders::linear_gradient((*start, *end), &spec, None)
       },
-      Gradient::Radial{start_point, start_radius, end_point, end_radius, stops, colors} => {
-        gradient_shader::two_point_conical(
-          *start_point, *start_radius,
-          *end_point, *end_radius,
-          Colors(colors), Some(stops.as_slice()),
-          TileMode::Clamp, None, None)
+      Gradient::Radial{start_point, start_radius, end_point, end_radius, ..} => {
+        gradient::shaders::two_point_conical_gradient(
+          (*start_point, *start_radius),
+          (*end_point, *end_radius),
+          &spec, None)
       },
-      Gradient::Conic{center, angle, stops, colors} => {
+      Gradient::Conic{center, angle, ..} => {
         let Point{x, y} = *center;
         let mut rotated = Matrix::new_identity();
         rotated
@@ -89,15 +96,11 @@ impl CanvasGradient{
           .pre_rotate(*angle, None)
           .pre_translate((-x, -y));
 
-        gradient_shader::sweep(
+        gradient::shaders::sweep_gradient(
           *center,
-          Colors(colors),
-          Some(stops.as_slice()),
-          TileMode::Clamp,
-          None, // angles
-          None, // flags
+          (0.0, 360.0), // same angular range the old api defaulted to
+          &spec,
           Some(&rotated), // local_matrix
-
         )
       }
     }

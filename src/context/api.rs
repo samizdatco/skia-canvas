@@ -153,15 +153,15 @@ pub fn createProjection(mut cx: FunctionContext) -> JsResult<JsArray> {
   let src = points_arg(&mut cx, 2)?;
 
   let basis:Vec<Point> = match src.len(){
-    0 => this.bounds.to_quad().to_vec(), // use canvas dims
-    1 => Rect::from_wh(src[0].x, src[0].y).to_quad().to_vec(), // implicit 0,0 origin
-    2 => Rect::new(src[0].x, src[0].y, src[1].x, src[1].y).to_quad().to_vec(), // lf/top, rt/bot
+    0 => this.bounds.to_quad(None).to_vec(), // use canvas dims
+    1 => Rect::from_wh(src[0].x, src[0].y).to_quad(None).to_vec(), // implicit 0,0 origin
+    2 => Rect::new(src[0].x, src[0].y, src[1].x, src[1].y).to_quad(None).to_vec(), // lf/top, rt/bot
     _ => src.clone(),
   };
 
   let quad:Vec<Point> = match dst.len(){
-    1 => Rect::from_wh(dst[0].x, dst[0].y).to_quad().to_vec(), // implicit 0,0 origin
-    2 => Rect::new(dst[0].x, dst[0].y, dst[1].x, dst[1].y).to_quad().to_vec(), // lf/top, rt/bot
+    1 => Rect::from_wh(dst[0].x, dst[0].y).to_quad(None).to_vec(), // implicit 0,0 origin
+    2 => Rect::new(dst[0].x, dst[0].y, dst[1].x, dst[1].y).to_quad(None).to_vec(), // lf/top, rt/bot
     _ => dst.clone(),
   };
 

@@ -211,7 +211,7 @@ fn make_direct_context(device:&Arc<Device>, queue:&Arc<Queue>) -> Option<DirectC
             })
         };
 
-        let backend_context = vk::BackendContext::new(
+        let backend_context = vk::BackendContext::new_builder(
             instance.handle().as_raw() as _,
             device.physical_device().handle().as_raw() as _,
             device.handle().as_raw() as _,
@@ -220,7 +220,8 @@ fn make_direct_context(device:&Arc<Device>, queue:&Arc<Queue>) -> Option<DirectC
                 queue.queue_family_index() as usize,
             ),
             &get_proc,
-        );
+            None, // max_api_version — same default the old constructor hardcoded
+        ).build();
         direct_contexts::make_vulkan(&backend_context, None)
     }
 }

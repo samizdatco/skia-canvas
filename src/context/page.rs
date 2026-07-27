@@ -408,7 +408,8 @@ impl Page{
     match format.as_str(){
       "pdf" => {
         let mut pdf_bytes = Vec::new();
-        let mut document = pdf_document(&mut pdf_bytes, quality, density).begin_page(size, None);
+        let metadata = pdf_metadata(quality, density);
+        let mut document = pdf_document(&mut pdf_bytes, &metadata).begin_page(size, None);
         let canvas = document.canvas();
         let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
         canvas.draw_picture(&picture, None, None);
@@ -626,9 +627,10 @@ impl PageSequence{
   pub fn as_pdf(&self, options:ExportOptions) -> Result<Vec<u8>, String>{
     let ExportOptions{ quality, density, matte, .. } = options;
     let mut pdf_bytes = Vec::new();
+    let metadata = pdf_metadata(quality, density);
     self.pages
       .iter()
-      .try_fold(pdf_document(&mut pdf_bytes, quality, density), |doc, page| page.append_to(doc, matte))
+      .try_fold(pdf_document(&mut pdf_bytes, &metadata), |doc, page| page.append_to(doc, matte))
       .map(|doc| doc.close())?;
     Ok(pdf_bytes)
   }
@@ -681,13 +683,18 @@ pub fn pages_arg(cx: &mut FunctionContext, idx:usize, opts:&ExportOptions, canva
   Ok(PageSequence::from(pages, engine))
 }
 
-fn pdf_document(buffer:&mut impl std::io::Write, quality:f32, density:f32) -> Document<'_>{
-  pdf::new_document(buffer, Some(&pdf::Metadata {
+// the metadata must now outlive the Document, so it needs a separate constructor
+fn pdf_metadata(quality:f32, density:f32) -> pdf::Metadata<'static>{
+  pdf::Metadata {
     producer: "Skia Canvas <https://skia-canvas.org>".to_string(),
     encoding_quality: Some((quality*100.0) as i32),
     raster_dpi: Some(density * 72.0),
     ..Default::default()
-  }))
+  }
+}
+
+fn pdf_document<'a>(buffer:&'a mut impl std::io::Write, metadata:&'a pdf::Metadata<'a>) -> Document<'a>{
+  pdf::new_document(buffer, Some(metadata))
 }
 
 #[derive(Clone, Debug, PartialEq)]

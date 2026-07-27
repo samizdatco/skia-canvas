@@ -200,7 +200,7 @@ mod vblank {
         ) -> CVReturn;
 
         #[link(name = "CoreVideo", kind = "framework")]
-        extern "C" {
+        unsafe extern "C" {
             fn CVDisplayLinkCreateWithCGDisplay(display:CGDirectDisplayID, out:*mut CVDisplayLinkRef) -> CVReturn;
             fn CVDisplayLinkSetOutputCallback(link:CVDisplayLinkRef, cb:OutputCallback, ctx:*mut c_void) -> CVReturn;
             fn CVDisplayLinkStart(link:CVDisplayLinkRef) -> CVReturn;
@@ -213,7 +213,7 @@ mod vblank {
 
         #[repr(C)]
         struct MachTimebaseInfo{ numer:u32, denom:u32 }
-        extern "C" { fn mach_timebase_info(info:*mut MachTimebaseInfo) -> i32; }
+        unsafe extern "C" { fn mach_timebase_info(info:*mut MachTimebaseInfo) -> i32; }
 
         pub struct DisplayLink{
             link: CVDisplayLinkRef,
@@ -230,14 +230,14 @@ mod vblank {
                 _flags_out:*mut CVOptionFlags,
                 ctx:*mut c_void, // points to the boxed proxy
             ) -> CVReturn {
-                let proxy = &*(ctx as *const EventLoopProxy<AppEvent>);
+                let proxy = unsafe{ &*(ctx as *const EventLoopProxy<AppEvent>) };
                 let at = if output_time.is_null(){
                     // fall back to using `now` only if there's been an error
                     Instant::now()
                 }else{
                     // Instants can't be created from raw timestamps, so cache an initial Instant & host_time,
                     // then return that Instant plus the (rate-scaled) delta between the current & cached host_times
-                    let host_time = (*(output_time as *const CVTimeStamp)).host_time;
+                    let host_time = unsafe{ (*(output_time as *const CVTimeStamp)).host_time };
                     static BASE:OnceLock<(Instant, u64, u32, u32)> = OnceLock::new();
                     let (base_instant, base_host, numer, denom) = *BASE.get_or_init(||{
                         let mut tb = MachTimebaseInfo{ numer:0, denom:0 };
