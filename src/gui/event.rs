@@ -95,14 +95,20 @@ impl Sieve{
     let canvas_point = self.mouse_transform.map_point((raw_position.x, raw_position.y));
     let canvas_position = LogicalPosition::<f32>::new(canvas_point.x, canvas_point.y);
 
-    self.queue.push(UiEvent::Mouse{
+    let ui = UiEvent::Mouse{
       event: event.to_string(),
       point: canvas_position,
       page_point: raw_position,
       button: self.mouse_button,
       buttons: self.mouse_buttons,
       modifiers: self.key_modifiers,
-    })
+    };
+
+    // collapse runs of consecutive mousemoves (since the last vblank) to only keep the last one
+    if event == "mousemove" && self.in_mousemove() {
+      self.queue.pop();
+    }
+    self.queue.push(ui);
   }
 
   pub fn capture(&mut self, event:&WindowEvent, dpr:f64){
@@ -118,6 +124,12 @@ impl Sieve{
       }
 
       WindowEvent::Focused(in_focus) => {
+        // losing focus while a button is held should cancel the ongoing drag
+        if !*in_focus && self.mouse_buttons != 0 {
+          self.mouse_button = None;
+          self.mouse_buttons = 0;
+          self.add_mouse_event("pointercancel", dpr);
+        }
         self.queue.push(UiEvent::Focus(*in_focus));
       }
 
@@ -290,5 +302,9 @@ impl Sieve{
 
   pub fn is_empty(&self) -> bool {
     self.queue.is_empty()
+  }
+
+  fn in_mousemove(&self) -> bool {
+    matches!(self.queue.last(), Some(UiEvent::Mouse{ event, .. }) if event == "mousemove")
   }
 }

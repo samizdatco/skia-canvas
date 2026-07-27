@@ -267,7 +267,10 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
                         }
                     });
                 }else{
-                    // on all other platforms just update the window
+                    // on all other platforms, only roundtrip before update if there are UI events to deliver
+                    if app.windows.has_ui_changes(){
+                        app.roundtrip(cx, With::Events);
+                    }
                     app.windows.find(&window_id, |win|{ win.redraw(); });
                 }
             }
@@ -282,10 +285,11 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
             app.cadence.stop();
         }
 
-        // when idle (no vblank source) the loop is event-driven: flush queued UI events
-        //  to js and repaint right away, since no Tick event will arrive to do it
+        // when idle (no vblank source) the loop is event-driven. so queue up a redraw on the next vblank
         if app.cadence.is_idle(){
-            app.roundtrip(cx, With::Events);
+            app.windows.find(&window_id, |win|{
+                if !win.sieve.is_empty(){ win.handle.request_redraw(); }
+            });
         }
     }
 
