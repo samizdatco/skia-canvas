@@ -3,10 +3,11 @@ use serde::Serialize;
 use serde_json::json;
 use winit::{
   dpi::{LogicalPosition, LogicalSize, PhysicalPosition},
-  event::{ElementState, KeyEvent, Ime, Modifiers, MouseButton, MouseScrollDelta, WindowEvent},
+  event::{ElementState, KeyEvent, Ime, Modifiers, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
   keyboard::{ModifiersState, KeyCode, KeyLocation, NamedKey, PhysicalKey::Code, Key::{Character, Named}},
 };
 
+use std::collections::HashMap;
 use std::time::Instant;
 use crate::context::page::Page;
 use super::window::WindowSpec;
@@ -29,6 +30,7 @@ pub enum UiEvent{
   Keyboard{event:String, key:String, code:KeyCode, location:u32, modifiers:ModifierKeys, repeat:bool},
   Composition{event:String, data:String},
   Mouse{event:String, button:Option<u16>, buttons:u16, point:LogicalPosition::<f32>, page_point:LogicalPosition::<f32>, modifiers:ModifierKeys},
+  Touch{event:String, pointer_id:i32, is_primary:bool, point:LogicalPosition::<f32>, page_point:LogicalPosition::<f32>, modifiers:ModifierKeys},
   Input(Option<String>, String),
   Focus(bool),
   Resize(LogicalSize<u32>),
@@ -63,6 +65,9 @@ pub struct Sieve{
   mouse_button: Option<u16>,
   mouse_buttons: u16,
   mouse_transform: Matrix,
+  touch_ids: HashMap<u64, i32>, // active touches: winit finger id -> pointerId
+  primary_touch: Option<u64>,   // finger id of the primary pointer (first one down)
+  next_touch_id: i32,           // pointerId allocator (mouse owns 1; touches start at 2)
   compose_begun: bool,
   compose_ongoing: bool,
 }
@@ -76,6 +81,9 @@ impl Sieve{
       mouse_button: None,
       mouse_buttons: 0,
       mouse_transform: Matrix::new_identity(),
+      touch_ids: HashMap::new(),
+      primary_touch: None,
+      next_touch_id: 2,
       compose_begun: false,
       compose_ongoing: false,
     }
@@ -109,6 +117,25 @@ impl Sieve{
       self.queue.pop();
     }
     self.queue.push(ui);
+  }
+
+  fn add_touch_event(&mut self, event:&str, pointer_id:i32, is_primary:bool, location:PhysicalPosition<f64>, dpr:f64){
+    // helper for adding a per-finger touch point (incorporating dpr and canvas transform)
+    let raw_position = LogicalPosition::<f32>::from_physical(location, dpr);
+    let canvas_point = self.mouse_transform.map_point((raw_position.x, raw_position.y));
+    let canvas_position = LogicalPosition::<f32>::new(canvas_point.x, canvas_point.y);
+
+    // collapse a run of consecutive moves from the same finger to only keep the last one
+    if event == "touchmove" && self.in_touchmove(pointer_id) {
+      self.queue.pop();
+    }
+    self.queue.push(UiEvent::Touch{
+      event: event.to_string(),
+      pointer_id, is_primary,
+      point: canvas_position,
+      page_point: raw_position,
+      modifiers: self.key_modifiers,
+    });
   }
 
   pub fn capture(&mut self, event:&WindowEvent, dpr:f64){
@@ -185,6 +212,34 @@ impl Sieve{
             self.add_mouse_event("mouseup", dpr);
             self.mouse_button = None;
           },
+        }
+      }
+
+      WindowEvent::Touch(touch) => {
+        match touch.phase {
+          TouchPhase::Started => {
+            let is_primary = self.touch_ids.is_empty();
+            let pointer_id = self.next_touch_id;
+            self.next_touch_id += 1;
+            self.touch_ids.insert(touch.id, pointer_id);
+            if is_primary { self.primary_touch = Some(touch.id); }
+            self.add_touch_event("touchstart", pointer_id, is_primary, touch.location, dpr);
+          }
+          TouchPhase::Moved => {
+            if let Some(&pointer_id) = self.touch_ids.get(&touch.id) {
+              let is_primary = self.primary_touch == Some(touch.id);
+              self.add_touch_event("touchmove", pointer_id, is_primary, touch.location, dpr);
+            }
+          }
+          TouchPhase::Ended | TouchPhase::Cancelled => {
+            if let Some(pointer_id) = self.touch_ids.remove(&touch.id) {
+              let is_primary = self.primary_touch == Some(touch.id);
+              if is_primary { self.primary_touch = None; }
+              if self.touch_ids.is_empty() { self.next_touch_id = 2; } // reset allocator once all fingers lift
+              let event = if matches!(touch.phase, TouchPhase::Ended) { "touchend" } else { "touchcancel" };
+              self.add_touch_event(event, pointer_id, is_primary, touch.location, dpr);
+            }
+          }
         }
       }
 
@@ -306,5 +361,9 @@ impl Sieve{
 
   fn in_mousemove(&self) -> bool {
     matches!(self.queue.last(), Some(UiEvent::Mouse{ event, .. }) if event == "mousemove")
+  }
+
+  fn in_touchmove(&self, pointer_id:i32) -> bool {
+    matches!(self.queue.last(), Some(UiEvent::Touch{ event, pointer_id:id, .. }) if event == "touchmove" && *id == pointer_id)
   }
 }
