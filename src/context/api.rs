@@ -214,7 +214,7 @@ pub fn beginPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
 
-  this.path = Path::new();
+  this.path = Path2D::default();
   Ok(cx.undefined())
 }
 
@@ -228,11 +228,12 @@ pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if let [x, y, w, h] = nums.as_slice(){
     let rect = Rect::from_xywh(*x, *y, *w, *h);
     let quad = this.state.matrix.map_rect_to_quad(rect);
-    this.path.move_to(quad[0]);
-    this.path.line_to(quad[1]);
-    this.path.line_to(quad[2]);
-    this.path.line_to(quad[3]);
-    this.path.close();
+    this.path.update()
+      .move_to(quad[0])
+      .line_to(quad[1])
+      .line_to(quad[2])
+      .line_to(quad[3])
+      .close();
   }
   Ok(cx.undefined())
 }
@@ -252,7 +253,7 @@ pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
     let matrix = this.state.matrix;
     let path = Path::rrect(rrect, Some(direction));
-    this.path.add_path(&path.with_transform(&matrix), (0,0), Extend);
+    this.path.update().add_path_with_transform(&path, &matrix, Extend);
   }
 
   Ok(cx.undefined())
@@ -268,7 +269,7 @@ pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let matrix = this.state.matrix;
     let mut arc = Path2D::default();
     arc.add_ellipse((*x, *y), (*radius, *radius), 0.0, *start_angle, *end_angle, ccw);
-    this.path.add_path(&arc.path.with_transform(&matrix), (0,0), Extend);
+    this.path.update().add_path_with_transform(&arc.path(), &matrix, Extend);
   }
   Ok(cx.undefined())
 }
@@ -286,7 +287,7 @@ pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let matrix = this.state.matrix;
     let mut arc = Path2D::default();
     arc.add_ellipse((*x, *y), (*x_radius, *y_radius), *rotation, *start_angle, *end_angle, ccw);
-    this.path.add_path(&arc.path.with_transform(&matrix), (0,0), Extend);
+    this.path.update().add_path_with_transform(&arc.path(), &matrix, Extend);
   }
   Ok(cx.undefined())
 }
@@ -299,7 +300,7 @@ pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let xy = float_args_or_bail(&mut cx, &["x", "y"])?;
   if let Some(dst) = this.map_points(&xy).first(){
-    this.path.move_to(*dst);
+    this.path.update().move_to(*dst);
   }
   Ok(cx.undefined())
 }
@@ -311,7 +312,7 @@ pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let xy = float_args_or_bail(&mut cx, &["x", "y"])?;
   if let Some(dst) = this.map_points(&xy).first(){
     this.scoot(*dst);
-    this.path.line_to(*dst);
+    this.path.update().line_to(*dst);
   }
   Ok(cx.undefined())
 }
@@ -328,7 +329,7 @@ pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   if let [src, dst] = this.map_points(&coords)[..2]{
     this.scoot(src);
-    this.path.arc_to_tangent(src, dst, radius);
+    this.path.update().arc_to_tangent(src, dst, radius);
   }
   Ok(cx.undefined())
 }
@@ -340,7 +341,7 @@ pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let coords = float_args_or_bail(&mut cx, &["cp1x", "cp1y", "cp2x", "cp2y", "x", "y"])?;
   if let [cp1, cp2, dst] = this.map_points(&coords)[..3]{
     this.scoot(cp1);
-    this.path.cubic_to(cp1, cp2, dst);
+    this.path.update().cubic_to(cp1, cp2, dst);
   }
   Ok(cx.undefined())
 }
@@ -352,7 +353,7 @@ pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let coords = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y"])?;
   if let [cp, dst] = this.map_points(&coords)[..2]{
     this.scoot(cp);
-    this.path.quad_to(cp, dst);
+    this.path.update().quad_to(cp, dst);
   }
   Ok(cx.undefined())
 }
@@ -374,7 +375,7 @@ pub fn closePath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
 
-  this.path.close();
+  this.path.update().close();
   Ok(cx.undefined())
 }
 
@@ -397,7 +398,7 @@ fn _is_in(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsBoolean> {
     Some(path) => (4, path),
     None => match cx.len(){
       5 => cx.throw_type_error("Expected a Path2D for 1st arg")?,
-      _ => (3, this.path.clone())
+      _ => (3, this.path.path())
     }
   };
 
@@ -565,7 +566,7 @@ pub fn get_lineDashMarker(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = this.borrow();
 
   match &this.state.line_dash_marker{
-    Some(marker) => Ok(cx.boxed(RefCell::new(Path2D{path:marker.clone()})).upcast()),
+    Some(marker) => Ok(cx.boxed(RefCell::new(Path2D::from(marker.clone()))).upcast()),
     None => Ok(cx.null().upcast())
   }
 }
@@ -956,7 +957,7 @@ pub fn outlineText(mut cx: FunctionContext) -> JsResult<JsValue> {
     _ => None
   };
   let path = this.outline_text(&text, width);
-  Ok(cx.boxed(RefCell::new(Path2D{path})).upcast())
+  Ok(cx.boxed(RefCell::new(Path2D::from(path))).upcast())
 }
 
 // -- type properties ---------------------------------------------------------------

@@ -19,6 +19,7 @@ mod trim;
 
 use crate::utils::*;
 use crate::font_library::FontLibrary;
+use crate::path::Path2D;
 use crate::typography::{Typesetter, FontSpec, Baseline, Spacing, DecorationStyle};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
@@ -39,7 +40,7 @@ pub struct Context2D{
   recorder: RefCell<PageRecorder>,
   state: State,
   stack: Vec<State>,
-  path: Path,
+  path: Path2D,
 }
 
 #[derive(Clone)]
@@ -194,7 +195,7 @@ impl Context2D{
     Context2D{
       bounds,
       recorder: RefCell::new(PageRecorder::new(bounds)),
-      path: Path::new(),
+      path: Path2D::default(),
       stack: vec![],
       state: State::default(),
     }
@@ -208,7 +209,7 @@ impl Context2D{
     self.stack.clear();
     self.stack.shrink_to_fit();
     self.state = State::default();
-    self.path = Path::new();
+    self.path = Path2D::default();
   }
 
   pub fn in_local_coordinates(&mut self, x: f32, y: f32) -> Point{
@@ -312,7 +313,7 @@ impl Context2D{
   pub fn reset_size(&mut self, dims: impl Into<Size>) {
     // called by the canvas when .width or .height are assigned to
     self.bounds = Rect::from_size(dims);
-    self.path = Path::default();
+    self.path = Path2D::default();
     self.stack = vec![];
     self.state = State::default();
 
@@ -349,16 +350,14 @@ impl Context2D{
 
   pub fn scoot(&mut self, point:Point){
     // update initial point if first drawing command isn't a moveTo
-    if self.path.is_empty(){
-      self.path.move_to(point);
-    }
+    self.path.scoot(point.x, point.y);
   }
 
   pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<PathFillType>){
     let mut path = path.unwrap_or_else(|| {
       // the current path has already incorporated its transform state
       let inverse = self.state.matrix.invert().unwrap_or_default();
-      self.path.with_transform(&inverse)
+      self.path.path().with_transform(&inverse)
     });
     path.set_fill_type(rule.unwrap_or(PathFillType::Winding));
 
@@ -426,7 +425,7 @@ impl Context2D{
   pub fn clip_path(&mut self, path: Option<Path>, rule:PathFillType){
     let mut clip = match path{
       Some(path) => path.with_transform(&self.state.matrix),
-      None => self.path.clone()
+      None => self.path.path()
     };
     clip.set_fill_type(rule);
 
