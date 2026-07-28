@@ -6,7 +6,7 @@ const fs = require('fs'),
       tmp = require('tmp'),
       path = require('path'),
       {assert, describe, test, beforeEach, afterEach} = require('../runner'),
-      {Canvas, Image} = require('../../lib');
+      {Canvas, Image, FontLibrary, loadImage} = require('../../lib');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -367,6 +367,64 @@ describe("Canvas", ()=>{
       Object.assign(canvas, {width, height})
       assert.matchesSubset(canvas, {width, height})
       await assert.rejects(canvas.toFile(`${TMP}/zeroed.png`), /must be non-zero/)
+    })
+  })
+
+  describe("can export with options", ()=>{
+    test("density", async () => {
+      let small = new Canvas(50, 50),
+          ctx = small.getContext('2d')
+      ctx.fillStyle = 'red'
+      ctx.fillRect(10, 10, 30, 30)
+
+      let img = await loadImage(await small.toBuffer('png', {density:2}))
+      assert.equal(img.width, 100)
+      assert.equal(img.height, 100)
+
+      // content scales up with the pixel grid
+      let dest = new Canvas(100, 100),
+          dtx = dest.getContext('2d')
+      dtx.drawImage(img, 0, 0)
+      assert.deepEqual(Array.from(dtx.getImageData(50, 50, 1, 1).data), [255, 0, 0, 255])
+      assert.deepEqual(Array.from(dtx.getImageData(10, 10, 1, 1).data), CLEAR)
+    })
+
+    test("matte", async () => {
+      ctx.fillStyle = 'red'
+      ctx.fillRect(100, 100, 100, 100)
+      assert.deepEqual(pixel(50, 50), CLEAR)
+
+      let img = await loadImage(await canvas.toBuffer('png', {matte:'white'}))
+      let flat = new Canvas(WIDTH, HEIGHT),
+          ftx = flat.getContext('2d')
+      ftx.drawImage(img, 0, 0)
+      assert.deepEqual(Array.from(ftx.getImageData(50, 50, 1, 1).data), WHITE)
+      assert.deepEqual(Array.from(ftx.getImageData(150, 150, 1, 1).data), [255, 0, 0, 255])
+    })
+
+    test("quality", async () => {
+      // noisy content so compression quality has bytes to trade away
+      for (let i = 0; i < 50; i++){
+        ctx.fillStyle = `hsl(${i * 7}, 80%, 50%)`
+        ctx.beginPath()
+        ctx.arc(WIDTH/2, HEIGHT/2, 250 - i * 5, 0, 2 * Math.PI)
+        ctx.fill()
+      }
+      let hi = await canvas.toBuffer('jpg', {quality:1.0}),
+          lo = await canvas.toBuffer('jpg', {quality:0.2})
+      assert(lo.length < hi.length / 2)
+    })
+
+    test("outline", async () => {
+      FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
+      ctx.font = '40px Monoton'
+      ctx.fillText('Hi', 20, 60)
+
+      let glyphs = (await canvas.toBuffer('svg')).toString(),
+          outlined = (await canvas.toBuffer('svg', {outline:true})).toString()
+      assert.equal(glyphs.includes('<text'), true)
+      assert.equal(outlined.includes('<text'), false)
+      assert.equal(outlined.includes('<path'), true)
     })
   })
 

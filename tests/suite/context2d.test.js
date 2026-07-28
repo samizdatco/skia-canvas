@@ -501,6 +501,130 @@ describe("Context2D", ()=>{
       assert.notEqual(pixel(143, 117), BLACK)
     })
 
+    test("globalCompositeOperation()", () => {
+      let RED = [255,0,0,255],
+          BLUE = [0,0,255,255],
+          MAGENTA = [255,0,255,255]
+      let dstOnly = () => pixel(40, 40),
+          overlap = () => pixel(100, 100),
+          srcOnly = () => pixel(160, 160)
+
+      let compose = op => {
+        canvas.width = WIDTH
+        ctx.fillStyle = '#f00'
+        ctx.fillRect(20, 20, 100, 100)
+        ctx.globalCompositeOperation = op
+        ctx.fillStyle = '#00f'
+        ctx.fillRect(80, 80, 100, 100)
+      }
+
+      compose('source-over')
+      assert.deepEqual(dstOnly(), RED)
+      assert.deepEqual(overlap(), BLUE)
+      assert.deepEqual(srcOnly(), BLUE)
+
+      compose('destination-over')
+      assert.deepEqual(dstOnly(), RED)
+      assert.deepEqual(overlap(), RED)
+      assert.deepEqual(srcOnly(), BLUE)
+
+      compose('source-in')
+      assert.deepEqual(dstOnly(), CLEAR)
+      assert.deepEqual(overlap(), BLUE)
+      assert.deepEqual(srcOnly(), CLEAR)
+
+      compose('destination-out')
+      assert.deepEqual(dstOnly(), RED)
+      assert.deepEqual(overlap(), CLEAR)
+      assert.deepEqual(srcOnly(), CLEAR)
+
+      compose('xor')
+      assert.deepEqual(dstOnly(), RED)
+      assert.deepEqual(overlap(), CLEAR)
+      assert.deepEqual(srcOnly(), BLUE)
+
+      compose('copy')
+      assert.deepEqual(dstOnly(), CLEAR)
+      assert.deepEqual(overlap(), BLUE)
+      assert.deepEqual(srcOnly(), BLUE)
+
+      // blend-mode results are computable from the source & destination channels
+      compose('multiply')
+      assert.deepEqual(overlap(), [0,0,0,255])
+
+      compose('lighter')
+      assert.deepEqual(overlap(), MAGENTA)
+
+      compose('screen')
+      assert.deepEqual(overlap(), MAGENTA)
+    })
+
+    test("setLineDash()", () => {
+      let runsAcross = y => {
+        let row = ctx.getImageData(0, y, WIDTH, 1).data,
+            runs = 0,
+            prev = false
+        for (let x = 0; x < WIDTH; x++){
+          let ink = row[x*4 + 3] > 128
+          if (ink && !prev) runs++
+          prev = ink
+        }
+        return runs
+      }
+
+      let dashedLine = y => {
+        ctx.beginPath()
+        ctx.moveTo(50, y)
+        ctx.lineTo(350, y)
+        ctx.stroke()
+      }
+
+      ctx.lineWidth = 4
+      ctx.setLineDash([20, 20])
+      dashedLine(100)
+      assert.deepEqual(pixel(55, 100), BLACK)
+      assert.deepEqual(pixel(75, 100), CLEAR)
+      assert.equal(runsAcross(100), 8)
+
+      // lineDashOffset shifts the phase
+      ctx.lineDashOffset = 20
+      assert.equal(ctx.lineDashOffset, 20)
+      dashedLine(200)
+      assert.deepEqual(pixel(55, 200), CLEAR)
+      assert.deepEqual(pixel(75, 200), BLACK)
+      assert.equal(runsAcross(200), 7)
+    })
+
+    test("lineDashMarker", () => {
+      assert.equal(ctx.lineDashMarker, null)
+      let marker = new Path2D()
+      marker.rect(-4, -4, 8, 8)
+      ctx.lineDashMarker = marker
+      assert.equal(ctx.lineDashMarker.d, marker.d)
+
+      // markers are stamped at each dash interval in place of the dash pattern
+      ctx.setLineDash([50])
+      ctx.beginPath()
+      ctx.moveTo(50, 300)
+      ctx.lineTo(350, 300)
+      ctx.stroke()
+      assert.deepEqual(pixel(50, 300), BLACK)
+      assert.deepEqual(pixel(100, 300), BLACK)
+      assert.deepEqual(pixel(75, 300), CLEAR)
+
+      ctx.lineDashMarker = null
+      assert.equal(ctx.lineDashMarker, null)
+
+      // lineDashFit accepts its enum & ignores unknown values
+      assert.equal(ctx.lineDashFit, 'turn')
+      for (let fit of ['move', 'turn', 'follow']){
+        ctx.lineDashFit = fit
+        assert.equal(ctx.lineDashFit, fit)
+      }
+      ctx.lineDashFit = 'bogus'
+      assert.equal(ctx.lineDashFit, 'follow')
+    })
+
     test("clip()", () => {
       ctx.fillStyle = 'white'
       ctx.fillRect(0, 0, 2, 2)
@@ -635,6 +759,22 @@ describe("Context2D", ()=>{
         ctx.fillText(...args)
         assert.equal(ctx.getImageData(0, 0, 20, 20).data.some(a => a), shouldDraw)
       })
+    })
+
+    test("strokeText()", () => {
+      FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
+      let inked = () => ctx.getImageData(0, 0, WIDTH, HEIGHT).data.filter((v, i) => i % 4 == 3 && v > 128).length
+
+      ctx.font = '80px Monoton'
+      ctx.strokeText('O', 50, 120)
+      let stroked = inked()
+      assert(stroked > 0)
+
+      // filling the same glyph covers more area than stroking its outline
+      canvas.width = WIDTH
+      ctx.font = '80px Monoton'
+      ctx.fillText('O', 50, 120)
+      assert(inked() > stroked)
     })
 
     test("roundRect()", () => {
@@ -792,6 +932,37 @@ describe("Context2D", ()=>{
         assert.nearEqual(ctx.measureText(text).width, 74)
         ctx.textWrap = true
         assert.nearEqual(ctx.measureText(text).width, 74)
+    })
+
+    test("textWrap", () => {
+      FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
+      let inkHeight = () => {
+        let data = ctx.getImageData(0, 0, WIDTH, HEIGHT).data,
+            minY = HEIGHT,
+            maxY = 0
+        for (let i = 3; i < data.length; i += 4){
+          if (data[i] > 128){
+            let y = Math.floor(i / 4 / WIDTH)
+            minY = Math.min(minY, y)
+            maxY = Math.max(maxY, y)
+          }
+        }
+        return Math.max(0, maxY - minY)
+      }
+
+      assert.equal(ctx.textWrap, false)
+      ctx.font = '20px Monoton'
+      ctx.fillText('word '.repeat(12), 10, 30, 150)
+      let single = inkHeight()
+      assert(single > 0)
+
+      // with wrapping enabled, the width limit becomes a column width
+      canvas.width = WIDTH
+      ctx.font = '20px Monoton'
+      ctx.textWrap = true
+      assert.equal(ctx.textWrap, true)
+      ctx.fillText('word '.repeat(12), 10, 30, 150)
+      assert(inkHeight() > single * 2)
     })
 
     test("measureText()", () => {
