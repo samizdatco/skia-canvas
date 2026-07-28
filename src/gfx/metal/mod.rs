@@ -1,4 +1,5 @@
-use metal::{ foreign_types::ForeignTypeRef, CommandQueue, DeviceRef };
+use objc2::{rc::Retained, runtime::ProtocolObject};
+use objc2_metal::{MTLCommandQueue, MTLDevice};
 use skia_safe::gpu::{ mtl, direct_contexts, DirectContext };
 
 pub mod offscreen;
@@ -7,12 +8,12 @@ pub mod offscreen;
 pub mod window;
 
 // create a Skia rendering context for use by either on- or offscreen renderers
-fn make_direct_context(device:&DeviceRef) -> Option<(CommandQueue, DirectContext)>{
-    let queue = device.new_command_queue();
+fn make_direct_context(device:&ProtocolObject<dyn MTLDevice>) -> Option<(Retained<ProtocolObject<dyn MTLCommandQueue>>, DirectContext)>{
+    let queue = device.newCommandQueue()?;
     let backend = unsafe {
         mtl::BackendContext::new(
-            device.as_ptr() as mtl::Handle,
-            queue.as_ptr() as mtl::Handle,
+            std::ptr::from_ref(device) as mtl::Handle,
+            Retained::as_ptr(&queue) as mtl::Handle,
         )
     };
     direct_contexts::make_metal(&backend, None).map(|context| (queue, context))

@@ -1,19 +1,17 @@
-#![allow(unexpected_cfgs)]
 use std::sync::Arc;
 use std::time::Duration;
-use metal::{
-    foreign_types::{ForeignType, ForeignTypeRef},
-    CommandQueue, Device, MTLPixelFormat, MetalLayer,
+use objc2::{rc::{autoreleasepool, Retained}, runtime::ProtocolObject};
+use objc2_core_foundation::CGSize;
+use objc2_metal::{
+    MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLPixelFormat,
 };
+use objc2_quartz_core::{kCAGravityBottomLeft, kCAGravityTopLeft, CAMetalDrawable, CAMetalLayer};
 use skia_safe::{
     scalar, ColorType, Size, Matrix, Color, Paint, BlendMode, SurfaceProps,
     canvas::SrcRectConstraint,
 };
 use skia_safe::gpu::{ mtl, surfaces, backend_render_targets, SurfaceOrigin, DirectContext };
-use objc::rc::autoreleasepool;
 use raw_window_metal::Layer;
-use core_graphics_types::geometry::CGSize;
-use objc::{msg_send, sel, sel_impl, runtime::{self, Object}};
 use winit::{
     dpi::PhysicalSize,
     window::Window,
@@ -26,24 +24,17 @@ use crate::gfx::RenderOutcome;
 use crate::gfx::cache::Frame;
 use super::make_direct_context;
 
-#[allow(non_upper_case_globals)]
-#[link(name = "QuartzCore", kind = "framework")]
-unsafe extern "C" {
-    static kCAGravityTopLeft: *mut Object;
-    static kCAGravityBottomLeft: *mut Object;
-}
-
 pub struct MetalRenderer {
     window: Arc<Window>,
     backend: MetalBackend,
-    layer: MetalLayer,
+    layer: Retained<CAMetalLayer>,
     frame: Frame,
     last_page_id: usize, // previous frame's page id — render-loop history, not cache state
 }
 
 impl MetalRenderer{
     pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
-        let device = Device::system_default().expect("Metal device not found");
+        let device = MTLCreateSystemDefaultDevice().expect("Metal device not found");
 
         let raw_window = window
             .window_handle()
@@ -56,24 +47,30 @@ impl MetalRenderer{
             _ => panic!("Unsupported window handle type"),
         };
 
-        let layer = unsafe{
-            let mtl_layer = MetalLayer::from_ptr(raw_layer.into_raw().as_ptr().cast());
-            let gravity = match msg_send![mtl_layer.as_ptr(), contentsAreFlipped] {
-                runtime::YES => kCAGravityBottomLeft,
-                _ => kCAGravityTopLeft,
-            };
-            let _: () = msg_send![mtl_layer.as_ptr(), setContentsGravity: gravity];
-            mtl_layer
+        // raw-window-metal hands back a +1 retained CAMetalLayer pointer
+        let layer: Retained<CAMetalLayer> = unsafe {
+            Retained::from_raw(raw_layer.into_raw().as_ptr().cast())
+                .expect("Failed to obtain a CAMetalLayer")
         };
-        layer.set_device(&device);
-        layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
-        layer.set_presents_with_transaction(false);
-        layer.set_display_sync_enabled(true);
-        layer.set_opaque(false);
-        layer.set_framebuffer_only(false); // to enable blend modes
 
-        let draw_size = window.inner_size();
-        layer.set_drawable_size(CGSize::new(draw_size.width as f64, draw_size.height as f64));
+        let gravity = unsafe {
+            match layer.contentsAreFlipped() {
+                true => kCAGravityBottomLeft,
+                false => kCAGravityTopLeft,
+            }
+        };
+        layer.setContentsGravity(gravity);
+        layer.setOpaque(false);
+        unsafe{
+            layer.setDevice(Some(&device));
+            layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
+            layer.setPresentsWithTransaction(false);
+            layer.setDisplaySyncEnabled(true);
+            layer.setFramebufferOnly(false); // to enable blend modes
+
+            let draw_size = window.inner_size();
+            layer.setDrawableSize(CGSize::new(draw_size.width as f64, draw_size.height as f64));
+        }
 
         let backend = MetalBackend::for_layer(&layer);
         let frame = Frame::default();
@@ -83,7 +80,7 @@ impl MetalRenderer{
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         let cg_size = CGSize::new(size.width as f64, size.height as f64);
-        self.layer.set_drawable_size(cg_size);
+        unsafe{ self.layer.setDrawableSize(cg_size) };
         self.frame.start_resizing();
     }
 
@@ -121,33 +118,35 @@ impl MetalRenderer{
 
 pub struct MetalBackend {
     skia_ctx: DirectContext,
-    queue: CommandQueue,
+    queue: Retained<ProtocolObject<dyn MTLCommandQueue>>,
 }
 
 impl MetalBackend {
-    pub fn for_layer(layer:&MetalLayer) -> Self{
-        let (queue, skia_ctx) = make_direct_context(&layer.device())
+    pub fn for_layer(layer:&CAMetalLayer) -> Self{
+        let device = unsafe{ layer.device() }.expect("Metal: layer has no device");
+        let (queue, skia_ctx) = make_direct_context(&device)
             .expect("Metal: Failed to create Skia direct context");
         Self { skia_ctx, queue }
     }
 
-    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, snapshot:bool, props:&SurfaceProps, f:F) -> RenderOutcome
+    fn render_to_layer<F>(&mut self, layer:&CAMetalLayer, window:&Window, sync:bool, snapshot:bool, props:&SurfaceProps, f:F) -> RenderOutcome
         where F:FnOnce(&skia_safe::Canvas)
     {
-      autoreleasepool(||{
+      autoreleasepool(|_|{
         // if layer pool is exhausted, just drop the frame and try again next tick
-        let Some(drawable) = layer.next_drawable() else {
+        let Some(drawable) = (unsafe{ layer.nextDrawable() }) else {
             return RenderOutcome::Skipped;
         };
 
         let drawable_size = {
-            let size = layer.drawable_size();
+            let size = unsafe{ layer.drawableSize() };
             Size::new(size.width as scalar, size.height as scalar)
         };
 
         let backend_render_target = unsafe {
+            let texture = drawable.texture();
             let texture_info =
-                mtl::TextureInfo::new(drawable.texture().as_ptr() as mtl::Handle);
+                mtl::TextureInfo::new(Retained::as_ptr(&texture) as mtl::Handle);
             backend_render_targets::make_mtl(
                 (drawable_size.width as i32, drawable_size.height as i32),
                 &texture_info,
@@ -170,12 +169,13 @@ impl MetalBackend {
         self.skia_ctx.perform_deferred_cleanup(Duration::from_secs(1), None);
 
         window.pre_present_notify();
-        let command_buffer = self.queue.new_command_buffer();
-        command_buffer.present_drawable(drawable);
+        let command_buffer = self.queue.commandBuffer()
+            .expect("MetalBackend: could not create command buffer");
+        command_buffer.presentDrawable(ProtocolObject::from_ref(&*drawable));
         command_buffer.commit();
 
         // during resizes, ensure drawing is complete before returning
-        if sync{ command_buffer.wait_until_completed(); }
+        if sync{ unsafe{ command_buffer.waitUntilCompleted() }; }
 
         // copy the frame contents (for the Frame cache) only when they'll be reused
         RenderOutcome::Rendered(snapshot.then(||

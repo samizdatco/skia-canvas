@@ -183,100 +183,77 @@ mod vblank {
     //
     #[cfg(target_os = "macos")]
     pub mod mac{
+        #![allow(deprecated)]
+
         use std::ffi::c_void;
+        use std::ptr::NonNull;
         use std::time::{Instant, Duration};
         use std::sync::OnceLock;
+        use objc2_core_foundation::CFRetained;
+        use objc2_core_video::{kCVReturnSuccess, CVDisplayLink, CVOptionFlags, CVReturn, CVTimeStamp};
         use winit::event_loop::EventLoopProxy;
         use crate::gui::event::AppEvent;
-
-        type CVDisplayLinkRef = *mut c_void; // opaque handle
-        type CVReturn = i32;
-        type CGDirectDisplayID = u32;
-        type CVOptionFlags = u64;
-        const CV_RETURN_SUCCESS: CVReturn = 0;
-
-        type OutputCallback = unsafe extern "C" fn(
-            CVDisplayLinkRef, *const c_void, *const c_void, CVOptionFlags, *mut CVOptionFlags, *mut c_void,
-        ) -> CVReturn;
-
-        #[link(name = "CoreVideo", kind = "framework")]
-        unsafe extern "C" {
-            fn CVDisplayLinkCreateWithCGDisplay(display:CGDirectDisplayID, out:*mut CVDisplayLinkRef) -> CVReturn;
-            fn CVDisplayLinkSetOutputCallback(link:CVDisplayLinkRef, cb:OutputCallback, ctx:*mut c_void) -> CVReturn;
-            fn CVDisplayLinkStart(link:CVDisplayLinkRef) -> CVReturn;
-            fn CVDisplayLinkStop(link:CVDisplayLinkRef) -> CVReturn;
-            fn CVDisplayLinkRelease(link:CVDisplayLinkRef);
-        }
-
-        #[repr(C)]
-        struct CVTimeStamp{ version:u32, video_time_scale:i32, video_time:i64, host_time:u64 }
 
         #[repr(C)]
         struct MachTimebaseInfo{ numer:u32, denom:u32 }
         unsafe extern "C" { fn mach_timebase_info(info:*mut MachTimebaseInfo) -> i32; }
 
         pub struct DisplayLink{
-            link: CVDisplayLinkRef,
+            link: CFRetained<CVDisplayLink>,
             _proxy: Box<EventLoopProxy<AppEvent>>, // boxed so on_vblank gets a stable address
         }
 
         impl DisplayLink{
             // fires on CVDisplayLink's own thread at each vblank
-            unsafe extern "C" fn on_vblank(
-                _link:CVDisplayLinkRef,
-                _now:*const c_void,
-                output_time:*const c_void,
+            unsafe extern "C-unwind" fn on_vblank(
+                _link:NonNull<CVDisplayLink>,
+                _now:NonNull<CVTimeStamp>,
+                output_time:NonNull<CVTimeStamp>,
                 _flags_in:CVOptionFlags,
-                _flags_out:*mut CVOptionFlags,
+                _flags_out:NonNull<CVOptionFlags>,
                 ctx:*mut c_void, // points to the boxed proxy
             ) -> CVReturn {
                 let proxy = unsafe{ &*(ctx as *const EventLoopProxy<AppEvent>) };
-                let at = if output_time.is_null(){
-                    // fall back to using `now` only if there's been an error
-                    Instant::now()
-                }else{
-                    // Instants can't be created from raw timestamps, so cache an initial Instant & host_time,
-                    // then return that Instant plus the (rate-scaled) delta between the current & cached host_times
-                    let host_time = unsafe{ (*(output_time as *const CVTimeStamp)).host_time };
-                    static BASE:OnceLock<(Instant, u64, u32, u32)> = OnceLock::new();
-                    let (base_instant, base_host, numer, denom) = *BASE.get_or_init(||{
-                        let mut tb = MachTimebaseInfo{ numer:0, denom:0 };
-                        unsafe{ mach_timebase_info(&mut tb); } // record the *rate* that host_time passes at
-                        (Instant::now(), host_time, tb.numer.max(1), tb.denom.max(1))
-                    });
-                    let delta_ns = host_time.saturating_sub(base_host) as u128 * numer as u128 / denom as u128;
-                    base_instant + Duration::from_nanos(delta_ns as u64)
-                };
+
+                // Instants can't be created from raw timestamps, so cache an initial Instant & hostTime,
+                // then return that Instant plus the (rate-scaled) delta between the current & cached hostTimes
+                let host_time = unsafe{ output_time.as_ref() }.hostTime;
+                static BASE:OnceLock<(Instant, u64, u32, u32)> = OnceLock::new();
+                let (base_instant, base_host, numer, denom) = *BASE.get_or_init(||{
+                    let mut tb = MachTimebaseInfo{ numer:0, denom:0 };
+                    unsafe{ mach_timebase_info(&mut tb); } // record the *rate* that host_time passes at
+                    (Instant::now(), host_time, tb.numer.max(1), tb.denom.max(1))
+                });
+                let delta_ns = host_time.saturating_sub(base_host) as u128 * numer as u128 / denom as u128;
+                let at = base_instant + Duration::from_nanos(delta_ns as u64);
+
                 let _ = proxy.send_event(AppEvent::Tick{ at });
-                CV_RETURN_SUCCESS
+                kCVReturnSuccess
             }
         }
 
         impl Drop for DisplayLink{
             fn drop(&mut self){
-                unsafe{
-                    CVDisplayLinkStop(self.link);
-                    CVDisplayLinkRelease(self.link);
-                }
+                unsafe{ self.link.stop(); } // CFRetained releases the link itself
             }
         }
 
-        pub fn start(proxy:EventLoopProxy<AppEvent>, display_id:CGDirectDisplayID) -> Option<DisplayLink>{
+        pub fn start(proxy:EventLoopProxy<AppEvent>, display_id:u32) -> Option<DisplayLink>{
             unsafe{
                 // create the link
-                let mut link:CVDisplayLinkRef = std::ptr::null_mut();
-                if CVDisplayLinkCreateWithCGDisplay(display_id, &mut link) != CV_RETURN_SUCCESS || link.is_null(){
+                let mut raw:*mut CVDisplayLink = std::ptr::null_mut();
+                if CVDisplayLink::create_with_cg_display(display_id, NonNull::from(&mut raw)) != kCVReturnSuccess{
                     return None;
                 }
+                let link = CFRetained::from_raw(NonNull::new(raw)?);
 
                 // connect the link to our on_vblank callback
                 let boxed = Box::new(proxy);
                 let ctx = (&*boxed as *const EventLoopProxy<AppEvent>) as *mut c_void;
-                if CVDisplayLinkSetOutputCallback(link, DisplayLink::on_vblank, ctx) != CV_RETURN_SUCCESS
-                    || CVDisplayLinkStart(link) != CV_RETURN_SUCCESS
+                if link.set_output_callback(Some(DisplayLink::on_vblank), ctx) != kCVReturnSuccess
+                    || link.start() != kCVReturnSuccess
                 {
-                    CVDisplayLinkRelease(link);
-                    return None;
+                    return None; // dropping the CFRetained releases the link
                 }
 
                 Some(DisplayLink{ link, _proxy: boxed })

@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::sync::OnceLock;
 use std::time::{Instant, Duration};
-use metal::{ Device, MTLDeviceLocation };
+use objc2::{rc::{autoreleasepool, Retained}, runtime::ProtocolObject};
+use objc2_metal::{ MTLCreateSystemDefaultDevice, MTLDevice, MTLDeviceLocation };
 use skia_safe::{ImageInfo, Surface};
 use skia_safe::gpu::{ surfaces, Budgeted, DirectContext, SurfaceOrigin };
-use objc::rc::autoreleasepool;
 use serde_json::{json, Value};
 
 use crate::context::page::ExportOptions;
@@ -64,7 +64,7 @@ impl MetalEngine {
         match MetalEngine::supported() {
             false => Err("Metal API not supported".to_string()),
             true => MTL_CONTEXT.with_borrow_mut(|local_ctx|
-                autoreleasepool(||
+                autoreleasepool(|_|
                     // lazily initialize this thread's context...
                     local_ctx
                         .take()
@@ -106,7 +106,7 @@ impl MetalEngine {
     pub fn purge_stale(){
         MTL_CONTEXT.with_borrow_mut(|cell| {
             if let Some(engine) = cell.as_mut(){
-                autoreleasepool(||
+                autoreleasepool(|_|
                     engine.context.perform_deferred_cleanup(Duration::from_secs(1), None)
                 );
             }
@@ -115,12 +115,12 @@ impl MetalEngine {
 
     // create a job-specific autorelease pool for each pass through the render-thread
     pub fn with_cleanup<T>(f: impl FnOnce() -> T) -> T {
-        autoreleasepool(f)
+        autoreleasepool(|_| f())
     }
 }
 
 pub struct MetalContext {
-    device: Device,
+    device: Retained<ProtocolObject<dyn MTLDevice>>,
     context: DirectContext,
     msaa: Vec<usize>,
     last_use: Instant,
@@ -128,11 +128,11 @@ pub struct MetalContext {
 
 impl MetalContext{
     fn new() -> Option<Self>{
-        autoreleasepool(|| {
-            Device::system_default().and_then(|device|{
+        autoreleasepool(|_| {
+            MTLCreateSystemDefaultDevice().and_then(|device|{
                 let last_use = Instant::now() + MTL_CONTEXT_LIFESPAN;
                 let msaa:Vec<usize> = [0,2,4,8,16,32].into_iter().filter(|s|{
-                    *s==0 || device.supports_texture_sample_count(*s as _)
+                    *s==0 || device.supportsTextureSampleCount(*s as _)
                 }).collect();
                 make_direct_context(&device)
                     .map(|(_queue, context)| MetalContext{device, context, msaa, last_use})
