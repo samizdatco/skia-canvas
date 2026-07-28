@@ -80,6 +80,29 @@ describe("Path2D", ()=>{
     })
   })
 
+  describe("can get & set", () => {
+    test("d", () => {
+      p.moveTo(10, 10)
+      p.lineTo(100, 40)
+      p.quadraticCurveTo(150, 200, 100, 300)
+      p.bezierCurveTo(60, 350, 300, 380, 380, 300)
+      p.closePath()
+
+      // the getter's SVG string losslessly reconstructs the path
+      let clone = new Path2D(p.d)
+      assert.equal(clone.d, p.d)
+      assert.deepEqual(clone.edges, p.edges)
+      assert.matchesSubset(clone.bounds, p.bounds)
+
+      // the setter replaces the path's previous contents
+      p.d = "M 50 50 h 100 v 100 h -100 Z"
+      assert.matchesSubset(p.bounds, {left:50, top:50, right:150, bottom:150})
+      ctx.fill(p)
+      assert.deepEqual(pixel(100, 100), BLACK)
+      assert.deepEqual(pixel(30, 30), CLEAR)
+    })
+  })
+
   describe("can use verb", () => {
     test("moveTo", () => {
       let [left, top] = [20, 30]
@@ -168,6 +191,15 @@ describe("Path2D", ()=>{
 
       assert.deepEqual(pixel(150, 137), BLACK)
       assert.deepEqual(pixel(150, 33), BLACK)
+
+      // collinear points degenerate to a straight line ending at the control point
+      let flat = new Path2D()
+      flat.moveTo(50, 300)
+      flat.arcTo(200, 300, 350, 300, 60)
+      assert.deepEqual(flat.edges, [["moveTo", 50, 300], ["lineTo", 200, 300]])
+      ctx.stroke(flat)
+      assert.deepEqual(pixel(125, 300), BLACK)
+
       assert.throws(() => p.arcTo(0,0, 20,20) , /not enough arguments/)
       assert.doesNotThrow(() => p.arcTo(150, 5, null, 'foo', NaN) )
     })
@@ -179,6 +211,16 @@ describe("Path2D", ()=>{
       ctx.stroke(p)
 
       assert.deepEqual(pixel(150, 150), BLACK)
+
+      // negative dimensions are normalized
+      scrub()
+      let neg = new Path2D()
+      neg.rect(300, 300, -200, -200)
+      assert.matchesSubset(neg.bounds, {left:100, top:100, right:300, bottom:300})
+      ctx.fill(neg)
+      assert.deepEqual(pixel(200, 200), BLACK)
+      assert.deepEqual(pixel(50, 50), CLEAR)
+
       assert.throws(() => p.rect(0,0, 20) , /not enough arguments/)
     })
 
@@ -339,6 +381,26 @@ describe("Path2D", ()=>{
       assert.deepEqual(pixel(150, 223), BLACK)
       assert.deepEqual(pixel(300, 301), BLACK)
       assert.deepEqual(pixel(300, 448), BLACK)
+    })
+
+    test("convex contours", () => {
+      // skia's add_path append fast-path can leave the destination's cached
+      // convexity stale, so append_path replays verbs instead — both contours
+      // must fill even when the first was already drawn (and its convexity cached)
+      let base = new Path2D()
+      base.arc(100, 100, 50, 0, TAU)
+      ctx.fillStyle = 'black'
+      ctx.fill(base)
+
+      let extra = new Path2D()
+      extra.arc(300, 300, 50, 0, TAU)
+      base.addPath(extra)
+
+      scrub()
+      ctx.fill(base)
+      assert.deepEqual(pixel(100, 100), BLACK)
+      assert.deepEqual(pixel(300, 300), BLACK)
+      assert.deepEqual(pixel(200, 200), CLEAR)
     })
 
   })
