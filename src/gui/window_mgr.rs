@@ -127,6 +127,12 @@ impl WindowManager {
         self.windows.iter().any(|win| !win.sieve.is_empty() )
     }
 
+    pub fn any_present_pending(&self) -> bool {
+        // true while any window has a requested redraw that hasn't presented yet. vblank sources will
+        // defer the next roundtrip until the last frame is complete to avoid stalling
+        self.windows.iter().any(|win| win.is_present_pending() )
+    }
+
     pub fn get_ui_changes(&mut self) -> Value {
         let mut ui = Map::new();
         let mut state = Map::new();

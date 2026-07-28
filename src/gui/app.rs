@@ -313,9 +313,10 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
                 app.cadence.set_frame_rate(fps)
             }
             AppEvent::Tick{ at } => {
-                // a tick arrives every vblank and the cadence handles triggering roundtrips & redraws (at the target fps)
-                if app.cadence.tick(at){
-                    app.roundtrip(cx, With::Events); // pause the source if the app just went idle
+                // a tick arrives every vblank and the cadence decides whether it's time to present (based on target fps).
+                // if there's already a present pending it means we've fallen behind, so skip this frame.
+                if app.cadence.tick(at) && !app.windows.any_present_pending(){
+                    app.roundtrip(cx, With::Events); // pauses the source if the app just went idle
                 }
             }
             AppEvent::Quit => {

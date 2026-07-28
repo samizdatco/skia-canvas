@@ -59,6 +59,7 @@ pub struct Window {
     background: Color,
     page: Page,
     suspended: bool,
+    present_pending: bool, // request_redraw() was called by this window but RedrawRequest has not yet arrived
 }
 
 impl Window {
@@ -94,7 +95,7 @@ impl Window {
         }
 
         let monitor = handle.current_monitor();
-        Self{ spec, handle, sieve, monitor, renderer, page:page.clone(), suspended:false, background}
+        Self{ spec, handle, sieve, monitor, renderer, page:page.clone(), suspended:false, background, present_pending:false }
     }
 
     pub fn id(&self) -> WindowId {
@@ -195,18 +196,28 @@ impl Window {
         )
     }
 
+    pub fn set_page(&mut self, page:Page){
+        if self.page != page{
+            self.handle.request_redraw(); // queue up the event that will trigger redraw() below
+            self.present_pending = true; // gate the next roundtrip until this frame presents
+        }
+        self.page = page;
+    }
+
+    pub fn is_present_pending(&self) -> bool{
+        // true after request_redraw() and before winit delivers the RequestRedraw that triggers redraw().
+        // if *any* window is still pending, the event loop will defer the next roundtrip
+        self.present_pending
+    }
+
     pub fn redraw(&mut self){
+        // called in response to RedrawRequest being delivered, so pending is complete (even for occluded windows)
+        self.present_pending = false;
         if !self.suspended{
             self.renderer.draw(self.page.clone(), self.fitting_matrix(), self.suface_props(), self.background);
         }
     }
 
-    pub fn set_page(&mut self, page:Page){
-        if self.page != page{
-            self.handle.request_redraw();
-        }
-        self.page = page;
-    }
 
     pub fn set_visible(&mut self, flag:bool){
         self.handle.set_visible(flag);
@@ -270,9 +281,11 @@ impl Window {
 
     pub fn set_redrawing_suspended(&mut self, suspended:bool){
         self.suspended = suspended;
-        if !suspended{
+        if suspended{
+            // a hidden window won't get a RedrawRequested to complete its pending redraw, so just drop the guard
+            self.present_pending = false;
+        }else{
             self.handle.request_redraw();
         }
     }
 }
-

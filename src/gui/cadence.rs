@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use winit::event_loop::EventLoopProxy;
 use super::event::AppEvent;
 use super::window_mgr::WindowManager;
@@ -10,6 +10,7 @@ pub struct Cadence{
     rate: u64,
     credit: f64,
     last_tick: Option<Instant>, // None until the first tick seeds the time base
+    refresh: Duration, // cached display interval; re-read whenever the vblank source is (re)built
     needs_cleanup: bool,
     vblank: Option<vblank::Source>,
 }
@@ -20,6 +21,7 @@ impl Default for Cadence {
             rate: 60,
             credit: 0.0,
             last_tick: None,
+            refresh: Duration::from_secs_f64(1.0 / 60.0), // 60Hz until the first source is built
             needs_cleanup: true, // ensure at least one post-Init loop
             vblank: None,
         }
@@ -30,6 +32,7 @@ impl Cadence{
     // start up the vblank source if it's not already running
     pub fn run(&mut self, proxy:EventLoopProxy<AppEvent>, windows:&WindowManager){
         if self.vblank.is_none(){
+            self.refresh = windows.refresh_interval(); // cache the current display's interval for tick()
             self.vblank = Some(vblank::Source::start(proxy, windows));
 
             // on Wayland we need to kick off an initial redraw request to start ticking
@@ -66,13 +69,19 @@ impl Cadence{
         self.vblank.is_none()
     }
 
-    // report whether a frame is due (based on target fps) whenever a vblank tick arrives
+    // report whether a frame is due (based on target fps) whenever a vblank tick arrives.
     pub fn tick(&mut self, at:Instant) -> bool{
         // the first tick just establishes the time base (and draws immediately)
         let Some(prev) = self.last_tick else {
             self.last_tick = Some(at);
             return true;
         };
+
+        // vblanks keep arriving even if the js roundtrip is too slow to support them, so only add new
+        // Tick events when the vblank's timestamp isn't from multiple vblank-intervals in our past
+        if Instant::now().saturating_duration_since(at) > self.refresh.mul_f64(1.5) {
+            return false; // leave last_tick/credit untouched so the next fresh tick paces from here
+        }
 
         // compare the elapsed time since our last redraw to the target fps and see if it's time for another
         let dt = at.saturating_duration_since(prev).as_secs_f64();
@@ -207,17 +216,16 @@ mod vblank {
             // fires on CVDisplayLink's own thread at each vblank
             unsafe extern "C-unwind" fn on_vblank(
                 _link:NonNull<CVDisplayLink>,
-                _now:NonNull<CVTimeStamp>,
-                output_time:NonNull<CVTimeStamp>,
+                now:NonNull<CVTimeStamp>,           // the vblank that just fired
+                _output_time:NonNull<CVTimeStamp>,  // predicted scan-out (unused)
                 _flags_in:CVOptionFlags,
                 _flags_out:NonNull<CVOptionFlags>,
                 ctx:*mut c_void, // points to the boxed proxy
             ) -> CVReturn {
                 let proxy = unsafe{ &*(ctx as *const EventLoopProxy<AppEvent>) };
-
                 // Instants can't be created from raw timestamps, so cache an initial Instant & hostTime,
                 // then return that Instant plus the (rate-scaled) delta between the current & cached hostTimes
-                let host_time = unsafe{ output_time.as_ref() }.hostTime;
+                let host_time = unsafe{ now.as_ref() }.hostTime;
                 static BASE:OnceLock<(Instant, u64, u32, u32)> = OnceLock::new();
                 let (base_instant, base_host, numer, denom) = *BASE.get_or_init(||{
                     let mut tb = MachTimebaseInfo{ numer:0, denom:0 };
