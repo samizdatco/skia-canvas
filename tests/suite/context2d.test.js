@@ -1508,8 +1508,9 @@ describe("Context2D", ()=>{
     })
 
     test('value errors', async () => {
-      assert.throws(() => ctx.ellipse(0,0,-10,-10,0,0,0,false), /Radius value must be positive/)
-      assert.throws(() => ctx.arcTo(0,0,0,0,-10), /Radius value must be positive/)
+      assert.throws(() => ctx.arc(0,0,-10,0,0), {name:'IndexSizeError'})
+      assert.throws(() => ctx.ellipse(0,0,-10,-10,0,0,0,false), {name:'IndexSizeError'})
+      assert.throws(() => ctx.arcTo(0,0,0,0,-10), {name:'IndexSizeError'})
       assert.throws(() => ctx.roundRect(0,0,0,0,-10), /Corner radius cannot be negative/)
       assert.throws(() => ctx.createImageData(1,0), /Dimensions must be non-zero/)
       assert.throws(() => ctx.getImageData(1,1,NaN,10), /Expected a number/)
@@ -1570,6 +1571,8 @@ describe("Context2D", ()=>{
       assert.doesNotThrow(() => ctx.quadraticCurveTo(0,0,NaN,0))
       assert.doesNotThrow(() => ctx.conicCurveTo(0,0,NaN,0,1))
       assert.doesNotThrow(() => ctx.roundRect(0,0,0,0,NaN))
+      assert.doesNotThrow(() => ctx.roundRect(NaN,0,0,0,5))
+      assert.doesNotThrow(() => ctx.roundRect(0,0,NaN,0,5))
       assert.doesNotThrow(() => ctx.fillRect(0,0,NaN,0))
       assert.doesNotThrow(() => ctx.strokeRect(0,0,NaN,0))
       assert.doesNotThrow(() => ctx.clearRect(0,0,NaN,0))

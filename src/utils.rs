@@ -384,10 +384,6 @@ pub fn float_args_at(cx: &mut FunctionContext, start:usize, names:&[&str]) -> Ne
   _float_args_at(cx, start, names, false)
 }
 
-pub fn float_args_or_bail(cx: &mut FunctionContext, names:&[&str]) -> NeonResult<Vec<f32>>{
-  _float_args_at(cx, 1, names, true)
-}
-
 pub fn float_args_or_bail_at(cx: &mut FunctionContext, start:usize, names:&[&str]) -> NeonResult<Vec<f32>>{
   _float_args_at(cx, start, names, true)
 }

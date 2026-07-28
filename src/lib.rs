@@ -5,6 +5,7 @@ use neon::prelude::*;
 mod canvas;
 mod context;
 mod path;
+mod drawlist;
 mod image;
 mod filter;
 mod gradient;
@@ -47,17 +48,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_from_path", path::from_path)?;
   cx.export_function("Path2D_from_svg", path::from_svg)?;
   cx.export_function("Path2D_addPath", path::addPath)?;
-  cx.export_function("Path2D_closePath", path::closePath)?;
-  cx.export_function("Path2D_moveTo", path::moveTo)?;
-  cx.export_function("Path2D_lineTo", path::lineTo)?;
-  cx.export_function("Path2D_bezierCurveTo", path::bezierCurveTo)?;
-  cx.export_function("Path2D_quadraticCurveTo", path::quadraticCurveTo)?;
-  cx.export_function("Path2D_conicCurveTo", path::conicCurveTo)?;
-  cx.export_function("Path2D_arc", path::arc)?;
-  cx.export_function("Path2D_arcTo", path::arcTo)?;
-  cx.export_function("Path2D_ellipse", path::ellipse)?;
-  cx.export_function("Path2D_rect", path::rect)?;
-  cx.export_function("Path2D_roundRect", path::roundRect)?;
   cx.export_function("Path2D_op", path::op)?;
   cx.export_function("Path2D_interpolate", path::interpolate)?;
   cx.export_function("Path2D_simplify", path::simplify)?;
@@ -72,6 +62,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_edges", path::edges)?;
   cx.export_function("Path2D_get_d", path::get_d)?;
   cx.export_function("Path2D_set_d", path::set_d)?;
+  cx.export_function("Path2D_plot", drawlist::plot)?;
+
+  // -- Drawlist ----------------------------------------------------------------------------------
+
+  cx.export_function("DrawList_opcodes", drawlist::opcodes)?;
 
   // -- CanvasGradient ----------------------------------------------------------------------------
 
@@ -131,30 +126,12 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_dispose", ctx::dispose)?;
 
   // grid state
-  cx.export_function("CanvasRenderingContext2D_save", ctx::save)?;
-  cx.export_function("CanvasRenderingContext2D_restore", ctx::restore)?;
-  cx.export_function("CanvasRenderingContext2D_transform", ctx::transform)?;
-  cx.export_function("CanvasRenderingContext2D_translate", ctx::translate)?;
-  cx.export_function("CanvasRenderingContext2D_scale", ctx::scale)?;
-  cx.export_function("CanvasRenderingContext2D_rotate", ctx::rotate)?;
-  cx.export_function("CanvasRenderingContext2D_resetTransform", ctx::resetTransform)?;
   cx.export_function("CanvasRenderingContext2D_get_currentTransform", ctx::get_currentTransform)?;
   cx.export_function("CanvasRenderingContext2D_set_currentTransform", ctx::set_currentTransform)?;
   cx.export_function("CanvasRenderingContext2D_createProjection", ctx::createProjection)?;
 
   // bézier paths
-  cx.export_function("CanvasRenderingContext2D_beginPath", ctx::beginPath)?;
-  cx.export_function("CanvasRenderingContext2D_rect", ctx::rect)?;
-  cx.export_function("CanvasRenderingContext2D_roundRect", ctx::roundRect)?;
-  cx.export_function("CanvasRenderingContext2D_arc", ctx::arc)?;
-  cx.export_function("CanvasRenderingContext2D_ellipse", ctx::ellipse)?;
-  cx.export_function("CanvasRenderingContext2D_moveTo", ctx::moveTo)?;
-  cx.export_function("CanvasRenderingContext2D_lineTo", ctx::lineTo)?;
-  cx.export_function("CanvasRenderingContext2D_arcTo", ctx::arcTo)?;
-  cx.export_function("CanvasRenderingContext2D_bezierCurveTo", ctx::bezierCurveTo)?;
-  cx.export_function("CanvasRenderingContext2D_quadraticCurveTo", ctx::quadraticCurveTo)?;
-  cx.export_function("CanvasRenderingContext2D_conicCurveTo", ctx::conicCurveTo)?;
-  cx.export_function("CanvasRenderingContext2D_closePath", ctx::closePath)?;
+  cx.export_function("CanvasRenderingContext2D_plot", drawlist::plot)?;
   cx.export_function("CanvasRenderingContext2D_isPointInPath", ctx::isPointInPath)?;
   cx.export_function("CanvasRenderingContext2D_isPointInStroke", ctx::isPointInStroke)?;
   cx.export_function("CanvasRenderingContext2D_clip", ctx::clip)?;
@@ -162,9 +139,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // fill & stroke
   cx.export_function("CanvasRenderingContext2D_fill", ctx::fill)?;
   cx.export_function("CanvasRenderingContext2D_stroke", ctx::stroke)?;
-  cx.export_function("CanvasRenderingContext2D_fillRect", ctx::fillRect)?;
-  cx.export_function("CanvasRenderingContext2D_strokeRect", ctx::strokeRect)?;
-  cx.export_function("CanvasRenderingContext2D_clearRect", ctx::clearRect)?;
   cx.export_function("CanvasRenderingContext2D_get_fillStyle", ctx::get_fillStyle)?;
   cx.export_function("CanvasRenderingContext2D_set_fillStyle", ctx::set_fillStyle)?;
   cx.export_function("CanvasRenderingContext2D_get_strokeStyle", ctx::get_strokeStyle)?;

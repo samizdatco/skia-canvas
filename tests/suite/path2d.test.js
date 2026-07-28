@@ -249,6 +249,92 @@ describe("Path2D", ()=>{
         assert.deepEqual(pixel(WIDTH - x - 1, y), CLEAR)
         assert.deepEqual(pixel(WIDTH - x - 1, HEIGHT - y - 1), CLEAR)
       }
+
+      // an omitted radius defaults to a 0-radius (square-cornered) rect
+      let sq = new Path2D(); sq.roundRect(10, 10, 50, 50)
+      assert.ok(sq.d.length > 0, `expected non-empty d, got "${sq.d}"`)
+      assert.deepEqual([sq.bounds.left, sq.bounds.top, sq.bounds.right, sq.bounds.bottom], [10, 10, 60, 60])
+    })
+
+    describe("winds shapes to match the browser", ()=>{
+      // Regression guards for the rect/roundRect corner-ordering fixes. These shapes fill
+      // identically no matter where their closed contour starts or which way it winds, so the
+      // divergences we fixed are invisible to a plain fill — they only surface in dash phase,
+      // the current point after the verb, and nonzero-winding overlaps. Assert the raw edge
+      // list (and cross-check that Context2D delegates to the same builders).
+
+      test("rect() follows the spec's fixed corner order", ()=>{
+        // moveTo(x,y) → (x+w,y) → (x+w,y+h) → (x,y+h) → close, whatever the sign of w/h
+        let pos = new Path2D(); pos.rect(110, 110, 90, 70)
+        assert.deepEqual(pos.edges, [
+          ["moveTo", 110, 110], ["lineTo", 200, 110], ["lineTo", 200, 180],
+          ["lineTo", 110, 180], ["lineTo", 110, 110], ["closePath"],
+        ])
+
+        // mixed-sign dims must wind the SAME direction — add_rect's normalized winding used to
+        // reverse the traversal for these
+        let negW = new Path2D(); negW.rect(110, 110, -90, 70)
+        assert.deepEqual(negW.edges, [
+          ["moveTo", 110, 110], ["lineTo", 20, 110], ["lineTo", 20, 180],
+          ["lineTo", 110, 180], ["lineTo", 110, 110], ["closePath"],
+        ])
+
+        let negH = new Path2D(); negH.rect(110, 110, 90, -70)
+        assert.deepEqual(negH.edges, [
+          ["moveTo", 110, 110], ["lineTo", 200, 110], ["lineTo", 200, 40],
+          ["lineTo", 110, 40], ["lineTo", 110, 110], ["closePath"],
+        ])
+      })
+
+      test("roundRect() starts at the top-left corner, going clockwise", ()=>{
+        // browser origin is (x + topLeftRadius, y) with the first edge running along the top
+        // toward the top-right corner. (Skia's default rrect start index 6/7 begins at the
+        // bottom-left instead.)
+        let rr = new Path2D(); rr.roundRect(10, 20, 100, 80, 15)
+        let [move, line] = rr.edges
+        assert.deepEqual(move, ["moveTo", 25, 20])   // (x + rTL, y)
+        assert.deepEqual(line, ["lineTo", 95, 20])   // top edge → (x + w − rTR, y)
+      })
+
+      test("Context2D rect/roundRect render identically to the Path2D builders", ()=>{
+        // ctx.rect/roundRect delegate to these builders. Preceded by real geometry and drawn as
+        // a dashed stroke, any divergence in start vertex, winding, or new-subpath-vs-connecting-
+        // line shows up as differing pixels (a plain fill would hide all three).
+        let render = (target, build) => {
+          scrub(); ctx.save(); ctx.setLineDash([9, 9])
+          if (target == 'ctx'){ ctx.beginPath(); build(ctx); ctx.stroke() }
+          else { let q = new Path2D(); build(q); ctx.stroke(q) }
+          ctx.restore()
+          return ctx.getImageData(0, 0, WIDTH, HEIGHT).data
+        }
+        let diff = (a, b) => { let n = 0; for (let i=0; i<a.length; i++) if (a[i] !== b[i]) n++; return n }
+
+        let cases = {
+          "rect":              o => { o.moveTo(20, 20); o.lineTo(40, 40); o.rect(80, 80, 200, 150) },
+          "rect (mixed-sign)": o => { o.moveTo(20, 20); o.lineTo(40, 40); o.rect(280, 280, -200, 150) },
+          "roundRect":         o => { o.moveTo(20, 20); o.lineTo(40, 40); o.roundRect(80, 320, 200, 150, 25) },
+        }
+        for (let [name, build] of Object.entries(cases)){
+          assert.equal(diff(render('ctx', build), render('path', build)), 0, `${name}: ctx vs Path2D mismatch`)
+        }
+      })
+    })
+
+    test("arcTo transforms its radius with the CTM", ()=>{
+      // arcTo's radius must scale with the context transform — a device-space circular arc with a
+      // fixed radius wouldn't. ctx.arcTo bakes the CTM as it builds; drawing the same Path2D
+      // through the transformed context is the browser reference. Under a scale they must match
+      // (before the fix ctx kept the radius in device space and diverged by thousands of pixels).
+      let render = (target) => {
+        scrub(); ctx.save(); ctx.translate(30, 20); ctx.scale(1.6, 1.6)
+        let build = o => { o.moveTo(40, 40); o.arcTo(160, 40, 160, 160, 50); o.lineTo(40, 160) }
+        if (target == 'ctx'){ ctx.beginPath(); build(ctx); ctx.fillStyle = 'black'; ctx.fill() }
+        else { let q = new Path2D(); build(q); ctx.fillStyle = 'black'; ctx.fill(q) }
+        ctx.restore()
+        return ctx.getImageData(0, 0, WIDTH, HEIGHT).data
+      }
+      let diff = (a, b) => { let n = 0; for (let i=0; i<a.length; i++) if (a[i] !== b[i]) n++; return n }
+      assert.equal(diff(render('ctx'), render('path')), 0)
     })
 
     test("arc", () => {
@@ -755,6 +841,9 @@ describe("Path2D", ()=>{
       assert.throws(() => p.transform(0,0,0,NaN,0,0), /Expected a DOMMatrix/)
       assert.throws(() => p.complement({}), /Expected a Path2D/)
       assert.throws(() => p.interpolate(p), /Expected a number/)
+      assert.throws(() => p.arc(0,0,-10,0,0), {name:'IndexSizeError'})
+      assert.throws(() => p.arcTo(0,0,0,0,-10), {name:'IndexSizeError'})
+      assert.throws(() => p.ellipse(0,0,-10,-10,0,0,0), {name:'IndexSizeError'})
       assert.throws(() => p.roundRect(0,0,0,0,-10), /Corner radius cannot be negative/)
       assert.throws(() => p.addPath(p, []), /Invalid transform matrix/)
     })
@@ -772,6 +861,8 @@ describe("Path2D", ()=>{
       assert.doesNotThrow(() => p.quadraticCurveTo(0,0,NaN,0))
       assert.doesNotThrow(() => p.conicCurveTo(0,0,NaN,0,1))
       assert.doesNotThrow(() => p.roundRect(0,0,0,0,NaN))
+      assert.doesNotThrow(() => p.roundRect(NaN,0,0,0,5))
+      assert.doesNotThrow(() => p.roundRect(0,0,NaN,0,5))
       assert.doesNotThrow(() => p.transform({}))
     })
   })

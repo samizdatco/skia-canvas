@@ -11,6 +11,7 @@ use skia_safe::{PathEffect, trim_path_effect};
 use skia_safe::path::{self, AddPathMode, Verb};
 
 use crate::utils::*;
+use crate::drawlist::Pen;
 
 pub type BoxedPath2D = JsBox<RefCell<Path2D>>;
 impl Finalize for Path2D {}
@@ -63,11 +64,20 @@ impl Path2D{
     }
   }
 
+  // the current point (end of the last-added verb), or None if the path is empty
+  pub fn last_point(&self) -> Option<Point> {
+    self.path().last_pt()
+  }
+
   pub fn append_path(&mut self, src:&Path, matrix:&Matrix){
     self.update().add_path_with_transform(src, matrix, AddPathMode::Append);
   }
 
-  pub fn conic_to(&mut self, p1:impl Into<Point>, p2:impl Into<Point>, weight:f32){
+  pub fn extend_path(&mut self, sub:&Path, matrix:&Matrix){
+    self.update().add_path_with_transform(sub, matrix, AddPathMode::Extend);
+  }
+
+  pub fn conic_to_normalized(&mut self, p1:impl Into<Point>, p2:impl Into<Point>, weight:f32){
     let (p1, p2) = (p1.into(), p2.into());
     let builder = self.update();
 
@@ -139,8 +149,52 @@ impl Path2D{
         arc.arc_to(oval, start_deg, sweep_deg, false);
       }
     }
-    self.update().add_path_with_transform(&arc.detach(), &rotated, AddPathMode::Extend);
+    self.extend_path(&arc.detach(), &rotated);
   }
+}
+
+// receives verbs from the shared DrawList decoder and applies them verbatim (i.e., no baked-in CTM)
+impl Pen for Path2D {
+  fn move_to(&mut self, x:f32, y:f32){ self.update().move_to((x, y)); }
+  fn line_to(&mut self, x:f32, y:f32){ self.scoot(x, y); self.update().line_to((x, y)); }
+  fn bezier_to(&mut self, c1x:f32, c1y:f32, c2x:f32, c2y:f32, x:f32, y:f32){
+    self.scoot(c1x, c1y);
+    self.update().cubic_to((c1x, c1y), (c2x, c2y), (x, y));
+  }
+  fn quad_to(&mut self, cx:f32, cy:f32, x:f32, y:f32){
+    self.scoot(cx, cy);
+    self.update().quad_to((cx, cy), (x, y));
+  }
+  fn conic_to(&mut self, cx:f32, cy:f32, x:f32, y:f32, w:f32){
+    self.scoot(cx, cy);
+    self.conic_to_normalized((cx, cy), (x, y), w);
+  }
+  fn arc(&mut self, x:f32, y:f32, r:f32, start:f32, end:f32, ccw:bool){
+    self.add_ellipse((x, y), (r, r), 0.0, start, end, ccw);
+  }
+  fn arc_to(&mut self, x1:f32, y1:f32, x2:f32, y2:f32, r:f32){
+    self.scoot(x1, y1);
+    self.update().arc_to_tangent((x1, y1), (x2, y2), r);
+  }
+  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f32, start:f32, end:f32, ccw:bool){
+    self.add_ellipse((x, y), (xr, yr), rot, start, end, ccw);
+  }
+  fn rect(&mut self, x:f32, y:f32, w:f32, h:f32){
+    // enulate browser's corner orderL moveTo(x,y), then CW/CCW based on the sign of w×h
+    self.update()
+      .move_to((x, y))
+      .line_to((x+w, y))
+      .line_to((x+w, y+h))
+      .line_to((x, y+h))
+      .close();
+  }
+  fn round_rect(&mut self, x:f32, y:f32, w:f32, h:f32, radii:[Point;4]){
+    let rect = Rect::from_xywh(x, y, w, h);
+    let rrect = RRect::new_rect_radii(rect, &radii);
+    let direction = if w.signum() == h.signum(){ PathDirection::CW }else{ PathDirection::CCW };
+    self.update().add_rrect(rrect, direction, 0);
+  }
+  fn close(&mut self){ self.update().close(); }
 }
 
 //
@@ -174,163 +228,6 @@ pub fn addPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   // the snapshot is already a copy, so this is safe even when adding a path to itself
   let src = other.borrow().path();
   this.borrow_mut().append_path(&src, &matrix);
-
-  Ok(cx.undefined())
-}
-
-// Causes the point of the pen to move back to the start of the current sub-path. It tries to draw a straight line from the current point to the start. If the shape has already been closed or has only one point, this function does nothing.
-pub fn closePath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-  this.update().close();
-  Ok(cx.undefined())
-}
-
-// Moves the starting point of a new sub-path to the (x, y) coordinates.
-pub fn moveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["x", "y"])?;
-  if let [x, y] = nums.as_slice(){
-    this.update().move_to((*x, *y));
-  }
-
-  Ok(cx.undefined())
-}
-
-// Connects the last point in the subpath to the (x, y) coordinates with a straight line.
-pub fn lineTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["x", "y"])?;
-  if let [x, y] = nums.as_slice(){
-    this.scoot(*x, *y);
-    this.update().line_to((*x, *y));
-  }
-
-  Ok(cx.undefined())
-}
-
-// Adds a cubic Bézier curve to the path. It requires three points. The first two points are control points and the third one is the end point. The starting point is the last point in the current path, which can be changed using moveTo() before creating the Bézier curve.
-pub fn bezierCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["cp1x", "cp1y", "cp2x", "cp2y", "x", "y"])?;
-  if let [cp1x, cp1y, cp2x, cp2y, x, y] = nums.as_slice(){
-    this.scoot(*cp1x, *cp1y);
-    this.update().cubic_to((*cp1x, *cp1y), (*cp2x, *cp2y), (*x, *y));
-  }
-
-  Ok(cx.undefined())
-}
-
-// Adds a quadratic Bézier curve to the current path.
-pub fn quadraticCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y"])?;
-  if let [cpx, cpy, x, y] = nums.as_slice(){
-    this.scoot(*cpx, *cpy);
-    this.update().quad_to((*cpx, *cpy), (*x, *y));
-  }
-
-  Ok(cx.undefined())
-}
-
-// Adds a conic-section curve to the current path.
-pub fn conicCurveTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["cpx", "cpy", "x", "y", "weight"])?;
-  if let [p1x, p1y, p2x, p2y, weight] = nums.as_slice(){
-    this.scoot(*p1x, *p1y);
-    this.conic_to((*p1x, *p1y), (*p2x, *p2y), *weight);
-  }
-
-  Ok(cx.undefined())
-}
-
-// Adds an arc to the path which is centered at (x, y) position with radius r starting at startAngle and ending at endAngle going in the given direction by anticlockwise (defaulting to clockwise).
-pub fn arc(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["x", "y", "radius", "startAngle", "endAngle"])?;
-  let ccw = bool_arg_or(&mut cx, 6, false);
-  if let [x, y, radius, start_angle, end_angle] = nums.as_slice(){
-    this.add_ellipse((*x, *y), (*radius, *radius), 0.0, *start_angle, *end_angle, ccw);
-  }
-
-  Ok(cx.undefined())
-}
-
-// Adds a circular arc to the path with the given control points and radius, connected to the previous point by a straight line.
-pub fn arcTo(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["x1", "y1", "x2", "y2", "radius"])?;
-  if let [x1, y1, x2, y2, radius] = nums.as_slice(){
-    this.scoot(*x1, *y1);
-    this.update().arc_to_tangent((*x1, *y1), (*x2, *y2), *radius);
-  }
-
-  Ok(cx.undefined())
-}
-
-// Adds an elliptical arc to the path which is centered at (x, y) position with the radii radiusX and radiusY starting at startAngle and ending at endAngle going in the given direction by anticlockwise (defaulting to clockwise).
-pub fn ellipse(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["x", "y", "xRadius", "yRadius", "rotation", "startAngle", "endAngle"])?;
-  let ccw = bool_arg_or(&mut cx, 8, false);
-  if let [x, y, x_radius, y_radius, rotation, start_angle, end_angle] = nums.as_slice(){
-    if *x_radius < 0.0 || *y_radius < 0.0 {
-      return cx.throw_range_error("Radius value must be positive")
-    }
-    this.add_ellipse((*x, *y), (*x_radius, *y_radius), *rotation, *start_angle, *end_angle, ccw);
-  }
-
-  Ok(cx.undefined())
-}
-
-// Creates a path for a rectangle at position (x, y) with a size that is determined by width and height.
-pub fn rect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args_or_bail(&mut cx, &["x", "y", "width", "height"])?;
-  if let [x, y, w, h] = nums.as_slice(){
-    let rect = Rect::from_xywh(*x, *y, *w, *h);
-    let direction = if w.signum() == h.signum(){ PathDirection::CW }else{ PathDirection::CCW };
-    this.update().add_rect(rect, direction, 0);
-  }
-
-  Ok(cx.undefined())
-}
-
-// Creates a path for a rounded rectangle at position (x, y) with a size (w, h) and whose radii
-// are specified in x/y pairs for top_left, top_right, bottom_right, and bottom_left
-pub fn roundRect(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedPath2D>(0)?;
-  let mut this = this.borrow_mut();
-
-  let nums = float_args(&mut cx, &[
-    "x", "y", "width", "height", "r1x", "r1y", "r2x", "r2y", "r3x", "r3y", "r4x", "r4y"
-  ])?;
-  if let [x, y, w, h] = &nums[..4]{
-    let rect = Rect::from_xywh(*x, *y, *w, *h);
-    let radii:Vec<Point> = nums[4..].chunks(2).map(|xy| Point::new(xy[0], xy[1])).collect();
-    let rrect = RRect::new_rect_radii(rect, &[radii[0], radii[1], radii[2], radii[3]]);
-    let direction = if w.signum() == h.signum(){ PathDirection::CW }else{ PathDirection::CCW };
-    this.update().add_rrect(rrect, direction, 0);
-  }
 
   Ok(cx.undefined())
 }

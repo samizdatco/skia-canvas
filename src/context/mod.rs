@@ -20,6 +20,7 @@ mod trim;
 use crate::utils::*;
 use crate::font_library::FontLibrary;
 use crate::path::Path2D;
+use crate::drawlist::{Pen, Plotter};
 use crate::typography::{Typesetter, FontSpec, Baseline, Spacing, DecorationStyle};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
@@ -348,9 +349,8 @@ impl Context2D{
     }
   }
 
-  pub fn scoot(&mut self, point:Point){
-    // update initial point if first drawing command isn't a moveTo
-    self.path.scoot(point.x, point.y);
+  pub fn begin_path(&mut self){
+    self.path = Path2D::default();
   }
 
   pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<PathFillType>){
@@ -684,6 +684,88 @@ impl Context2D{
     Some(paint)
   }
 
+}
+
+// receives line-drawing verbs from the shared DrawList decoder and bakes the CTM into every point
+impl Pen for Context2D {
+  fn move_to(&mut self, x:f32, y:f32){
+    if let Some(dst) = self.map_points(&[x, y]).first(){
+      self.path.move_to(dst.x, dst.y);
+    }
+  }
+  fn line_to(&mut self, x:f32, y:f32){
+    if let Some(dst) = self.map_points(&[x, y]).first(){
+      self.path.line_to(dst.x, dst.y);
+    }
+  }
+  fn bezier_to(&mut self, c1x:f32, c1y:f32, c2x:f32, c2y:f32, x:f32, y:f32){
+    if let [cp1, cp2, dst] = self.map_points(&[c1x, c1y, c2x, c2y, x, y])[..3]{
+      self.path.bezier_to(cp1.x, cp1.y, cp2.x, cp2.y, dst.x, dst.y);
+    }
+  }
+  fn quad_to(&mut self, cx:f32, cy:f32, x:f32, y:f32){
+    if let [cp, dst] = self.map_points(&[cx, cy, x, y])[..2]{
+      self.path.quad_to(cp.x, cp.y, dst.x, dst.y);
+    }
+  }
+  fn conic_to(&mut self, cx:f32, cy:f32, x:f32, y:f32, w:f32){
+    if let [src, dst] = self.map_points(&[cx, cy, x, y])[..2]{
+      self.path.conic_to(src.x, src.y, dst.x, dst.y, w);
+    }
+  }
+  // arc* and ellipse `extend` the path, drawing a connecting line to their starting point
+  fn arc(&mut self, x:f32, y:f32, r:f32, start:f32, end:f32, ccw:bool){
+    let mut sub = Path2D::default();
+    sub.arc(x, y, r, start, end, ccw);
+    self.path.extend_path(&sub.path(), &self.state.matrix);
+  }
+  fn arc_to(&mut self, x1:f32, y1:f32, x2:f32, y2:f32, r:f32){
+    let mut sub = Path2D::default();
+    if let Some(pt) = self.path.last_point(){
+      // The arc's initial tangent is based on the path's current point, so begin the subpath with it
+      let local = self.in_local_coordinates(pt.x, pt.y);
+      sub.move_to(local.x, local.y);
+    }
+    sub.arc_to(x1, y1, x2, y2, r);
+    self.path.extend_path(&sub.path(), &self.state.matrix);
+  }
+  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f32, start:f32, end:f32, ccw:bool){
+    let mut sub = Path2D::default();
+    sub.ellipse(x, y, xr, yr, rot, start, end, ccw);
+    self.path.extend_path(&sub.path(), &self.state.matrix);
+  }
+  // rect and round_rect `append` new subpaths, starting with a moveTo rather than a connecting line
+  fn rect(&mut self, x:f32, y:f32, w:f32, h:f32){
+    let mut sub = Path2D::default();
+    sub.rect(x, y, w, h);
+    self.path.append_path(&sub.path(), &self.state.matrix);
+  }
+  fn round_rect(&mut self, x:f32, y:f32, w:f32, h:f32, radii:[Point;4]){
+    let mut sub = Path2D::default();
+    sub.round_rect(x, y, w, h, radii);
+    self.path.append_path(&sub.path(), &self.state.matrix);
+  }
+  fn close(&mut self){
+    self.path.update().close();
+  }
+}
+
+// receives the context-specifc drawlist verbs (state stack, transforms, and painting)
+impl Plotter for Context2D {
+  fn begin_path(&mut self){                   Context2D::begin_path(self); }
+  fn save(&mut self){                         self.push(); }
+  fn restore(&mut self){                      self.pop(); }
+  fn translate(&mut self, x:f32, y:f32){      self.with_matrix(|ctm| ctm.pre_translate((x, y))); }
+  fn scale(&mut self, x:f32, y:f32){          self.with_matrix(|ctm| ctm.pre_scale((x, y), None)); }
+  fn rotate(&mut self, radians:f32){          let deg = radians.to_degrees(); self.with_matrix(|ctm| ctm.pre_rotate(deg, None)); }
+  fn transform(&mut self, matrix:Matrix){     self.with_matrix(|ctm| ctm.pre_concat(&matrix)); }
+  fn set_transform(&mut self, matrix:Matrix){ self.with_matrix(|ctm| ctm.reset().pre_concat(&matrix)); }
+  fn reset_transform(&mut self){              self.with_matrix(|ctm| ctm.reset()); }
+  fn fill(&mut self, rule:PathFillType){      self.draw_path(None, PaintStyle::Fill, Some(rule)); }
+  fn stroke(&mut self){                       self.draw_path(None, PaintStyle::Stroke, None); }
+  fn fill_rect(&mut self, rect:Rect){         self.draw_path(Some(Path::rect(rect, None)), PaintStyle::Fill, None); }
+  fn stroke_rect(&mut self, rect:Rect){       self.draw_path(Some(Path::rect(rect, None)), PaintStyle::Stroke, None); }
+  fn clear_rect(&mut self, rect:Rect){        Context2D::clear_rect(self, &rect); }
 }
 
 //
