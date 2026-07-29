@@ -403,6 +403,63 @@ describe("Context2D", ()=>{
         assert.deepEqual(pixel(256, 500), WHITE)
         assert.deepEqual(pixel(256, 5), BLACK)
       })
+
+      test("interpolation", () => {
+        // render a red→blue ramp and sample its midpoint under different interpolation settings
+        let midpoint = configure => {
+          let g = ctx.createLinearGradient(0, 0, WIDTH, 0)
+          if (configure) configure(g)
+          g.addColorStop(0, 'red')
+          g.addColorStop(1, 'blue')
+          ctx.fillStyle = g
+          ctx.fillRect(0, 0, WIDTH, HEIGHT)
+          return pixel(WIDTH/2, 0)
+        }
+
+        // the default (srgb) blends straight through RGB — a dim purple midpoint…
+        let base = midpoint(null)
+        assert(base[1] < 10 && base[0] > 100 && base[2] > 100, `expected a purple midpoint, got ${base}`)
+        assert.deepEqual(midpoint(g => g.colorInterpolationMethod = 'srgb'), base) // …explicit srgb is identical
+
+        // oklch takes the perceptually-uniform path: a more saturated magenta
+        let oklch = midpoint(g => g.colorInterpolationMethod = 'oklch')
+        assert(oklch[0] > base[0] && oklch[2] > base[2], `expected a more saturated midpoint, got ${oklch}`)
+
+        // …and `longer` hue interpolation sweeps the long way around the wheel, through green
+        let longWay = midpoint(g => { g.colorInterpolationMethod = 'oklch'; g.hueInterpolationMethod = 'longer' })
+        assert(longWay[1] === Math.max(...longWay.slice(0, 3)), `expected a green midpoint, got ${longWay}`)
+
+        // getters always report the current setting; defaults are the spec defaults
+        let probe = ctx.createLinearGradient(0, 0, 1, 0)
+        assert.deepEqual(
+          [probe.colorInterpolationMethod, probe.hueInterpolationMethod, probe.premultipliedAlpha],
+          ['srgb', 'shorter', false]
+        )
+        probe.colorInterpolationMethod = 'OKLCH' // case-insensitive
+        assert.equal(probe.colorInterpolationMethod, 'oklch')
+        probe.hueInterpolationMethod = 'increasing'
+        assert.equal(probe.hueInterpolationMethod, 'increasing')
+        probe.premultipliedAlpha = true
+        assert.equal(probe.premultipliedAlpha, true)
+
+        // premultiplied alpha keeps a fade-to-transparent from darkening through the transparent stop:
+        // non-premultiplied lerps the red channel toward 0 as alpha drops; premultiplied keeps it red
+        let fadeRed = premul => {
+          let g = ctx.createLinearGradient(0, 0, WIDTH, 0)
+          g.premultipliedAlpha = premul
+          g.addColorStop(0, 'red')
+          g.addColorStop(1, 'transparent')
+          ctx.clearRect(0, 0, WIDTH, HEIGHT)
+          ctx.fillStyle = g
+          ctx.fillRect(0, 0, WIDTH, HEIGHT)
+          return pixel(WIDTH/2, 0)[0]
+        }
+        assert(fadeRed(true) > fadeRed(false), 'premultiplied should keep the midpoint red channel brighter')
+
+        // unknown values throw
+        assert.throws(() => probe.colorInterpolationMethod = 'bogus', /Unsupported colorInterpolationMethod/)
+        assert.throws(() => probe.hueInterpolationMethod = 'sideways', /Unsupported hueInterpolationMethod/)
+      })
     })
 
     describe("CanvasTexture", () => {

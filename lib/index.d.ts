@@ -427,6 +427,13 @@ export class CanvasPattern{
  *
  * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient)
  */
+// Non-polar interpolation spaces (interpolated by rectangular/cartesian coordinates)
+export type RectangularColorSpace = "srgb" | "srgb-linear" | "display-p3" | "a98-rgb" | "prophoto-rgb" | "rec2020" | "lab" | "oklab"
+// Cylindrical spaces with a hue angle (the only ones `hueInterpolationMethod` affects)
+export type PolarColorSpace = "hsl" | "hwb" | "lch" | "oklch"
+export type ColorInterpolationMethod = RectangularColorSpace | PolarColorSpace
+export type HueInterpolationMethod = "shorter" | "longer" | "increasing" | "decreasing"
+
 interface CanvasGradient {
   /**
    * Adds a color stop with the given color to the gradient at the given offset. 0.0 is the offset at one end of the gradient, 1.0 is the offset at the other end.
@@ -436,6 +443,12 @@ interface CanvasGradient {
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient/addColorStop)
    */
   addColorStop(offset: number, color: string): void;
+  /** Color space in which the gradient's colors are interpolated (default `"srgb"`). */
+  colorInterpolationMethod: ColorInterpolationMethod;
+  /** Hue-interpolation direction for polar spaces — hsl/hwb/lch/oklch (default `"shorter"`). */
+  hueInterpolationMethod: HueInterpolationMethod;
+  /** Whether colors are interpolated with premultiplied alpha (default `false`). */
+  premultipliedAlpha: boolean;
 }
 
 declare var CanvasGradient: {
