@@ -15,7 +15,7 @@ lto = "fat"
 
 [features]
 freetype = ["skia-safe/embed-freetype", "skia-safe/freetype-woff2"]
-metal = ["skia-safe/metal", "dep:raw-window-metal", "dep:objc2", "dep:objc2-core-foundation", "dep:objc2-metal", "dep:objc2-quartz-core"]
+metal = ["skia-safe/metal", "dep:raw-window-metal", "dep:objc2", "dep:objc2-core-foundation", "dep:objc2-metal", "dep:objc2-quartz-core", "dep:objc2-core-graphics", "objc2-quartz-core/objc2-core-graphics"]
 vulkan = ["skia-safe/vulkan", "winit/rwh_05", "dep:ash", "dep:vulkano"]
 window = ["dep:winit", "dep:spin_sleep", "dep:drm", "dep:objc2-core-foundation", "dep:objc2-core-video"]
 
@@ -58,3 +58,4 @@ drm = { version = "0.15", optional = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-foundation = { version = "0.3", optional = true, default-features = false, features = ["std", "CFCGTypes"] }
 objc2-core-video = { version = "0.3", optional = true, default-features = false, features = ["std", "CVBase", "CVReturn", "CVDisplayLink", "objc2-core-graphics"] }
+objc2-core-graphics = { version = "0.3", optional = true, default-features = false, features = ["std", "CGColorSpace"] }

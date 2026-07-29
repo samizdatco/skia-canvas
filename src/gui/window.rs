@@ -83,7 +83,7 @@ impl Window {
             .with_decorations(!spec.borderless);
 
         let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let renderer = Renderer::for_window(&event_loop, handle.clone());
+        let renderer = Renderer::for_window(&event_loop, handle.clone(), background.a() < 255);
         let sieve = Sieve::new();
 
         let cursor_icon = CursorIcon::from_str(&spec.cursor).ok();
