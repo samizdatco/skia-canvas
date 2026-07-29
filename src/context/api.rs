@@ -965,13 +965,13 @@ pub fn get_shadowColor(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();
   let shadow_color = this.state.shadow_color;
-  color_to_css(&mut cx, &shadow_color)
+  Ok(cx.string(shadow_color.to_css()).upcast())
 }
 
 pub fn set_shadowColor(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(color) = opt_color_arg(&mut cx, 1){
+  if let Some(color) = opt_css_color_arg(&mut cx, 1){
     this.state.shadow_color = color;
   }
   Ok(cx.undefined())

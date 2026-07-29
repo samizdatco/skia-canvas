@@ -14,13 +14,13 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use skia_safe::{Color, ColorSpace, Image as SkImage};
+use skia_safe::{Color4f, ColorSpace, Image as SkImage};
 use dashmap::DashMap;
 
 use crate::context::page::{ExportOptions, RecordingSurface};
 
 #[cfg(feature = "window")]
-use skia_safe::{Rect, Matrix};
+use skia_safe::{Color, Rect, Matrix};
 #[cfg(feature = "window")]
 use crate::context::page::Page;
 
@@ -129,7 +129,7 @@ impl RasterCache{
 pub(crate) struct Raster{
   image: Option<SkImage>,
   density: f32,
-  matte: Option<Color>,
+  matte: Option<Color4f>,
   msaa: Option<usize>,
   color_space: ColorSpace,
   depth: usize,

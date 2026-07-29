@@ -885,6 +885,76 @@ describe("Context2D", ()=>{
       assert.equal(plain.getContextAttributes().colorSpace, 'srgb')
     })
 
+    test('wide-gamut fillStyle', () => {
+      // a color() fill outside the sRGB gamut survives to a display-p3 surface losslessly…
+      let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+      p3.fillStyle = 'color(display-p3 1 0 0)'
+      p3.fillRect(0, 0, 4, 4)
+      assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+
+      // …while an srgb surface clamps it at draw time
+      let srgb = new Canvas(4, 4).getContext('2d')
+      srgb.fillStyle = 'color(display-p3 1 0 0)'
+      srgb.fillRect(0, 0, 4, 4)
+      assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+      assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
+    })
+
+    test('wide-gamut gradient stops', () => {
+      let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'}),
+          grad = p3.createLinearGradient(0, 0, 4, 0)
+      grad.addColorStop(0, 'color(display-p3 1 0 0)')
+      grad.addColorStop(1, 'color(display-p3 1 0 0)')
+      p3.fillStyle = grad
+      p3.fillRect(0, 0, 4, 4)
+      assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+    })
+
+    test('wide-gamut auxiliary colors', async () => {
+      // shadows cast in wide-gamut colors survive on a display-p3 surface
+      let p3 = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
+      p3.shadowColor = 'color(display-p3 1 0 0)'
+      assert.equal(p3.shadowColor, 'color(display-p3 1 0 0)')
+      p3.shadowOffsetX = 4
+      p3.fillStyle = 'black'
+      p3.fillRect(0, 2, 2, 2) // shadow lands at x:4-6
+      assert.deepEqual(Array.from(p3.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
+
+      // …as do matte backgrounds
+      let blank = new Canvas(4, 4)
+      blank.getContext('2d', {colorSpace:'display-p3'})
+      let raw = await blank.toBuffer('raw', {matte:'color(display-p3 1 0 0)'})
+      assert.deepEqual(Array.from(raw.slice(0, 4)), [255, 0, 0, 255])
+
+      // …and drop-shadow() filter colors
+      let f = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
+      f.filter = 'drop-shadow(4px 0px 0px color(display-p3 1 0 0))'
+      f.fillStyle = 'black'
+      f.fillRect(0, 2, 2, 2)
+      assert.deepEqual(Array.from(f.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
+    })
+
+    test('wide-gamut drawImage(canvas)', () => {
+      // a source canvas holding an out-of-sRGB-gamut fill…
+      let srcCanvas = new Canvas(4, 4),
+          src = srcCanvas.getContext('2d')
+      src.fillStyle = 'color(display-p3 1 0 0)'
+      src.fillRect(0, 0, 4, 4)
+
+      // …survives being composited onto a display-p3 canvas via drawImage(). The source is
+      // snapshotted to an intermediate raster first (unlike drawCanvas's vector path), so
+      // this only holds because that intermediate is F16 extended-sRGB rather than 8-bit —
+      // an 8-bit intermediate would clip the P3 red down to sRGB red ([234, 51, 35] in p3).
+      let viaImage = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+      viaImage.drawImage(srcCanvas, 0, 0)
+      assert.deepEqual(Array.from(viaImage.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+
+      // the vector drawCanvas() path (no intermediate raster) preserves it too
+      let viaCanvas = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+      viaCanvas.drawCanvas(srcCanvas, 0, 0)
+      assert.deepEqual(Array.from(viaCanvas.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+    })
+
     test('putImageData()', () => {
       assert.throws(() => ctx.putImageData({}, 0, 0))
       assert.throws(() => ctx.putImageData(undefined, 0, 0))
@@ -1453,28 +1523,40 @@ describe("Context2D", ()=>{
       ctx.fillStyle = 'hsl(1.24e2, 760e-1%, 4.7e1%)';
       assert.equal(ctx.fillStyle, '#1dd329');
 
-      // CSS Color 4 syntaxes (converted to sRGB, clamping out-of-gamut values)
+      // CSS Color 4 syntaxes (parsed in full; non-legacy forms serialize canonically, not as hex)
 
       ctx.fillStyle = 'color(srgb 0.5 0.25 1)'
-      assert.equal(ctx.fillStyle, '#8040ff')
+      assert.equal(ctx.fillStyle, 'color(srgb 0.5 0.25 1)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), [128, 64, 255, 255])
 
       ctx.fillStyle = 'color(display-p3 0.5 0.5 0.5)' // achromatic values are gamut-neutral
-      assert.equal(ctx.fillStyle, '#808080')
+      assert.equal(ctx.fillStyle, 'color(display-p3 0.5 0.5 0.5)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), [128, 128, 128, 255])
 
-      ctx.fillStyle = 'color(display-p3 1 0 0)' // P3 red clamps to the sRGB gamut's edge
-      assert.equal(ctx.fillStyle, '#ff0000')
+      ctx.fillStyle = 'color(display-p3 1 0 0)' // P3 red clamps to the sRGB gamut's edge when drawn
+      assert.equal(ctx.fillStyle, 'color(display-p3 1 0 0)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), [255, 0, 0, 255])
 
-      ctx.fillStyle = 'color(srgb 1 none 0)' // `none` components are treated as 0
-      assert.equal(ctx.fillStyle, '#ff0000')
+      ctx.fillStyle = 'color(srgb 1 none 0)' // `none` components are treated as 0 when drawing
+      assert.equal(ctx.fillStyle, 'color(srgb 1 none 0)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), [255, 0, 0, 255])
 
       ctx.fillStyle = 'oklch(100% 0 0)'
-      assert.equal(ctx.fillStyle, '#ffffff')
+      assert.equal(ctx.fillStyle, 'oklch(1 0 0)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), WHITE)
 
       ctx.fillStyle = 'lab(0% 0 0)'
-      assert.equal(ctx.fillStyle, '#000000')
+      assert.equal(ctx.fillStyle, 'lab(0 0 0)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), BLACK)
 
       ctx.fillStyle = 'oklab(1 0 0 / 0.5)'
-      assert.equal(ctx.fillStyle, 'rgba(255, 255, 255, 0.502)')
+      assert.equal(ctx.fillStyle, 'oklab(1 0 0 / 0.5)')
 
       // not-yet-supported syntax is ignored like any other invalid value
 

@@ -3,8 +3,8 @@ use std::cmp;
 use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
-use color::{parse_color, ColorSpaceTag, Srgb};
-use skia_safe::{ Path, Matrix, Point, Color, RGB, Data };
+use color::{parse_color, ColorSpaceTag, DynamicColor, Srgb};
+use skia_safe::{ Path, Matrix, Point, Color, Color4f, RGB, Data };
 
 //
 // panic recovery
@@ -380,39 +380,81 @@ pub fn float_args_or_bail_at(cx: &mut FunctionContext, start:usize, names:&[&str
 //
 
 
-pub fn css_to_color(css:&str) -> Option<Color> {
-  // covers the full CSS Color 4 syntax (oklch, lab, color(display-p3 …), etc)
-  parse_color(css).ok().map(|mut parsed|{
-    // clamp % components before conversion (as the spec requires) since linebender leaves them unbounded
-    if matches!(parsed.cs, ColorSpaceTag::Hsl | ColorSpaceTag::Hwb){
-      parsed.components[1] = parsed.components[1].clamp(0.0, 100.0);
-      parsed.components[2] = parsed.components[2].clamp(0.0, 100.0);
-    }
-
-    // clamp out-of-gamut colors to srgb (temporary until we can switch to Color4f)
-    let [red, green, blue, alpha] = parsed.to_alpha_color::<Srgb>().components;
-    Color::from_argb(
-      (alpha.clamp(0.0, 1.0)*255.0).round() as u8,
-      (red.clamp(0.0, 1.0)*255.0).round() as u8,
-      (green.clamp(0.0, 1.0)*255.0).round() as u8,
-      (blue.clamp(0.0, 1.0)*255.0).round() as u8,
-    )
-  })
+#[derive(Clone, Copy, Debug)]
+pub struct CssColor{
+  pub color: Color4f, // the wide-gamut (extended-sRGB) color
+  parsed: DynamicColor, // the canonicalized string form (for returning via getters)
 }
 
-pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
+impl CssColor{
+  pub fn black() -> Self{ CssColor::parse("black").unwrap() }
+  pub fn transparent() -> Self{ CssColor::parse("transparent").unwrap() }
+
+  pub fn parse(css:&str) -> Option<Self>{
+    // linebender covers the full CSS Color 4 syntax (oklch, lab, color(display-p3 ...), etc)
+    parse_color(css).ok().map(|mut parsed|{
+      // clamp % components before conversion (as the spec requires) since linebender leaves them unbounded
+      if matches!(parsed.cs, ColorSpaceTag::Hsl | ColorSpaceTag::Hwb){
+        parsed.components[1] = parsed.components[1].clamp(0.0, 100.0);
+        parsed.components[2] = parsed.components[2].clamp(0.0, 100.0);
+      }
+      // convert to extended sRGB (out-of-gamut components are unclamped until rasterization)
+      let [red, green, blue, alpha] = parsed.to_alpha_color::<Srgb>().components;
+      Self{ color:Color4f::new(red, green, blue, alpha.clamp(0.0, 1.0)), parsed }
+    })
+  }
+
+  pub fn to_css(&self) -> String{
+    // return canonical string (use legacy format for hex/rgba(), CSS Color 4 syntax for everything else)
+    match self.parsed.flags.named() || self.parsed.flags.color_name().is_some(){
+      true if matches!(self.parsed.cs, ColorSpaceTag::Srgb | ColorSpaceTag::Hsl | ColorSpaceTag::Hwb) =>
+        color_to_css_string(&color4f_to_color(self.color)),
+      _ => self.parsed.to_string()
+    }
+  }
+}
+
+pub fn css_to_color4f(css:&str) -> Option<Color4f> {
+  CssColor::parse(css).map(|css_color| css_color.color)
+}
+
+pub fn color4f_to_color(color:Color4f) -> Color {
+  // clamp each component to 8-bit sRGB (emulating browser behavior)
+  Color::from_argb(
+    (color.a.clamp(0.0, 1.0)*255.0).round() as u8,
+    (color.r.clamp(0.0, 1.0)*255.0).round() as u8,
+    (color.g.clamp(0.0, 1.0)*255.0).round() as u8,
+    (color.b.clamp(0.0, 1.0)*255.0).round() as u8,
+  )
+}
+
+pub fn css_to_color(css:&str) -> Option<Color> {
+  css_to_color4f(css).map(color4f_to_color)
+}
+
+fn css_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<String> {
   if val.is_a::<JsString, _>(cx) {
-    let css = val.downcast::<JsString, _>(cx).unwrap().value(cx);
-    return css_to_color(&css)
+    Some(val.downcast::<JsString, _>(cx).unwrap().value(cx))
   }else{
     // for other objects, try calling their .toString() method (if it exists)
     let obj = val.downcast::<JsObject, _>(cx).ok()?;
     let attr = obj.get::<JsValue, _, _>(cx, "toString").ok()?;
     let to_string = attr.downcast::<JsFunction, _>(cx).ok()?;
     let result = to_string.call(cx, obj, vec![]).ok()?;
-    let css = result.downcast::<JsString, _>(cx).ok()?.value(cx);
-    css_to_color(&css)
+    result.downcast::<JsString, _>(cx).ok().map(|css| css.value(cx))
   }
+}
+
+pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
+  css_in(cx, val).and_then(|css| css_to_color(&css))
+}
+
+pub fn color_in_4f<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color4f> {
+  css_in(cx, val).and_then(|css| css_to_color4f(&css))
+}
+
+pub fn css_color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<CssColor> {
+  css_in(cx, val).and_then(|css| CssColor::parse(&css))
 }
 
 pub fn opt_color_arg(cx: &mut FunctionContext, idx: usize) -> Option<Color> {
@@ -422,25 +464,38 @@ pub fn opt_color_arg(cx: &mut FunctionContext, idx: usize) -> Option<Color> {
   }
 }
 
-pub fn opt_color_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<Color>{
+pub fn opt_color_arg_4f(cx: &mut FunctionContext, idx: usize) -> Option<Color4f> {
+  match cx.argument_opt(idx) {
+    Some(arg) => color_in_4f(cx, arg),
+    _ => None
+  }
+}
+
+pub fn opt_css_color_arg(cx: &mut FunctionContext, idx: usize) -> Option<CssColor> {
+  match cx.argument_opt(idx) {
+    Some(arg) => css_color_in(cx, arg),
+    _ => None
+  }
+}
+
+pub fn opt_color_4f_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<Color4f>{
   obj.get(cx, attr).ok()
     .and_then(|val|
-      color_in(cx, val)
+      color_in_4f(cx, val)
     )
 }
 
 
-pub fn color_to_css<'a>(cx: &mut FunctionContext<'a>, color:&Color) -> JsResult<'a, JsValue> {
+pub fn color_to_css_string(color:&Color) -> String {
   let RGB {r, g, b} = color.to_rgb();
-  let css = match color.a() {
+  match color.a() {
     255 => format!("#{:02x}{:02x}{:02x}", r, g, b),
     _ => {
       let alpha = format!("{:.3}", color.a() as f32 / 255.0);
       let alpha = alpha.trim_end_matches('0');
       format!("rgba({}, {}, {}, {})", r, g, b, if alpha=="0."{ "0" } else{ alpha })
     }
-  };
-  Ok(cx.string(css).upcast())
+  }
 }
 
 //
@@ -572,12 +627,12 @@ pub fn image_data_settings_arg(cx: &mut FunctionContext, idx:usize) -> (ColorTyp
   }
 }
 
-pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace, Option<Color>, f32, Option<usize>){
+pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace, Option<Color4f>, f32, Option<usize>){
   match opt_object_arg(cx, idx){
     Some(obj) => {
       let color_type = opt_string_for_key(cx, &obj, "colorType").unwrap_or("rgba".to_string());
       let color_space = opt_string_for_key(cx, &obj, "colorSpace").unwrap_or("srgb".to_string());
-      let matte = opt_color_for_key(cx, &obj, "matte");
+      let matte = opt_color_4f_for_key(cx, &obj, "matte");
       let density = opt_float_for_key(cx, &obj, "density").unwrap_or(1.0);
       let msaa = opt_float_for_key(cx, &obj, "msaa").map(|n| n as usize);
       (to_color_type(&color_type), to_color_space(&color_space), matte, density, msaa)
@@ -679,7 +734,7 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let quality = float_for_key(cx, &opts, "quality")?;
   let density = float_for_key(cx, &opts, "density")?;
   let jpeg_downsample = bool_for_key(cx, &opts, "downsample")?;
-  let matte = opt_color_for_key(cx, &opts, "matte");
+  let matte = opt_color_4f_for_key(cx, &opts, "matte");
   let msaa = opt_float_for_key(cx, &opts, "msaa")
     .map(|num| num.floor() as usize);
   let color_type = opt_string_for_key(cx, &opts, "colorType")
@@ -742,7 +797,7 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, V
         let nums = values.to_vec(cx)?;
         let dims = floats_in(cx, &nums);
         let color_str = values.get::<JsString, _, _>(cx, 3)?.value(cx);
-        if let Some(color) = css_to_color(&color_str) {
+        if let Some(color) = css_to_color4f(&color_str) {
           filters.push(FilterSpec::Shadow{
             offset: Point::new(dims[0], dims[1]), blur: dims[2], color
           });

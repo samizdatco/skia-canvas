@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::{
   Canvas as SkCanvas, Paint, Path, PathBuilder, PathOp, Image, ImageInfo, Contains,
-  Rect, IRect, Point, Size, Color, Color4f, ColorSpace, PathFillType,
+  Rect, IRect, Point, Size, Color, ColorSpace, PathFillType,
   PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture,
   images, image_filters, dash_path_effect, path_1d_path_effect,
   matrix::{ Matrix, TypeMask },
@@ -53,7 +53,7 @@ pub struct State{
   fill_style: Dye,
   stroke_style: Dye,
   shadow_blur: f32,
-  shadow_color: Color,
+  shadow_color: CssColor,
   shadow_offset: Point,
 
   stroke_width: f32,
@@ -100,8 +100,8 @@ impl Default for State {
       matrix: Matrix::new_identity(),
 
       paint,
-      stroke_style: Dye::Color(BLACK),
-      fill_style: Dye::Color(BLACK),
+      stroke_style: Dye::Color(CssColor::black()),
+      fill_style: Dye::Color(CssColor::black()),
       stroke_width: 1.0,
       line_dash_offset: 0.0,
       line_dash_list: vec![],
@@ -114,7 +114,7 @@ impl Default for State {
       filter: Filter::default(),
 
       shadow_blur: 0.0,
-      shadow_color: TRANSPARENT,
+      shadow_color: CssColor::transparent(),
       shadow_offset: (0.0, 0.0).into(),
 
       font: "10px sans-serif".to_string(),
@@ -655,7 +655,7 @@ impl Context2D{
 
   pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint> {
     let State {shadow_color, mut shadow_blur, shadow_offset, ..} = self.state;
-    if shadow_color.a() == 0 || (shadow_blur == 0.0 && shadow_offset.is_zero()){
+    if shadow_color.color.a == 0.0 || (shadow_blur == 0.0 && shadow_offset.is_zero()){
       return None
     }
 
@@ -680,7 +680,7 @@ impl Context2D{
       }
     }
     let mut paint = base_paint.clone();
-    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma.x, sigma.y), shadow_color, ColorSpace::new_srgb(), None, None));
+    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma.x, sigma.y), shadow_color.color, ColorSpace::new_srgb(), None, None));
     Some(paint)
   }
 
@@ -774,7 +774,7 @@ impl Plotter for Context2D {
 
 #[derive(Clone)]
 pub enum Dye{
-  Color(Color),
+  Color(CssColor), // holds extended (unclamped) sRGB, so wide-gamut destinations are reachable
   Gradient(CanvasGradient),
   Pattern(CanvasPattern),
   Texture(CanvasTexture)
@@ -789,20 +789,20 @@ impl Dye{
     }else if let Ok(texture) = value.downcast::<BoxedCanvasTexture, _>(cx){
       Some(Dye::Texture(texture.borrow().clone()) )
     }else{
-      color_in(cx, value).map(Dye::Color)
+      css_color_in(cx, value).map(Dye::Color)
     }
   }
 
   pub fn value<'a>(&self, cx: &mut FunctionContext<'a>) -> JsResult<'a, JsValue> {
     match self{
-      Dye::Color(color) => color_to_css(cx, color),
+      Dye::Color(css_color) => Ok(cx.string(css_color.to_css()).upcast()),
       _ => Ok(cx.null().upcast()) // flag to the js context that it should use its cached pattern/gradient ref
     }
   }
 
   pub fn is_opaque(&self) -> bool{
     match self {
-      Dye::Color(color) => Color4f::from(*color).is_opaque(),
+      Dye::Color(css_color) => css_color.color.is_opaque(),
       Dye::Gradient(gradient) => gradient.is_opaque(),
       Dye::Pattern(pattern) => pattern.is_opaque(),
       Dye::Texture(_) => false,
@@ -811,10 +811,10 @@ impl Dye{
 
   pub fn mix_into(&self, paint: &mut Paint, alpha: f32, image_filter: ImageFilter){
     match self {
-      Dye::Color(color) => {
-        let mut color = Color4f::from(*color);
+      Dye::Color(css_color) => {
+        let mut color = css_color.color;
         color.a *= alpha;
-        paint.set_color(color.to_color());
+        paint.set_color4f(color, None);
       },
       Dye::Gradient(gradient) =>{
         paint.set_shader(gradient.shader())

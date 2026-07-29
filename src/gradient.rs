@@ -2,7 +2,7 @@
 use std::cell::{RefCell};
 use std::rc::Rc;
 use neon::prelude::*;
-use skia_safe::{Shader, Color, Color4f, Point, TileMode, Matrix};
+use skia_safe::{Shader, Color4f, Point, TileMode, Matrix};
 use skia_safe::gradient::{self, Colors as GradientColors, Interpolation};
 
 use crate::utils::*;
@@ -12,7 +12,7 @@ enum Gradient{
     start:Point,
     end:Point,
     stops:Vec<f32>,
-    colors:Vec<Color>,
+    colors:Vec<Color4f>,
   },
   Radial{
     start_point:Point,
@@ -20,13 +20,13 @@ enum Gradient{
     end_point:Point,
     end_radius:f32,
     stops:Vec<f32>,
-    colors:Vec<Color>,
+    colors:Vec<Color4f>,
   },
   Conic{
     center:Point,
     angle:f32,
     stops:Vec<f32>,
-    colors:Vec<Color>,
+    colors:Vec<Color4f>,
   }
 }
 
@@ -39,7 +39,7 @@ impl Gradient{
     }
   }
 
-  fn get_colors(&self) -> &Vec<Color>{
+  fn get_colors(&self) -> &Vec<Color4f>{
     match self{
       Gradient::Linear{colors, ..} => colors,
       Gradient::Radial{colors, ..} => colors,
@@ -47,7 +47,7 @@ impl Gradient{
     }
   }
 
-  fn add_stop(&mut self, offset: f32, color:Color){
+  fn add_stop(&mut self, offset: f32, color:Color4f){
     let stops = self.get_stops();
 
     // insert the new entries at the right index to keep the vectors sorted
@@ -71,10 +71,10 @@ pub struct CanvasGradient{
 impl CanvasGradient{
   pub fn shader(&self) -> Option<Shader>{
     let gradient = self.gradient.borrow();
-    let colors:Vec<Color4f> = gradient.get_colors().iter().map(|c| Color4f::from(*c)).collect();
+    let colors = gradient.get_colors();
     let stops = gradient.get_stops();
     let spec = gradient::Gradient::new(
-      GradientColors::new(&colors, Some(stops.as_slice()), TileMode::Clamp, None),
+      GradientColors::new(colors, Some(stops.as_slice()), TileMode::Clamp, None),
       Interpolation::default(), // matches the interpolation of the legacy u32-Color api
     );
 
@@ -106,14 +106,14 @@ impl CanvasGradient{
     }
   }
 
-  pub fn add_color_stop(&mut self, offset: f32, color:Color){
+  pub fn add_color_stop(&mut self, offset: f32, color:Color4f){
     self.gradient.borrow_mut().add_stop(offset, color);
   }
 
   pub fn is_opaque(&self) -> bool{
     // true if all colors are 100% opaque
     let gradient = self.gradient.borrow();
-    !gradient.get_colors().iter().any(|c| c.a() < 255)
+    !gradient.get_colors().iter().any(|c| c.a < 1.0)
   }
 }
 
@@ -166,7 +166,7 @@ pub fn addColorStop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     return cx.throw_range_error("Color stop offsets must be between 0.0 and 1.0");
   }
 
-  if let Some(color) = opt_color_arg(&mut cx, 2) {
+  if let Some(color) = opt_color_arg_4f(&mut cx, 2) {
     this.add_color_stop(offset, color);
   }else{
     return cx.throw_type_error(match cx.len(){
