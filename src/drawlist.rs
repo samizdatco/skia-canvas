@@ -71,9 +71,9 @@ pub(crate) trait Pen {
   fn bezier_to(&mut self, c1x:f32, c1y:f32, c2x:f32, c2y:f32, x:f32, y:f32);
   fn quad_to(&mut self, cx:f32, cy:f32, x:f32, y:f32);
   fn conic_to(&mut self, cx:f32, cy:f32, x:f32, y:f32, w:f32);
-  fn arc(&mut self, x:f32, y:f32, r:f32, start:f32, end:f32, ccw:bool);
+  fn arc(&mut self, x:f32, y:f32, r:f32, start:f64, end:f64, ccw:bool);
   fn arc_to(&mut self, x1:f32, y1:f32, x2:f32, y2:f32, r:f32);
-  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f32, start:f32, end:f32, ccw:bool);
+  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f64, start:f64, end:f64, ccw:bool);
   fn rect(&mut self, x:f32, y:f32, w:f32, h:f32);
   fn round_rect(&mut self, x:f32, y:f32, w:f32, h:f32, radii:[Point;4]);
   fn close(&mut self);
@@ -86,9 +86,9 @@ pub(crate) trait Pen {
       Op::bezierCurveTo => self.bezier_to(a[0] as f32, a[1] as f32, a[2] as f32, a[3] as f32, a[4] as f32, a[5] as f32),
       Op::quadraticCurveTo => self.quad_to(a[0] as f32, a[1] as f32, a[2] as f32, a[3] as f32),
       Op::conicCurveTo => self.conic_to(a[0] as f32, a[1] as f32, a[2] as f32, a[3] as f32, a[4] as f32),
-      Op::arc => self.arc(a[0] as f32, a[1] as f32, a[2] as f32, a[3] as f32, a[4] as f32, a[5] != 0.0),
+      Op::arc => self.arc(a[0] as f32, a[1] as f32, a[2] as f32, a[3], a[4], a[5] != 0.0),
       Op::arcTo => self.arc_to(a[0] as f32, a[1] as f32, a[2] as f32, a[3] as f32, a[4] as f32),
-      Op::ellipse => self.ellipse(a[0] as f32, a[1] as f32, a[2] as f32, a[3] as f32, a[4] as f32, a[5] as f32, a[6] as f32, a[7] != 0.0),
+      Op::ellipse => self.ellipse(a[0] as f32, a[1] as f32, a[2] as f32, a[3] as f32, a[4], a[5], a[6], a[7] != 0.0),
       Op::rect => self.rect(a[0] as f32, a[1] as f32, a[2] as f32, a[3] as f32),
       Op::roundRect => {
         let radii = [
@@ -111,7 +111,7 @@ pub(crate) trait Plotter: Pen {
   fn restore(&mut self);
   fn translate(&mut self, x:f32, y:f32);
   fn scale(&mut self, x:f32, y:f32);
-  fn rotate(&mut self, radians:f32);
+  fn rotate(&mut self, radians:f64);
   fn transform(&mut self, matrix:Matrix);
   fn set_transform(&mut self, matrix:Matrix);
   fn reset_transform(&mut self);
@@ -132,7 +132,7 @@ pub(crate) trait Plotter: Pen {
         Op::restore        => self.restore(),
         Op::translate      => self.translate(a[0] as f32, a[1] as f32),
         Op::scale          => self.scale(a[0] as f32, a[1] as f32),
-        Op::rotate         => self.rotate(a[0] as f32),
+        Op::rotate         => self.rotate(a[0]),
         Op::transform      => self.transform(mat9(a)),
         Op::setTransform   => self.set_transform(mat9(a)),
         Op::resetTransform => self.reset_transform(),

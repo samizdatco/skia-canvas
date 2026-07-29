@@ -4,7 +4,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 use std::cell::RefCell;
-use std::f32::{EPSILON, consts::PI};
+use std::f32::EPSILON;
 use neon::prelude::*;
 use skia_safe::{Path, Point, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, PathOp, StrokeRec};
 use skia_safe::{PathEffect, trim_path_effect};
@@ -94,12 +94,11 @@ impl Path2D{
     }
   }
 
-  pub fn add_ellipse(&mut self, origin:impl Into<Point>, radii:impl Into<Point>, rotation: f32, start_angle:f32, end_angle:f32, ccw:bool){
+  pub fn add_ellipse(&mut self, origin:impl Into<Point>, radii:impl Into<Point>, rotation: f64, start_angle:f64, end_angle:f64, ccw:bool){
     let Point{x, y} = origin.into();
     let Point{x:x_radius, y:y_radius} = radii.into();
 
-    // based off of CanonicalizeAngle in Chrome
-    let tau = 2.0 * PI;
+    let tau = 2.0 * std::f64::consts::PI;
     let mut new_start_angle = start_angle % tau;
     if new_start_angle < 0.0 {
       new_start_angle += tau;
@@ -108,7 +107,6 @@ impl Path2D{
     let start_angle = new_start_angle;
     let mut end_angle = end_angle + delta;
 
-    // Originally based off of AdjustEndAngle in Chrome, but does not limit to 360 degree sweep.
     if !ccw && start_angle > end_angle {
       end_angle = start_angle + (tau - (start_angle - end_angle) % tau);
     }else if ccw && start_angle < end_angle {
@@ -120,33 +118,25 @@ impl Path2D{
     let mut rotated = Matrix::new_identity();
     rotated
       .pre_translate((x, y))
-      .pre_rotate(to_degrees(rotation), None)
+      .pre_rotate(rotation.to_degrees() as f32, None)
       .pre_translate((-x, -y));
 
     // build the arc independently then *extend* the path (drawing a connecting line from the prior point)
     let mut arc = PathBuilder::new();
     {
-      // Based off of Chrome's implementation in
-      // https://cs.chromium.org/chromium/src/third_party/blink/renderer/platform/graphics/path.cc
-      // of note, can't use addArc or addOval because they close the arc, which
-      // the spec says not to do (unless the user explicitly calls closePath).
-      // This throws off points being in/out of the arc.
-
-      // rounding degrees to 4 decimals eliminates ambiguity from f32 imprecision dealing with radians
-      let mut sweep_deg = (to_degrees(end_angle - start_angle) * 10000.0).round() / 10000.0;
-      // mod-360 replicates the SkScalarMod that Path::arc_to applied but PathBuilder omits
-      let mut start_deg = (to_degrees(start_angle) * 10000.0).round() / 10000.0 % 360.0;
+      let sweep_deg = (end_angle - start_angle).to_degrees();
+      let start_deg = start_angle.to_degrees() % 360.0;
 
       // draw 360° ellipses in two 180° segments; trying to draw the full ellipse at once draws nothing
-      if sweep_deg >= 360.0 - EPSILON  {
-        arc.arc_to(oval, start_deg, 180.0, false);
-        arc.arc_to(oval, (start_deg + 180.0) % 360.0, 180.0, false);
-      }else if sweep_deg <= -360.0 + EPSILON {
-        arc.arc_to(oval, start_deg, -180.0, false);
-        arc.arc_to(oval, (start_deg - 180.0) % 360.0, -180.0, false);
+      if sweep_deg >= 360.0 - EPSILON as f64 {
+        arc.arc_to(oval, start_deg as f32, 180.0, false);
+        arc.arc_to(oval, ((start_deg + 180.0) % 360.0) as f32, 180.0, false);
+      }else if sweep_deg <= -360.0 + EPSILON as f64 {
+        arc.arc_to(oval, start_deg as f32, -180.0, false);
+        arc.arc_to(oval, ((start_deg - 180.0) % 360.0) as f32, -180.0, false);
       }else{
         // Draw <360° ellipses in a single arc
-        arc.arc_to(oval, start_deg, sweep_deg, false);
+        arc.arc_to(oval, start_deg as f32, sweep_deg as f32, false);
       }
     }
     self.extend_path(&arc.detach(), &rotated);
@@ -169,14 +159,14 @@ impl Pen for Path2D {
     self.scoot(cx, cy);
     self.conic_to_normalized((cx, cy), (x, y), w);
   }
-  fn arc(&mut self, x:f32, y:f32, r:f32, start:f32, end:f32, ccw:bool){
+  fn arc(&mut self, x:f32, y:f32, r:f32, start:f64, end:f64, ccw:bool){
     self.add_ellipse((x, y), (r, r), 0.0, start, end, ccw);
   }
   fn arc_to(&mut self, x1:f32, y1:f32, x2:f32, y2:f32, r:f32){
     self.scoot(x1, y1);
     self.update().arc_to_tangent((x1, y1), (x2, y2), r);
   }
-  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f32, start:f32, end:f32, ccw:bool){
+  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f64, start:f64, end:f64, ccw:bool){
     self.add_ellipse((x, y), (xr, yr), rot, start, end, ccw);
   }
   fn rect(&mut self, x:f32, y:f32, w:f32, h:f32){

@@ -714,7 +714,7 @@ impl Pen for Context2D {
     }
   }
   // arc* and ellipse `extend` the path, drawing a connecting line to their starting point
-  fn arc(&mut self, x:f32, y:f32, r:f32, start:f32, end:f32, ccw:bool){
+  fn arc(&mut self, x:f32, y:f32, r:f32, start:f64, end:f64, ccw:bool){
     let mut sub = Path2D::default();
     sub.arc(x, y, r, start, end, ccw);
     self.path.extend_path(&sub.path(), &self.state.matrix);
@@ -729,7 +729,7 @@ impl Pen for Context2D {
     sub.arc_to(x1, y1, x2, y2, r);
     self.path.extend_path(&sub.path(), &self.state.matrix);
   }
-  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f32, start:f32, end:f32, ccw:bool){
+  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f64, start:f64, end:f64, ccw:bool){
     let mut sub = Path2D::default();
     sub.ellipse(x, y, xr, yr, rot, start, end, ccw);
     self.path.extend_path(&sub.path(), &self.state.matrix);
@@ -757,7 +757,7 @@ impl Plotter for Context2D {
   fn restore(&mut self){                      self.pop(); }
   fn translate(&mut self, x:f32, y:f32){      self.with_matrix(|ctm| ctm.pre_translate((x, y))); }
   fn scale(&mut self, x:f32, y:f32){          self.with_matrix(|ctm| ctm.pre_scale((x, y), None)); }
-  fn rotate(&mut self, radians:f32){          let deg = radians.to_degrees(); self.with_matrix(|ctm| ctm.pre_rotate(deg, None)); }
+  fn rotate(&mut self, radians:f64){          let deg = radians.to_degrees() as f32; self.with_matrix(|ctm| ctm.pre_rotate(deg, None)); }
   fn transform(&mut self, matrix:Matrix){     self.with_matrix(|ctm| ctm.pre_concat(&matrix)); }
   fn set_transform(&mut self, matrix:Matrix){ self.with_matrix(|ctm| ctm.reset().pre_concat(&matrix)); }
   fn reset_transform(&mut self){              self.with_matrix(|ctm| ctm.reset()); }

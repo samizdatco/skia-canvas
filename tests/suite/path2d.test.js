@@ -353,6 +353,36 @@ describe("Path2D", ()=>{
       assert.doesNotThrow(() => p.arc(150, 150, 75, Math.PI/8, Math.PI*1.5) )
     })
 
+    test("arc (f64 angle precision)", () => {
+      // startAngle/endAngle used to be narrowed to f32 so very large angles lost precision and
+      // the arc began in the wrong place. compare the new (accurate) calculation to the old
+      const cx = 150, cy = 150, r = 75
+
+      const arcStart = a => {
+        let path = new Path2D()
+        path.arc(cx, cy, r, a, a + 0.5, false)
+        let [verb, x, y] = path.edges[0]
+        assert.equal(verb, "moveTo")
+        return [x, y]
+      }
+
+      // ensure the starting point is in the right location
+      for (const a of [1e4 + 0.3, 1e6 + 0.123, 1e7 + 1.5, 1e8 + 0.7]){
+        let [x, y] = arcStart(a)
+        assert.nearEqual(x, cx + r * Math.cos(a))
+        assert.nearEqual(y, cy + r * Math.sin(a))
+      }
+
+      // ensure it's not where the f32 math would put it
+      for (const a of [1e7 + 1.5, 1e8 + 0.7]){
+        let [x, y] = arcStart(a)
+        let af = Math.fround(a)
+        let f32x = cx + r * Math.cos(af), f32y = cy + r * Math.sin(af)
+        assert.ok(Math.hypot(f32x - x, f32y - y) > 25,
+          `f32-narrowed angle ${a} would misplace the arc start by tens of px`)
+      }
+    })
+
     test("ellipse", () => {
       // default to clockwise
       p.ellipse(100,100, 100, 50, .25*Math.PI, 0, 1.5*Math.PI)
