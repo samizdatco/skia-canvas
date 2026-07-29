@@ -3,7 +3,7 @@ use std::cmp;
 use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
-use css_color::Rgba;
+use color::{parse_color, ColorSpaceTag, Srgb};
 use skia_safe::{ Path, Matrix, Point, Color, RGB, Data };
 
 //
@@ -381,14 +381,23 @@ pub fn float_args_or_bail_at(cx: &mut FunctionContext, start:usize, names:&[&str
 
 
 pub fn css_to_color(css:&str) -> Option<Color> {
-  css.parse::<Rgba>().ok().map(|Rgba{red, green, blue, alpha}|
+  // covers the full CSS Color 4 syntax (oklch, lab, color(display-p3 …), etc)
+  parse_color(css).ok().map(|mut parsed|{
+    // clamp % components before conversion (as the spec requires) since linebender leaves them unbounded
+    if matches!(parsed.cs, ColorSpaceTag::Hsl | ColorSpaceTag::Hwb){
+      parsed.components[1] = parsed.components[1].clamp(0.0, 100.0);
+      parsed.components[2] = parsed.components[2].clamp(0.0, 100.0);
+    }
+
+    // clamp out-of-gamut colors to srgb (temporary until we can switch to Color4f)
+    let [red, green, blue, alpha] = parsed.to_alpha_color::<Srgb>().components;
     Color::from_argb(
-      (alpha*255.0).round() as u8,
-      (red*255.0).round() as u8,
-      (green*255.0).round() as u8,
-      (blue*255.0).round() as u8,
+      (alpha.clamp(0.0, 1.0)*255.0).round() as u8,
+      (red.clamp(0.0, 1.0)*255.0).round() as u8,
+      (green.clamp(0.0, 1.0)*255.0).round() as u8,
+      (blue.clamp(0.0, 1.0)*255.0).round() as u8,
     )
-  )
+  })
 }
 
 pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
