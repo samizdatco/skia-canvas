@@ -666,6 +666,67 @@ pub fn from_color_space(mode:ColorSpace) -> String{
   }.to_string()
 }
 
+use skia_safe::gradient::{Interpolation, interpolation::{ColorSpace as InterpColorSpace, HueMethod, InPremul}};
+
+// The spec-default gradient interpolation: non-premultiplied, sRGB, shorter-hue
+pub fn default_interpolation() -> Interpolation{
+  Interpolation{ in_premul:InPremul::No, color_space:InterpColorSpace::SRGB, hue_method:HueMethod::Shorter }
+}
+
+pub fn color_interpolation_from_str(name:&str) -> Option<InterpColorSpace>{
+  Some(match name.trim().to_lowercase().as_str(){
+    "srgb"         => InterpColorSpace::SRGB,
+    "srgb-linear"  => InterpColorSpace::SRGBLinear,
+    "display-p3"   => InterpColorSpace::DisplayP3,
+    "a98-rgb"      => InterpColorSpace::A98RGB,
+    "prophoto-rgb" => InterpColorSpace::ProphotoRGB,
+    "rec2020"      => InterpColorSpace::Rec2020,
+    "lab"          => InterpColorSpace::Lab,
+    "oklab"        => InterpColorSpace::OKLab,
+    "lch"          => InterpColorSpace::LCH,
+    "oklch"        => InterpColorSpace::OKLCH,
+    "hsl"          => InterpColorSpace::HSL,
+    "hwb"          => InterpColorSpace::HWB,
+    _ => return None,
+  })
+}
+
+pub fn color_interpolation_to_str(space:InterpColorSpace) -> &'static str{
+  match space{
+    InterpColorSpace::SRGBLinear    => "srgb-linear",
+    InterpColorSpace::DisplayP3     => "display-p3",
+    InterpColorSpace::A98RGB        => "a98-rgb",
+    InterpColorSpace::ProphotoRGB   => "prophoto-rgb",
+    InterpColorSpace::Rec2020       => "rec2020",
+    InterpColorSpace::Lab           => "lab",
+    InterpColorSpace::OKLab | InterpColorSpace::OKLabGamutMap => "oklab",
+    InterpColorSpace::LCH           => "lch",
+    InterpColorSpace::OKLCH | InterpColorSpace::OKLCHGamutMap => "oklch",
+    InterpColorSpace::HSL           => "hsl",
+    InterpColorSpace::HWB           => "hwb",
+    _ => "srgb",
+  }
+}
+
+pub fn hue_method_from_str(name:&str) -> Option<HueMethod>{
+  Some(match name.trim().to_lowercase().as_str(){
+    "shorter"    => HueMethod::Shorter,
+    "longer"     => HueMethod::Longer,
+    "increasing" => HueMethod::Increasing,
+    "decreasing" => HueMethod::Decreasing,
+    _ => return None,
+  })
+}
+
+pub fn hue_method_to_str(method:HueMethod) -> &'static str{
+  match method{
+    HueMethod::Longer     => "longer",
+    HueMethod::Increasing => "increasing",
+    HueMethod::Decreasing => "decreasing",
+    _ => "shorter",
+  }
+}
+
 pub fn to_color_type(type_name: &str) -> ColorType {
   match type_name {
     "Alpha8" => ColorType::Alpha8,
