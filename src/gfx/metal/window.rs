@@ -6,8 +6,9 @@ use objc2_metal::{
     MTLCommandBuffer, MTLCommandQueue, MTLCreateSystemDefaultDevice, MTLPixelFormat,
 };
 use objc2_quartz_core::{kCAGravityBottomLeft, kCAGravityTopLeft, CAMetalDrawable, CAMetalLayer};
+use objc2_core_graphics::{CGColorSpace, kCGColorSpaceDisplayP3};
 use skia_safe::{
-    scalar, ColorType, Size, Matrix, Color, Paint, BlendMode, SurfaceProps,
+    scalar, ColorType, ColorSpace, Size, Matrix, Color, Paint, BlendMode, SurfaceProps,
     canvas::SrcRectConstraint,
 };
 use skia_safe::gpu::{ mtl, surfaces, backend_render_targets, SurfaceOrigin, DirectContext };
@@ -22,6 +23,7 @@ use winit::{
 use crate::context::page::Page;
 use crate::gfx::RenderOutcome;
 use crate::gfx::cache::Frame;
+use crate::utils::to_color_space;
 use super::make_direct_context;
 
 pub struct MetalRenderer {
@@ -33,7 +35,7 @@ pub struct MetalRenderer {
 }
 
 impl MetalRenderer{
-    pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
+    pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>, is_transparent:bool) -> Self {
         let device = MTLCreateSystemDefaultDevice().expect("Metal device not found");
 
         let raw_window = window
@@ -61,9 +63,18 @@ impl MetalRenderer{
         };
         layer.setContentsGravity(gravity);
         layer.setOpaque(false);
+        let (pixel_format, color_type) = match is_transparent {
+            true  => (MTLPixelFormat::RGBA16Float,  ColorType::RGBAF16),
+            false => (MTLPixelFormat::RGB10A2Unorm, ColorType::RGBA1010102),
+        };
+
         unsafe{
             layer.setDevice(Some(&device));
-            layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
+            layer.setPixelFormat(pixel_format);
+            // tag the layer as Display P3 so CoreAnimation color-manages our P3 pixels to whatever
+            // gamut the window's display has (unchanged on a P3 panel, gamut-mapped down on sRGB)
+            let p3 = CGColorSpace::with_name(Some(kCGColorSpaceDisplayP3));
+            layer.setColorspace(p3.as_deref());
             layer.setPresentsWithTransaction(false);
             layer.setDisplaySyncEnabled(true);
             layer.setFramebufferOnly(false); // to enable blend modes
@@ -72,7 +83,7 @@ impl MetalRenderer{
             layer.setDrawableSize(CGSize::new(draw_size.width as f64, draw_size.height as f64));
         }
 
-        let backend = MetalBackend::for_layer(&layer);
+        let backend = MetalBackend::for_layer(&layer, color_type);
         let frame = Frame::default();
 
         Self{window, layer, backend, frame, last_page_id:0}
@@ -119,14 +130,16 @@ impl MetalRenderer{
 pub struct MetalBackend {
     skia_ctx: DirectContext,
     queue: Retained<ProtocolObject<dyn MTLCommandQueue>>,
+    color_type: ColorType,   // the layer's pixel format (RGBA1010102 / BGRA8888 / RGBAF16)
+    color_space: ColorSpace, // the layer's colorspace tag (Display P3)
 }
 
 impl MetalBackend {
-    pub fn for_layer(layer:&CAMetalLayer) -> Self{
+    pub fn for_layer(layer:&CAMetalLayer, color_type:ColorType) -> Self{
         let device = unsafe{ layer.device() }.expect("Metal: layer has no device");
         let (queue, skia_ctx) = make_direct_context(&device)
             .expect("Metal: Failed to create Skia direct context");
-        Self { skia_ctx, queue }
+        Self { skia_ctx, queue, color_type, color_space:to_color_space("display-p3") }
     }
 
     fn render_to_layer<F>(&mut self, layer:&CAMetalLayer, window:&Window, sync:bool, snapshot:bool, props:&SurfaceProps, f:F) -> RenderOutcome
@@ -157,8 +170,8 @@ impl MetalBackend {
             &mut self.skia_ctx,
             &backend_render_target,
             SurfaceOrigin::TopLeft,
-            ColorType::BGRA8888,
-            None,
+            self.color_type,
+            Some(self.color_space.clone()),
             Some(props),
         ).expect("MetalBackend: could not create render target");
 
