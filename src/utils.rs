@@ -167,13 +167,6 @@ pub fn opt_string_arg(cx: &mut FunctionContext, idx: usize) -> Option<String>{
   }
 }
 
-pub fn string_arg_or(cx: &mut FunctionContext, idx: usize, default:&str) -> String{
-  match opt_string_arg(cx, idx){
-    Some(v) => v,
-    None => String::from(default)
-  }
-}
-
 pub fn string_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<String> {
   let exists = cx.len() > idx;
   match opt_string_arg(cx, idx){
@@ -209,10 +202,7 @@ pub fn opt_bool_arg(cx: &mut FunctionContext, idx: usize) -> Option<bool>{
 }
 
 pub fn bool_arg_or(cx: &mut FunctionContext, idx: usize, default:bool) -> bool{
-  match opt_bool_arg(cx, idx){
-    Some(v) => v,
-    None => default
-  }
+  opt_bool_arg(cx, idx).unwrap_or(default)
 }
 
 pub fn bool_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<bool>{
@@ -333,10 +323,7 @@ pub fn opt_float_arg(cx: &mut FunctionContext, idx: usize) -> Option<f32>{
 }
 
 pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default:f32) -> f32{
-  match opt_float_arg(cx, idx){
-    Some(v) => v,
-    None => default as f32
-  }
+  opt_float_arg(cx, idx).unwrap_or(default)
 }
 
 pub fn float_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<f32>{
