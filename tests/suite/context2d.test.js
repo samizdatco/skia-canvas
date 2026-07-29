@@ -1453,6 +1453,38 @@ describe("Context2D", ()=>{
       ctx.fillStyle = 'hsl(1.24e2, 760e-1%, 4.7e1%)';
       assert.equal(ctx.fillStyle, '#1dd329');
 
+      // CSS Color 4 syntaxes (converted to sRGB, clamping out-of-gamut values)
+
+      ctx.fillStyle = 'color(srgb 0.5 0.25 1)'
+      assert.equal(ctx.fillStyle, '#8040ff')
+
+      ctx.fillStyle = 'color(display-p3 0.5 0.5 0.5)' // achromatic values are gamut-neutral
+      assert.equal(ctx.fillStyle, '#808080')
+
+      ctx.fillStyle = 'color(display-p3 1 0 0)' // P3 red clamps to the sRGB gamut's edge
+      assert.equal(ctx.fillStyle, '#ff0000')
+
+      ctx.fillStyle = 'color(srgb 1 none 0)' // `none` components are treated as 0
+      assert.equal(ctx.fillStyle, '#ff0000')
+
+      ctx.fillStyle = 'oklch(100% 0 0)'
+      assert.equal(ctx.fillStyle, '#ffffff')
+
+      ctx.fillStyle = 'lab(0% 0 0)'
+      assert.equal(ctx.fillStyle, '#000000')
+
+      ctx.fillStyle = 'oklab(1 0 0 / 0.5)'
+      assert.equal(ctx.fillStyle, 'rgba(255, 255, 255, 0.502)')
+
+      // not-yet-supported syntax is ignored like any other invalid value
+
+      ctx.fillStyle = '#8040ff'
+      ctx.fillStyle = 'rgb(from rebeccapurple r g b)' // relative color syntax
+      assert.equal(ctx.fillStyle, '#8040ff')
+
+      ctx.fillStyle = 'currentcolor'
+      assert.equal(ctx.fillStyle, '#8040ff')
+
       // case-insensitive css names
 
       ctx.fillStyle = "sILveR";

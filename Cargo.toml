@@ -22,7 +22,7 @@ window = ["dep:winit", "dep:spin_sleep", "dep:drm", "dep:objc2-core-foundation",
 [dependencies]
 neon = "1.0"
 crc = "^3.0"
-css-color = "^0.2"
+color = "0.3"
 rayon = "^1.5"
 crossbeam = "0.8.2"
 once_cell = "1.13"
