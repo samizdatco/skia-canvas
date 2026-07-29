@@ -835,6 +835,56 @@ describe("Context2D", ()=>{
       }
     })
 
+    test('getImageData() with colorSpace', () => {
+      ctx.fillStyle = '#f00'
+      ctx.fillRect(0, 0, 4, 4)
+
+      // srgb is the default and reads back unconverted
+      let srgb = ctx.getImageData(0, 0, 1, 1)
+      assert.equal(srgb.colorSpace, 'srgb')
+      assert.deepEqual(Array.from(srgb.data), [255, 0, 0, 255])
+
+      // sRGB red sits inside display-p3's wider gamut, so its converted coordinates pull in from the edge
+      let p3 = ctx.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'})
+      assert.equal(p3.colorSpace, 'display-p3')
+      assert.deepEqual(Array.from(p3.data), [234, 51, 35, 255])
+
+      // …and putting the converted bitmap back onto the (srgb) canvas converts it home again
+      ctx.putImageData(p3, 4, 0)
+      let [r, g, b, a] = pixel(4, 0)
+      assert.ok(Math.abs(r - 255) <= 1 && g <= 1 && b <= 1 && a == 255)
+    })
+
+    test('getContext() colorSpace setting', async () => {
+      let canvas = new Canvas(4, 4),
+          ctx = canvas.getContext('2d', {colorSpace:'display-p3'})
+      // full browser-parity shape: colorSpace is latched, the other fields are fixed defaults
+      assert.deepEqual(ctx.getContextAttributes(), {alpha:true, colorSpace:'display-p3', desynchronized:false, willReadFrequently:false})
+
+      ctx.fillStyle = '#f00'
+      ctx.fillRect(0, 0, 4, 4)
+
+      // getImageData/createImageData & exports default to the canvas's space…
+      let bmp = ctx.getImageData(0, 0, 1, 1)
+      assert.equal(bmp.colorSpace, 'display-p3')
+      assert.deepEqual(Array.from(bmp.data), [234, 51, 35, 255])
+      assert.equal(ctx.createImageData(2, 2).colorSpace, 'display-p3')
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw')).slice(0, 4)), [234, 51, 35, 255])
+      assert((await canvas.toBuffer('png')).includes('iCCP'))
+
+      // …but per-call settings still override
+      assert.deepEqual(Array.from(ctx.getImageData(0, 0, 1, 1, {colorSpace:'srgb'}).data), [255, 0, 0, 255])
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {colorSpace:'srgb'})).slice(0, 4)), [255, 0, 0, 255])
+
+      // only the first getContext call's settings are honored
+      assert.equal(canvas.getContext('2d', {colorSpace:'srgb'}), ctx)
+      assert.equal(ctx.getContextAttributes().colorSpace, 'display-p3')
+
+      // a canvas whose context was created without settings defaults to srgb
+      let plain = new Canvas(4, 4).getContext('2d')
+      assert.equal(plain.getContextAttributes().colorSpace, 'srgb')
+    })
+
     test('putImageData()', () => {
       assert.throws(() => ctx.putImageData({}, 0, 0))
       assert.throws(() => ctx.putImageData(undefined, 0, 0))

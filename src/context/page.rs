@@ -434,7 +434,7 @@ impl Page{
 
         enum Rendered{ Encodable(SkImage), Raw(Vec<u8>) }
         let rendered = engine.render(move || {
-          let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(ColorSpace::new_srgb()));
+          let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(opts.color_space.clone()));
           let mut surface = engine.make_surface(&img_info, &opts)?;
           let canvas = surface.canvas();
 
@@ -467,7 +467,7 @@ impl Page{
           match opts.format.as_str() {
             "raw" => {
               // return a Rendered::Raw buffer of pixels converted to destination color type
-              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
+              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, AlphaType::Unpremul, Some(opts.color_space.clone()));
               let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
               match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
                 true => Ok(Rendered::Raw(buffer)),

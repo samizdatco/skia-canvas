@@ -578,15 +578,26 @@ pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType,
 }
 
 
+use once_cell::sync::Lazy;
+use skia_safe::{named_primaries, named_transfer_fn};
+
+static SRGB_COLOR_SPACE: Lazy<ColorSpace> = Lazy::new(ColorSpace::new_srgb);
+static DISPLAY_P3_COLOR_SPACE: Lazy<ColorSpace> = Lazy::new(||
+  // Display P3 = P3-D65 primaries + the sRGB transfer curve
+  ColorSpace::new_cicp(named_primaries::CicpId::SMPTE_EG_432_1, named_transfer_fn::CicpId::SRGB)
+    .expect("Could not construct display-p3 color space")
+);
+
 pub fn to_color_space(mode_name:&str) -> ColorSpace{
   match mode_name{
-    // TODO: add display-p3 support
-    "srgb" | _ => ColorSpace::new_srgb()
+    "display-p3" => DISPLAY_P3_COLOR_SPACE.clone(),
+    "srgb" | _ => SRGB_COLOR_SPACE.clone()
   }
 }
 
 pub fn from_color_space(mode:ColorSpace) -> String{
   match mode {
+    p3 if p3 == *DISPLAY_P3_COLOR_SPACE => "display-p3",
     _ => "srgb"
   }.to_string()
 }
@@ -664,11 +675,11 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
     .map(|num| num.floor() as usize);
   let color_type = opt_string_for_key(cx, &opts, "colorType")
     .map(|mode| to_color_type(&mode)).unwrap_or(ColorType::RGBA8888);
+  let color_space = opt_string_for_key(cx, &opts, "colorSpace")
+    .map(|name| to_color_space(&name)).unwrap_or_else(|| to_color_space("srgb"));
   let text_contrast = float_for_key(cx, &opts, "textContrast")?;
   let text_gamma = float_for_key(cx, &opts, "textGamma")?;
   let outline = bool_for_key(cx, &opts, "outline")?;
-
-  let color_space = ColorSpace::new_srgb();
 
   Ok(ExportOptions{
     format, quality, density, outline, matte, msaa, color_type, color_space, jpeg_downsample, text_contrast, text_gamma

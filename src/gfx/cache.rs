@@ -14,7 +14,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
-use skia_safe::{Color, Image as SkImage};
+use skia_safe::{Color, ColorSpace, Image as SkImage};
 use dashmap::DashMap;
 
 use crate::context::page::{ExportOptions, RecordingSurface};
@@ -131,19 +131,20 @@ pub(crate) struct Raster{
   density: f32,
   matte: Option<Color>,
   msaa: Option<usize>,
+  color_space: ColorSpace,
   depth: usize,
 }
 
 impl Default for Raster{
   fn default() -> Self {
-    Self{image:None, depth:0, density:1.0, matte:None, msaa:None}
+    Self{image:None, depth:0, density:1.0, matte:None, msaa:None, color_space:ColorSpace::new_srgb()}
   }
 }
 
 impl Raster{
   // build a cached raster from a freshly-rendered snapshot and the opts it was rendered under
   fn new(image:SkImage, opts:&ExportOptions, depth:usize) -> Self{
-    Self{ image:Some(image), density:opts.density, matte:opts.matte, msaa:opts.msaa, depth }
+    Self{ image:Some(image), density:opts.density, matte:opts.matte, msaa:opts.msaa, color_space:opts.color_space.clone(), depth }
   }
 
   // whether the cached snapshot holds a gpu texture (so its drop must run on the render thread)
@@ -155,6 +156,7 @@ impl Raster{
     self.density == opts.density &&
     self.matte == opts.matte &&
     self.msaa == opts.msaa &&
+    self.color_space == opts.color_space &&
     self.image.is_some() &&
     opts.is_raster()
   }
