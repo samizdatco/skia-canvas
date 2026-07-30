@@ -37,7 +37,7 @@ impl Typesetter{
     let typefaces = FontLibrary::with_shared(|lib|
       lib
         .set_hinting(graf_style.hinting_is_on())
-        .fonts_for_style(&char_style)
+        .font_collection()
     );
     let width = width.unwrap_or(GALLEY);
     let text = match text_wrap{
@@ -55,10 +55,22 @@ impl Typesetter{
       &self.text_decoration.for_layout(&char_style, paint.color())
     );
 
-    // prevent SkParagraph from faking the font style if the match isn't the requested weight/slant
+    // rewrite the requested match so it is equal to the closest 'real' weight/style match..
     let fams:Vec<String> = char_style.font_families().iter().map(|s| s.to_string()).collect();
     if let Some(matched) = self.typefaces.clone().find_typefaces(&fams, char_style.font_style()).first(){
       char_style.set_font_style(matched.font_style());
+    }
+
+    // set the `wght` coordinate so variable fonts will instance at the correct weight
+    // (non-variable fonts will just ignore the setting)
+    {
+      use skia_safe::FontArguments;
+      use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
+      let weight = *self.char_style.font_style().weight() as f32;
+      let coords = [ Coordinate { axis: Coordinate::wght, value: weight } ];
+      let args = FontArguments::new()
+        .set_variation_design_position(VariationPosition { coordinates: &coords });
+      char_style.set_font_arguments(&args);
     }
 
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
