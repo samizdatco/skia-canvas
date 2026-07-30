@@ -10,7 +10,7 @@ use skia_safe::textlayout::{
   Decoration, FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
   TextAlign, TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextStyle,
 };
-use crate::font_library::FontLibrary;
+use crate::font_library::{FontLibrary, RenderAttrs};
 use crate::utils::*;
 use crate::context::State;
 
@@ -34,9 +34,13 @@ pub struct Typesetter{
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
     let (char_style, graf_style, text_decoration, baseline, text_wrap) = state.typography();
+
     let typefaces = FontLibrary::with_shared(|lib|
       lib
-        .set_hinting(graf_style.hinting_is_on())
+        .set_render_attrs(RenderAttrs{
+          hinting: graf_style.hinting_is_on(),
+          synthesize: graf_style.fake_missing_font_styles(),
+        })
         .font_collection()
     );
     let width = width.unwrap_or(GALLEY);
@@ -54,12 +58,6 @@ impl Typesetter{
     char_style.set_decoration(
       &self.text_decoration.for_layout(&char_style, paint.color())
     );
-
-    // rewrite the requested match so it is equal to the closest 'real' weight/style match..
-    let fams:Vec<String> = char_style.font_families().iter().map(|s| s.to_string()).collect();
-    if let Some(matched) = self.typefaces.clone().find_typefaces(&fams, char_style.font_style()).first(){
-      char_style.set_font_style(matched.font_style());
-    }
 
     // set the `wght` coordinate so variable fonts will instance at the correct weight
     // (non-variable fonts will just ignore the setting)

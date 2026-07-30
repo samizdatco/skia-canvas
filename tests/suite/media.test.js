@@ -409,6 +409,53 @@ describe("FontLibrary", ()=>{
     }
   })
 
+  test("instances variable fonts at the requested weight", () => {
+    // Amstelvar exposes a `wght` axis, so heavier weights must lay down more ink
+    // (verifies Skia's native variable-font instancing in Typesetter::layout)
+    FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
+    let ink = weight => {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      ctx.font = `${weight} 80px AmstelvarAlpha`
+      ctx.fillText("Hamburg", 20, 100)
+      return ctx.getImageData(0, 0, WIDTH, HEIGHT).data.filter((v, i) => i % 4 == 3 && v > 10).length
+    }
+    assert(ink(400) > 0)
+    assert(ink(700) > ink(400))
+    assert(ink(900) > ink(700))
+  })
+
+  test("synthesizes faux bold/oblique unless fontSynthesis is off", () => {
+    // Monoton has a single (regular) face, so bold/italic have no *real* face to match
+    FontLibrary.use(findFont("Monoton-Regular.woff"))
+    let render = (spec, synth) => {
+      ctx.fontSynthesis = synth
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      ctx.font = `${spec} 80px Monoton`
+      ctx.fillText("RR", 40, 100)
+      return ctx.getImageData(0, 0, WIDTH, HEIGHT).data
+    }
+
+    // count opaque pixels for weight comparisons
+    let opaque = data => data.filter((v, i) => i % 4 == 3 && v > 10).length
+    // diff alpha channels of pixmaps for oblique/normal comparisons
+    let differs = (a, b) => { for (let i = 3; i < a.length; i += 4) if ((a[i] > 10) !== (b[i] > 10)) return true; return false }
+
+    assert.equal(ctx.fontSynthesis, true) // browser-parity default: synthesis on
+    let regular = render("400", true)
+    assert(opaque(regular) > 0)
+
+    // default is synthesis-on
+    assert(opaque(render("700", true)) > opaque(regular)) // faux bold lays down more ink
+    assert(differs(render("italic", true), regular))      // faux oblique skews the glyphs
+
+    // ensure that disabling it actually prevents fake weight/slant
+    assert.equal(opaque(render("700", false)), opaque(regular))
+    assert(!differs(render("italic", false), regular))
+
+    // check that the setting isn't cached across calls (i.e., FontLibrary clears its cache)
+    assert(opaque(render("700", true)) > opaque(regular))
+  })
+
   test("can handle different use() signatures", () => {
     const normalizePath = p => os.platform() == 'win32'
         ? p.replace(/^\\\\(?<path>[.?])/, '//$1') // The device path (\\.\ or \\?\)
