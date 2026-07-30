@@ -9,7 +9,7 @@ use std::path::Path;
 use std::collections::HashMap;
 use neon::prelude::*;
 
-use skia_safe::{FontMgr, Typeface};
+use skia_safe::{font::Edging, FontHinting, FontMgr, Typeface};
 use skia_safe::font_style::FontStyle;
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
 use skia_safe::utils::OrderedFontMgr;
@@ -260,13 +260,15 @@ impl FontLibrary{
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct RenderAttrs{
-  pub hinting: bool,
+  pub hinting: FontHinting,
+  pub edging: Edging,
+  pub subpixel: bool,
   pub synthesize: bool,
 }
 
 impl Default for RenderAttrs{
   fn default() -> Self{
-    Self{hinting:false, synthesize:true}
+    Self{hinting:FontHinting::None, edging:Edging::AntiAlias, subpixel:true, synthesize:true}
   }
 }
 

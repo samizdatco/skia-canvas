@@ -738,6 +738,8 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   readonly canvas: Canvas
   fontVariant: FontVariantSetting
   fontHinting: boolean
+  fontSmoothing: boolean
+  fontSynthesis: boolean
   textWrap: boolean
   textDecoration: string
   lineDashMarker: Path2D | null

@@ -38,7 +38,9 @@ impl Typesetter{
     let typefaces = FontLibrary::with_shared(|lib|
       lib
         .set_render_attrs(RenderAttrs{
-          hinting: graf_style.hinting_is_on(),
+          hinting: char_style.font_hinting(),
+          edging: char_style.font_edging(),
+          subpixel: char_style.subpixel(),
           synthesize: graf_style.fake_missing_font_styles(),
         })
         .font_collection()
