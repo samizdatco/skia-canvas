@@ -33,7 +33,7 @@ pub struct FontLibrary{
     collection: Option<FontCollection>,
     fonts: Vec<(Typeface, Option<String>)>,
     generics_cache: Vec<(Typeface, Option<String>)>,
-    collection_hinted: bool,
+    collection_attrs: RenderAttrs,
   }
 
 impl FontLibrary{
@@ -56,7 +56,7 @@ impl FontLibrary{
         }
 
         RefCell::new(FontLibrary{
-          mgr:FontMgr::default(), fonts:vec![], collection:None, collection_hinted:false, generics_cache:vec![]
+          mgr:FontMgr::default(), fonts:vec![], collection:None, collection_attrs:RenderAttrs::default(), generics_cache:vec![]
         })
       });
 
@@ -248,16 +248,28 @@ impl FontLibrary{
       })
   }
 
-  pub fn set_hinting(&mut self, hinting:bool) -> &mut Self{
-    // skia's rasterizer cache doesn't take hinting into account, so manually invalidate if changed
-    if hinting != self.collection_hinted{
-      self.collection_hinted = hinting;
+  pub fn set_render_attrs(&mut self, attrs:RenderAttrs) -> &mut Self{
+    // skia's layout & font-resolution caches don't key on any of these attrs, so manually invalidate if changed
+    if attrs != self.collection_attrs{
+      self.collection_attrs = attrs;
       self.font_collection().clear_caches();
     }
     self
   }
-
 }
+
+#[derive(Clone, Copy, PartialEq)]
+pub struct RenderAttrs{
+  pub hinting: bool,
+  pub synthesize: bool,
+}
+
+impl Default for RenderAttrs{
+  fn default() -> Self{
+    Self{hinting:false, synthesize:true}
+  }
+}
+
 
 //
 // Javascript Methods

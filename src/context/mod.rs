@@ -71,6 +71,7 @@ pub struct State{
   font_variant: String,
   font_width: Width,
   font_hinting: bool,
+  font_synthesis: bool,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
   text_baseline: Baseline,
@@ -121,6 +122,7 @@ impl Default for State {
       font_variant: "normal".to_string(),
       font_width: Width::NORMAL,
       font_hinting: false,
+      font_synthesis: true,
       char_style,
       graf_style,
       text_baseline: Baseline::Alphabetic,
@@ -168,6 +170,8 @@ impl State{
       graf_style.set_max_lines(Some(1));
     }
 
+    // reflect context's `fontSynthesis` and `fontHinting` flags
+    graf_style.set_fake_missing_font_styles(self.font_synthesis);
     if !self.font_hinting{
       graf_style.turn_hinting_off();
     }
