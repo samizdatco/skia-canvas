@@ -4,7 +4,8 @@ use neon::prelude::*;
 use skia_safe::{
   Canvas as SkCanvas, Paint, Path, PathBuilder, PathOp, Image, ImageInfo, Contains,
   Rect, IRect, Point, Size, Color, ColorSpace, PathFillType,
-  PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture,
+  PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture, FontHinting,
+  font::Edging,
   images, image_filters, dash_path_effect, path_1d_path_effect,
   matrix::{ Matrix, TypeMask },
   textlayout::{ParagraphStyle, TextStyle, StrutStyle},
@@ -71,6 +72,7 @@ pub struct State{
   font_variant: String,
   font_width: Width,
   font_hinting: bool,
+  font_smoothing: bool,
   font_synthesis: bool,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
@@ -122,6 +124,7 @@ impl Default for State {
       font_variant: "normal".to_string(),
       font_width: Width::NORMAL,
       font_hinting: false,
+      font_smoothing: true,
       font_synthesis: true,
       char_style,
       graf_style,
@@ -146,6 +149,9 @@ impl State{
     let font_families = char_style.font_families(); // consult proper metrics for height & leading defaults
 
     if self.text_wrap{
+      // render shy hyphens (U+00AD) rather than just breaking on them
+      graf_style.set_render_soft_hyphens(true);
+
       // handle multi-line spacing
       let mut strut_style = StrutStyle::new();
       strut_style
@@ -170,11 +176,13 @@ impl State{
       graf_style.set_max_lines(Some(1));
     }
 
-    // reflect context's `fontSynthesis` and `fontHinting` flags
+    // reflect context's `fontSynthesis`, `fontHinting`, & `fontSmoothing` settings
     graf_style.set_fake_missing_font_styles(self.font_synthesis);
-    if !self.font_hinting{
-      graf_style.turn_hinting_off();
-    }
+    let (edging, subpixel) = if self.font_smoothing{ (Edging::AntiAlias, true) }else{ (Edging::Alias, false) };
+    let hinting = if self.font_hinting{ FontHinting::Normal }else{ FontHinting::None };
+    char_style.set_font_hinting(hinting);
+    char_style.set_font_edging(edging);
+    char_style.set_subpixel(subpixel);
 
     ( char_style, graf_style, self.text_decoration.clone(), self.text_baseline, self.text_wrap )
   }

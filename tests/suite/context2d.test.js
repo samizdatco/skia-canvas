@@ -1140,6 +1140,14 @@ describe("Context2D", ()=>{
       assert.equal(ctx.textWrap, true)
       ctx.fillText('word '.repeat(12), 10, 30, 150)
       assert(inkHeight() > single * 2)
+
+      // make sure soft-hyphens are drawn when the line breaks on them
+      canvas.width = WIDTH
+      ctx.font = '20px Monoton'
+      ctx.textWrap = true
+      ctx.fillText('word\u00ADword\u00ADword\u00ADword', 10, 30, 150)
+      let {data} = ctx.getImageData(155, 17, 10, 10)
+      assert(data.some(a => a))
     })
 
     test("measureText()", () => {

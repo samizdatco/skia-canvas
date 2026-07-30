@@ -831,6 +831,20 @@ pub fn set_fontHinting(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+pub fn get_fontSmoothing(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow_mut();
+  Ok(cx.boolean(this.state.font_smoothing))
+}
+
+pub fn set_fontSmoothing(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let flag = bool_arg(&mut cx, 1, "fontSmoothing")?;
+  this.state.font_smoothing = flag;
+  Ok(cx.undefined())
+}
+
 pub fn get_fontSynthesis(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();

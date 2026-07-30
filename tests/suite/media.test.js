@@ -456,6 +456,91 @@ describe("FontLibrary", ()=>{
     assert(opaque(render("700", true)) > opaque(regular))
   })
 
+  test("applies fontHinting to glyph rasterization", () => {
+    // a face whose hinting instructions survive in the tracked woff2 subset
+    FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+
+    let render = (hinting) => {
+      ctx.fontHinting = hinting
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      ctx.font = '11px Montserrat'
+      ctx.fillText("Illegible waveforms 10x", 10, 24)
+      return ctx.getImageData(0, 0, WIDTH, HEIGHT).data
+    }
+    let differs = (a, b) => { for (let i = 3; i < a.length; i += 4) if (a[i] !== b[i]) return true; return false }
+
+    // boolean property; hinting disabled by default to match browser rendering
+    assert.equal(ctx.fontHinting, false)
+    ctx.fontHinting = true
+    assert.equal(ctx.fontHinting, true)
+
+    // truthy coercion like fontSynthesis (invalid values never throw)
+    ctx.fontHinting = 0
+    assert.equal(ctx.fontHinting, false)
+    ctx.fontHinting = 'yes'
+    assert.equal(ctx.fontHinting, true)
+
+    // hinted vs unhinted rasterization must differ at text sizes (DirectWrite
+    // quantization is unverified, hence the win32 escape hatch)
+    let unhinted = render(false)
+    let hinted = render(true)
+    if (os.platform() != 'win32'){
+      assert(differs(hinted, unhinted))
+    }
+
+    // toggling back must return to the identical rendering (i.e., FontLibrary clears its cache)
+    assert(!differs(render(false), unhinted))
+  })
+
+  test("applies fontSmoothing to glyph antialiasing & positioning", () => {
+    FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+
+    let census = (smoothing) => {
+      ctx.fontSmoothing = smoothing
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      ctx.font = '40px Montserrat'
+      ctx.fillText("Osprey wings", 10, 55)
+      let data = ctx.getImageData(0, 0, WIDTH, HEIGHT).data,
+          tally = {opaque:0, partial:0}
+      for (let i = 3; i < data.length; i += 4){
+        if (data[i] == 255) tally.opaque++
+        else if (data[i] > 0) tally.partial++
+      }
+      return tally
+    }
+
+    // boolean property; smoothing on by default (truthy coercion, like fontSynthesis)
+    assert.equal(ctx.fontSmoothing, true)
+    ctx.fontSmoothing = false
+    assert.equal(ctx.fontSmoothing, false)
+    ctx.fontSmoothing = 'yes'
+    assert.equal(ctx.fontSmoothing, true)
+
+    // smoothed edges include partial-alpha pixels; aliased coverage is strictly 0/255
+    let aliased = census(false)
+    assert(aliased.opaque > 0)
+    assert.equal(aliased.partial, 0)
+    let antialiased = census(true)
+    assert(antialiased.partial > 0)
+
+    // toggling back must re-alias (i.e., FontLibrary clears its cache)
+    assert.equal(census(false).partial, 0)
+
+    // smoothing also drives subpixel positioning: fractional placement renders
+    // differently than the aliased/grid-snapped case, and round-trips after toggling
+    let render = (smoothing) => {
+      ctx.fontSmoothing = smoothing
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      ctx.font = '11px Montserrat'
+      ctx.fillText("Illegible waveforms 10x", 10.5, 24)
+      return ctx.getImageData(0, 0, WIDTH, HEIGHT).data
+    }
+    let differs = (a, b) => { for (let i = 3; i < a.length; i += 4) if (a[i] !== b[i]) return true; return false }
+    let smoothed = render(true)
+    assert(differs(render(false), smoothed))
+    assert(!differs(render(true), smoothed))
+  })
+
   test("can handle different use() signatures", () => {
     const normalizePath = p => os.platform() == 'win32'
         ? p.replace(/^\\\\(?<path>[.?])/, '//$1') // The device path (\\.\ or \\?\)
