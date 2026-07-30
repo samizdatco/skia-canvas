@@ -30,8 +30,7 @@
   "dependencies": {
     "detect-libc": "^2.1.2",
     "follow-redirects": "^1.16.0",
-    "https-proxy-agent": "^7.0.6",
-    "string-split-by": "^1.0.0"
+    "https-proxy-agent": "^7.0.6"
   },
   "devDependencies": {
     "@hono/node-server": "^2.0.12",

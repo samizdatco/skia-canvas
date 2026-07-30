@@ -1461,6 +1461,8 @@ describe("Context2D", ()=>{
         'italic small-caps bolder 16px cursive': { size: 16, style: 'italic', variant: 'small-caps', weight: 800, family: ['cursive'] },
         '20px "new century schoolbook", serif': { size: 20, family: ['new century schoolbook','serif'] },
         '20px "Arial bold 300"': { size: 20, family: ['Arial bold 300'], variant: 'normal' }, // synthetic case with weight keyword inside family
+        'italic\n16px\nArial': { size: 16, style: 'italic', family: ['Arial'] },
+        'bold\n50px\nArial,\nsans-serif': { size: 50, weight: 700, family: ['Arial','sans-serif'] },
       }
 
       _each(cases, (spec, font) => {
@@ -1469,6 +1471,28 @@ describe("Context2D", ()=>{
         assert.matchesSubset(parsed, expected)
       })
 
+    })
+
+    test('textDecoration', () => {
+      let cases = {
+        'underline':                  { line: 'underline', style: 'solid',  color: 'currentColor' },
+        'overline dashed':            { line: 'overline',  style: 'dashed', color: 'currentColor' },
+        'wavy line-through lime':     { line: 'line-through', style: 'wavy',   color: 'lime' },
+        'underline from-font':        { line: 'underline', inherit: 'from-font' },
+        'underline 2px blue':         { line: 'underline', thickness: { size: 2, unit: 'px', px: 2 }, color: 'blue' },
+        'underline\ndotted\nred':     { line: 'underline', style: 'dotted', color: 'red' },
+        'wavy\t3px\tunderline\tblue': { line: 'underline', style: 'wavy', color: 'blue', thickness: { size: 3, unit: 'px', px: 3 } },
+      }
+
+      _each(cases, (spec, decoration) => {
+        assert.matchesSubset(css.decoration(decoration), spec)
+      })
+
+      // a multiline value must parse identically to its single-line equivalent
+      assert.deepEqual(
+        css.decoration('underline\ndotted\nred'),
+        css.decoration('underline dotted red')
+      )
     })
 
     test('colors', () => {
