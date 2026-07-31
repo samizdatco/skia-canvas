@@ -244,7 +244,7 @@ impl PageRecorder{
       self.has_gpu_surface = false;
     }
 
-    super::trim::mark_reclaimable(estimated_bytes);
+    mem::glibc::mark_reclaimable(estimated_bytes);
   }
 }
 

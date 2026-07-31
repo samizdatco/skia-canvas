@@ -8,7 +8,7 @@
 // or it can be set to `eager` to make it run whenever there's a lull in activity.
 
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
-mod trimmer {
+mod heap_watcher {
     use std::sync::{Condvar, Mutex, OnceLock};
     use std::thread;
     use std::time::{Duration, Instant};
@@ -94,11 +94,9 @@ mod trimmer {
     }
 }
 
-#[cfg(all(target_os = "linux", target_env = "gnu"))]
-pub fn mark_reclaimable(estimated_bytes: usize) {
-    trimmer::mark_reclaimable(estimated_bytes);
-}
-
 // only necessary on glibc (macOS, Windows, and musl don't have the same pathology)
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub use heap_watcher::mark_reclaimable;
+
 #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
 pub fn mark_reclaimable(_estimated_bytes: usize) {}

@@ -16,7 +16,6 @@ use skia_safe::{
 
 pub mod api;
 pub mod page;
-mod trim;
 
 use crate::utils::*;
 use crate::font_library::FontLibrary;
