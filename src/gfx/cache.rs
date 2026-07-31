@@ -2,7 +2,7 @@
 // render-thread lifetime, and eviction policy for the backends' cached page rasters:
 //
 //   • SurfaceCache — the render thread's live RecordingSurfaces, keyed by PageRecorder id. The
-//     RecordingSurface values are defined over in context::page (where they interoperate with the
+//     RecordingSurface values are defined over in gfx::page (where they interoperate with the
 //     RasterCache); this module owns only their storage and render-thread lifetime.
 //
 //   • RasterCache — persistent snapshot bitmaps (Raster) of the last raster generated for a
@@ -17,13 +17,13 @@ use std::sync::{Arc, OnceLock};
 use skia_safe::{Color4f, ColorSpace, Image as SkImage};
 use dashmap::DashMap;
 
-use crate::context::page::{ExportOptions, RecordingSurface};
+use crate::gfx::page::{ExportOptions, RecordingSurface};
 use crate::mem;
 
 #[cfg(feature = "window")]
 use skia_safe::{Color, Rect, Matrix};
 #[cfg(feature = "window")]
-use crate::context::page::Page;
+use crate::gfx::page::Page;
 
 // release every gpu-derived cache resource: called by the render thread just before it releases an
 // idle gpu context, since both live surfaces and texture-backed snapshots are bound to that context

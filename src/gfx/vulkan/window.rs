@@ -22,7 +22,7 @@ use winit::{
     event_loop::ActiveEventLoop,
     window::Window,
 };
-use crate::context::page::Page;
+use crate::gfx::page::Page;
 use crate::gfx::RenderOutcome;
 use crate::gfx::cache::Frame;
 use super::{VK_FORMATS, to_sk_format, VulkanShared, make_direct_context};

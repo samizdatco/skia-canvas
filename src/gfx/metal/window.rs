@@ -20,7 +20,7 @@ use winit::{
     event_loop::ActiveEventLoop,
 };
 
-use crate::context::page::Page;
+use crate::gfx::page::Page;
 use crate::gfx::RenderOutcome;
 use crate::gfx::cache::Frame;
 use crate::utils::to_color_space;

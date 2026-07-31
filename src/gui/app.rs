@@ -15,7 +15,8 @@ use winit::{
     window::WindowId,
 };
 
-use crate::context::{page::Page, BoxedContext2D};
+use crate::context::BoxedContext2D;
+use crate::gfx::page::Page;
 use super::{
     event::AppEvent,
     window_mgr::WindowManager,

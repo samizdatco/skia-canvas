@@ -10,7 +10,7 @@ use winit::{
 };
 
 use crate::utils::css_to_color;
-use crate::context::page::Page;
+use crate::gfx::page::Page;
 use super::window::{Window, WindowSpec};
 
 #[derive(Default)]

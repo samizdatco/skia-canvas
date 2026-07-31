@@ -6,7 +6,8 @@ use skia_safe::{AlphaType, ImageInfo, Matrix, PaintStyle, Point, Rect, Size};
 use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
-use super::{Context2D, BoxedContext2D, Dye, page::ExportOptions};
+use super::{Context2D, BoxedContext2D, Dye};
+use crate::gfx::page::ExportOptions;
 use crate::canvas::BoxedCanvas;
 use crate::mem;
 use crate::path::Path2D;

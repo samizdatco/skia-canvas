@@ -787,7 +787,7 @@ pub fn from_color_type(color_type: ColorType) -> String {
 // ExportOptions
 //
 
-use crate::context::page::ExportOptions;
+use crate::gfx::page::ExportOptions;
 
 pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<ExportOptions>{
   let opts = opt_object_arg(cx, idx).unwrap();

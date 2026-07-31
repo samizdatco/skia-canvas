@@ -9,7 +9,7 @@ use winit::{
 
 use std::collections::HashMap;
 use std::time::Instant;
-use crate::context::page::Page;
+use crate::gfx::page::Page;
 use super::window::WindowSpec;
 
 #[derive(Debug, Clone)]
