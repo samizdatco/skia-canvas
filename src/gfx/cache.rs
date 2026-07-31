@@ -18,6 +18,7 @@ use skia_safe::{Color4f, ColorSpace, Image as SkImage};
 use dashmap::DashMap;
 
 use crate::context::page::{ExportOptions, RecordingSurface};
+use crate::mem;
 
 #[cfg(feature = "window")]
 use skia_safe::{Color, Rect, Matrix};
@@ -114,6 +115,7 @@ impl RasterCache{
   pub fn evict_textures(){
     Self::shared().iter_mut().for_each(|mut raster|{
       if raster.is_texture_backed(){
+        raster.footprint.clear(); // report the snapshot's dealloc to v8
         raster.image = None;
         raster.depth = 0;
       }
@@ -125,9 +127,10 @@ impl RasterCache{
 // Raster: a cached Page snapshot and the export settings that were used to render it
 //
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct Raster{
   image: Option<SkImage>,
+  footprint: mem::v8::Footprint,
   density: f32,
   matte: Option<Color4f>,
   msaa: Option<usize>,
@@ -137,14 +140,15 @@ pub(crate) struct Raster{
 
 impl Default for Raster{
   fn default() -> Self {
-    Self{image:None, depth:0, density:1.0, matte:None, msaa:None, color_space:ColorSpace::new_srgb()}
+    Self{image:None, footprint:mem::v8::Footprint::default(), depth:0, density:1.0, matte:None, msaa:None, color_space:ColorSpace::new_srgb()}
   }
 }
 
 impl Raster{
   // build a cached raster from a freshly-rendered snapshot and the opts it was rendered under
   fn new(image:SkImage, opts:&ExportOptions, depth:usize) -> Self{
-    Self{ image:Some(image), density:opts.density, matte:opts.matte, msaa:opts.msaa, color_space:opts.color_space.clone(), depth }
+    let footprint = mem::v8::Footprint::new(image.image_info().compute_min_byte_size()); // report the image/texture allocation size to v8
+    Self{ image:Some(image), footprint, density:opts.density, matte:opts.matte, msaa:opts.msaa, color_space:opts.color_space.clone(), depth }
   }
 
   // whether the cached snapshot holds a gpu texture (so its drop must run on the render thread)

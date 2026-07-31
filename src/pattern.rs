@@ -8,6 +8,7 @@ use crate::utils::*;
 use crate::image::{BoxedImage, Content};
 use crate::context::BoxedContext2D;
 use crate::filter::ImageFilter;
+use crate::mem;
 
 pub type BoxedCanvasPattern = JsBox<RefCell<CanvasPattern>>;
 impl Finalize for CanvasPattern {}
@@ -15,9 +16,18 @@ impl Finalize for CanvasPattern {}
 
 pub struct Stamp{
   content: Content,
+  #[allow(dead_code)] // not called after construction, but used for its side-effect on drop
+  footprint: mem::v8::Footprint,
   dims:Size,
   repeat:(TileMode, TileMode),
   matrix:Matrix
+}
+
+impl Stamp{
+  fn new(content:Content, dims:Size, repeat:(TileMode, TileMode), matrix:Matrix) -> Self{
+    let footprint = mem::v8::Footprint::new(content.native_bytes()); // record the bitmap size for v8
+    Stamp{content, footprint, dims, repeat, matrix}
+  }
 }
 
 impl Drop for Stamp{
@@ -82,10 +92,12 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
     matrix.set_scale(factor, None);
   }
 
-  let stamp = Stamp{content, dims, repeat, matrix};
+  let stamp = Stamp::new(content, dims, repeat, matrix);
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
-  Ok(cx.boxed(this))
+  let boxed = cx.boxed(this);
+  mem::v8::flush(&mut cx); // update v8's memory tally
+  Ok(boxed)
 }
 
 pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
@@ -95,10 +107,12 @@ pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> 
   let dims:Size = content.size().into();
   let matrix = Matrix::new_identity();
 
-  let stamp = Stamp{content, dims, repeat, matrix};
+  let stamp = Stamp::new(content, dims, repeat, matrix);
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
-  Ok(cx.boxed(this))
+  let boxed = cx.boxed(this);
+  mem::v8::flush(&mut cx); // update v8's memory tally
+  Ok(boxed)
 }
 
 pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
@@ -112,10 +126,12 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
     .map(|picture| Content::Vector(picture, dims))
     .unwrap_or_default();
 
-  let stamp = Stamp{content, dims, repeat, matrix};
+  let stamp = Stamp::new(content, dims, repeat, matrix);
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
-  Ok(cx.boxed(this))
+  let boxed = cx.boxed(this);
+  mem::v8::flush(&mut cx); // update v8's memory tally
+  Ok(boxed)
 }
 
 pub fn setTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {

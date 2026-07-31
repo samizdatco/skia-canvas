@@ -8,6 +8,7 @@ use skia_safe::PaintStyle::{Fill, Stroke};
 
 use super::{Context2D, BoxedContext2D, Dye, page::ExportOptions};
 use crate::canvas::BoxedCanvas;
+use crate::mem;
 use crate::path::Path2D;
 use crate::image::{BoxedImage, Content};
 use crate::filter::Filter;
@@ -72,7 +73,8 @@ pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  this.borrow_mut().dispose();
+  this.borrow_mut().dispose(); // free the PageRecorder & its RasterCache buffer
+  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(cx.undefined())
 }
 
@@ -562,6 +564,7 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let dst = buffer.as_mut_slice(&mut cx);
   let result = this.borrow_mut().write_pixels(dst, &dst_info, crop, opts, engine);
   result.or_else(|e| cx.throw_error(e))?;
+  mem::v8::flush(&mut cx); // report the getImageData surface allocation to v8
 
   Ok(buffer)
 }

@@ -10,6 +10,7 @@ use skia_safe::{
 use crate::utils::*;
 use crate::context::Context2D;
 use crate::font_library::FontLibrary;
+use crate::mem;
 
 pub type BoxedImage = JsBox<RefCell<Image>>;
 impl Finalize for Image {}
@@ -18,11 +19,12 @@ pub struct Image{
   src:String,
   pub autosized:bool,
   pub content: Content,
+  footprint: mem::v8::Footprint,
 }
 
 impl Default for Image{
   fn default() -> Self {
-    Image{ content:Content::Loading, autosized:false, src:"".to_string() }
+    Image{ content:Content::Loading, autosized:false, src:"".to_string(), footprint:mem::v8::Footprint::default() }
   }
 }
 
@@ -91,6 +93,18 @@ impl Content{
       Content::Bitmap(img) => img.dimensions().into(),
       Content::Vector(_, size) => *size,
       _ => Size::new_empty()
+    }
+  }
+
+  pub fn native_bytes(&self) -> usize {
+    match &self {
+      // a lazily-decoded bitmap's *decoded* pixels live in Skia's resource cache (so no
+      // accounting is necessary), but the *encoded* bytes are included in the v8 footprint
+      Content::Bitmap(img) if img.is_lazy_generated() =>
+        img.encoded_data().map(|data| data.size()).unwrap_or(0),
+      Content::Bitmap(img) => img.image_info().compute_min_byte_size(),
+      Content::Vector(pict, _) => pict.approximate_bytes_used(),
+      _ => 0,
     }
   }
 
@@ -250,7 +264,12 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
   };
 
   this.content.replace(new_content);
-  Ok(cx.boolean(this.content.is_drawable()))
+  let bytes = this.content.native_bytes(); // picture-size for SVG, w×h×4 for bitmap, encoded-bytes for lazy
+  this.footprint.set(bytes); // record the allocation size for v8
+  let drawable = this.content.is_drawable();
+  drop(this); // release the RefCell borrow before calling into cx (since it might reenter)
+  mem::v8::flush(&mut cx); // update v8's memory tally
+  Ok(cx.boolean(drawable))
 }
 
 pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -259,6 +278,9 @@ pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedImage>(0)?;
   let mut this = this.borrow_mut();
   std::mem::take(&mut this.content).release();
+  this.footprint.clear(); // record the dealloc for v8
+  drop(this); // release the RefCell borrow before calling into cx (since it might reenter)
+  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(cx.undefined())
 }
 
