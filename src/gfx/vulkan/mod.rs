@@ -211,6 +211,17 @@ fn make_direct_context(device:&Arc<Device>, queue:&Arc<Queue>) -> Option<DirectC
             })
         };
 
+        // choose an API version explicitly. When set to None, Skia trusts the loader's version
+        // (1.4 on current Windows) over the older one the instance negotiated (1.3), then probes
+        // for newer core functions the instance never opted into. Lenient drivers (NVIDIA) will
+        // tolerate this, but stricter ones (Intel) will crash [see #274].
+        let vk_version = device.api_version();
+        let max_api_version = vk::Version::from((
+            vk_version.major as usize,
+            vk_version.minor as usize,
+            vk_version.patch as usize,
+        ));
+
         let backend_context = vk::BackendContext::new_builder(
             instance.handle().as_raw() as _,
             device.physical_device().handle().as_raw() as _,
@@ -220,7 +231,7 @@ fn make_direct_context(device:&Arc<Device>, queue:&Arc<Queue>) -> Option<DirectC
                 queue.queue_family_index() as usize,
             ),
             &get_proc,
-            None, // max_api_version — same default the old constructor hardcoded
+            Some(max_api_version),
         ).build();
         direct_contexts::make_vulkan(&backend_context, None)
     }
