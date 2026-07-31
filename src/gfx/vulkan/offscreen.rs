@@ -106,11 +106,8 @@ impl VulkanEngine {
         )
     }
 
-    // called by the render thread when idle to drop the context & free gpu resources
-    pub fn evict_idle(){
-        VK_CONTEXT.with_borrow_mut(|cell| {
-            cell.take_if(|engine| engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN);
-        });
+    pub fn retire(){
+        VK_CONTEXT.with_borrow_mut(|cell| { cell.take(); });
     }
 
     // called by the render thread between jobs to expire skia's internal caches
