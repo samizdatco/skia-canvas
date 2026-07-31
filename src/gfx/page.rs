@@ -690,7 +690,6 @@ pub fn pages_arg(cx: &mut FunctionContext, idx:usize, opts:&ExportOptions, canva
   Ok(PageSequence::from(pages, engine))
 }
 
-// the metadata must now outlive the Document, so it needs a separate constructor
 fn pdf_metadata(quality:f32, density:f32) -> pdf::Metadata<'static>{
   pdf::Metadata {
     producer: "Skia Canvas <https://skia-canvas.org>".to_string(),
@@ -700,6 +699,7 @@ fn pdf_metadata(quality:f32, density:f32) -> pdf::Metadata<'static>{
   }
 }
 
+// the metadata must now outlive the Document, so it needs a separate constructor
 fn pdf_document<'a>(buffer:&'a mut impl std::io::Write, metadata:&'a pdf::Metadata<'a>) -> Document<'a>{
   pdf::new_document(buffer, Some(metadata))
 }
@@ -746,6 +746,7 @@ impl ExportOptions{
     }
   }
 
+  #[cfg(any(feature = "metal", feature = "vulkan"))] // GPU-only: MSAA sample selection for gpu surfaces
   pub fn msaa_from(&self, valid_msaa:&Vec<usize>) -> Result<usize, String>{
     let samples = self.msaa.unwrap_or(0); // default to shader-based AA
     match valid_msaa.contains(&samples){

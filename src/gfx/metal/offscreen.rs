@@ -7,7 +7,7 @@ use skia_safe::{ImageInfo, Surface};
 use skia_safe::gpu::{ surfaces, Budgeted, DirectContext, SurfaceOrigin };
 use serde_json::{json, Value};
 
-use crate::context::page::ExportOptions;
+use crate::gfx::page::ExportOptions;
 use super::make_direct_context;
 
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );

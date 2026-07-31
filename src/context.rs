@@ -14,8 +14,8 @@ use skia_safe::{
   font_style::{FontStyle, Width},
 };
 
+#[path = "context_api.rs"]
 pub mod api;
-pub mod page;
 
 use crate::utils::*;
 use crate::font_library::FontLibrary;
@@ -28,7 +28,7 @@ use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
 use crate::image::ImageData;
 use crate::gfx::RenderingEngine;
-use page::{PageRecorder, Page, ExportOptions};
+use crate::gfx::page::{PageRecorder, Page, ExportOptions};
 
 const BLACK:Color = Color::BLACK;
 const TRANSPARENT:Color = Color::TRANSPARENT;

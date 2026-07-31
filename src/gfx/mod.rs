@@ -3,7 +3,7 @@ use skia_safe::{gpu::DirectContext, ImageInfo, Surface};
 #[cfg(feature = "window")]
 use skia_safe::Image; // RenderOutcome carries a snapshot destined for the Frame cache
 use serde_json::{json, Value};
-use crate::context::page::ExportOptions;
+use crate::gfx::page::ExportOptions;
 use crate::utils::catch_panic;
 
 // reject `window` without a backend also being selected
@@ -19,13 +19,14 @@ pub use crate::gfx::metal::window::MetalRenderer as Renderer;
 
 #[cfg(feature = "vulkan")]
 mod vulkan;
+pub mod page;
 #[cfg(feature = "vulkan")]
 use crate::gfx::vulkan::offscreen::VulkanEngine as Engine;
 #[cfg(all(feature = "vulkan", feature = "window"))]
 pub use crate::gfx::vulkan::window::VulkanRenderer as Renderer;
 
 // caches for the render thread's gpu-backed page resources: live recording surfaces
-// (see context::page::RecordingSurface) and persistent snapshot bitmaps
+// (see gfx::page::RecordingSurface) and persistent snapshot bitmaps
 pub(crate) mod cache;
 
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]

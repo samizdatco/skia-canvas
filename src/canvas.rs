@@ -4,7 +4,7 @@ use neon::prelude::*;
 use skia_safe::SurfaceProps;
 use serde_json::json;
 use crate::utils::*;
-use crate::context::page::{ExportOptions, pages_arg};
+use crate::gfx::page::{ExportOptions, pages_arg};
 use crate::gfx;
 use crate::mem;
 

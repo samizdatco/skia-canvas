@@ -13,7 +13,7 @@ use skia_safe::{
     ColorSpace, ISize, ImageInfo, Surface,
 };
 
-use crate::context::page::ExportOptions;
+use crate::gfx::page::ExportOptions;
 use super::{VulkanShared, make_direct_context};
 
 thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );
