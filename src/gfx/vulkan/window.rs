@@ -38,32 +38,32 @@ impl VulkanRenderer {
     pub fn for_window(_event_loop: &ActiveEventLoop, window: Arc<Window>, _is_transparent: bool) -> Self {
         // all windows and the offscreen engine share one instance/physical-device; each window
         // keeps its own swapchain, logical device, queue, and Skia DirectContext
-        let shared = VulkanShared::get().expect("Vulkan initialization failed");
+        let shared = VulkanShared::get().expect("Vulkan: Initialization failed");
         let instance = shared.instance.clone();
 
-        // use the window's surface to find a physical device that can draw to it
+        // walk the ranked list of devices that *claim* they can present and choose the first one
+        // that actually initializes (skipping over powered-down GPUs and the like)
         let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
-        let (physical_device, queue_family_index) = shared.screen_device(&surface)
+        let (physical_device, device, queue) = shared.screen_devices(&surface)
+            .find_map(|(physical_device, queue_family_index)| {
+                let (device, mut queues) = Device::new(
+                    physical_device.clone(),
+                    DeviceCreateInfo {
+                        enabled_extensions: DeviceExtensions {
+                            khr_swapchain: true,
+                            ..DeviceExtensions::empty()
+                        },
+                        queue_create_infos: vec![QueueCreateInfo {
+                            queue_family_index,
+                            ..Default::default()
+                        }],
+                        ..Default::default()
+                    },
+                ).ok()?;
+
+                queues.next().map(|queue| (physical_device, device, queue))
+            })
             .expect("Vulkan: no device can present to this window");
-
-        // give this window its own logical device (with swapchain support) and queue
-        let (device, mut queues) = Device::new(
-            physical_device.clone(),
-            DeviceCreateInfo {
-                enabled_extensions: DeviceExtensions {
-                    khr_swapchain: true, // we need a swapchain to manage repainting the window
-                    ..DeviceExtensions::empty()
-                },
-                queue_create_infos: vec![QueueCreateInfo {
-                    queue_family_index,
-                    ..Default::default()
-                }],
-                ..Default::default()
-            },
-        )
-        .expect("Vulkan: device initialization failed");
-
-        let queue = queues.next().unwrap();
 
         // Create a swapchain to manage frame buffers and vsync
         let (swapchain, _images) = {
@@ -218,7 +218,7 @@ impl VulkanBackend{
                     image_extent: size.into(),
                     ..self.swapchain.create_info()
                 })
-                .expect("failed to recreate swapchain");
+                .expect("Vulkan: Failed to recreate swapchain");
 
             self.swapchain = new_swapchain;
             self.framebuffers = new_images
@@ -276,7 +276,7 @@ impl VulkanBackend{
                     self.swapchain_is_valid = false;
                     return None;
                 }
-                Err(e) => panic!("failed to acquire next image: {e}"),
+                Err(e) => panic!("Vulkan: Failed to acquire next image: {e}"),
             };
 
         match suboptimal{

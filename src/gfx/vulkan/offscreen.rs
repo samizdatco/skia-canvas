@@ -33,14 +33,8 @@ impl VulkanEngine {
 
     pub fn status() -> Value {
         VK_STATUS.get_or_init(||{
-            // test whether a context can be created and do some one-time init if so
-            let context = VulkanContext::new()
-                .and_then(|mut ctx| match ctx.works(){
-                    true => Ok(ctx),
-                    false => Err("Vulkan device was instantiated but unable to render".to_string())
-                });
-
-            match context {
+            match VulkanContext::new() {
+                // if a context can successfully be created, collect info about the GPU
                 Ok(context) => {
                     let device_props = context.physical_device.properties();
                     let gpu_type = match device_props.device_type {
@@ -63,6 +57,7 @@ impl VulkanEngine {
                         "threads": rayon::current_num_threads(),
                     })
                 },
+                // if no working GPUs are available, report the error received
                 Err(msg) => json!({
                     "renderer": "CPU",
                     "api": "Vulkan",
@@ -85,7 +80,7 @@ impl VulkanEngine {
                     // lazily initialize this thread's context...
                     .take()
                     .or_else(|| VulkanContext::new().ok() )
-                    .ok_or("Vulkan initialization failed".to_string())
+                    .ok_or("Vulkan: Initialization failed".to_string())
                     .and_then(|ctx|{
                         f(local_ctx.insert(ctx))
                     })
@@ -145,11 +140,28 @@ pub struct VulkanContext{
 
 impl VulkanContext{
     fn new() -> Result<Self, String> {
-        // use the shared library + instance + memoized offscreen physical-device...
+        let shared = VulkanShared::get()?;
+        let mut failure = "Vulkan: No suitable physical device found".to_string();
+
+        // walk the rank-ordered candidates and keep the first one that initializes *and* can actually render
+        for (physical_device, queue_family_index) in shared.offscreen_devices(){
+            let device_name = physical_device.properties().device_name.clone();
+            match Self::for_device(physical_device, queue_family_index){
+                Ok(mut context) => match context.works(){
+                    true => return Ok(context),
+                    false => failure = format!("Vulkan: {device_name} was instantiated but unable to render"),
+                },
+                Err(msg) => failure = format!("Vulkan: {device_name}: {msg}"),
+            }
+        }
+
+        Err(failure)
+    }
+
+    fn for_device(physical_device:Arc<PhysicalDevice>, queue_family_index:u32) -> Result<Self, String> {
         let shared = VulkanShared::get()?;
         let library = shared.library.clone();
         let instance = shared.instance.clone();
-        let (physical_device, queue_family_index) = shared.offscreen_device();
 
         // ...but create a private logical device, queue, and DirectContext
         let (device, mut queues) = Device::new(
@@ -162,12 +174,12 @@ impl VulkanContext{
                 ..Default::default()
             },
         )
-        .or(Err("Failed to create Vulkan device"))?;
+        .or(Err("Vulkan: Failed to create device"))?;
 
-        let queue = queues.next().ok_or("Failed to create Vulkan graphics queue")?;
+        let queue = queues.next().ok_or("Vulkan: Failed to create graphics queue")?;
 
         let context = make_direct_context(&device, &queue)
-            .ok_or("Failed to create Vulkan backend context")?;
+            .ok_or("Vulkan: Failed to create backend context")?;
 
         let vk_sample_counts = physical_device.properties().framebuffer_color_sample_counts;
         let max_sample_count = context.max_surface_sample_count_for_color_type(
@@ -197,7 +209,7 @@ impl VulkanContext{
 
     pub fn works(&mut self) -> bool{
         self.surface(&ImageInfo::new_n32_premul(
-            ISize::new(100, 100),
+            ISize::new(1, 1),
             Some(ColorSpace::new_srgb()),
         ), &ExportOptions::default()).is_ok()
     }
