@@ -85,9 +85,7 @@ fn to_sk_format(vulkano_format:&VkFormat) -> Option<(vk::Format, ColorType)>{
 struct VulkanShared {
     library: Arc<VulkanLibrary>,
     instance: Arc<Instance>,
-    // the offscreen device+queue can be memoized since all exports will run through it
-    offscreen_physical_device: Arc<PhysicalDevice>,
-    offscreen_queue_family_index: u32,
+    offscreen_candidates: Vec<(Arc<PhysicalDevice>, u32)>,
 }
 
 static VK_SHARED: OnceLock<Result<VulkanShared, String>> = OnceLock::new();
@@ -129,10 +127,10 @@ impl VulkanShared {
                 enabled_extensions,
                 ..Default::default()
             },
-        ).or(Err("Could not create Vulkan instance"))?;
+        ).or(Err("Vulkan: Could not create instance"))?;
 
-        // memoize an offscreen device + queue that will be reused for all exports
-        let (offscreen_physical_device, offscreen_queue_family_index) = instance
+        // collect the offscreen candidates that will be reused for all exports
+        let mut offscreen_candidates:Vec<_> = instance
             .enumerate_physical_devices()
             .or(Err("Vulkan: No physical devices found"))?
             .filter_map(|p| {
@@ -142,36 +140,47 @@ impl VulkanShared {
                     .position(|q| q.queue_flags.intersects(QueueFlags::GRAPHICS))
                     .map(|i| (p, i as u32))
             })
-            .min_by_key(|(p, _)| device_type_rank(p))
-            .ok_or("No suitable Vulkan physical device found")?;
+            .collect();
+        offscreen_candidates.sort_by_key(|(p, _)| device_type_rank(p));
 
-        Ok(Self{ library, instance, offscreen_physical_device, offscreen_queue_family_index })
+        if offscreen_candidates.is_empty(){
+            Err("Vulkan: No suitable physical device found")?
+        }
+
+        Ok(Self{ library, instance, offscreen_candidates })
     }
 
-    // memoized offscreen device with no presentability requirement (for display-less servers and software rasterizers).
-    fn offscreen_device(&self) -> (Arc<PhysicalDevice>, u32) {
-        (self.offscreen_physical_device.clone(), self.offscreen_queue_family_index)
+    // lists offscreen devices (no surface needed), sorted by device class. each device needs to be tested
+    // before being settled on since it's not guaranteed any listed device can actually build a context.
+    fn offscreen_devices(&self) -> impl Iterator<Item = (Arc<PhysicalDevice>, u32)> + '_ {
+        self.offscreen_candidates.iter().cloned()
     }
 
-    // newly-created device that can render to a particular window surface (for hybrid gpu & multi-screen systems)
+    // lists devices that can present to *this* window's surface (which may vary for hybrid-gpu &
+    // multi-screen setups). computed fresh per-surface rather than cached, but ranked by device class
+    // and tried in order until a working device can be found.
     #[cfg(feature = "window")]
-    fn screen_device(&self, surface:&Arc<Surface>) -> Option<(Arc<PhysicalDevice>, u32)> {
-        self.instance
+    fn screen_devices(&self, surface:&Arc<Surface>) -> impl Iterator<Item = (Arc<PhysicalDevice>, u32)> {
+        let mut candidates:Vec<_> = self.instance
             .enumerate_physical_devices()
-            .ok()?
-            .filter(|p| p.supported_extensions().khr_swapchain)
-            .filter_map(|p| {
-                // need a queue family that is both graphics-capable and can present to this surface
-                p.queue_family_properties()
-                    .iter()
-                    .enumerate()
-                    .position(|(i, q)|
-                        q.queue_flags.intersects(QueueFlags::GRAPHICS)
-                            && p.surface_support(i as u32, surface).unwrap_or(false)
-                    )
-                    .map(|i| (p, i as u32))
-            })
-            .min_by_key(|(p, _)| device_type_rank(p))
+            .map(|devices| devices
+                .filter(|p| p.supported_extensions().khr_swapchain)
+                .filter_map(|p| {
+                    // need a queue family that is both graphics-capable and can present to this surface
+                    p.queue_family_properties()
+                        .iter()
+                        .enumerate()
+                        .position(|(i, q)|
+                            q.queue_flags.intersects(QueueFlags::GRAPHICS)
+                                && p.surface_support(i as u32, surface).unwrap_or(false)
+                        )
+                        .map(|i| (p, i as u32))
+                })
+                .collect::<Vec<_>>()
+            )
+            .unwrap_or_default();
+        candidates.sort_by_key(|(p, _)| device_type_rank(p));
+        candidates.into_iter()
     }
 }
 
