@@ -18,6 +18,7 @@ use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
 use crate::gfx::RenderingEngine;
 use crate::gfx::cache::{SurfaceCache, RasterCache};
+use crate::mem;
 
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
@@ -260,6 +261,7 @@ impl Drop for PageRecorder{
 
 pub struct RecordingSurface{
   surface: Option<Surface>,
+  footprint: mem::v8::Footprint,
   depth: usize,
   matte: Option<Color4f>,
   msaa: Option<usize>,
@@ -270,7 +272,7 @@ pub struct RecordingSurface{
 
 impl Default for RecordingSurface{
   fn default() -> Self {
-      Self{surface:None, depth:0, matte:None, msaa:None, gpu:None, color_space:ColorSpace::new_srgb(), density:0.0}
+    Self{surface:None, footprint:mem::v8::Footprint::default(), depth:0, matte:None, msaa:None, gpu:None, color_space:ColorSpace::new_srgb(), density:0.0}
   }
 }
 
@@ -312,6 +314,9 @@ impl RecordingSurface{
         let page_size = page.scaled_dimensions(opts.density);
         let img_info = ImageInfo::new_n32_premul(page_size, opts.color_space.clone());
         self.surface = engine.make_surface(&img_info, &opts).ok();
+
+        let bytes = if self.surface.is_some(){ img_info.compute_min_byte_size() } else { 0 };
+        self.footprint.set(bytes); // record the allocation size for v8
       }
     }
 
