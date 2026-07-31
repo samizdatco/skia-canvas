@@ -13,7 +13,7 @@ pub mod page;
 pub(crate) mod cache;
 
 // rendering engine, CPU/GPU dispatch, and the gpu render thread
-mod engine;
+pub(crate) mod engine;
 
 // backend-selected windowed renderer (only when a gpu backend + window are enabled)
 #[cfg(all(feature = "metal", feature = "window"))]

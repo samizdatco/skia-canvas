@@ -95,11 +95,8 @@ impl MetalEngine {
         )
     }
 
-    // called by the render thread when idle to drop the context & free gpu resources
-    pub fn evict_idle(){
-        MTL_CONTEXT.with_borrow_mut(|cell| {
-            cell.take_if(|engine| engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN);
-        });
+    pub fn retire(){
+        MTL_CONTEXT.with_borrow_mut(|cell| { autoreleasepool(|_| { cell.take(); }); });
     }
 
     // called by the render thread between jobs to expire skia's internal caches

@@ -238,5 +238,12 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("App_setRate", gui::set_rate)?;
   }
 
+  // -- GPU teardown (run by node at exit) -------------------------------------------------------
+
+  cx.export_function("gfx_retireGPU", |mut cx: FunctionContext| {
+      gfx::engine::retire_gpu();
+      Ok(cx.undefined())
+  })?;
+
   Ok(())
 }

@@ -3,7 +3,7 @@ use skia_safe::{gpu::DirectContext, ImageInfo, Surface};
 #[cfg(feature = "window")]
 use skia_safe::Image; // RenderOutcome carries a snapshot destined for the Frame cache
 use serde_json::{json, Value};
-use crate::gfx::page::ExportOptions;
+use crate::gfx::{self, page::ExportOptions};
 use crate::utils::catch_panic;
 
 #[cfg(feature = "metal")]
@@ -28,7 +28,7 @@ impl Engine {
     pub fn make_surface(_info: &ImageInfo, _opts:&ExportOptions) -> Result<Surface, String>{ panic!() }
     pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
     pub fn context_is_idle() -> bool{ false }
-    pub fn evict_idle(){ }
+    pub fn retire(){ }
     pub fn purge_stale(){ }
     pub fn with_cleanup<T>(f: impl FnOnce() -> T) -> T { f() }
 }
@@ -119,7 +119,7 @@ mod render_thread{
     use std::panic::{catch_unwind, AssertUnwindSafe};
     use std::sync::{mpsc, OnceLock};
     use std::time::Duration;
-    use super::Engine;
+    use super::{gfx, Engine};
 
     type Job = Box<dyn FnOnce() + Send>;
     static SENDER: OnceLock<mpsc::Sender<Job>> = OnceLock::new();
@@ -138,10 +138,8 @@ mod render_thread{
                         Ok(job) => { Engine::with_cleanup(|| catch_unwind(AssertUnwindSafe(job)).ok()); },
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             if Engine::context_is_idle(){
-                                // everything derived from the idle context (cached textures,
-                                // recording surfaces) must be released along with it
-                                crate::gfx::cache::evict_idle();
-                                Engine::evict_idle();
+                                gfx::cache::evict_idle(); // free recording surfaces and snapshots
+                                Engine::retire(); // drop the context
                             } else {
                                 Engine::purge_stale(); // trim oldest entries in skia cache
                             }
@@ -180,10 +178,24 @@ mod render_thread{
             tx.send(Box::new(f)).ok();
         }
     }
+
+    pub fn is_running() -> bool { SENDER.get().is_some() }
 }
 
 // fire-and-forget access to the render thread for maintenance of gpu-resident resources
 // (cache seeding, registry removal) from threads that shouldn't block on render traffic
 pub fn render_soon(f: impl FnOnce() + Send + 'static){
     render_thread::post(f)
+}
+
+// retire the gpu context before process shutdown (on the render thread where it lives) so
+// its destructor can run while the driver is still alive. otherwise the thread-local destructor
+// would run at dll-detach on Windows, when it's too late to cleanly shut down.
+pub fn retire_gpu(){
+    if !render_thread::is_running(){ return }
+    render_thread::run(|| {
+        gfx::cache::evict_idle(); // free recording surfaces and snapshots
+        Engine::retire(); // drop the context
+        Ok::<(), String>(())
+    }).ok();
 }
