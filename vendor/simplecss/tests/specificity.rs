@@ -52,3 +52,14 @@ fn spec_08() {
     let selectors = Selector::parse("#x34y").unwrap();
     assert_eq!(selectors.specificity(), [1, 0, 0]);
 }
+
+// skia-canvas: :not() contributes the specificity of its argument.
+#[test]
+fn spec_not() {
+    assert_eq!(Selector::parse("p:not(.cls)").unwrap().specificity(), [0, 1, 1]);
+    assert_eq!(Selector::parse(":not(#id)").unwrap().specificity(), [1, 0, 0]);
+    assert_eq!(
+        Selector::parse("p:not(div > .x)").unwrap().specificity(),
+        [0, 1, 2]
+    );
+}

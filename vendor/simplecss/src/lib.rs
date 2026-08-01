@@ -56,7 +56,8 @@ Since it's very simple we will start with limitations:
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+// skia-canvas: BTreeMap/String/format are used by StyleSheet::resolve_inline (below)
+use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
 use core::fmt;
 
 use log::warn;
@@ -253,6 +254,64 @@ impl<'a> StyleSheet<'a> {
         // Sort the rules by specificity.
         self.rules
             .sort_by_cached_key(|rule| rule.selector.specificity());
+    }
+}
+
+// skia-canvas: cascade key for one declaration; the higher tuple wins. Origin/importance
+// simplified for a static render (no cascade layers / animations / transitions): `!important`
+// beats normal regardless of specificity; within a tier an element's own inline style beats
+// selector rules; then specificity; then source order (later wins).
+type CascadeKey = (bool, bool, [u8; 3], usize);
+
+fn consider<'a>(
+    winners: &mut BTreeMap<&'a str, (CascadeKey, &'a str)>,
+    name: &'a str,
+    value: &'a str,
+    key: CascadeKey,
+) {
+    winners
+        .entry(name)
+        .and_modify(|w| {
+            if key > w.0 {
+                *w = (key, value);
+            }
+        })
+        .or_insert((key, value));
+}
+
+// skia-canvas: cascade resolution — see resolve_inline.
+impl StyleSheet<'_> {
+    /// Resolve the cascade for `element` into a keyword-stripped `prop:value;` string, folding
+    /// the element's existing inline `style=` value (`inline`, or `""`) in as the highest author
+    /// tier. Returns an empty string when nothing applies; otherwise one declaration per property,
+    /// sorted by property name (deterministic).
+    ///
+    /// This resolves specificity, source order, and `!important` itself — rather than relying on a
+    /// downstream last-declaration-wins — and strips `!important` from the emitted values. It's for
+    /// callers that splice the result into a renderer which ignores `!important` (e.g. skia-canvas's
+    /// SVG `<style>` support, where Skia discards any declaration whose value carries the keyword).
+    pub fn resolve_inline<E: Element>(&self, element: &E, inline: &str) -> String {
+        let mut winners: BTreeMap<&str, (CascadeKey, &str)> = BTreeMap::new();
+        let mut order = 0usize; // strict source order → last of equal priority wins
+
+        for rule in self.rules.iter().filter(|r| r.selector.matches(element)) {
+            let spec = rule.selector.specificity();
+            for d in &rule.declarations {
+                consider(&mut winners, d.name, d.value, (d.important, false, spec, order));
+                order += 1;
+            }
+        }
+
+        // the element's own inline style outranks any selector of equal importance
+        for d in DeclarationTokenizer::from(inline) {
+            consider(&mut winners, d.name, d.value, (d.important, true, [u8::MAX; 3], order));
+            order += 1;
+        }
+
+        winners
+            .iter()
+            .map(|(name, (_, value))| format!("{}:{};", name, value))
+            .collect()
     }
 }
 

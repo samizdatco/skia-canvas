@@ -30,8 +30,16 @@ impl Element for XmlNode<'_, '_> {
         self.0.prev_sibling_element().map(XmlNode)
     }
 
+    fn next_sibling_element(&self) -> Option<Self> {
+        self.0.next_sibling_element().map(XmlNode)
+    }
+
     fn has_local_name(&self, local_name: &str) -> bool {
         self.0.tag_name().name() == local_name
+    }
+
+    fn local_name(&self) -> &str {
+        self.0.tag_name().name()
     }
 
     fn attribute_matches(&self, local_name: &str, operator: AttributeOperator<'_>) -> bool {
@@ -41,11 +49,10 @@ impl Element for XmlNode<'_, '_> {
         }
     }
 
-    fn pseudo_class_matches(&self, class: PseudoClass<'_>) -> bool {
-        match class {
-            PseudoClass::FirstChild => self.prev_sibling_element().is_none(),
-            _ => false,
-        }
+    // structural pseudos (:*-child, :*-of-type, :nth-*, :not) are now matched generically by the
+    // crate; only state-dependent ones reach here, and none match under static rendering.
+    fn pseudo_class_matches(&self, _class: PseudoClass<'_>) -> bool {
+        false
     }
 }
 
@@ -506,4 +513,92 @@ fn select_30() {
 fn to_string() {
     let selectors = Selector::parse("a > b").unwrap();
     assert_eq!(selectors.to_string(), "a > b");
+}
+
+// skia-canvas: added structural pseudo-classes, :not(), and the general sibling combinator.
+
+fn ids(doc: &roxmltree::Document<'_>, selector: &str) -> Vec<String> {
+    let mut v: Vec<String> = XmlNode(doc.root_element())
+        .select(selector)
+        .iter()
+        .filter_map(|n| n.attribute("id"))
+        .map(|s| s.to_string())
+        .collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn structural_type_pseudos() {
+    let doc = roxmltree::Document::parse(
+        "<div><p id='p1'/><p id='p2'/><rect id='r1'/><p id='p3'/></div>",
+    )
+    .unwrap();
+    assert_eq!(match_single!(doc, "p:nth-child(2)"), "p2");
+    assert_eq!(match_single!(doc, "p:first-of-type"), "p1");
+    assert_eq!(match_single!(doc, "p:last-of-type"), "p3");
+    assert_eq!(match_single!(doc, "p:nth-of-type(2)"), "p2");
+    assert_eq!(match_single!(doc, "rect:only-of-type"), "r1");
+    assert_eq!(match_single!(doc, "p:last-child"), "p3");
+    match_none!(doc, "p:only-child");
+}
+
+#[test]
+fn nth_child_anb() {
+    let doc = roxmltree::Document::parse(
+        "<div><i id='i1'/><i id='i2'/><i id='i3'/><i id='i4'/></div>",
+    )
+    .unwrap();
+    assert_eq!(ids(&doc, "i:nth-child(odd)"), ["i1", "i3"]);
+    assert_eq!(ids(&doc, "i:nth-child(even)"), ["i2", "i4"]);
+    assert_eq!(ids(&doc, "i:nth-child(2n+1)"), ["i1", "i3"]);
+    assert_eq!(ids(&doc, "i:nth-child(-n+2)"), ["i1", "i2"]);
+    assert_eq!(ids(&doc, "i:nth-last-child(1)"), ["i4"]);
+}
+
+#[test]
+fn not_and_general_sibling() {
+    let doc = roxmltree::Document::parse(
+        "<div><a id='a1'/><b id='b1'/><b id='b2' class='skip'/><b id='b3'/></div>",
+    )
+    .unwrap();
+    // general sibling: all b's after a; adjacent: only the immediate one
+    assert_eq!(ids(&doc, "a ~ b"), ["b1", "b2", "b3"]);
+    assert_eq!(match_single!(doc, "a + b"), "b1");
+    // :not() with a simple inner
+    assert_eq!(ids(&doc, "b:not(.skip)"), ["b1", "b3"]);
+    // :not() with a complex inner (adjacent combinator): excludes the b right after a
+    assert_eq!(ids(&doc, "b:not(a + b)"), ["b2", "b3"]);
+    // :not() with a comma-list is deferred → never matches (graceful skip)
+    match_none!(doc, "b:not(a, b)");
+}
+
+#[test]
+fn resolve_inline_cascade() {
+    let doc = roxmltree::Document::parse("<div><rect id='r' class='x'/></div>").unwrap();
+    let rect = doc.descendants().find(|n| n.has_tag_name("rect")).unwrap();
+    let el = XmlNode(rect);
+
+    // higher specificity wins (#r over .x)
+    assert_eq!(
+        StyleSheet::parse(".x{fill:red} #r{fill:green}").resolve_inline(&el, ""),
+        "fill:green;"
+    );
+    // the element's own inline style beats a normal stylesheet rule
+    assert_eq!(
+        StyleSheet::parse(".x{fill:red}").resolve_inline(&el, "fill:green"),
+        "fill:green;"
+    );
+    // a stylesheet !important beats a normal inline; the keyword is stripped from the output
+    assert_eq!(
+        StyleSheet::parse(".x{fill:green !important}").resolve_inline(&el, "fill:red"),
+        "fill:green;"
+    );
+    // one declaration per property, sorted by name (deterministic)
+    assert_eq!(
+        StyleSheet::parse("rect{fill:green; stroke:blue}").resolve_inline(&el, ""),
+        "fill:green;stroke:blue;"
+    );
+    // nothing applies → empty string
+    assert_eq!(StyleSheet::parse("circle{fill:green}").resolve_inline(&el, ""), "");
 }
