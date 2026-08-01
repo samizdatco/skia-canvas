@@ -452,12 +452,12 @@ pub fn set_miterLimit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 fn _layout_rects(cx: &mut FunctionContext, intrinsic:Size, nums:&[f32]) -> NeonResult<(Rect, Rect)> {
   let (src, dst) = match nums.len() {
-    2 => ( Rect::from_xywh(0.0, 0.0, intrinsic.width, intrinsic.height),
-           Rect::from_xywh(nums[0], nums[1], intrinsic.width, intrinsic.height) ),
-    4 => ( Rect::from_xywh(0.0, 0.0, intrinsic.width, intrinsic.height),
-           Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]) ),
-    8 => ( Rect::from_xywh(nums[0], nums[1], nums[2], nums[3]),
-           Rect::from_xywh(nums[4], nums[5], nums[6], nums[7]) ),
+    2 => ( normalized_rect(0.0, 0.0, intrinsic.width, intrinsic.height),
+           normalized_rect(nums[0], nums[1], intrinsic.width, intrinsic.height) ),
+    4 => ( normalized_rect(0.0, 0.0, intrinsic.width, intrinsic.height),
+           normalized_rect(nums[0], nums[1], nums[2], nums[3]) ),
+    8 => ( normalized_rect(nums[0], nums[1], nums[2], nums[3]),
+           normalized_rect(nums[4], nums[5], nums[6], nums[7]) ),
     9.. => cx.throw_type_error(format!("⚠️Expected 2, 4, or 8 coordinates (got {})", nums.len()))?,
     _ => cx.throw_type_error(format!("not enough arguments: Expected 2, 4, or 8 coordinates (got {})", nums.len()))?
   };
@@ -544,20 +544,16 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut x = float_arg(&mut cx, 1, "x")?.floor();
-  let mut y = float_arg(&mut cx, 2, "y")?.floor();
-  let mut w = float_arg(&mut cx, 3, "width")?.floor();
-  let mut h = float_arg(&mut cx, 4, "height")?.floor();
+  let x = float_arg(&mut cx, 1, "x")?.floor();
+  let y = float_arg(&mut cx, 2, "y")?.floor();
+  let w = float_arg(&mut cx, 3, "width")?.floor();
+  let h = float_arg(&mut cx, 4, "height")?.floor();
   let (color_type, color_space, matte, density, msaa) = image_data_export_arg(&mut cx, 5);
   let parent = cx.argument::<BoxedCanvas>(6)?;
   let canvas = &mut parent.borrow_mut();
 
-  // negative dimensions are valid, just shift the origin and absify
-  if w < 0.0 { x += w; w *= -1.0; }
-  if h < 0.0 { y += h; h *= -1.0; }
-
   let opts = ExportOptions{matte, density, msaa, color_type, color_space, ..canvas.export_options()};
-  let crop = Rect::from_point_and_size((x*density, y*density), (w*density, h*density)).round();
+  let crop = normalized_rect(x*density, y*density, w*density, h*density).round();
   let engine = canvas.engine();
 
   let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type, AlphaType::Unpremul, opts.color_space.clone());
@@ -578,16 +574,14 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   // determine geometry
   let x = float_arg(&mut cx, 2, "dx")?;
   let y = float_arg(&mut cx, 3, "dy")?;
-  let mut dirty = match cx.len(){
+  let dirty = match cx.len(){
     5.. => float_args_at(&mut cx, 4, &["dirtyX", "dirtyY", "dirtyWidth", "dirtyHeight"])?,
     _ => [].to_vec()
   };
-  let (src, dst) = match dirty.as_mut_slice(){
+  let (src, dst) = match dirty.as_slice(){
     [dx, dy, dw, dh] => {
-      // negative dimensions are valid, just shift the origin and absify
-      if *dw < 0.0 { *dw *= -1.0; *dx -= *dw; }
-      if *dh < 0.0 { *dh *= -1.0; *dy -= *dh; }
-      (Rect::from_xywh(*dx, *dy, *dw, *dh), Rect::from_xywh(*dx + x, *dy + y, *dw, *dh))
+      let src = normalized_rect(*dx, *dy, *dw, *dh);
+      (src, src.with_offset((x, y)))
     },
     _ => (
       Rect::from_xywh(0.0, 0.0, img_data.width, img_data.height),

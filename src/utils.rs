@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
 use color::{parse_color, ColorSpaceTag, DynamicColor, Srgb};
-use skia_safe::{ Path, Matrix, Point, Color, Color4f, RGB, Data };
+use skia_safe::{ Path, Matrix, Point, Rect, Color, Color4f, RGB, Data };
 
 //
 // meta-helpers
@@ -318,6 +318,12 @@ pub fn float_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<
 pub fn float_arg_or_bail(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<f32>{
   _float_args_at(cx, idx, &[attr], true)
     .map(|vec| vec.into_iter().nth(0).unwrap())
+}
+
+// build a canvas spec-conforming Rect by normalizing negative width/height dimensions
+// into a sorted (left ≤ right, top ≤ bottom) rectangle
+pub fn normalized_rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
+  Rect::from_ltrb(x.min(x + w), y.min(y + h), x.max(x + w), y.max(y + h))
 }
 
 pub fn floats_to_array<'a>(cx: &mut FunctionContext<'a>, nums: &[f32]) -> JsResult<'a, JsValue> {
