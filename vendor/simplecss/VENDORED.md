@@ -29,5 +29,22 @@ artifacts were dropped when vendoring (`Cargo.toml.orig`, `Cargo.lock`, `.cargo-
 `.cargo_vcs_info.json`); the crate's own `src/`, `tests/`, and `examples/` are intact
 (the standalone suite passes: `cargo test --manifest-path vendor/simplecss/Cargo.toml`).
 
-_(none yet — this commit is the pristine import; modifications land in the following
-change.)_
+All local changes are confined to `src/selector.rs` (the matching semantics for the new
+pseudo-classes live in the downstream `simplecss::Element` impl in skia-canvas's
+`src/image.rs`, not here). Added tests in `tests/select.rs` and `tests/specificity.rs`.
+
+- **Structural pseudo-classes.** New `PseudoClass` variants `LastChild`, `OnlyChild`,
+  `FirstOfType`, `LastOfType`, `OnlyOfType`, and the functional `NthChild`/`NthLastChild`/
+  `NthOfType`/`NthLastOfType` (carrying a new `Nth { a, b }` with `Nth::matches(index)` and
+  a `parse_nth` for the `An+B`/`odd`/`even` micro-syntax).
+- **`:not()`** as `Not(&str)` — stores the argument's source (re-parsed on match) so
+  `PseudoClass` stays `Copy`; accepts a single (possibly complex) inner selector, rejects
+  comma-lists; contributes its argument's specificity in `Selector::specificity()`.
+- **General sibling combinator `~`** — new `Combinator::GeneralSibling` +
+  `SelectorToken::SiblingCombinator`, wired through the tokenizer, parser, `matches_impl`,
+  and `Display`.
+- **Functional-pseudo tokenizing.** The tokenizer now consumes a `(...)` argument for any
+  functional pseudo (not just `:lang`), emitting `SelectorToken::FunctionalPseudoClass`, so
+  the argument can't leak into the stream and corrupt later tokens.
+- **Graceful skip.** An unknown or malformed pseudo becomes `PseudoClass::Unsupported(name)`
+  (never matches) instead of dropping the whole selector — so grouped siblings survive.

@@ -28,8 +28,18 @@ impl simplecss::Element for XmlNode<'_, '_> {
             .map(XmlNode)
     }
 
+    // skia-canvas: added alongside local_name for the extended Element trait
+    fn next_sibling_element(&self) -> Option<Self> {
+        self.0.next_sibling_element().map(XmlNode)
+    }
+
     fn has_local_name(&self, local_name: &str) -> bool {
         self.0.tag_name().name() == local_name
+    }
+
+    // skia-canvas
+    fn local_name(&self) -> &str {
+        self.0.tag_name().name()
     }
 
     fn attribute_matches(

@@ -1,7 +1,7 @@
 // Copyright 2019 the SimpleCSS Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::{vec, vec::Vec};
+use alloc::{string::String, vec, vec::Vec};
 use core::fmt;
 
 use log::warn;
@@ -48,24 +48,82 @@ impl AttributeOperator<'_> {
 #[allow(missing_docs)]
 pub enum PseudoClass<'a> {
     FirstChild,
+    // skia-canvas: structural pseudo-classes beyond upstream's lone :first-child.
+    LastChild,
+    OnlyChild,
+    FirstOfType,
+    LastOfType,
+    OnlyOfType,
+    NthChild(Nth),
+    NthLastChild(Nth),
+    NthOfType(Nth),
+    NthLastOfType(Nth),
+    // skia-canvas: :not() stores its argument's source text (re-parsed on match) so that
+    // PseudoClass stays Copy; comma-separated lists are rejected at parse time, leaving a
+    // single (possibly complex) inner selector.
+    Not(&'a str),
     Link,
     Visited,
     Hover,
     Active,
     Focus,
     Lang(&'a str),
+    // skia-canvas: any unknown/unsupported pseudo (e.g. :target, or a functional pseudo we
+    // don't model). Parses successfully but never matches, so the enclosing rule survives
+    // (graceful skip) instead of being dropped. Carries the name for Display round-tripping.
+    Unsupported(&'a str),
+}
+
+/// skia-canvas: the `An+B` micro-syntax of a functional structural pseudo-class
+/// (e.g. `:nth-child(2n+1)` parses to `Nth { a: 2, b: 1 }`; `odd` = `2n+1`, `even` = `2n`).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Nth {
+    /// The `A` (step) coefficient of `An+B`.
+    pub a: i32,
+    /// The `B` (offset) term of `An+B`.
+    pub b: i32,
+}
+
+impl Nth {
+    /// skia-canvas: does a 1-based sibling index satisfy `An+B` for some integer `n >= 0`?
+    pub fn matches(&self, index: i32) -> bool {
+        if self.a == 0 {
+            index == self.b
+        } else {
+            let diff = index - self.b;
+            diff % self.a == 0 && diff / self.a >= 0
+        }
+    }
+}
+
+impl fmt::Display for Nth {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // not canonical CSS, but re-parses to the same Nth (e.g. "2n+1", "-1n+3").
+        write!(f, "{}n{}{}", self.a, if self.b < 0 { "-" } else { "+" }, self.b.abs())
+    }
 }
 
 impl fmt::Display for PseudoClass<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             PseudoClass::FirstChild => write!(f, "first-child"),
+            PseudoClass::LastChild => write!(f, "last-child"),
+            PseudoClass::OnlyChild => write!(f, "only-child"),
+            PseudoClass::FirstOfType => write!(f, "first-of-type"),
+            PseudoClass::LastOfType => write!(f, "last-of-type"),
+            PseudoClass::OnlyOfType => write!(f, "only-of-type"),
+            PseudoClass::NthChild(n) => write!(f, "nth-child({})", n),
+            PseudoClass::NthLastChild(n) => write!(f, "nth-last-child({})", n),
+            PseudoClass::NthOfType(n) => write!(f, "nth-of-type({})", n),
+            PseudoClass::NthLastOfType(n) => write!(f, "nth-last-of-type({})", n),
+            PseudoClass::Not(inner) => write!(f, "not({})", inner),
             PseudoClass::Link => write!(f, "link"),
             PseudoClass::Visited => write!(f, "visited"),
             PseudoClass::Hover => write!(f, "hover"),
             PseudoClass::Active => write!(f, "active"),
             PseudoClass::Focus => write!(f, "focus"),
             PseudoClass::Lang(lang) => write!(f, "lang({})", lang),
+            PseudoClass::Unsupported(name) => write!(f, "{}", name),
         }
     }
 }
@@ -78,13 +136,29 @@ pub trait Element: Sized {
     /// Returns a previous sibling element.
     fn prev_sibling_element(&self) -> Option<Self>;
 
+    /// skia-canvas: Returns the next sibling element. Needed for the structural pseudo-classes
+    /// that look forward — `:last-child`, `:only-child`, `:nth-last-child`, and the
+    /// `:*-of-type` family (upstream only had `prev_sibling_element`, hence only `:first-child`).
+    fn next_sibling_element(&self) -> Option<Self>;
+
     /// Checks that the element has a specified local name.
     fn has_local_name(&self, name: &str) -> bool;
+
+    /// skia-canvas: Returns the element's own local name. Needed to compare sibling types for
+    /// the `:*-of-type` pseudo-classes (`has_local_name` can't, since the generic matcher has
+    /// no name of its own to pass).
+    fn local_name(&self) -> &str;
 
     /// Checks that the element has a specified attribute.
     fn attribute_matches(&self, local_name: &str, operator: AttributeOperator<'_>) -> bool;
 
     /// Checks that the element matches a specified pseudo-class.
+    ///
+    /// skia-canvas: only *state-dependent* pseudo-classes reach this method now
+    /// (`:hover`/`:focus`/`:active`/`:target`/`:link`/`:visited` and unsupported ones). The
+    /// structural pseudos (`:*-child`, `:*-of-type`, `:nth-*`, `:not`) are matched generically
+    /// by the crate via the sibling/name accessors above, so impls that only do static
+    /// rendering can return `false` here.
     fn pseudo_class_matches(&self, class: PseudoClass<'_>) -> bool;
 }
 
@@ -112,6 +186,8 @@ enum Combinator {
     Descendant,
     Child,
     AdjacentSibling,
+    // skia-canvas: general sibling combinator `~`
+    GeneralSibling,
 }
 
 #[derive(Clone, Debug)]
@@ -151,6 +227,16 @@ impl<'a> Selector<'a> {
             for sub in &selector.subselectors {
                 match sub {
                     SubSelector::Attribute("id", _) => spec[0] = spec[0].saturating_add(1),
+                    // skia-canvas: :not() contributes the specificity of its argument, not
+                    // of the pseudo itself (CSS Selectors L3/L4).
+                    SubSelector::PseudoClass(PseudoClass::Not(inner)) => {
+                        if let Some(sel) = Selector::parse(inner) {
+                            let s = sel.specificity();
+                            spec[0] = spec[0].saturating_add(s[0]);
+                            spec[1] = spec[1].saturating_add(s[1]);
+                            spec[2] = spec[2].saturating_add(s[2]);
+                        }
+                    }
                     _ => spec[1] = spec[1].saturating_add(1),
                 }
             }
@@ -209,6 +295,19 @@ impl<'a> Selector<'a> {
 
                 false
             }
+            // skia-canvas: general sibling `~` — any preceding sibling may match
+            Combinator::GeneralSibling => {
+                let mut prev = element.prev_sibling_element();
+                while let Some(e) = prev {
+                    if self.matches_impl(idx - 1, &e) {
+                        return true;
+                    }
+
+                    prev = e.prev_sibling_element();
+                }
+
+                false
+            }
             Combinator::None => true,
         }
     }
@@ -229,7 +328,7 @@ fn match_selector<E: Element>(selector: &SimpleSelector<'_>, element: &E) -> boo
                 }
             }
             SubSelector::PseudoClass(class) => {
-                if !element.pseudo_class_matches(*class) {
+                if !match_pseudo_class(*class, element) {
                     return false;
                 }
             }
@@ -237,6 +336,82 @@ fn match_selector<E: Element>(selector: &SimpleSelector<'_>, element: &E) -> boo
     }
 
     true
+}
+
+// skia-canvas: structural & negation pseudo-classes are purely positional, so the crate matches
+// them generically here (via the Element sibling/name accessors). Only state-dependent pseudos
+// (:hover/:focus/:target/… and unsupported ones) are delegated to the downstream impl — which,
+// for a static renderer, returns false.
+fn match_pseudo_class<E: Element>(class: PseudoClass<'_>, element: &E) -> bool {
+    match class {
+        PseudoClass::FirstChild => element.prev_sibling_element().is_none(),
+        PseudoClass::LastChild => element.next_sibling_element().is_none(),
+        PseudoClass::OnlyChild => {
+            element.prev_sibling_element().is_none() && element.next_sibling_element().is_none()
+        }
+        PseudoClass::FirstOfType => !has_type_sibling(element, true),
+        PseudoClass::LastOfType => !has_type_sibling(element, false),
+        PseudoClass::OnlyOfType => {
+            !has_type_sibling(element, true) && !has_type_sibling(element, false)
+        }
+        PseudoClass::NthChild(nth) => nth.matches(nth_index(element, true, false)),
+        PseudoClass::NthLastChild(nth) => nth.matches(nth_index(element, false, false)),
+        PseudoClass::NthOfType(nth) => nth.matches(nth_index(element, true, true)),
+        PseudoClass::NthLastOfType(nth) => nth.matches(nth_index(element, false, true)),
+        PseudoClass::Not(inner) => Selector::parse(inner).map_or(false, |s| !s.matches(element)),
+        // state-dependent — only the downstream impl can decide (false under static rendering)
+        PseudoClass::Link
+        | PseudoClass::Visited
+        | PseudoClass::Hover
+        | PseudoClass::Active
+        | PseudoClass::Focus
+        | PseudoClass::Lang(_)
+        | PseudoClass::Unsupported(_) => element.pseudo_class_matches(class),
+    }
+}
+
+// skia-canvas: 1-based sibling index of `element`, counted from the start (`forward`) or the end,
+// over all element siblings (`same_type == false`) or only those sharing its local name.
+fn nth_index<E: Element>(element: &E, forward: bool, same_type: bool) -> i32 {
+    let name = element.local_name();
+    let mut i = 1;
+    let mut sib = if forward {
+        element.prev_sibling_element()
+    } else {
+        element.next_sibling_element()
+    };
+    while let Some(s) = sib {
+        if !same_type || s.local_name() == name {
+            i += 1;
+        }
+        sib = if forward {
+            s.prev_sibling_element()
+        } else {
+            s.next_sibling_element()
+        };
+    }
+    i
+}
+
+// skia-canvas: whether `element` has a sibling of the same local name before it (`forward`) or after.
+fn has_type_sibling<E: Element>(element: &E, forward: bool) -> bool {
+    let name = element.local_name();
+    let mut sib = if forward {
+        element.prev_sibling_element()
+    } else {
+        element.next_sibling_element()
+    };
+    while let Some(s) = sib {
+        if s.local_name() == name {
+            return true;
+        }
+        sib = if forward {
+            s.prev_sibling_element()
+        } else {
+            s.next_sibling_element()
+        };
+    }
+    false
 }
 
 pub(crate) fn parse(text: &str) -> (Option<Selector<'_>>, usize) {
@@ -309,14 +484,23 @@ pub(crate) fn parse(text: &str) -> (Option<Selector<'_>>, usize) {
             SelectorToken::PseudoClass(ident) => {
                 let class = match ident {
                     "first-child" => PseudoClass::FirstChild,
+                    // skia-canvas: additional structural pseudo-classes
+                    "last-child" => PseudoClass::LastChild,
+                    "only-child" => PseudoClass::OnlyChild,
+                    "first-of-type" => PseudoClass::FirstOfType,
+                    "last-of-type" => PseudoClass::LastOfType,
+                    "only-of-type" => PseudoClass::OnlyOfType,
                     "link" => PseudoClass::Link,
                     "visited" => PseudoClass::Visited,
                     "hover" => PseudoClass::Hover,
                     "active" => PseudoClass::Active,
                     "focus" => PseudoClass::Focus,
+                    // skia-canvas: graceful skip — an unknown pseudo (e.g. :target) becomes a
+                    // never-matching subselector so the rule and its grouped siblings survive,
+                    // rather than dropping the whole selector as upstream did.
                     _ => {
-                        warn!("':{}' is not supported. Selector skipped.", ident);
-                        return (None, tokenizer.stream.pos());
+                        warn!("':{}' is not supported; treated as never-matching.", ident);
+                        PseudoClass::Unsupported(ident)
                     }
                 };
 
@@ -324,6 +508,21 @@ pub(crate) fn parse(text: &str) -> (Option<Selector<'_>>, usize) {
                 // TODO: order
 
                 add_sub(SubSelector::PseudoClass(class));
+            }
+            // skia-canvas: functional pseudo-classes (:nth-*(An+B), :not(...)). A malformed or
+            // unmodeled one becomes Unsupported (never matches) instead of dropping the rule.
+            SelectorToken::FunctionalPseudoClass(name, args) => {
+                let class = match name {
+                    "nth-child" => parse_nth(args).map(PseudoClass::NthChild),
+                    "nth-last-child" => parse_nth(args).map(PseudoClass::NthLastChild),
+                    "nth-of-type" => parse_nth(args).map(PseudoClass::NthOfType),
+                    "nth-last-of-type" => parse_nth(args).map(PseudoClass::NthLastOfType),
+                    "not" => parse_not(args),
+                    _ => None,
+                };
+                add_sub(SubSelector::PseudoClass(
+                    class.unwrap_or(PseudoClass::Unsupported(name)),
+                ));
             }
             SelectorToken::LangPseudoClass(lang) => {
                 add_sub(SubSelector::PseudoClass(PseudoClass::Lang(lang)));
@@ -336,6 +535,10 @@ pub(crate) fn parse(text: &str) -> (Option<Selector<'_>>, usize) {
             }
             SelectorToken::AdjacentCombinator => {
                 combinator = Combinator::AdjacentSibling;
+            }
+            // skia-canvas: general sibling `~`
+            SelectorToken::SiblingCombinator => {
+                combinator = Combinator::GeneralSibling;
             }
         }
     }
@@ -355,6 +558,55 @@ pub(crate) fn parse(text: &str) -> (Option<Selector<'_>>, usize) {
     }
 }
 
+// skia-canvas: parse the `An+B` argument of a :nth-* pseudo into an `Nth`. Accepts `odd`,
+// `even`, a bare integer `B`, and the `n`, `-n`, `An`, `An+B`, `An-B` forms with arbitrary
+// internal whitespace. Returns None for anything malformed (→ graceful skip by the caller).
+fn parse_nth(text: &str) -> Option<Nth> {
+    let clean: String = text
+        .bytes()
+        .filter(|b| !b.is_ascii_whitespace())
+        .map(|b| b.to_ascii_lowercase() as char)
+        .collect();
+
+    match clean.as_str() {
+        "odd" => return Some(Nth { a: 2, b: 1 }),
+        "even" => return Some(Nth { a: 2, b: 0 }),
+        _ => {}
+    }
+
+    if let Some(n_pos) = clean.find('n') {
+        let a = match &clean[..n_pos] {
+            "" | "+" => 1,
+            "-" => -1,
+            a_str => a_str.parse::<i32>().ok()?,
+        };
+        let b_str = &clean[n_pos + 1..];
+        let b = if b_str.is_empty() {
+            0
+        } else {
+            b_str.parse::<i32>().ok()?
+        };
+        Some(Nth { a, b })
+    } else {
+        Some(Nth {
+            a: 0,
+            b: clean.parse::<i32>().ok()?,
+        })
+    }
+}
+
+// skia-canvas: validate the argument of :not(). We accept a single (possibly complex)
+// selector and store its source slice for re-parsing at match time (keeping PseudoClass
+// Copy). Comma-separated selector lists and empty/garbage arguments return None, so the
+// caller treats the pseudo as never-matching rather than partially applying it.
+fn parse_not(args: &str) -> Option<PseudoClass<'_>> {
+    let trimmed = args.trim();
+    if trimmed.is_empty() || trimmed.contains(',') {
+        return None;
+    }
+    Selector::parse(trimmed).map(|_| PseudoClass::Not(trimmed))
+}
+
 impl fmt::Display for Selector<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for component in &self.components {
@@ -362,6 +614,7 @@ impl fmt::Display for Selector<'_> {
                 Combinator::Descendant => write!(f, " ")?,
                 Combinator::Child => write!(f, " > ")?,
                 Combinator::AdjacentSibling => write!(f, " + ")?,
+                Combinator::GeneralSibling => write!(f, " ~ ")?,
                 Combinator::None => {}
             }
 
@@ -421,6 +674,9 @@ pub enum SelectorToken<'a> {
     /// `:lang(en)`
     LangPseudoClass(&'a str),
 
+    /// skia-canvas: `:nth-child(2n+1)` — a functional pseudo-class and its raw argument
+    FunctionalPseudoClass(&'a str, &'a str),
+
     /// `a b`
     DescendantCombinator,
 
@@ -429,6 +685,9 @@ pub enum SelectorToken<'a> {
 
     /// `a + b`
     AdjacentCombinator,
+
+    /// skia-canvas: `a ~ b`
+    SiblingCombinator,
 }
 
 /// A selector tokenizer.
@@ -548,17 +807,25 @@ impl<'a> Iterator for SelectorTokenizer<'a> {
                 self.stream.advance(1);
                 let ident = try2!(self.stream.consume_ident());
 
-                if ident == "lang" {
-                    try2!(self.stream.consume_byte(b'('));
-                    let lang = self.stream.consume_bytes(|c| c != b')').trim();
+                // skia-canvas: a `(...)` argument marks a functional pseudo-class. Consume it
+                // here (upstream only special-cased :lang) so the argument can't leak into the
+                // stream and corrupt later tokens. Scanned flat to the first `)`, which suffices
+                // for An+B and the single, non-nested selectors we model inside :not().
+                if self.stream.curr_byte() == Ok(b'(') {
+                    self.stream.advance(1);
+                    let args = self.stream.consume_bytes(|c| c != b')');
                     try2!(self.stream.consume_byte(b')'));
 
-                    if lang.is_empty() {
-                        self.finished = true;
-                        return Some(Err(Error::InvalidLanguagePseudoClass));
+                    if ident == "lang" {
+                        let lang = args.trim();
+                        if lang.is_empty() {
+                            self.finished = true;
+                            return Some(Err(Error::InvalidLanguagePseudoClass));
+                        }
+                        return Some(Ok(SelectorToken::LangPseudoClass(lang)));
                     }
 
-                    Some(Ok(SelectorToken::LangPseudoClass(lang)))
+                    Some(Ok(SelectorToken::FunctionalPseudoClass(ident, args)))
                 } else {
                     Some(Ok(SelectorToken::PseudoClass(ident)))
                 }
@@ -585,6 +852,19 @@ impl<'a> Iterator for SelectorTokenizer<'a> {
                 self.after_combinator = true;
                 Some(Ok(SelectorToken::AdjacentCombinator))
             }
+            // skia-canvas: general sibling `~`. Unambiguous at the top level: the `[a~=v]`
+            // form is consumed inside the `[` branch, so a `~` reaching here is a combinator.
+            b'~' => {
+                if self.after_combinator {
+                    self.after_combinator = false;
+                    self.finished = true;
+                    return Some(Err(Error::UnexpectedCombinator));
+                }
+
+                self.stream.advance(1);
+                self.after_combinator = true;
+                Some(Ok(SelectorToken::SiblingCombinator))
+            }
             b' ' | b'\t' | b'\n' | b'\r' | b'\x0C' => {
                 self.stream.skip_spaces();
 
@@ -598,7 +878,8 @@ impl<'a> Iterator for SelectorTokenizer<'a> {
                 }
 
                 match self.stream.curr_byte() {
-                    Ok(b'>') | Ok(b'+') | Ok(b',') | Ok(b'{') | Err(_) => self.next(),
+                    // skia-canvas: `~` added so `a ~ b` doesn't emit a spurious descendant
+                    Ok(b'>') | Ok(b'+') | Ok(b'~') | Ok(b',') | Ok(b'{') | Err(_) => self.next(),
                     _ => {
                         if self.after_combinator {
                             self.after_combinator = false;
