@@ -1056,8 +1056,12 @@ use skia_safe::PathFillType;
 pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> NeonResult<PathFillType>{
   let err_msg = format!("Expected `fillRule` to be \"nonzero\" or \"evenodd\" for {} arg", arg_num(idx));
 
-  // if arg is provided, verify that it's a string (if absent use default val)
+  // if arg is provided, verify that it's a string (if absent use default val). An explicit
+  // `undefined` is treated as a missing optional arg per WebIDL — so clip(undefined) / fill(undefined)
+  // / isPointInPath(…, undefined) fall back to the default rule rather than throwing. (Verified
+  // against Chrome: `undefined` behaves as the default "nonzero"; `null` and bogus strings throw.)
   let mode = match cx.argument_opt(idx) {
+    Some(arg) if arg.is_a::<JsUndefined, _>(cx) => Ok(default.to_string()),
     Some(arg) => match arg.downcast::<JsString, _>(cx) {
       Ok(v) => Ok(v.value(cx)),
       Err(_e) => cx.throw_type_error(&err_msg)
