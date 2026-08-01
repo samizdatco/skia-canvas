@@ -231,7 +231,7 @@ impl PageRecorder{
     // if the cached page image is gpu-backed (or an export has used a gpu surface)
     // the buffers can only be dropped on the render thread
     let id = self.id;
-    let cache = RasterCache::drop(id);
+    let cache = RasterCache::evict(id);
     let texture_backed = cache.as_ref()
       .map(|c| c.is_texture_backed())
       .unwrap_or(false);
@@ -239,7 +239,7 @@ impl PageRecorder{
     if texture_backed || self.has_gpu_surface{
       crate::gfx::render_soon(move ||{
         drop(cache); // may release a texture-backed SkImage — must happen here, on the render thread
-        SurfaceCache::drop(id);
+        SurfaceCache::evict(id);
       });
       self.has_gpu_surface = false;
     }

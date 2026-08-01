@@ -69,7 +69,7 @@ pub fn get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
 
 pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  this.borrow_mut().engine = None; // potentially release gpu rendering context
+  this.borrow_mut().engine = None; // drop the (potentially GPU-backed) rendering context
   mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(cx.undefined())
 }

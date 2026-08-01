@@ -25,10 +25,10 @@ use skia_safe::{Color, Rect, Matrix};
 #[cfg(feature = "window")]
 use crate::gfx::page::Page;
 
-// release every gpu-derived cache resource: called by the render thread just before it releases an
+// evict every gpu-derived cache resource: called by the render thread just before it retires an
 // idle gpu context, since both live surfaces and texture-backed snapshots are bound to that context
 pub fn evict_idle(){
-  SurfaceCache::evict();
+  SurfaceCache::evict_all();
   RasterCache::evict_textures();
 }
 
@@ -55,14 +55,14 @@ impl SurfaceCache{
     RECORDING_SURFACES.with_borrow_mut(|surfaces| surfaces.get_mut(&id).map(f))
   }
 
-  // drop the surface for a single recorder (its PageRecorder is being released/dropped)
-  pub fn drop(id:usize){
+  // evict the surface for a single recorder (its PageRecorder is being released)
+  pub fn evict(id:usize){
     RECORDING_SURFACES.with_borrow_mut(|surfaces|{ surfaces.remove(&id); })
   }
 
-  // drop every recording surface: called by the render thread just before it releases an idle gpu
-  // context, since everything derived from that context must be released along with it
-  pub fn evict(){
+  // evict every recording surface: called by the render thread just before it retires an idle gpu
+  // context, since everything derived from that context must be evicted along with it
+  pub fn evict_all(){
     RECORDING_SURFACES.with_borrow_mut(|surfaces| surfaces.clear());
   }
 }
@@ -84,8 +84,8 @@ impl RasterCache{
     Self::shared().insert(id, Raster::default());
   }
 
-  // remove the entry but also return it (in case it contains textures that need to be dropped on the render thread)
-  pub fn drop(id:usize) -> Option<Raster>{
+  // evict the entry but also return it (in case it contains textures that need to be dropped on the render thread)
+  pub fn evict(id:usize) -> Option<Raster>{
     Self::shared().remove(&id).map(|(_, cache)| cache)
   }
 
@@ -110,7 +110,7 @@ impl RasterCache{
     });
   }
 
-  // drop texture-backed cache entries: called by the render thread just before it releases an idle
+  // evict texture-backed cache entries: called by the render thread just before it retires an idle
   // gpu context, since the textures those entries hold are derived from that context
   pub fn evict_textures(){
     Self::shared().iter_mut().for_each(|mut raster|{
