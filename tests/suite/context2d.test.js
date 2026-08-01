@@ -1293,6 +1293,26 @@ describe("Context2D", ()=>{
       assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), GREEN)
       assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), GREEN)
       assert.deepEqual(pixel(WIDTH/2, HEIGHT/2), CLEAR)
+
+      // negative dest / source dimensions: the rect normalizes to a sorted corner-pair
+      // (relocate), and content is never mirrored — verified to match browsers. [#283/#283b]
+      let asym = new Canvas(2, 2), asymCtx = asym.getContext('2d')
+      asymCtx.fillStyle = 'green'; asymCtx.fillRect(0, 0, 2, 2)
+      asymCtx.fillStyle = 'white'; asymCtx.fillRect(0, 0, 1, 1) // marker in the TOP-LEFT cell only
+
+      // negative dest w/h: dest (12,12)+(-2,-2) normalizes to the (10,10)-(12,12) rect
+      ctx.clearRect(0,0,WIDTH,HEIGHT)
+      ctx.drawImage(asym, 12, 12, -2, -2)
+      assert.deepEqual(pixel(10, 10), WHITE)  // top-left marker stays top-left (no mirror)
+      assert.deepEqual(pixel(11, 10), GREEN)
+      assert.deepEqual(pixel(10, 11), GREEN)
+      assert.deepEqual(pixel(13, 13), CLEAR)  // nothing painted in the positive direction
+
+      // negative source w/h (9-arg): src (2,2)+(-2,-2) normalizes to the full (0,0,2,2)
+      ctx.clearRect(0,0,WIDTH,HEIGHT)
+      ctx.drawImage(asym, 2, 2, -2, -2, 20, 20, 2, 2)
+      assert.deepEqual(pixel(20, 20), WHITE)  // marker preserved → source sampled, not mirrored
+      assert.deepEqual(pixel(21, 20), GREEN)
     })
 
     test('drawCanvas()', async () => {
@@ -1331,6 +1351,16 @@ describe("Context2D", ()=>{
       assert.deepEqual(pixel(0, 1), GREEN)
       assert.deepEqual(pixel(1, 0), GREEN)
       assert.deepEqual(pixel(1, 1), GREEN)
+
+      // negative dest dims normalize to a sorted corner-pair (relocate, no mirror) [#283]
+      let asym = new Canvas(2, 2), asymCtx = asym.getContext('2d')
+      asymCtx.fillStyle = 'green'; asymCtx.fillRect(0, 0, 2, 2)
+      asymCtx.fillStyle = 'white'; asymCtx.fillRect(0, 0, 1, 1) // marker in the TOP-LEFT cell only
+      ctx.clearRect(0,0,WIDTH,HEIGHT)
+      ctx.drawCanvas(asym, 12, 12, -2, -2)      // → the (10,10)-(12,12) rect
+      assert.deepEqual(pixel(10, 10), WHITE)    // top-left marker stays top-left
+      assert.deepEqual(pixel(11, 10), GREEN)
+      assert.deepEqual(pixel(13, 13), CLEAR)    // nothing in the positive direction
 
       let image = await loadAsset('checkers.png')
       assert.doesNotThrow( () => ctx.drawCanvas(image, 0, 0) )

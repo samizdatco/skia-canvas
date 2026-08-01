@@ -126,7 +126,7 @@ describe("DOMRect", ()=>{
     assert.deepEqual([r.x, r.y, r.width, r.height], [1, 2, 3, 4])
   })
 
-  test("normalizes negative dimensions", {skip:true}, () => {
+  test("normalizes negative dimensions", () => {
     // currently failing: the spec defines left/top as min(x, x+width)/min(y, y+height)
     // but the getters in classes/geometry.js return x/y as-is
     let r = new DOMRect(10, 20, -30, -40)
