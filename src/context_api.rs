@@ -74,7 +74,7 @@ pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  this.borrow_mut().dispose(); // free the PageRecorder & its RasterCache buffer
+  this.borrow_mut().release(); // free the PageRecorder & its RasterCache buffer
   mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(cx.undefined())
 }

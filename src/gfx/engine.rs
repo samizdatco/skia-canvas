@@ -141,7 +141,7 @@ mod render_thread{
                                 gfx::cache::evict_idle(); // free recording surfaces and snapshots
                                 Engine::retire(); // drop the context
                             } else {
-                                Engine::purge_stale(); // trim oldest entries in skia cache
+                                Engine::purge_stale(); // trim oldest entries in skia's internal cache
                             }
                         },
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,

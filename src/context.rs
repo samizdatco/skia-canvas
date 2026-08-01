@@ -214,9 +214,9 @@ impl Context2D{
   }
 
   // Synchronously release all internal Skia state (rather than waiting until for the next event
-  // loop tick gets around to calling Drop). Drawing post-dispose will be ignored on the rust side
+  // loop tick gets around to calling Drop). Drawing post-release will be ignored on the rust side
   // and should be prevented by a js-side TypeError anyway.
-  pub fn dispose(&mut self){
+  pub fn release(&mut self){
     self.recorder.borrow_mut().release();
     self.stack.clear();
     self.stack.shrink_to_fit();
