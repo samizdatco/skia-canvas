@@ -563,7 +563,7 @@ impl Context2D{
       self.with_canvas(|canvas| {
         let paint = Paint::default();
         let mut eraser = Paint::default();
-        canvas.restore_to_count(1); // discard current matrix & clip
+        canvas.restore_to_count(1).save(); // discard current matrix & clip and create clean stack
         eraser.set_blend_mode(BlendMode::Clear);
         canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &eraser);
         canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &paint);
