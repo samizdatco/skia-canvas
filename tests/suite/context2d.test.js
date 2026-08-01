@@ -1467,6 +1467,22 @@ describe("Context2D", ()=>{
         'lighter 20px Arial': { size: 20, weight: 300, family: ['Arial'] },
         'normal normal normal 16px Impact': { size: 16, weight: 400, family: ['Impact'], style: 'normal', variant: 'normal' },
         'italic small-caps bolder 16px cursive': { size: 16, style: 'italic', variant: 'small-caps', weight: 800, family: ['cursive'] },
+        // `normal` is a no-op token in the shorthand: it must not cancel a sub-property that a
+        // preceding (or following) keyword already set — regression guards for #278.
+        'italic normal 20px Arial': { size: 20, style: 'italic', family: ['Arial'] },
+        'bold normal 20px Arial': { size: 20, weight: 700, family: ['Arial'] },
+        'small-caps normal 20px Arial': { size: 20, variant: 'small-caps', family: ['Arial'] },
+        'oblique normal 20px Arial': { size: 20, style: 'oblique', family: ['Arial'] },
+        'normal italic 20px Arial': { size: 20, style: 'italic', family: ['Arial'] }, // normal before the keyword
+        'italic normal bold 20px Arial': { size: 20, style: 'italic', weight: 700, family: ['Arial'] }, // normal wedged between two
+        // upper bound of the numeric weight range (1–1000)
+        '1000 20px Arial': { size: 20, weight: 1000, family: ['Arial'] },
+        // line-height component (`size/line-height`), incl. the `normal` (1.2×) keyword
+        '16px/1.5 Arial': { size: 16, lineHeight: 24, family: ['Arial'] },
+        '16px/normal Arial': { size: 16, lineHeight: 19.2, family: ['Arial'] },
+        // font-stretch: intentionally supported beyond Chrome's canvas (which silently drops it)
+        'condensed 20px Arial': { size: 20, stretch: 'condensed', family: ['Arial'] },
+        'italic small-caps 300 condensed 20px Arial': { size: 20, style: 'italic', variant: 'small-caps', weight: 300, stretch: 'condensed', family: ['Arial'] },
         '20px "new century schoolbook", serif': { size: 20, family: ['new century schoolbook','serif'] },
         '20px "Arial bold 300"': { size: 20, family: ['Arial bold 300'], variant: 'normal' }, // synthetic case with weight keyword inside family
         'italic\n16px\nArial': { size: 16, style: 'italic', family: ['Arial'] },
