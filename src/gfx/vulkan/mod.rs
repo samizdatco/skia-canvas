@@ -7,7 +7,7 @@ use vulkano::{
     },
     format::Format as VkFormat,
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo, InstanceExtensions},
-    VulkanLibrary, VulkanObject,
+    Version, VulkanLibrary, VulkanObject,
 };
 #[cfg(feature = "window")]
 use vulkano::swapchain::Surface;
@@ -133,6 +133,7 @@ impl VulkanShared {
         let mut offscreen_candidates:Vec<_> = instance
             .enumerate_physical_devices()
             .or(Err("Vulkan: No physical devices found"))?
+            .filter(|p| p.api_version() >= SKIA_MIN_VULKAN)
             .filter_map(|p| {
                 // find a graphics-capable queue family, skipping devices that lack one
                 p.queue_family_properties()
@@ -164,6 +165,7 @@ impl VulkanShared {
         let mut candidates:Vec<_> = self.instance
             .enumerate_physical_devices()
             .map(|devices| devices
+                .filter(|p| p.api_version() >= SKIA_MIN_VULKAN)
                 .filter(|p| p.supported_extensions().khr_swapchain)
                 .filter_map(|p| {
                     // need a queue family that is both graphics-capable and can present to this surface
@@ -183,6 +185,12 @@ impl VulkanShared {
         candidates.into_iter()
     }
 }
+
+// Skia's Vulkan backend requires Vulkan 1.1 as its minimum supported API version. This isn't
+// exposed as a constant by skia-safe and is only documented in `gpu::vk::BackendContext::new`, so
+// re-check against that doc on any skia-safe upgrade. When confronted with a device below the cutoff
+// Skia will simply abort the whole process. See #289.
+const SKIA_MIN_VULKAN: Version = Version::V1_1;
 
 // choose the fastest general class of device
 fn device_type_rank(device: &PhysicalDevice) -> u8 {
