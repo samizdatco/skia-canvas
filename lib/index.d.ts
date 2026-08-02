@@ -45,13 +45,6 @@ interface DOMPointReadOnly {
   toJSON(): any;
 }
 
-declare var DOMPointReadOnly: {
-  prototype: DOMPointReadOnly;
-  new(x?: number, y?: number, z?: number, w?: number): DOMPointReadOnly;
-  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMPointReadOnly/fromPoint_static) */
-  fromPoint(other?: DOMPointInit): DOMPointReadOnly;
-};
-
 
 /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRect) */
 interface DOMRect extends DOMRectReadOnly {
@@ -81,11 +74,6 @@ interface DOMRectList {
   [index: number]: DOMRect;
 }
 
-declare var DOMRectList: {
-  prototype: DOMRectList;
-  new(): DOMRectList;
-};
-
 /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRectReadOnly) */
 interface DOMRectReadOnly {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRectReadOnly/bottom) */
@@ -107,30 +95,29 @@ interface DOMRectReadOnly {
   toJSON(): any;
 }
 
-declare var DOMRectReadOnly: {
-  prototype: DOMRectReadOnly;
-  new(x?: number, y?: number, width?: number, height?: number): DOMRectReadOnly;
-  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRectReadOnly/fromRect_static) */
-  fromRect(other?: DOMRectInit): DOMRectReadOnly;
-};
-
 
 //
 // Images
 //
 
-export function loadImage(src: string | URL, options?: RequestInit): Promise<Image>
+/** Options passed to Node's `http`/`https` request when fetching images from remote URLs */
+export type ImageRequestOptions = import("https").RequestOptions & {
+  /** Optional request body (sent via `request.write()`) */
+  body?: string | Buffer
+}
+
+export function loadImage(src: string | URL, options?: ImageRequestOptions): Promise<Image>
 export function loadImage(src: Sharp | Buffer): Promise<Image>
 
 export function loadImageData(src: string | Buffer | URL, width: number, height?:number): Promise<ImageData>
-export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
+export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & ImageRequestOptions): Promise<ImageData>
 export function loadImageData(src: Sharp): Promise<ImageData>
 
 export type ColorSpace = "srgb" | "display-p3"
 export type ColorType = "Alpha8" | "Gray8" | "R8UNorm" | // 1 byte/px
   "A16Float" | "A16UNorm" | "ARGB4444" | "R8G8UNorm" | "RGB565" | // 2 bytes/px
   "rgb"|"RGB888x" | "rgba"|"RGBA8888" | "bgra"|"BGRA8888" | "BGR101010x" | "BGRA1010102" | // 4 bytes/px
-  "R16G16Float" | "R16G16UNorm" | "RGB101010x" | "RGBA1010102" | "RGBA8888" |  "SRGBA8888" | // 4 bytes/px
+  "R16G16Float" | "R16G16UNorm" | "RGB101010x" | "RGBA1010102" | "SRGBA8888" | // 4 bytes/px
   "R16G16B16A16UNorm" | "RGBAF16" | "RGBAF16Norm" | // 8 bytes/px
   "RGBAF32" // 16 bytes/px
 
@@ -141,7 +128,7 @@ interface ImageDataSettings {
 
 interface ImageDataExportSettings {
   /** Background color to draw beneath transparent parts of the canvas */
-  matte?: string
+  matte?: CSSColor
 
   /** Number of pixels per grid ‘point’ (defaults to 1) */
   density?: number
@@ -166,6 +153,7 @@ export class ImageData {
 
   readonly colorSpace: ColorSpace
   readonly colorType: ColorType
+  readonly bytesPerPixel: number
   readonly data: Uint8ClampedArray
   readonly height: number
   readonly width: number
@@ -180,8 +168,12 @@ export class Image extends EventEmitter{
   get height(): number
   onload: ((this: Image, image: Image) => any) | null;
   onerror: ((this: Image, error: Error) => any) | null;
-  complete: boolean
+  readonly complete: boolean
   decode(): Promise<Image>
+
+  /** Release native state synchronously rather than waiting for the GC's deferred finalizers. The image may no longer be used after disposal. Can also be triggered via `using`. */
+  dispose(): void
+  [Symbol.dispose](): void
 }
 
 //
@@ -224,6 +216,9 @@ interface DOMMatrix {
   m31: number, m32: number, m33: number, m34: number,
   m41: number, m42: number, m43: number, m44: number,
 
+  readonly is2D: boolean
+  readonly isIdentity: boolean
+
   flipX(): DOMMatrix
   flipY(): DOMMatrix
   inverse(): DOMMatrix
@@ -255,7 +250,7 @@ interface DOMMatrix {
   translate(tx?: number, ty?: number, tz?: number): DOMMatrix
   translateSelf(tx?: number, ty?: number, tz?: number): DOMMatrix
 
-  setMatrixValue(transformList: string): DOMMatrix
+  setMatrixValue(transformList: TransformString): DOMMatrix
   transformPoint(point?: DOMPointInit): DOMPoint
 
   toFloat32Array(): Float32Array
@@ -265,8 +260,16 @@ interface DOMMatrix {
   clone(): DOMMatrix
 }
 
+type TransformFunction =
+  | "matrix()" | "matrix3d()"
+  | "translate()" | "translateX()" | "translateY()" | "translateZ()" | "translate3d()"
+  | "scale()" | "scaleX()" | "scaleY()" | "scaleZ()" | "scale3d()"
+  | "rotate()" | "rotateX()" | "rotateY()" | "rotateZ()" | "rotate3d()"
+  | "skew()" | "skewX()" | "skewY()"
+type TransformString = TransformFunction | "none" | (string & {})
+
 type FixedLenArray<T, L extends number> = T[] & { length: L };
-type Matrix = string | DOMMatrix | { a: number, b: number, c: number, d: number, e: number, f: number } | FixedLenArray<number, 6> | FixedLenArray<number, 16>
+type Matrix = TransformString | DOMMatrix | { a: number, b: number, c: number, d: number, e: number, f: number } | FixedLenArray<number, 6> | FixedLenArray<number, 16>
 
 declare var DOMMatrix: {
   prototype: DOMMatrix
@@ -280,7 +283,9 @@ declare var DOMMatrix: {
 // Canvas
 //
 
-export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "raw" | "pdf" | "svg";
+export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "raw" | "pdf" | "svg" |
+                           "image/png" | "image/jpeg" | "image/webp" | "application/pdf" | "image/svg+xml" |
+                           "application/octet-stream";
 export type FontOptions = "outline" | "device-independent"
 
 export interface RenderOptions {
@@ -288,7 +293,7 @@ export interface RenderOptions {
   page?: number
 
   /** Background color to draw beneath transparent parts of the canvas */
-  matte?: string
+  matte?: CSSColor
 
   /** Number of pixels per grid ‘point’ (defaults to 1) */
   density?: number
@@ -320,12 +325,22 @@ export interface SaveOptions extends ExportOptions {
 }
 
 export interface EngineDetails {
+  /** Whether the active renderer is CPU- or GPU-backed */
   renderer: "CPU" | "GPU"
-  api: "Vulkan" | "Metal"
+  /** Backend API in use (null when compiled without GPU support) */
+  api: "Vulkan" | "Metal" | null
+  /** Details about the graphics hardware that was initialized */
   device: string
+  /** The device driver useed by the active graphics adapter */
   driver?: string
+  /** Size of the thread pool used for async rendering (set via the SKIA_CANVAS_THREADS env var; defaults to CPU core count) */
   threads: number
-  error?: string
+  /** Error thrown when attempting to initialize the GPU */
+  error?: string | null
+  /** Amount of additional contrast added when rendering text (see TextOptions) */
+  textContrast: number
+  /** Gamma value used for blending the edges of letterforms (see TextOptions) */
+  textGamma: number
 }
 
 export interface TextOptions{
@@ -336,6 +351,11 @@ export interface TextOptions{
   textGamma?: number
 }
 
+export interface CanvasBackend{
+  /** Whether to prefer a GPU-backed renderer (defaults to true) */
+  gpu?: boolean
+}
+
 export interface CanvasRenderingContext2DSettings {
   /** Color space used when rasterizing the canvas for exports & getImageData (defaults to "srgb") */
   colorSpace?: ColorSpace
@@ -343,7 +363,6 @@ export interface CanvasRenderingContext2DSettings {
 
 /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas) */
 export class Canvas {
-  static contexts: WeakMap<Canvas, readonly CanvasRenderingContext2D[]>
   /**
    * Gets or sets the height of a canvas element on a document.
    *
@@ -358,7 +377,7 @@ export class Canvas {
   width: number;
 
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#creating-new-canvas-objects) */
-  constructor(width?: number, height?: number, options?: TextOptions)
+  constructor(width?: number, height?: number, options?: TextOptions & CanvasBackend)
 
   /**
    * Returns an object that provides methods and properties for drawing and manipulating images and graphics on a canvas element in a document. A context object includes information about colors, line widths, fonts, and other graphic parameters that can be drawn on a canvas.
@@ -367,7 +386,8 @@ export class Canvas {
    *
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/getContext)
    */
-  getContext(type?: "2d", settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
+  getContext(type: "2d", settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
+  getContext(type?: string, settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D | null
   newPage(width?: number, height?: number): CanvasRenderingContext2D
   readonly pages: CanvasRenderingContext2D[]
 
@@ -375,30 +395,37 @@ export class Canvas {
   set gpu(enabled: boolean)
   readonly engine: EngineDetails
 
+  /** Release native state synchronously rather than waiting for the GC's deferred finalizers. The canvas may no longer be used after disposal. Can also be triggered via `using`. */
+  dispose(): void
+  [Symbol.dispose](): void
+  /** Dispose of the canvas then yield until the next event loop tick so other deferred finalizers can run. Can also be triggered via `await using`. */
+  release(): Promise<void>
+  [Symbol.asyncDispose](): Promise<void>
+
   /** @deprecated Use {@link Canvas.toFile()} instead */
-  saveAs(filename: string, options?: SaveOptions): Promise<void>
+  saveAs(filename: string | URL, options?: SaveOptions): Promise<void>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tofile): toFile() */
-  toFile(filename: string, options?: SaveOptions): Promise<void>
+  toFile(filename: string | URL, options?: SaveOptions): Promise<void>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
-  toBuffer(format: ExportFormat, options?: ExportOptions): Promise<Buffer>
+  toBuffer(format?: ExportFormat, options?: ExportOptions): Promise<Buffer>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tourl) */
-  toURL(format: ExportFormat, options?: ExportOptions): Promise<string>
+  toURL(format?: ExportFormat, options?: ExportOptions): Promise<string>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
   toSharp(options?: RenderOptions): Sharp
 
   /** @deprecated Use {@link Canvas.toFileSync()} instead */
-  saveAsSync(filename: string, options?: SaveOptions): void
+  saveAsSync(filename: string | URL, options?: SaveOptions): void
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tofile): toFile() */
+  toFileSync(filename: string | URL, options?: SaveOptions): void
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
-  toBufferSync(format: ExportFormat, options?: ExportOptions): Buffer
+  toBufferSync(format?: ExportFormat, options?: ExportOptions): Buffer
   /** @deprecated {@link Canvas.toDataURL()} is now synchronous; use it instead */
-  toDataURLSync(format: ExportFormat, options?: ExportOptions): string
+  toDataURLSync(format?: ExportFormat, options?: ExportOptions): string
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tourl) */
-  toURLSync(format: ExportFormat, options?: ExportOptions): string
-  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
-  toSharpSync(options?: RenderOptions): Sharp
+  toURLSync(format?: ExportFormat, options?: ExportOptions): string
 
   /** [MDN Reference](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL) */
-  toDataURL(format: ExportFormat, quality?: number): string
+  toDataURL(format?: ExportFormat, quality?: number): string
 
   get raw(): Promise<Buffer>
   get pdf(): Promise<Buffer>
@@ -422,17 +449,30 @@ export class CanvasPattern{
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
 }
 
-/**
- * An opaque object describing a gradient. It is returned by the methods CanvasRenderingContext2D.createLinearGradient() or CanvasRenderingContext2D.createRadialGradient().
- *
- * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient)
- */
+/** How a {@link CanvasPattern} tiles its image.  */
+export type PatternRepeat = "repeat" | "repeat-x" | "repeat-y" | "no-repeat"
+
 // Non-polar interpolation spaces (interpolated by rectangular/cartesian coordinates)
 export type RectangularColorSpace = "srgb" | "srgb-linear" | "display-p3" | "a98-rgb" | "prophoto-rgb" | "rec2020" | "lab" | "oklab"
 // Cylindrical spaces with a hue angle (the only ones `hueInterpolationMethod` affects)
 export type PolarColorSpace = "hsl" | "hwb" | "lch" | "oklch"
 export type ColorInterpolationMethod = RectangularColorSpace | PolarColorSpace
 export type HueInterpolationMethod = "shorter" | "longer" | "increasing" | "decreasing"
+
+//
+// Colors
+//
+
+type ColorFunction =
+  | "rgb()" | "rgba()" | "hsl()" | "hsla()" | "hwb()"
+  | "lab()" | "lch()" | "oklab()" | "oklch()" | "color()"
+export type CSSColor = ColorFunction | "#" | (string & {})
+
+/**
+ * An opaque object describing a gradient. It is returned by the methods CanvasRenderingContext2D.createLinearGradient() or CanvasRenderingContext2D.createRadialGradient().
+ *
+ * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient)
+ */
 
 interface CanvasGradient {
   /**
@@ -442,7 +482,7 @@ interface CanvasGradient {
    *
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient/addColorStop)
    */
-  addColorStop(offset: number, color: string): void;
+  addColorStop(offset: number, color: CSSColor): void;
   /** Color space in which the gradient's colors are interpolated (default `"srgb"`). */
   colorInterpolationMethod: ColorInterpolationMethod;
   /** Hue-interpolation direction for polar spaces — hsl/hwb/lch/oklch (default `"shorter"`). */
@@ -465,7 +505,7 @@ export class CanvasTexture {}
 //
 
 type CanvasDrawable = Canvas | Image | ImageData;
-type CanvasPatternSource = Canvas | Image;
+type CanvasPatternSource = Canvas | Image | ImageData;
 type CanvasDirection = "inherit" | "ltr" | "rtl";
 type CanvasFillRule = "evenodd" | "nonzero";
 type CanvasFontStretch = "condensed" | "expanded" | "extra-condensed" | "extra-expanded" | "normal" | "semi-condensed" | "semi-expanded" | "ultra-condensed" | "ultra-expanded";
@@ -480,7 +520,7 @@ type CanvasLineJoin = "bevel" | "miter" | "round";
 type Offset = [x: number, y: number] | number
 type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:number, x4:number, y4:number] |
                   [left:number, top:number, right:number, bottom:number] | [width:number, height:number]
-type GlobalCompositeOperation = "color" | "color-burn" | "color-dodge" | "copy" | "darken" | "destination-atop" | "destination-in" | "destination-out" | "destination-over" | "difference" | "exclusion" | "hard-light" | "hue" | "lighten" | "lighter" | "luminosity" | "multiply" | "overlay" | "saturation" | "screen" | "soft-light" | "source-atop" | "source-in" | "source-out" | "source-over" | "xor";
+type GlobalCompositeOperation = "clear" | "color" | "color-burn" | "color-dodge" | "copy" | "darken" | "destination" | "destination-atop" | "destination-in" | "destination-out" | "destination-over" | "difference" | "exclusion" | "hard-light" | "hue" | "lighten" | "lighter" | "luminosity" | "multiply" | "overlay" | "saturation" | "screen" | "soft-light" | "source-atop" | "source-in" | "source-out" | "source-over" | "xor";
 type ImageSmoothingQuality = "high" | "low" | "medium";
 
 type FontVariantSetting = "normal" |
@@ -503,7 +543,7 @@ export interface CreateTextureOptions {
   cap?: CanvasLineCap
 
   /** The color to use for stroking/filling the path */
-  color?: string
+  color?: CSSColor
 
   /** The orientation of the pattern grid in radians */
   angle?: number
@@ -526,9 +566,9 @@ interface CanvasDrawImage {
   drawImage(image: CanvasDrawable, dx: number, dy: number): void;
   drawImage(image: CanvasDrawable, dx: number, dy: number, dw: number, dh: number): void;
   drawImage(image: CanvasDrawable, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
-  drawCanvas(image: Canvas, dx: number, dy: number): void;
-  drawCanvas(image: Canvas, dx: number, dy: number, dw: number, dh: number): void;
-  drawCanvas(image: Canvas, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+  drawCanvas(image: CanvasDrawable, dx: number, dy: number): void;
+  drawCanvas(image: CanvasDrawable, dx: number, dy: number, dw: number, dh: number): void;
+  drawCanvas(image: CanvasDrawable, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
 }
 
 interface CanvasDrawPath {
@@ -553,15 +593,15 @@ interface CanvasDrawPath {
 
 interface CanvasFillStrokeStyles {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fillStyle) */
-  fillStyle: string | CanvasGradient | CanvasPattern | CanvasTexture;
+  fillStyle: CSSColor | CanvasGradient | CanvasPattern | CanvasTexture;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/strokeStyle) */
-  strokeStyle: string | CanvasGradient | CanvasPattern | CanvasTexture;
+  strokeStyle: CSSColor | CanvasGradient | CanvasPattern | CanvasTexture;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createConicGradient) */
   createConicGradient(startAngle: number, x: number, y: number): CanvasGradient;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createLinearGradient) */
   createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradient;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createPattern) */
-  createPattern(image: CanvasPatternSource, repetition: string | null): CanvasPattern | null;
+  createPattern(image: CanvasPatternSource, repetition: PatternRepeat | "" | null): CanvasPattern | null;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createRadialGradient) */
   createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
 
@@ -569,9 +609,18 @@ interface CanvasFillStrokeStyles {
   createTexture(spacing: Offset, options?: CreateTextureOptions): CanvasTexture
 }
 
+type FilterFunction =
+  | "blur()" | "brightness()" | "contrast()" | "drop-shadow()" | "grayscale()"
+  | "hue-rotate()" | "invert()" | "opacity()" | "saturate()" | "sepia()"
+
 interface CanvasFilters {
-  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/filter) */
-  filter: string;
+  /**
+   * A CSS `filter` string — one or more of the {@link FilterFunction} primitives (`blur()`,
+   * `drop-shadow()`, `hue-rotate()`, …) or `"none"`.
+   *
+   * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/filter)
+   */
+  filter: FilterFunction | "none" | (string & {});
 }
 
 interface CanvasImageData {
@@ -649,7 +698,7 @@ interface CanvasShadowStyles {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/shadowBlur) */
   shadowBlur: number;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/shadowColor) */
-  shadowColor: string;
+  shadowColor: CSSColor;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/shadowOffsetX) */
   shadowOffsetX: number;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/shadowOffsetY) */
@@ -754,8 +803,13 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
 
   // add optional maxWidth to work in conjunction with textWrap
   measureText(text: string, maxWidth?: number): TextMetrics
-  outlineText(text: string, maxWidth?: number): Path2D
+  outlineText(text: string, maxWidth?: number): Path2D | null
 }
+
+declare var CanvasRenderingContext2D: {
+  prototype: CanvasRenderingContext2D;
+  new(): CanvasRenderingContext2D;
+};
 
 //
 // Bézier Paths
@@ -961,7 +1015,7 @@ import { EventEmitter } from "stream";
 export type EventLoopMode = "node" | "native"
 export type TextInputType = "insertText" | "deleteContentBackward" | "deleteContentForward" | "insertLineBreak" | "insertCompositionText"
 export type FitStyle = "none" | "contain-x" | "contain-y" | "contain" | "cover" | "fill" | "scale-down" | "resize"
-export type CursorStyle = "default" | "crosshair" | "hand" | "arrow" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
+export type CursorStyle = "default" | "crosshair" | "pointer" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
                           "cell" | "vertical-text" | "alias" | "copy" | "no-drop" | "grab" | "grabbing" | "all-scroll" | "zoom-in" | "zoom-out" |
                           "e-resize" | "n-resize" | "ne-resize" | "nw-resize" | "s-resize" | "se-resize" | "sw-resize" | "w-resize" | "ew-resize" |
                           "ns-resize" | "nesw-resize" | "nwse-resize" | "col-resize" | "row-resize" | "none"
@@ -974,7 +1028,7 @@ export type WindowOptions = {
   height?: number
   fit?: FitStyle
   page?: number
-  background?: string
+  background?: CSSColor
   fullscreen?: boolean
   borderless?: boolean
   resizable?: boolean
@@ -1005,18 +1059,65 @@ type KeyboardEventProps = {
   altKey: boolean
   metaKey: boolean
   shiftKey: boolean
+  /** Suppress the default keybindings (window-close, fullscreen-toggle, etc.) */
+  preventDefault(): void
+}
+
+type PointerEventProps = {
+  pointerId: number
+  pointerType: "mouse" | "touch"
+  isPrimary: boolean
+  pressure: number
+  tangentialPressure: number
+  width: number
+  height: number
+  tiltX: number
+  tiltY: number
+  twist: number
+  button: number
+  buttons: number
+  x: number
+  y: number
+  pageX: number
+  pageY: number
+  ctrlKey: boolean
+  altKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+}
+
+type CoalescedPointerEventProps = PointerEventProps & {
+  getCoalescedEvents(): PointerEventProps[]
+}
+
+type CompositionEventProps = {
+  data: string
+  locale: string | undefined
 }
 
 type WindowEvents = {
   mousedown: MouseEventProps
   mouseup: MouseEventProps
   mousemove: MouseEventProps
+  mouseenter: MouseEventProps
+  mouseleave: MouseEventProps
+  pointerdown: CoalescedPointerEventProps
+  pointerup: CoalescedPointerEventProps
+  pointermove: CoalescedPointerEventProps
+  pointerover: PointerEventProps
+  pointerenter: PointerEventProps
+  pointerout: PointerEventProps
+  pointerleave: PointerEventProps
+  pointercancel: PointerEventProps
   keydown: KeyboardEventProps
   keyup: KeyboardEventProps
   input: {
     data: string
     inputType: TextInputType
   };
+  compositionstart: CompositionEventProps
+  compositionupdate: CompositionEventProps
+  compositionend: CompositionEventProps
   wheel: { deltaX: number; deltaY: number }
   fullscreen: { enabled: boolean }
   move: { left: number; top: number }
@@ -1040,6 +1141,7 @@ export class Window extends EventEmitter<{
   constructor(width: number, height: number, options?: WindowOptions)
   constructor(options?: WindowOptions)
 
+  readonly id: number
   readonly ctx: CanvasRenderingContext2D
   canvas: Canvas
   visible: boolean
@@ -1054,7 +1156,7 @@ export class Window extends EventEmitter<{
   width: number
   height: number
   page: number
-  background: string
+  background: CSSColor
   readonly closed: boolean
 
   open(): void
@@ -1070,7 +1172,9 @@ export interface App extends EventEmitter<{
   readonly windows: Window[]
   readonly running: boolean
   /** @deprecated Event loop modes have been removed: the node event loop is now always available */
-  eventLoop: EventLoopMode
+  get eventLoop(): undefined
+  /** @deprecated Event loop modes have been removed: the node event loop is now always available */
+  set eventLoop(mode: EventLoopMode)
   fps: number
 
   launch(): Promise<undefined>

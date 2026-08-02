@@ -18,21 +18,25 @@ const BLACK = [0,0,0,255],
         pdf: Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d]),
         svg: Buffer.from(`<?xml version`, 'utf-8')
       },
-      MIME = {
+      MIME = /** @type {const} */ ({
         png: "image/png",
         jpg: "image/jpeg",
         webp: "image/webp",
         pdf: "application/pdf",
         svg: "image/svg+xml"
-      };
+      });
 
 describe("Canvas", ()=>{
-  let canvas, ctx,
-      WIDTH = 512, HEIGHT = 512,
+  /** @type {Canvas} */
+  let canvas
+  /** @type {import('../../lib').CanvasRenderingContext2D} */
+  let ctx
+  let WIDTH = 512, HEIGHT = 512,
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
 
-  let TMP,
-      tmpFiles = () =>  fs.readdirSync(TMP)
+  /** @type {string} */
+  let TMP
+  let tmpFiles = () =>  fs.readdirSync(TMP)
         .map(fn =>  path.join(TMP, fn) )
         .filter(fn => fs.lstatSync(fn).isFile())
 
@@ -307,7 +311,7 @@ describe("Canvas", ()=>{
         ctx.fillRect(0, 0, canvas.width, canvas.height)
         ctx.fillStyle = 'white'
         ctx.textAlign = 'center'
-        ctx.fillText(i+1, canvas.width/2, canvas.height/2)
+        ctx.fillText(`${i+1}`, canvas.width/2, canvas.height/2)
       })
 
       let path = `${TMP}/multipage.pdf`
@@ -318,7 +322,7 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", async () => {
-      for (let ext of ["png", "jpg", "pdf", "svg"]){
+      for (let ext of /** @type {const} */ (["png", "jpg", "pdf", "svg"])){
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = await canvas.toBuffer(ext)
@@ -340,8 +344,9 @@ describe("Canvas", ()=>{
     })
 
     test("data URLs", async () => {
-      for (let ext in MIME){
-        let magic = MAGIC[ext],
+      for (let key in MIME){
+        let ext = /** @type {keyof typeof MIME} */ (key),
+            magic = MAGIC[ext],
             mime = MIME[ext],
             [extURL, mimeURL] = await Promise.all([
               canvas.toDataURL(ext),
@@ -602,7 +607,7 @@ describe("Canvas", ()=>{
         ctx.fillRect(0, 0, canvas.width, canvas.height)
         ctx.fillStyle = 'white'
         ctx.textAlign = 'center'
-        ctx.fillText(i+1, canvas.width/2, canvas.height/2)
+        ctx.fillText(`${i+1}`, canvas.width/2, canvas.height/2)
       })
 
       let path = `${TMP}/multipage.pdf`
@@ -613,7 +618,7 @@ describe("Canvas", ()=>{
     })
 
     test("image Buffers", () => {
-      for (let ext of ["png", "jpg", "pdf", "svg"]){
+      for (let ext of /** @type {const} */ (["png", "jpg", "pdf", "svg"])){
         // use extension to specify type
         let path = `${TMP}/output.${ext}`
         let buf = canvas.toBufferSync(ext)
@@ -635,8 +640,9 @@ describe("Canvas", ()=>{
     })
 
     test("data URLs", async () => {
-      for (let ext in MIME){
-        let magic = MAGIC[ext],
+      for (let key in MIME){
+        let ext = /** @type {keyof typeof MIME} */ (key),
+            magic = MAGIC[ext],
             mime = MIME[ext],
             extURL = canvas.toURLSync(ext),
             mimeURL = canvas.toURLSync(mime),

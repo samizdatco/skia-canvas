@@ -467,13 +467,17 @@ describe("ImageData", () => {
     assert.equal(new ImageData(8, 8, {colorSpace:'display-p3'}).colorSpace, 'display-p3')
 
     // outside of SKIA_CANVAS_STRICT mode, unsupported spaces quietly fall back to srgb
+    // @ts-expect-error — 'rec2020' is deliberately not a valid ColorSpace
     assert.equal(new ImageData(8, 8, {colorSpace:'rec2020'}).colorSpace, 'srgb')
   })
 })
 
 describe("FontLibrary", ()=>{
-  let canvas, ctx,
-      WIDTH = 512, HEIGHT = 512,
+  /** @type {Canvas} */
+  let canvas
+  /** @type {import('../../lib').CanvasRenderingContext2D} */
+  let ctx
+  let WIDTH = 512, HEIGHT = 512,
       FONTS_DIR = 'tests/assets/fonts',
       findFont = font => path.join(FONTS_DIR, font);
 
@@ -622,8 +626,10 @@ describe("FontLibrary", ()=>{
     assert.equal(ctx.fontHinting, true)
 
     // truthy coercion like fontSynthesis (invalid values never throw)
+    // @ts-expect-error — deliberately mistyped: exercises truthy coercion
     ctx.fontHinting = 0
     assert.equal(ctx.fontHinting, false)
+    // @ts-expect-error — deliberately mistyped: exercises truthy coercion
     ctx.fontHinting = 'yes'
     assert.equal(ctx.fontHinting, true)
 
@@ -660,6 +666,7 @@ describe("FontLibrary", ()=>{
     assert.equal(ctx.fontSmoothing, true)
     ctx.fontSmoothing = false
     assert.equal(ctx.fontSmoothing, false)
+    // @ts-expect-error — deliberately mistyped: exercises truthy coercion
     ctx.fontSmoothing = 'yes'
     assert.equal(ctx.fontSmoothing, true)
 
