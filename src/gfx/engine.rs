@@ -21,6 +21,7 @@ impl Engine {
         "renderer": "CPU",
         "api": Value::Null,
         "device": "CPU-based renderer (compiled without GPU support)",
+        "threads": rayon::current_num_threads(),
         "error": Value::Null,
     })}
     // placeholders that match the GPU signatures (for the type-checker) but will never be called
