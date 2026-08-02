@@ -1,0 +1,22 @@
+{
+  // Scoped to the test tree: only files that opt in with a `// @ts-check`
+  // pragma are checked, and checking is lenient (implicit `any` allowed) so
+  // fixtures and helpers don't need annotations. The goal is to validate API
+  // calls against lib/index.d.ts, not to fully type the tests.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": false,
+    "strict": false,
+    "target": "es2022",
+    // no "DOM": the canvas/matrix/path types here must come from lib/index.d.ts,
+    // not the browser globals (which lack skia-canvas's API extensions)
+    "lib": ["ES2022"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.js", "**/*.mjs"],
+  "exclude": ["visual"]
+}

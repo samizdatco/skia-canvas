@@ -11,11 +11,15 @@ const BLACK = [0,0,0,255],
       TAU = Math.PI * 2
 
 describe("Path2D", ()=>{
-  let canvas, ctx,
-      WIDTH = 512, HEIGHT = 512,
+  /** @type {Canvas} */
+  let canvas
+  /** @type {import('../../lib').CanvasRenderingContext2D} */
+  let ctx
+  /** @type {Path2D} */
+  let p
+  let WIDTH = 512, HEIGHT = 512,
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data),
-      scrub = () => ctx.clearRect(0,0,WIDTH,HEIGHT),
-      p;
+      scrub = () => ctx.clearRect(0,0,WIDTH,HEIGHT);
 
   beforeEach(()=>{
     canvas = new Canvas(WIDTH, HEIGHT)
@@ -108,6 +112,7 @@ describe("Path2D", ()=>{
       let [left, top] = [20, 30]
       p.moveTo(left, top)
       assert.matchesSubset(p.bounds, {left, top})
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.throws(() => p.moveTo(120) , /not enough arguments/)
     })
 
@@ -119,6 +124,7 @@ describe("Path2D", ()=>{
       ctx.stroke(p)
       assert.matchesSubset(p.bounds, {left, top, width, height})
       assert.deepEqual(pixel(left+width/2, top+height/2), BLACK)
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.throws(() => p.lineTo(120) , /not enough arguments/)
     })
 
@@ -131,7 +137,9 @@ describe("Path2D", ()=>{
 
       assert.deepEqual(pixel(71, 42), BLACK)
       assert.deepEqual(pixel(168, 157), BLACK)
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.throws(() => p.bezierCurveTo(120, 300, 400, 400) , /not enough arguments/)
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.doesNotThrow(() => p.bezierCurveTo(120, 300, null, 'foo', NaN, 400) )
     })
 
@@ -143,7 +151,9 @@ describe("Path2D", ()=>{
       ctx.stroke(p)
 
       assert.deepEqual(pixel(120, 199), BLACK)
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.throws(() => p.quadraticCurveTo(120, 300) , /not enough arguments/)
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.doesNotThrow(() => p.quadraticCurveTo(NaN, 300, null, 'foo') )
     })
 
@@ -200,7 +210,9 @@ describe("Path2D", ()=>{
       ctx.stroke(flat)
       assert.deepEqual(pixel(125, 300), BLACK)
 
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.throws(() => p.arcTo(0,0, 20,20) , /not enough arguments/)
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.doesNotThrow(() => p.arcTo(150, 5, null, 'foo', NaN) )
     })
 
@@ -221,6 +233,7 @@ describe("Path2D", ()=>{
       assert.deepEqual(pixel(200, 200), BLACK)
       assert.deepEqual(pixel(50, 50), CLEAR)
 
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.throws(() => p.rect(0,0, 20) , /not enough arguments/)
     })
 
@@ -349,6 +362,7 @@ describe("Path2D", ()=>{
 
       assert.deepEqual(pixel(196, 112), BLACK)
       assert.deepEqual(pixel(150, 150), WHITE)
+      // @ts-expect-error — deliberately invalid (validation test)
       assert.throws(() => p.arc(150, 150, 75, Math.PI/8) , /not enough arguments/)
       assert.doesNotThrow(() => p.arc(150, 150, 75, Math.PI/8, Math.PI*1.5) )
     })
@@ -845,44 +859,48 @@ describe("Path2D", ()=>{
   })
 
   describe("validates", () => {
+    /** @type {any} */
+    let lax // deliberately-invalid calls are routed through this untyped alias
+    beforeEach(() => lax = p)
+
     test('not enough arguments', async () => {
       let ERR =  /not enough arguments/
-      assert.throws(() => p.transform(), ERR)
-      assert.throws(() => p.transform(0,0,0,0,0), ERR)
-      assert.throws(() => p.rect(0,0,0), ERR)
-      assert.throws(() => p.roundRect(0,0,0), ERR)
-      assert.throws(() => p.arc(0,0,0,0), ERR)
-      assert.throws(() => p.arcTo(0,0,0,0), ERR)
-      assert.throws(() => p.ellipse(0,0,0,0,0,0), ERR)
-      assert.throws(() => p.moveTo(0), ERR)
-      assert.throws(() => p.lineTo(0), ERR)
-      assert.throws(() => p.bezierCurveTo(0,0,0,0,0), ERR)
-      assert.throws(() => p.quadraticCurveTo(0,0,0), ERR)
-      assert.throws(() => p.conicCurveTo(0,0,0,0), ERR)
-      assert.throws(() => p.complement(), ERR)
-      assert.throws(() => p.interpolate(), ERR)
-      assert.throws(() => p.offset(0), ERR)
-      assert.throws(() => p.round(), ERR)
-      assert.throws(() => p.contains(0), ERR)
-      assert.throws(() => p.addPath(), ERR)
+      assert.throws(() => lax.transform(), ERR)
+      assert.throws(() => lax.transform(0,0,0,0,0), ERR)
+      assert.throws(() => lax.rect(0,0,0), ERR)
+      assert.throws(() => lax.roundRect(0,0,0), ERR)
+      assert.throws(() => lax.arc(0,0,0,0), ERR)
+      assert.throws(() => lax.arcTo(0,0,0,0), ERR)
+      assert.throws(() => lax.ellipse(0,0,0,0,0,0), ERR)
+      assert.throws(() => lax.moveTo(0), ERR)
+      assert.throws(() => lax.lineTo(0), ERR)
+      assert.throws(() => lax.bezierCurveTo(0,0,0,0,0), ERR)
+      assert.throws(() => lax.quadraticCurveTo(0,0,0), ERR)
+      assert.throws(() => lax.conicCurveTo(0,0,0,0), ERR)
+      assert.throws(() => lax.complement(), ERR)
+      assert.throws(() => lax.interpolate(), ERR)
+      assert.throws(() => lax.offset(0), ERR)
+      assert.throws(() => lax.round(), ERR)
+      assert.throws(() => lax.contains(0), ERR)
+      assert.throws(() => lax.addPath(), ERR)
     })
 
     test('value errors', async () => {
       assert.throws(() => p.transform(0,0,0,NaN,0,0), /Expected a DOMMatrix/)
-      assert.throws(() => p.complement({}), /Expected a Path2D/)
-      assert.throws(() => p.interpolate(p), /Expected a number/)
+      assert.throws(() => lax.complement({}), /Expected a Path2D/)
+      assert.throws(() => lax.interpolate(p), /Expected a number/)
       assert.throws(() => p.arc(0,0,-10,0,0), {name:'IndexSizeError'})
       assert.throws(() => p.arcTo(0,0,0,0,-10), {name:'IndexSizeError'})
       assert.throws(() => p.ellipse(0,0,-10,-10,0,0,0), {name:'IndexSizeError'})
       assert.throws(() => p.roundRect(0,0,0,0,-10), /Corner radius cannot be negative/)
-      assert.throws(() => p.addPath(p, []), /Invalid transform matrix/)
+      assert.throws(() => lax.addPath(p, []), /Invalid transform matrix/)
     })
 
     test('NaN arguments', async () => {
       assert.doesNotThrow(() => p.rect(0,0,NaN,0))
       assert.doesNotThrow(() => p.arc(0,0,NaN,0,0))
       assert.doesNotThrow(() => p.arc(0,0,NaN,0,0,false))
-      assert.doesNotThrow(() => p.arc(0,0,NaN,0,0,new Date()))
+      assert.doesNotThrow(() => lax.arc(0,0,NaN,0,0,new Date()))
       assert.doesNotThrow(() => p.ellipse(0,0,0,NaN,0,0,0))
       assert.doesNotThrow(() => p.moveTo(NaN,0))
       assert.doesNotThrow(() => p.lineTo(NaN,0))
@@ -893,7 +911,7 @@ describe("Path2D", ()=>{
       assert.doesNotThrow(() => p.roundRect(0,0,0,0,NaN))
       assert.doesNotThrow(() => p.roundRect(NaN,0,0,0,5))
       assert.doesNotThrow(() => p.roundRect(0,0,NaN,0,5))
-      assert.doesNotThrow(() => p.transform({}))
+      assert.doesNotThrow(() => lax.transform({}))
     })
   })
 })

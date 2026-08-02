@@ -14,8 +14,11 @@ const BLACK = [0,0,0,255],
 const _each = (obj, fn) => Object.entries(obj).forEach(([term, val]) => fn(val, term))
 
 describe("Context2D", ()=>{
-  let canvas, ctx,
-      WIDTH = 512, HEIGHT = 512,
+  /** @type {Canvas} */
+  let canvas
+  /** @type {import('../../lib').CanvasRenderingContext2D} */
+  let ctx
+  let WIDTH = 512, HEIGHT = 512,
       pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data),
       loadAsset = url => loadImage(`tests/assets/${url}`),
       mockedWarn = () => {},
@@ -74,14 +77,15 @@ describe("Context2D", ()=>{
     })
 
     test('globalCompositeOperation', () => {
-      let ops = ["source-over", "destination-over", "copy", "destination", "clear",
+      let ops = /** @type {const} */ (["source-over", "destination-over", "copy", "destination", "clear",
                  "source-in", "destination-in", "source-out", "destination-out",
                  "source-atop", "destination-atop", "xor", "lighter", "multiply",
                  "screen", "overlay", "darken", "lighten", "color-dodge", "color-burn",
                  "hard-light", "soft-light", "difference", "exclusion", "hue",
-                 "saturation", "color", "luminosity"]
+                 "saturation", "color", "luminosity"])
 
       assert.equal(ctx.globalCompositeOperation, 'source-over')
+      // @ts-expect-error — deliberately invalid enum value
       ctx.globalCompositeOperation = 'invalid'
       assert.equal(ctx.globalCompositeOperation, 'source-over')
 
@@ -99,9 +103,10 @@ describe("Context2D", ()=>{
 
 
     test('imageSmoothingQuality', () => {
-      let vals = ["low", "medium", "high"]
+      let vals = /** @type {const} */ (["low", "medium", "high"])
 
       assert.equal(ctx.imageSmoothingQuality, 'low')
+      // @ts-expect-error — deliberately invalid enum value
       ctx.imageSmoothingQuality = 'invalid'
       assert.equal(ctx.imageSmoothingQuality, 'low')
 
@@ -112,9 +117,10 @@ describe("Context2D", ()=>{
     })
 
     test('lineCap', () => {
-      let vals = ["butt", "square", "round"]
+      let vals = /** @type {const} */ (["butt", "square", "round"])
 
       assert.equal(ctx.lineCap, 'butt')
+      // @ts-expect-error — deliberately invalid enum value
       ctx.lineCap = 'invalid'
       assert.equal(ctx.lineCap, 'butt')
 
@@ -133,9 +139,10 @@ describe("Context2D", ()=>{
     })
 
     test('lineJoin', () => {
-      let vals = ["miter", "round", "bevel"]
+      let vals = /** @type {const} */ (["miter", "round", "bevel"])
 
       assert.equal(ctx.lineJoin, 'miter')
+      // @ts-expect-error — deliberately invalid enum value
       ctx.lineJoin = 'invalid'
       assert.equal(ctx.lineJoin, 'miter')
 
@@ -159,9 +166,10 @@ describe("Context2D", ()=>{
     })
 
     test('textAlign', () => {
-      let vals = ["start", "end", "left", "center", "right", "justify"]
+      let vals = /** @type {const} */ (["start", "end", "left", "center", "right", "justify"])
 
       assert.equal(ctx.textAlign, 'start')
+      // @ts-expect-error — deliberately invalid enum value
       ctx.textAlign = 'invalid'
       assert.equal(ctx.textAlign, 'start')
 
@@ -363,8 +371,8 @@ describe("Context2D", ()=>{
 
       test("radial", () => {
         let [x, y, inside, outside] = [100, 100, 45, 55],
-            inner = [x, y, 25],
-            outer = [x, y, 50],
+            inner = /** @type {const} */ ([x, y, 25]),
+            outer = /** @type {const} */ ([x, y, 50]),
             gradient = ctx.createRadialGradient(...inner, ...outer);
         ctx.fillStyle = gradient
         gradient.addColorStop(0,'#fff');
@@ -435,7 +443,8 @@ describe("Context2D", ()=>{
           [probe.colorInterpolationMethod, probe.hueInterpolationMethod, probe.premultipliedAlpha],
           ['srgb', 'shorter', false]
         )
-        probe.colorInterpolationMethod = 'OKLCH' // case-insensitive
+        // @ts-expect-error — the type admits only canonical lowercase, but the parser is case-tolerant
+        probe.colorInterpolationMethod = 'OKLCH'
         assert.equal(probe.colorInterpolationMethod, 'oklch')
         probe.hueInterpolationMethod = 'increasing'
         assert.equal(probe.hueInterpolationMethod, 'increasing')
@@ -456,8 +465,10 @@ describe("Context2D", ()=>{
         }
         assert(fadeRed(true) > fadeRed(false), 'premultiplied should keep the midpoint red channel brighter')
 
-        // unknown values throw
+        // unknown values throw (also compile-time errors under the strict property types, hence the pragmas)
+        // @ts-expect-error
         assert.throws(() => probe.colorInterpolationMethod = 'bogus', /Unsupported colorInterpolationMethod/)
+        // @ts-expect-error
         assert.throws(() => probe.hueInterpolationMethod = 'sideways', /Unsupported hueInterpolationMethod/)
       })
     })
@@ -674,10 +685,11 @@ describe("Context2D", ()=>{
 
       // lineDashFit accepts its enum & ignores unknown values
       assert.equal(ctx.lineDashFit, 'turn')
-      for (let fit of ['move', 'turn', 'follow']){
+      for (let fit of /** @type {const} */ (['move', 'turn', 'follow'])){
         ctx.lineDashFit = fit
         assert.equal(ctx.lineDashFit, fit)
       }
+      // @ts-expect-error — deliberately invalid enum value
       ctx.lineDashFit = 'bogus'
       assert.equal(ctx.lineDashFit, 'follow')
     })
@@ -813,6 +825,7 @@ describe("Context2D", ()=>{
         canvas.width = WIDTH
         ctx.textBaseline = 'middle'
         ctx.textAlign = 'center'
+        // @ts-expect-error — the argset rows mix arities/types on purpose
         ctx.fillText(...args)
         assert.equal(ctx.getImageData(0, 0, 20, 20).data.some(a => a), shouldDraw)
       })
@@ -1013,6 +1026,7 @@ describe("Context2D", ()=>{
     })
 
     test('putImageData()', () => {
+      // @ts-expect-error — deliberately not an ImageData
       assert.throws(() => ctx.putImageData({}, 0, 0))
       assert.throws(() => ctx.putImageData(undefined, 0, 0))
 
@@ -1049,9 +1063,9 @@ describe("Context2D", ()=>{
     })
 
     test("isPointInPath()", () => {
-      let inStroke = [100, 94],
-          inFill = [150, 150],
-          inBoth = [100, 100];
+      let inStroke = /** @type {const} */ ([100, 94]),
+          inFill = /** @type {const} */ ([150, 150]),
+          inBoth = /** @type {const} */ ([100, 100]);
 
       ctx.rect(100,100,100,100)
       ctx.lineWidth = 12
@@ -1067,9 +1081,9 @@ describe("Context2D", ()=>{
     })
 
     test("isPointInPath(Path2D)", () => {
-      let inStroke = [100, 94],
-          inFill = [150, 150],
-          inBoth = [100, 100];
+      let inStroke = /** @type {const} */ ([100, 94]),
+          inFill = /** @type {const} */ ([150, 150]),
+          inBoth = /** @type {const} */ ([100, 100]);
 
       let path = new Path2D()
       path.rect(100,100,100,100)
@@ -1189,7 +1203,7 @@ describe("Context2D", ()=>{
       assert(metrics.actualBoundingBoxDescent > 0)
 
       // width calculations should be the same (modulo rounding) for any alignment
-      let [lft, cnt, rgt] = ['left', 'center', 'right'].map(align => {
+      let [lft, cnt, rgt] = /** @type {const} */ (['left', 'center', 'right']).map(align => {
         ctx.textAlign = align
         return ctx.measureText(msg).width
       })
@@ -1204,6 +1218,7 @@ describe("Context2D", ()=>{
 
 
     test("createProjection()", () => {
+      /** @type {[number,number, number,number, number,number, number,number]} */
       let quad = [
         WIDTH*.33, HEIGHT/2,
         WIDTH*.66, HEIGHT/2,
@@ -1463,6 +1478,7 @@ describe("Context2D", ()=>{
 
       test('rejects invalid args', () => {
         assert.throws( () => ctx.transform("nonesuch"), /Invalid transform matrix/)
+        // @ts-expect-error — deliberately too few arguments
         assert.throws( () => ctx.transform(0, 0, 0), /not enough arguments/)
         assert.doesNotThrow( () => ctx.transform(0, 0, 0, NaN, 0, 0))
       })
@@ -1748,7 +1764,10 @@ describe("Context2D", ()=>{
 
   describe("validates", () => {
     let g, id, img, p2d
+    /** @type {any} */
+    let lax // deliberately-invalid calls are routed through this untyped alias
     beforeEach(async () => {
+      lax = ctx
       g = ctx.createLinearGradient(0,0,10,10)
       id = ctx.getImageData(0,0,10,10)
       img = await loadAsset("checkers.png")
@@ -1759,50 +1778,50 @@ describe("Context2D", ()=>{
 
     test('not enough arguments', async () => {
       let ERR =  /not enough arguments/
-      assert.throws(() => ctx.transform(), ERR)
-      assert.throws(() => ctx.transform(0,0,0,0,0), ERR)
-      assert.throws(() => ctx.setTransform(0,0,0,0,0), ERR)
-      assert.throws(() => ctx.translate(0), ERR)
-      assert.throws(() => ctx.scale(0), ERR)
-      assert.throws(() => ctx.rotate(), ERR)
-      assert.throws(() => ctx.rect(0,0,0), ERR)
-      assert.throws(() => ctx.arc(0,0,0,0), ERR)
-      assert.throws(() => ctx.arcTo(0,0,0,0), ERR)
-      assert.throws(() => ctx.ellipse(0,0,0,0,0,0), ERR)
-      assert.throws(() => ctx.moveTo(0), ERR)
-      assert.throws(() => ctx.lineTo(0), ERR)
-      assert.throws(() => ctx.bezierCurveTo(0,0,0,0,0), ERR)
-      assert.throws(() => ctx.quadraticCurveTo(0,0,0), ERR)
-      assert.throws(() => ctx.conicCurveTo(0,0,0,0), ERR)
-      assert.throws(() => ctx.roundRect(0,0,0), ERR)
-      assert.throws(() => ctx.fillRect(0,0,0), ERR)
-      assert.throws(() => ctx.strokeRect(0,0,0), ERR)
-      assert.throws(() => ctx.clearRect(0,0,0), ERR)
-      assert.throws(() => ctx.fillText("text",0), ERR)
-      assert.throws(() => ctx.isPointInPath(10), ERR)
-      assert.throws(() => ctx.isPointInStroke(10), ERR)
-      assert.throws(() => ctx.createLinearGradient(0,0,1), ERR)
-      assert.throws(() => ctx.createRadialGradient(0,0,0,0,0), ERR)
-      assert.throws(() => ctx.createConicGradient(0,0), ERR)
-      assert.throws(() => ctx.setLineDash(), ERR)
-      assert.throws(() => ctx.createImageData(), ERR)
-      assert.throws(() => ctx.createPattern(img), ERR)
-      assert.throws(() => ctx.createTexture(), ERR)
-      assert.throws(() => ctx.getImageData(1,1,10), ERR)
-      assert.throws(() => ctx.putImageData({},0), ERR)
-      assert.throws(() => ctx.putImageData(id,0,0,0,0,0), ERR)
-      assert.throws(() => ctx.drawImage(img), ERR)
-      assert.throws(() => ctx.drawImage(img,0), ERR)
-      assert.throws(() => ctx.drawImage(img,0,0,0), ERR)
-      assert.throws(() => ctx.drawImage(img,0,0,0,0,0), ERR)
-      assert.throws(() => ctx.drawImage(img,0,0,0,0,0,0), ERR)
-      assert.throws(() => ctx.drawImage(img,0,0,0,0,0,0,0), ERR)
-      assert.throws(() => ctx.drawCanvas(canvas), ERR)
-      assert.throws(() => ctx.drawCanvas(canvas,0), ERR)
-      assert.throws(() => ctx.drawCanvas(canvas,0,0,0), ERR)
-      assert.throws(() => ctx.drawCanvas(canvas,0,0,0,0,0), ERR)
-      assert.throws(() => ctx.drawCanvas(canvas,0,0,0,0,0,0), ERR)
-      assert.throws(() => ctx.drawCanvas(canvas,0,0,0,0,0,0,0), ERR)
+      assert.throws(() => lax.transform(), ERR)
+      assert.throws(() => lax.transform(0,0,0,0,0), ERR)
+      assert.throws(() => lax.setTransform(0,0,0,0,0), ERR)
+      assert.throws(() => lax.translate(0), ERR)
+      assert.throws(() => lax.scale(0), ERR)
+      assert.throws(() => lax.rotate(), ERR)
+      assert.throws(() => lax.rect(0,0,0), ERR)
+      assert.throws(() => lax.arc(0,0,0,0), ERR)
+      assert.throws(() => lax.arcTo(0,0,0,0), ERR)
+      assert.throws(() => lax.ellipse(0,0,0,0,0,0), ERR)
+      assert.throws(() => lax.moveTo(0), ERR)
+      assert.throws(() => lax.lineTo(0), ERR)
+      assert.throws(() => lax.bezierCurveTo(0,0,0,0,0), ERR)
+      assert.throws(() => lax.quadraticCurveTo(0,0,0), ERR)
+      assert.throws(() => lax.conicCurveTo(0,0,0,0), ERR)
+      assert.throws(() => lax.roundRect(0,0,0), ERR)
+      assert.throws(() => lax.fillRect(0,0,0), ERR)
+      assert.throws(() => lax.strokeRect(0,0,0), ERR)
+      assert.throws(() => lax.clearRect(0,0,0), ERR)
+      assert.throws(() => lax.fillText("text",0), ERR)
+      assert.throws(() => lax.isPointInPath(10), ERR)
+      assert.throws(() => lax.isPointInStroke(10), ERR)
+      assert.throws(() => lax.createLinearGradient(0,0,1), ERR)
+      assert.throws(() => lax.createRadialGradient(0,0,0,0,0), ERR)
+      assert.throws(() => lax.createConicGradient(0,0), ERR)
+      assert.throws(() => lax.setLineDash(), ERR)
+      assert.throws(() => lax.createImageData(), ERR)
+      assert.throws(() => lax.createPattern(img), ERR)
+      assert.throws(() => lax.createTexture(), ERR)
+      assert.throws(() => lax.getImageData(1,1,10), ERR)
+      assert.throws(() => lax.putImageData({},0), ERR)
+      assert.throws(() => lax.putImageData(id,0,0,0,0,0), ERR)
+      assert.throws(() => lax.drawImage(img), ERR)
+      assert.throws(() => lax.drawImage(img,0), ERR)
+      assert.throws(() => lax.drawImage(img,0,0,0), ERR)
+      assert.throws(() => lax.drawImage(img,0,0,0,0,0), ERR)
+      assert.throws(() => lax.drawImage(img,0,0,0,0,0,0), ERR)
+      assert.throws(() => lax.drawImage(img,0,0,0,0,0,0,0), ERR)
+      assert.throws(() => lax.drawCanvas(canvas), ERR)
+      assert.throws(() => lax.drawCanvas(canvas,0), ERR)
+      assert.throws(() => lax.drawCanvas(canvas,0,0,0), ERR)
+      assert.throws(() => lax.drawCanvas(canvas,0,0,0,0,0), ERR)
+      assert.throws(() => lax.drawCanvas(canvas,0,0,0,0,0,0), ERR)
+      assert.throws(() => lax.drawCanvas(canvas,0,0,0,0,0,0,0), ERR)
       assert.throws(() => g.addColorStop(0), ERR)
     })
 
@@ -1814,46 +1833,47 @@ describe("Context2D", ()=>{
       assert.throws(() => ctx.createImageData(1,0), /Dimensions must be non-zero/)
       assert.throws(() => ctx.getImageData(1,1,NaN,10), /Expected a number/)
       assert.throws(() => ctx.getImageData(1,NaN,10,10), /Expected a number/)
-      assert.throws(() => ctx.createImageData(1,{}), /Dimensions must be non-zero/)
+      assert.throws(() => lax.createImageData(1,{}), /Dimensions must be non-zero/)
       assert.throws(() => ctx.createImageData(1,NaN), /Dimensions must be non-zero/)
       assert.throws(() => ctx.putImageData(id,NaN,0), /Expected a number/)
       assert.throws(() => ctx.putImageData(id,0,0,0,0,NaN,0), /Expected a number for `dirtyWidth`/)
-      assert.throws(() => ctx.putImageData({},0,0), /Expected an ImageData as 1st arg/)
-      assert.throws(() => ctx.drawImage(), /Expected an Image or a Canvas/)
-      assert.throws(() => ctx.drawCanvas(), /Expected an Image or a Canvas/)
-      assert.throws(() => ctx.fill(NaN), /Expected `fillRule`/)
-      assert.throws(() => ctx.clip(NaN), /Expected `fillRule`/)
-      assert.throws(() => ctx.stroke(NaN), /Expected a Path2D/)
-      assert.throws(() => ctx.fill(NaN, "evenodd"), /Expected a Path2D/)
-      assert.throws(() => ctx.clip(NaN, "evenodd"), /Expected a Path2D/)
-      assert.throws(() => ctx.fill(p2d, {}), /Expected `fillRule`/)
+      assert.throws(() => lax.putImageData({},0,0), /Expected an ImageData as 1st arg/)
+      assert.throws(() => lax.drawImage(), /Expected an Image or a Canvas/)
+      assert.throws(() => lax.drawCanvas(), /Expected an Image or a Canvas/)
+      assert.throws(() => lax.fill(NaN), /Expected `fillRule`/)
+      assert.throws(() => lax.clip(NaN), /Expected `fillRule`/)
+      assert.throws(() => lax.stroke(NaN), /Expected a Path2D/)
+      assert.throws(() => lax.fill(NaN, "evenodd"), /Expected a Path2D/)
+      assert.throws(() => lax.clip(NaN, "evenodd"), /Expected a Path2D/)
+      assert.throws(() => lax.fill(p2d, {}), /Expected `fillRule`/)
       assert.throws(() => ctx.createTexture([1, NaN]), /Expected a number or array/)
       assert.throws(() => ctx.createTexture(1, {path:null}), /Expected a Path2D/)
-      assert.throws(() => ctx.createTexture(20, {line:{}}), /Expected a number for `line`/)
-      assert.throws(() => ctx.createTexture(20, {angle:{}}), /Expected a number for `angle`/)
-      assert.throws(() => ctx.createTexture(20, {offset:{}}), /Expected a number or array/)
-      assert.throws(() => ctx.createTexture(20, {cap:{}}), /Expected a string/)
-      assert.throws(() => ctx.createTexture(20, {cap:""}), /Expected \"butt\", \"square\"/)
+      assert.throws(() => lax.createTexture(20, {line:{}}), /Expected a number for `line`/)
+      assert.throws(() => lax.createTexture(20, {angle:{}}), /Expected a number for `angle`/)
+      assert.throws(() => lax.createTexture(20, {offset:{}}), /Expected a number or array/)
+      assert.throws(() => lax.createTexture(20, {cap:{}}), /Expected a string/)
+      assert.throws(() => lax.createTexture(20, {cap:""}), /Expected \"butt\", \"square\"/)
       assert.throws(() => ctx.createTexture(20, {offset:[1, NaN]}), /Expected a number or array/)
-      assert.throws(() => ctx.isPointInPath(0, 10, 10), /Expected `fillRule`/)
-      assert.throws(() => ctx.isPointInPath(false, 10, 10), /Expected `fillRule`/)
-      assert.throws(() => ctx.isPointInPath({}, 10, 10), /Expected `fillRule`/)
-      assert.throws(() => ctx.isPointInPath({}, 10, 10, "___"), /Expected a Path2D/)
-      assert.throws(() => ctx.isPointInPath({}, 10, 10, "evenodd"), /Expected a Path2D/)
-      assert.throws(() => ctx.isPointInPath(10, 10, "___"), /Expected `fillRule`/)
-      assert.throws(() => ctx.isPointInPath(p2d, 10, 10, ""), /Expected `fillRule`/)
+      assert.throws(() => lax.isPointInPath(0, 10, 10), /Expected `fillRule`/)
+      assert.throws(() => lax.isPointInPath(false, 10, 10), /Expected `fillRule`/)
+      assert.throws(() => lax.isPointInPath({}, 10, 10), /Expected `fillRule`/)
+      assert.throws(() => lax.isPointInPath({}, 10, 10, "___"), /Expected a Path2D/)
+      assert.throws(() => lax.isPointInPath({}, 10, 10, "evenodd"), /Expected a Path2D/)
+      assert.throws(() => lax.isPointInPath(10, 10, "___"), /Expected `fillRule`/)
+      assert.throws(() => lax.isPointInPath(p2d, 10, 10, ""), /Expected `fillRule`/)
       assert.throws(() => ctx.createLinearGradient(0,0,NaN,1), /Expected a number for/)
       assert.throws(() => ctx.createRadialGradient(0,0,NaN,0,0,0), /Expected a number for/)
       assert.throws(() => ctx.createConicGradient(0,NaN,0), /Expected a number for/)
+      // @ts-expect-error — deliberately invalid repetition value
       assert.throws(() => ctx.createPattern(img, "___"), /Expected `repetition`/)
       assert.throws(() => g.addColorStop(NaN, '#000'), /Expected a number/)
       assert.throws(() => g.addColorStop(0, {}), /Could not be parsed as a color/)
-      assert.throws(() => ctx.setLineDash(NaN), /Value is not a sequence/)
+      assert.throws(() => lax.setLineDash(NaN), /Value is not a sequence/)
     })
 
     test('NaN arguments', async () => {
       // silently fail
-      assert.doesNotThrow(() => ctx.setTransform({}))
+      assert.doesNotThrow(() => lax.setTransform({}))
       assert.doesNotThrow(() => ctx.setTransform(0,0,0,NaN,0,0))
       assert.doesNotThrow(() => ctx.translate(NaN,0))
       assert.doesNotThrow(() => ctx.scale(NaN,0))
@@ -1861,7 +1881,7 @@ describe("Context2D", ()=>{
       assert.doesNotThrow(() => ctx.rect(0,0,NaN,0))
       assert.doesNotThrow(() => ctx.arc(0,0,NaN,0,0))
       assert.doesNotThrow(() => ctx.arc(0,0,NaN,0,0,false))
-      assert.doesNotThrow(() => ctx.arc(0,0,NaN,0,0,new Date()))
+      assert.doesNotThrow(() => lax.arc(0,0,NaN,0,0,new Date()))
       assert.doesNotThrow(() => ctx.ellipse(0,0,0,NaN,0,0,0))
       assert.doesNotThrow(() => ctx.moveTo(NaN,0))
       assert.doesNotThrow(() => ctx.lineTo(NaN,0))
