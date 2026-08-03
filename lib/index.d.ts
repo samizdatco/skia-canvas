@@ -735,7 +735,11 @@ interface CanvasText {
 interface CanvasTextDrawingStyles {
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/direction) */
     direction: CanvasDirection;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/font) */
+    /**
+     * A CSS `font` shorthand string, e.g. `"italic bold 24px/1.5 Palatino, serif"`.
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/font)
+     */
     font: string;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontStretch) */
     fontStretch: CanvasFontStretch;
