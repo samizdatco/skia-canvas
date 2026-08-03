@@ -865,13 +865,12 @@ pub fn get_fontVariant(mut cx: FunctionContext) -> JsResult<JsString> {
 
 pub fn set_fontVariant(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-  let arg = cx.argument::<JsObject>(1)?;
-
-  let variant = string_for_key(&mut cx, &arg, "variant")?;
-  let feat_obj: Handle<JsObject> = arg.get(&mut cx, "features")?;
-  let features = font_features(&mut cx, &feat_obj)?;
-  this.set_font_variant(&variant, &features);
+  if let Some(arg) = opt_object_arg(&mut cx, 1){
+    let variant = string_for_key(&mut cx, &arg, "variant")?;
+    let feat_obj: Handle<JsObject> = arg.get(&mut cx, "features")?;
+    let features = font_features(&mut cx, &feat_obj)?;
+    this.borrow_mut().set_font_variant(&variant, &features);
+  }
   Ok(cx.undefined())
 }
 

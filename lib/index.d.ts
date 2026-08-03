@@ -523,13 +523,18 @@ type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:num
 type GlobalCompositeOperation = "clear" | "color" | "color-burn" | "color-dodge" | "copy" | "darken" | "destination" | "destination-atop" | "destination-in" | "destination-out" | "destination-over" | "difference" | "exclusion" | "hard-light" | "hue" | "lighten" | "lighter" | "luminosity" | "multiply" | "overlay" | "saturation" | "screen" | "soft-light" | "source-atop" | "source-in" | "source-out" | "source-over" | "xor";
 type ImageSmoothingQuality = "high" | "low" | "medium";
 
-type FontVariantSetting = "normal" |
+type FontVariantKeyword = "normal" |
 /* alternates */ "historical-forms" |
 /* caps */ "small-caps" | "all-small-caps" | "petite-caps" | "all-petite-caps" | "unicase" | "titling-caps" |
 /* numeric */ "lining-nums" | "oldstyle-nums" | "proportional-nums" | "tabular-nums" | "diagonal-fractions" | "stacked-fractions" | "ordinal" | "slashed-zero" |
 /* ligatures */ "common-ligatures" | "no-common-ligatures" | "discretionary-ligatures" | "no-discretionary-ligatures" | "historical-ligatures" | "no-historical-ligatures" | "contextual" | "no-contextual" |
 /* east-asian */ "jis78" | "jis83" | "jis90" | "jis04" | "simplified" | "traditional" | "full-width" | "proportional-width" | "ruby" |
 /* position */ "super" | "sub";
+
+type FontVariantAlternate =
+  | `stylistic(${number})` | `styleset(${number})` | `swash(${number})`
+  | `character-variant(${number})` | `ornaments(${number})` | `annotation(${number})`;
+type FontVariantSetting = FontVariantKeyword | FontVariantAlternate | (string & {});
 
 
 export interface CreateTextureOptions {
