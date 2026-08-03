@@ -741,3 +741,80 @@ describe("FontLibrary", ()=>{
   })
 
 })
+
+describe("Typography", () => {
+  /** @type {Canvas} */
+  let canvas
+  /** @type {import('../../lib').CanvasRenderingContext2D} */
+  let ctx
+  let WIDTH = 512, HEIGHT = 512,
+      FONTS_DIR = 'tests/assets/fonts',
+      findFont = font => path.join(FONTS_DIR, font);
+
+  beforeEach(() => {
+    canvas = new Canvas(WIDTH, HEIGHT)
+    ctx = canvas.getContext("2d")
+  })
+
+  afterEach(() => {
+    FontLibrary.reset()
+  })
+
+  describe("fontVariant", () => {
+    test("defaults to normal", () => {
+      assert.equal(ctx.fontVariant, "normal")
+    })
+
+    test("accepts single keywords", () => {
+      for (let kw of ["small-caps", "all-small-caps", "tabular-nums", "oldstyle-nums",
+                      "lining-nums", "discretionary-ligatures", "slashed-zero", "ordinal",
+                      "super", "sub"]){
+        ctx.fontVariant = kw
+        assert.equal(ctx.fontVariant, kw)
+      }
+    })
+
+    test("accepts normal (resetting a prior value)", () => {
+      ctx.fontVariant = "small-caps"
+      ctx.fontVariant = "normal"
+      assert.equal(ctx.fontVariant, "normal")
+    })
+
+    test("accepts space-separated combos", () => {
+      ctx.fontVariant = "small-caps tabular-nums"
+      assert.equal(ctx.fontVariant, "small-caps tabular-nums")
+      ctx.fontVariant = "oldstyle-nums lining-nums"
+      assert.equal(ctx.fontVariant, "oldstyle-nums lining-nums")
+    })
+
+    test("accepts parameterized alternates", () => {
+      for (let v of ["stylistic(2)", "styleset(3)", "swash(1)",
+                     "character-variant(4)", "ornaments(1)", "annotation(1)"]){
+        ctx.fontVariant = v
+        assert.equal(ctx.fontVariant, v)
+      }
+    })
+
+    test("applies features to text shaping", () => {
+      FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      ctx.font = "40px TestFace"
+      let text = "0123456789",
+          base = ctx.measureText(text).width
+      ctx.fontVariant = "tabular-nums"
+      let tnum = ctx.measureText(text).width
+      assert(tnum > base, `expected tabular-nums width (${tnum}) > proportional width (${base})`)
+    })
+
+    test("silently ignores invalid values, keeping the prior value", () => {
+      ctx.fontVariant = "small-caps"
+      assert.doesNotThrow(() => { ctx.fontVariant = "bogus" })
+      assert.equal(ctx.fontVariant, "small-caps")
+    })
+
+    test("rejects a combo whole if any token is invalid (all-or-nothing)", () => {
+      ctx.fontVariant = "tabular-nums"
+      ctx.fontVariant = "small-caps bogus"
+      assert.equal(ctx.fontVariant, "tabular-nums")
+    })
+  })
+})
