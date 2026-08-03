@@ -817,4 +817,29 @@ describe("Typography", () => {
       assert.equal(ctx.fontVariant, "tabular-nums")
     })
   })
+
+  describe("fontStretch", () => {
+    test("defaults to normal", () => {
+      assert.equal(ctx.fontStretch, "normal")
+    })
+
+    test("accepts stretch keywords", () => {
+      /** @type {Array<import('../../lib').CanvasRenderingContext2D['fontStretch']>} */
+      let keywords = ["ultra-condensed", "extra-condensed", "condensed", "semi-condensed",
+                      "semi-expanded", "expanded", "extra-expanded", "ultra-expanded", "normal"]
+      for (let kw of keywords){
+        ctx.fontStretch = kw
+        assert.equal(ctx.fontStretch, kw)
+      }
+    })
+
+    test("silently ignores invalid values, keeping the prior value", () => {
+      ctx.fontStretch = "condensed"
+      assert.doesNotThrow(() => {
+        // @ts-expect-error - "bogus" is not a valid CanvasFontStretch
+        ctx.fontStretch = "bogus"
+      })
+      assert.equal(ctx.fontStretch, "condensed")
+    })
+  })
 })
