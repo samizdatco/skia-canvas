@@ -35,7 +35,10 @@
   "devDependencies": {
     "@hono/node-server": "^2.0.12",
     "@types/node": "^24.13.3",
+    "clean-stack": "^5.2.0",
     "hono": "^4.12.32",
+    "jest-diff": "^29.7.0",
+    "markdown-or-chalk": "^0.2.0",
     "nock": "^14.0.16",
     "tmp": "^0.2.7"
   },
