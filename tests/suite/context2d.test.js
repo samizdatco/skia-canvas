@@ -552,6 +552,27 @@ describe("Context2D", ()=>{
       canvas.gpu = gpu
     })
 
+    test("filter rejects a chain whole if any term is invalid (all-or-nothing)", () => {
+      // an invalid term drops the entire declaration and keeps the prior filter — matching CSS
+      // (and `font`/`fontVariant`) rather than salvaging the valid terms
+      ctx.filter = 'blur(2px)'
+      assert.equal(ctx.filter, 'blur(2px)')
+      ctx.filter = 'blur(4px) garbage(3)'
+      assert.equal(ctx.filter, 'blur(2px)')
+      // junk glued to a valid function (no space) is likewise invalid: browsers parse `filter` as
+      // a token list, so leading/trailing/embedded junk drops the whole value rather than letting
+      // the valid substring through
+      for (let junk of ['blur(4px)junk', 'junkblur(4px)', 'xblur(4px)', 'blur(4px)!!!']){
+        ctx.filter = junk
+        assert.equal(ctx.filter, 'blur(2px)', `"${junk}" should be rejected whole`)
+      }
+      // a fully-valid chain still applies, and `none` still resets
+      ctx.filter = 'blur(4px) invert(50%)'
+      assert.equal(ctx.filter, 'blur(4px) invert(50%)')
+      ctx.filter = 'none'
+      assert.equal(ctx.filter, 'none')
+    })
+
     test('shadow', async() => {
       const sin = Math.sin(1.15*Math.PI)
       const cos = Math.cos(1.15*Math.PI)
