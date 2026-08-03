@@ -2,6 +2,7 @@
 
 "use strict"
 
+
 const {assert, describe, test, beforeEach, afterEach} = require('../runner'),
       {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../../lib'),
       css = require('../../lib/classes/css')

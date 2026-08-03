@@ -2,7 +2,6 @@ NPM := $(CURDIR)/node_modules
 LIB := $(CURDIR)/lib/skia.node
 LIB_SRC := Cargo.toml lib/prebuild.mjs $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src/*/*/*.rs)
 GIT_TAG = $(shell git describe)
-TESTS := $(wildcard tests/suite/*.test.js)
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | sed -e 's/^.*=/v/')
 PRERELEASE_FLAG = $(subst -rc,--prerelease,$(findstring -rc,$(PACKAGE_VERSION)))
 NPM_VERSION = $(shell npm view skia-canvas version)
@@ -25,10 +24,10 @@ dev: $(NPM) $(LIB_SRC)
 	@touch $(LIB)
 
 test: $(LIB)
-	node --test --test-reporter ./tests/runner/full.js $(TESTS)
+	node --test --test-reporter ./tests/runner/full.js "tests/suite/*.test.js"
 
 debug: $(LIB)
-	node --test --watch $(TESTS)
+	node --test --test-reporter ./tests/runner/debug.js --watch "tests/suite/*.test.js"
 
 visual: $(LIB)
 	@node --watch-path lib --watch-path tests/visual tests/visual
