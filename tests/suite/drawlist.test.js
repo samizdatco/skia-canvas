@@ -6,7 +6,8 @@
 //
 "use strict"
 
-const {assert, describe, test} = require('../runner'),
+const {assert} = require('../runner/assert'), 
+      {describe, test} = require('node:test'),
       {execFileSync} = require('node:child_process'),
       fs = require('node:fs'),
       path = require('node:path'),

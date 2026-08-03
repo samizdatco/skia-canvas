@@ -6,7 +6,8 @@ const path = require('path'),
       os = require('os'),
       fs = require('fs'),
       nock = require('nock'),
-      {assert, describe, test, beforeEach, afterEach} = require('../runner'),
+      {assert} = require('../runner/assert'), 
+      {describe, test, beforeEach, afterEach} = require('node:test'),
       {pathToFileURL, fileURLToPath} = require('url'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../../lib')
 
