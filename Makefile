@@ -25,7 +25,7 @@ dev: $(NPM) $(LIB_SRC)
 	@touch $(LIB)
 
 test: $(LIB)
-	node --test $(TESTS)
+	node --test --test-reporter ./tests/runner/full.js $(TESTS)
 
 debug: $(LIB)
 	node --test --watch $(TESTS)
