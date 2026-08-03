@@ -943,4 +943,62 @@ describe("Typography", () => {
       assert.equal(ctx.textDecoration, "none")
     })
   })
+
+  describe("SKIA_CANVAS_STRICT", () => {
+    // the flag is read once when lib/classes/neon.js loads, so it can't be toggled in-process.
+    // exercise every strict-mode rejection in a single child process (rather than one per case);
+    // the child collects any mismatch, prints it to stderr, and exits non-zero.
+    test("invalid typography values throw a TypeError (valid ones don't)", () => {
+      const {execFileSync} = require('node:child_process')
+      const lib = require.resolve('../../lib')
+      const child = `
+        const {Canvas} = require(${JSON.stringify(lib)})
+        const ctx = new Canvas(10, 10).getContext('2d')
+
+        // [property, value, shouldThrow] — invalid values throw under strict; valid ones must not
+        const cases = [
+          // rejected by the JS parsers (css.js \`parsed\`)
+          ['font',           'not-a-font',                      true],
+          ['fontVariant',    'bogus',                           true],
+          ['fontVariant',    'small-caps bogus',                true],
+          ['fontStretch',    'bogus',                           true],
+          ['letterSpacing',  'bogus',                           true],
+          ['wordSpacing',    '2ex',                             true],
+          ['textDecoration', 'notaword blue',                   true],
+          ['filter',         'blur(2px)junk',                   true],
+          ['filter',         'blur(2px) garbage(3)',            true],
+          // rejected Rust-side via the ⚠️ canary (neon.js \`rustError\`)
+          ['textDecoration', 'blahblah',                        true],
+          ['textDecoration', 'underline notacolor',             true],
+          // valid values must survive strict mode untouched
+          ['fontVariant',    'small-caps',                      false],
+          ['letterSpacing',  '1rem',                            false],
+          ['textDecoration', 'line-through oklch(0.7 0.1 200)', false],
+          ['filter',         'blur(2px) invert(50%)',           false],
+        ]
+
+        const fails = []
+        for (const [prop, value, shouldThrow] of cases){
+          let threw = null
+          try { ctx[prop] = value } catch(e){ threw = e }
+          if (shouldThrow && !threw)
+            fails.push(prop + ' = ' + JSON.stringify(value) + ' should have thrown')
+          else if (shouldThrow && !(threw instanceof TypeError))
+            fails.push(prop + ' = ' + JSON.stringify(value) + ' threw ' + threw.constructor.name + ', expected TypeError')
+          else if (!shouldThrow && threw)
+            fails.push(prop + ' = ' + JSON.stringify(value) + ' should not have thrown (' + threw.message + ')')
+        }
+        if (fails.length){ console.error(fails.join('\\n')); process.exit(1) }
+      `
+      try {
+        execFileSync(process.execPath, ['-e', child], {
+          env: {...process.env, SKIA_CANVAS_STRICT: '1'},
+          encoding: 'utf8',
+          stdio: ['ignore', 'ignore', 'pipe'],
+        })
+      } catch (err) {
+        assert.fail('strict-mode expectations failed:\n' + String(err.stderr || err.message).trim())
+      }
+    })
+  })
 })
