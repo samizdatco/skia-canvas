@@ -605,7 +605,8 @@ impl Spacing{
 
   pub fn in_px(&self, em_size:f32) -> f32{
     match self.unit.as_str(){
-      "em" | "rem" => self.raw_size * em_size,
+      "em" => self.raw_size * em_size,
+      "rem" => self.raw_size * 16.0,
       _ => self.px_size
     }
   }

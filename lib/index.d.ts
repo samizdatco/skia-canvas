@@ -743,13 +743,23 @@ interface CanvasTextDrawingStyles {
     font: string;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontStretch) */
     fontStretch: CanvasFontStretch;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/letterSpacing) */
+    /**
+     * A CSS length, e.g. `"2px"` or `"0.1em"`. Accepts `px`, `pt`, `pc`, `in`, `cm`, `mm`, `q`,
+     * `em`, and `rem` (`em`/`rem` resolve against the current font size); other units are ignored.
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/letterSpacing)
+     */
     letterSpacing: string;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textAlign) */
     textAlign: CanvasTextAlign;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textBaseline) */
     textBaseline: CanvasTextBaseline;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/wordSpacing) */
+    /**
+     * A CSS length, e.g. `"4px"` or `"0.25em"`. Accepts `px`, `pt`, `pc`, `in`, `cm`, `mm`, `q`,
+     * `em`, and `rem` (`em`/`rem` resolve against the current font size); other units are ignored.
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/wordSpacing)
+     */
     wordSpacing: string;
 
     // UNIMPLEMENTED
