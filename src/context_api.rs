@@ -896,11 +896,8 @@ pub fn get_textDecoration(mut cx: FunctionContext) -> JsResult<JsString> {
 
 pub fn set_textDecoration(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  if let Ok(arg) = decoration_arg(&mut cx, 1){
-    if let Some(deco_style) = arg{
-      let mut this = this.borrow_mut();
-      this.state.text_decoration = deco_style;
-    }
+  if let Some(deco_style) = decoration_arg(&mut cx, 1)? {
+    this.borrow_mut().state.text_decoration = deco_style;
   }
 
   Ok(cx.undefined())

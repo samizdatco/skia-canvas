@@ -901,4 +901,46 @@ describe("Typography", () => {
       assert.equal(ctx.wordSpacing, "6px")
     })
   })
+
+  describe("textDecoration", () => {
+    test("defaults to none", () => {
+      assert.equal(ctx.textDecoration, "none")
+    })
+
+    test("accepts a bare line keyword (inheriting the current color)", () => {
+      // a decoration with no explicit color uses `currentColor`; it must still apply rather than
+      // being dropped as "invalid" (regression: underline-alone previously round-tripped to "none")
+      for (let line of ["underline", "overline", "line-through"]){
+        ctx.textDecoration = "none"
+        ctx.textDecoration = line
+        assert.equal(ctx.textDecoration, line)
+      }
+    })
+
+    test("accepts a line + style + color combo", () => {
+      ctx.textDecoration = "underline wavy red"
+      assert.equal(ctx.textDecoration, "underline wavy red")
+    })
+
+    test("accepts a wide-gamut color token", () => {
+      ctx.textDecoration = "line-through oklch(0.7 0.1 200)"
+      assert.equal(ctx.textDecoration, "line-through oklch(0.7 0.1 200)")
+    })
+
+    test("silently ignores junk, keeping the prior value", () => {
+      // junk must no-op (retain the prior decoration), not reset to "none": a single unrecognized
+      // token, an unparseable color, and junk hidden behind a valid color
+      ctx.textDecoration = "underline wavy red"
+      for (let junk of ["blahblah", "underline blahblah", "notaword blue"]){
+        ctx.textDecoration = junk
+        assert.equal(ctx.textDecoration, "underline wavy red", `"${junk}" should be ignored`)
+      }
+    })
+
+    test("an explicit none resets a prior decoration", () => {
+      ctx.textDecoration = "underline"
+      ctx.textDecoration = "none"
+      assert.equal(ctx.textDecoration, "none")
+    })
+  })
 })

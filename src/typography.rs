@@ -522,6 +522,15 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
   if let Some(deco) = opt_object_arg(cx, idx){
     let css = string_for_key(cx, &deco, "str")?;
 
+    // inherit the fill color unless textDecoration specifies a css color to use
+    let color = match string_for_key(cx, &deco, "color")?.as_str(){
+      "currentColor" => None,
+      color_str => match css_to_color(&color_str){
+        Some(color) => Some(color),
+        None => return cx.throw_type_error(format!("⚠️Invalid text decoration: {:?}", css)),
+      }
+    };
+
     let line = string_for_key(cx, &deco, "line")?;
     let ty = match line.as_str(){
       "underline" => TextDecoration::UNDERLINE,
@@ -539,11 +548,6 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
       "solid" | _ => TextDecorationStyle::Solid,
     };
 
-    let color = match string_for_key(cx, &deco, "color")?.as_str(){
-      "currentColor" => None,
-      color_str => css_to_color(&color_str),
-    };
-
     let inherit = string_for_key(cx, &deco, "inherit")?;
     let size = match inherit.as_str(){
       "from-font" => None,
@@ -553,8 +557,8 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
       }
     };
 
-    // if the setting is invalid, it should just be ignored
-    if css.is_empty() || color.is_none(){ return Ok(None) }
+    // an empty decoration string is a no-op (a None color here just means `currentColor`)
+    if css.is_empty(){ return Ok(None) }
 
     // As of skia_safe 0.78.2, `Gaps` mode is too buggy, with random breaks in places that don't have
     // descenders. It would be nice to enable this in a future release once it stabilizes…

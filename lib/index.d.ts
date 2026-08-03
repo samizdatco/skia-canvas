@@ -536,6 +536,16 @@ type FontVariantAlternate =
   | `character-variant(${number})` | `ornaments(${number})` | `annotation(${number})`;
 type FontVariantSetting = FontVariantKeyword | FontVariantAlternate | (string & {});
 
+// A `text-decoration` shorthand value: a line keyword optionally combined with a style keyword,
+// a thickness (a LengthString), and a color — e.g. "underline", "line-through wavy", or
+// "underline 2px dodgerblue". The finite keywords below surface in completions; the (string & {})
+// escape hatch lets full combos and computed strings through (validated by the runtime, not TS).
+type TextDecorationKeyword =
+  /* line */ "none" | "underline" | "overline" | "line-through" |
+  /* style */ "solid" | "double" | "dotted" | "dashed" | "wavy" |
+  /* thickness source */ "auto" | "from-font";
+type TextDecorationSetting = TextDecorationKeyword | (string & {});
+
 
 export interface CreateTextureOptions {
   /** The 2D shape to be drawn in a repeating grid with the specified spacing (if omitted, parallel lines will be used) */
@@ -809,7 +819,7 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   fontSmoothing: boolean
   fontSynthesis: boolean
   textWrap: boolean
-  textDecoration: string
+  textDecoration: TextDecorationSetting
   lineDashMarker: Path2D | null
   lineDashFit: "move" | "turn" | "follow"
 
