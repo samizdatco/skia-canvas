@@ -1,5 +1,4 @@
-const {describe, test, beforeEach, afterEach} = require('node:test'),
-      assert = require('node:assert')
+const assert = require('node:assert')
 
 Object.assign(assert, {
   contains: (actual, expected) => assert((actual || []).includes(expected)),
@@ -11,4 +10,4 @@ Object.assign(assert, {
   )
 })
 
-module.exports = {assert, describe, test, beforeEach, afterEach}
+module.exports = {assert}

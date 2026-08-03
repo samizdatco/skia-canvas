@@ -5,7 +5,8 @@
 const fs = require('fs'),
       tmp = require('tmp'),
       path = require('path'),
-      {assert, describe, test, beforeEach, afterEach} = require('../runner'),
+      {assert} = require('../runner/assert'), 
+      {describe, test, beforeEach, afterEach} = require('node:test'),
       {Canvas, Image, FontLibrary, loadImage} = require('../../lib');
 
 const BLACK = [0,0,0,255],

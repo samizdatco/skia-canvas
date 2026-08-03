@@ -3,7 +3,8 @@
 "use strict"
 
 
-const {assert, describe, test, beforeEach, afterEach} = require('../runner'),
+const {assert} = require('../runner/assert'), 
+      {describe, test, beforeEach, afterEach} = require('node:test'),
       {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../../lib'),
       css = require('../../lib/classes/css')
 

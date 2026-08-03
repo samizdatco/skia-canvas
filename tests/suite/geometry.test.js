@@ -2,7 +2,7 @@
 
 "use strict"
 
-const {assert, describe, test} = require('../runner'),
+const {assert} = require('../runner/assert'), {describe, test} = require('node:test'),
       {DOMMatrix, DOMPoint, DOMRect} = require('../../lib');
 
 const cells = m => [m.a, m.b, m.c, m.d, m.e, m.f]
