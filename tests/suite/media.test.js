@@ -842,4 +842,63 @@ describe("Typography", () => {
       assert.equal(ctx.fontStretch, "condensed")
     })
   })
+
+  describe("letterSpacing / wordSpacing", () => {
+    test("default to 0px", () => {
+      assert.equal(ctx.letterSpacing, "0px")
+      assert.equal(ctx.wordSpacing, "0px")
+    })
+
+    test("accept absolute length units", () => {
+      for (let len of ["5px", "2pt", "1pc", "0.5cm", "10q"]){
+        ctx.letterSpacing = len
+        assert.equal(ctx.letterSpacing, len)
+        ctx.wordSpacing = len
+        assert.equal(ctx.wordSpacing, len)
+      }
+    })
+
+    test("accept font-relative em / rem units", () => {
+      ctx.letterSpacing = "0.1em"
+      assert.equal(ctx.letterSpacing, "0.1em")
+      ctx.wordSpacing = "1rem"
+      assert.equal(ctx.wordSpacing, "1rem")
+    })
+
+    test("resolve em against the current font size", () => {
+      // 1em of letter-spacing should widen text twice as much at 40px as at 20px
+      ctx.letterSpacing = "1em"
+      ctx.font = "40px serif"
+      let wide = ctx.measureText("abc").width
+      ctx.font = "20px serif"
+      let narrow = ctx.measureText("abc").width
+      assert(wide > narrow, `expected 40px spacing (${wide}) > 20px spacing (${narrow})`)
+    })
+
+    test("resolve rem against a fixed 16px root, not the current font size", () => {
+      // rem is root-relative, so 1rem == 16px regardless of the font size (unlike em above)
+      for (let px of ["40px", "10px"]){
+        ctx.font = `${px} serif`
+        ctx.letterSpacing = "1rem"
+        let rem = ctx.measureText("abc").width
+        ctx.letterSpacing = "16px"
+        let px16 = ctx.measureText("abc").width
+        assert.nearEqual(rem, px16)
+      }
+    })
+
+    test("ignore units that can't be resolved (%, ex, ch)", () => {
+      ctx.letterSpacing = "4px"
+      for (let bad of ["10%", "2ex", "3ch"]){
+        ctx.letterSpacing = bad
+        assert.equal(ctx.letterSpacing, "4px", `${bad} should have been ignored`)
+      }
+    })
+
+    test("silently ignore invalid values, keeping the prior value", () => {
+      ctx.wordSpacing = "6px"
+      assert.doesNotThrow(() => { ctx.wordSpacing = "bogus" })
+      assert.equal(ctx.wordSpacing, "6px")
+    })
+  })
 })
