@@ -180,6 +180,153 @@ describe("Image", () => {
     })
   })
 
+  describe("resolves SVG <style> CSS", () => {
+    // Skia's SVG DOM ignores <style>/CSS selectors (only presentation & inline-style attrs), so
+    // skia-canvas resolves the cascade itself before rendering (see src/image.rs). These tests
+    // render each selector/cascade construction and check the fill actually landed. Behavior was
+    // cross-checked against Chrome. `rgb(0,170,0)` = the "styled" fill; unstyled rects fall back
+    // to SVG's default black.
+    const GREEN = 'rgb(0,170,0)', RED = 'rgb(200,0,0)'
+    const render = async (body, x = 20, y = 20) => {
+      let svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">${body}</svg>`)
+      let image = await loadImage(svg)
+      let canvas = new Canvas(40, 40), ctx = canvas.getContext('2d')
+      ctx.drawImage(image, 0, 0)
+      return Array.from(ctx.getImageData(x, y, 1, 1).data)
+    }
+    const isGreen = px => px[3] > 250 && px[1] > 150 && px[0] < 60 && px[2] < 60
+
+    test("supported selector constructions all apply", async () => {
+      const cases = {
+        'type':               `<style>rect{fill:${GREEN}}</style><rect width="40" height="40"/>`,
+        'class':              `<style>.p{fill:${GREEN}}</style><rect class="p" width="40" height="40"/>`,
+        'id':                 `<style>#r{fill:${GREEN}}</style><rect id="r" width="40" height="40"/>`,
+        'universal':          `<style>*{fill:${GREEN}}</style><rect width="40" height="40"/>`,
+        'descendant':         `<style>g rect{fill:${GREEN}}</style><g><rect width="40" height="40"/></g>`,
+        'child (>)':          `<style>g>rect{fill:${GREEN}}</style><g><rect width="40" height="40"/></g>`,
+        'attribute [a]':      `<style>rect[data-x]{fill:${GREEN}}</style><rect data-x="1" width="40" height="40"/>`,
+        'attribute [a=v]':    `<style>rect[role=box]{fill:${GREEN}}</style><rect role="box" width="40" height="40"/>`,
+        'attribute [a~=v]':   `<style>[class~=p]{fill:${GREEN}}</style><rect class="a p b" width="40" height="40"/>`,
+        'grouped selector':   `<style>circle, rect{fill:${GREEN}}</style><rect width="40" height="40"/>`,
+      }
+      for (const [name, body] of Object.entries(cases)){
+        assert(isGreen(await render(body)), `${name} selector did not apply`)
+      }
+    })
+
+    test("structural selectors match the right sibling", async () => {
+      // adjacent-sibling `rect + rect` targets only the SECOND of two stacked rects
+      let adj = `<style>rect+rect{fill:${GREEN}}</style>` +
+                `<rect x="0" y="0" width="40" height="20"/><rect x="0" y="20" width="40" height="20"/>`
+      assert(isGreen(await render(adj, 20, 30)), 'adjacent sibling did not apply to the 2nd rect')
+      assert(!isGreen(await render(adj, 20, 10)), 'adjacent sibling wrongly applied to the 1st rect')
+
+      // `:first-child` targets only the FIRST of two side-by-side rects in a <g>
+      let fc = `<style>rect:first-child{fill:${GREEN}}</style>` +
+               `<g><rect x="0" y="0" width="20" height="40"/><rect x="20" y="0" width="20" height="40"/></g>`
+      assert(isGreen(await render(fc, 10, 20)), ':first-child did not apply to the 1st rect')
+      assert(!isGreen(await render(fc, 30, 20)), ':first-child wrongly applied to the 2nd rect')
+    })
+
+    test("cascade & specificity resolve like a browser", async () => {
+      // inline style beats a stylesheet rule
+      assert(isGreen(await render(
+        `<style>.x{fill:${RED}}</style><rect class="x" style="fill:${GREEN}" width="40" height="40"/>`)),
+        'inline style should beat the stylesheet')
+      // a stylesheet rule beats a presentation attribute
+      assert(isGreen(await render(
+        `<style>.x{fill:${GREEN}}</style><rect class="x" fill="${RED}" width="40" height="40"/>`)),
+        'stylesheet should beat the presentation attribute')
+      // higher specificity wins (#id over .class)
+      assert(isGreen(await render(
+        `<style>.x{fill:${RED}} #r{fill:${GREEN}}</style><rect id="r" class="x" width="40" height="40"/>`)),
+        'id selector should outrank class selector')
+      // equal specificity → later rule wins
+      assert(isGreen(await render(
+        `<style>.x{fill:${RED}} .x{fill:${GREEN}}</style><rect class="x" width="40" height="40"/>`)),
+        'the later of two equal-specificity rules should win')
+      // stylesheet inside a CDATA section is still honored
+      assert(isGreen(await render(
+        `<style><![CDATA[ .x{fill:${GREEN}} ]]></style><rect class="x" width="40" height="40"/>`)),
+        'CDATA-wrapped stylesheet should be honored')
+    })
+
+    test("child-order & of-type structural pseudo-classes select correctly", async () => {
+      // four side-by-side rects (each 10 wide); centers at x = 5, 15, 25, 35
+      const rects = `<rect x="0" width="10" height="40"/><rect x="10" width="10" height="40"/>` +
+                    `<rect x="20" width="10" height="40"/><rect x="30" width="10" height="40"/>`
+      const strip = rule => `<style>${rule}</style><g>${rects}</g>`
+
+      let odd = strip(`rect:nth-child(odd){fill:${GREEN}}`)
+      assert(isGreen(await render(odd, 5, 20)) && isGreen(await render(odd, 25, 20)), ':nth-child(odd) should hit the 1st & 3rd')
+      assert(!isGreen(await render(odd, 15, 20)) && !isGreen(await render(odd, 35, 20)), ':nth-child(odd) should skip the 2nd & 4th')
+
+      let last = strip(`rect:last-child{fill:${GREEN}}`)
+      assert(isGreen(await render(last, 35, 20)) && !isGreen(await render(last, 5, 20)), ':last-child should hit only the 4th')
+
+      let anb = strip(`rect:nth-child(2n){fill:${GREEN}}`)
+      assert(isGreen(await render(anb, 15, 20)) && isGreen(await render(anb, 35, 20)), ':nth-child(2n) should hit the 2nd & 4th')
+
+      // a non-rect sibling shifts child indices but not of-type indices: children are rect, circle, rect
+      let ofType = `<style>rect:nth-of-type(2){fill:${GREEN}}</style><g>` +
+        `<rect x="0" width="10" height="40"/><circle cx="15" cy="20" r="3"/><rect x="20" width="10" height="40"/></g>`
+      assert(isGreen(await render(ofType, 25, 20)), ':nth-of-type(2) should hit the 2nd rect (the 3rd child)')
+      assert(!isGreen(await render(ofType, 5, 20)), ':nth-of-type(2) should skip the 1st rect')
+    })
+
+    test("general sibling (~) targets every following sibling", async () => {
+      let body = `<style>circle ~ rect{fill:${GREEN}}</style><g>` +
+        `<rect x="0" width="10" height="40"/>` +                 // before the circle — not matched
+        `<circle cx="15" cy="20" r="3"/>` +
+        `<rect x="20" width="10" height="40"/>` +                // after — matched
+        `<rect x="30" width="10" height="40"/></g>`              // after — matched
+      assert(!isGreen(await render(body, 5, 20)), 'a sibling before the circle should not match')
+      assert(isGreen(await render(body, 25, 20)) && isGreen(await render(body, 35, 20)), 'all rects after the circle should match')
+    })
+
+    test(":not() handles simple, complex, and (deferred) list arguments", async () => {
+      let simple = `<style>rect:not(.skip){fill:${GREEN}}</style><g>` +
+        `<rect x="0" width="20" height="40" class="skip"/><rect x="20" width="20" height="40"/></g>`
+      assert(!isGreen(await render(simple, 10, 20)), ':not(.skip) should skip the .skip rect')
+      assert(isGreen(await render(simple, 30, 20)), ':not(.skip) should match the other rect')
+
+      // complex inner selector (adjacent combinator): the 2nd rect *is* `rect + rect`, so it's excluded
+      let complex = `<style>rect:not(rect + rect){fill:${GREEN}}</style><g>` +
+        `<rect x="0" width="20" height="40"/><rect x="20" width="20" height="40"/></g>`
+      assert(isGreen(await render(complex, 10, 20)), ':not(rect+rect) should match the 1st rect')
+      assert(!isGreen(await render(complex, 30, 20)), ':not(rect+rect) should exclude the 2nd rect')
+
+      // a comma-separated list inside :not() is deferred → the pseudo never matches (rule doesn't apply)
+      let list = `<style>rect:not(.a, .b){fill:${GREEN}}</style><rect width="40" height="40"/>`
+      assert(!isGreen(await render(list)), ':not() with a comma-list should be skipped, not applied')
+    })
+
+    test("unknown/interactive pseudo-classes are skipped without dropping grouped selectors", async () => {
+      // :target never matches statically, but the grouped plain `rect` selector must still apply —
+      // i.e. an unknown pseudo no longer drops the whole rule (and its siblings) at parse time
+      let grouped = `<style>rect:target, rect{fill:${GREEN}}</style><rect width="40" height="40"/>`
+      assert(isGreen(await render(grouped)), 'a grouped plain selector should apply alongside an unknown :target selector')
+
+      let target = `<style>rect:target{fill:${GREEN}}</style><rect width="40" height="40"/>`
+      assert(!isGreen(await render(target)), ':target should never match a static render')
+    })
+
+    test("!important resolves in our own cascade (Skia ignores it)", async () => {
+      // an important rule beats a higher-specificity normal one
+      assert(isGreen(await render(
+        `<style>#r{fill:${RED}} .x{fill:${GREEN} !important}</style><rect id="r" class="x" width="40" height="40"/>`)),
+        'an important class rule should beat a normal id rule')
+      // inline !important beats stylesheet !important
+      assert(isGreen(await render(
+        `<style>.x{fill:${RED} !important}</style><rect class="x" style="fill:${GREEN} !important" width="40" height="40"/>`)),
+        'inline !important should beat stylesheet !important')
+      // stylesheet !important beats a normal inline style (which would otherwise win)
+      assert(isGreen(await render(
+        `<style>.x{fill:${GREEN} !important}</style><rect class="x" style="fill:${RED}" width="40" height="40"/>`)),
+        'stylesheet !important should beat a normal inline style')
+    })
+  })
+
   describe("sends notifications through", () => {
     test(".complete flag", async () => {
       assert(!img.complete)
