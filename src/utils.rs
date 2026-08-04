@@ -3,8 +3,8 @@ use std::cmp;
 use std::f32::consts::PI;
 use core::ops::Range;
 use neon::prelude::*;
-use css_color::Rgba;
-use skia_safe::{ Path, Matrix, Point, Color, RGB, Data };
+use color::{parse_color, ColorSpaceTag, DynamicColor, Srgb};
+use skia_safe::{ Path, Matrix, Point, Color, Color4f, RGB, Data };
 
 //
 // panic recovery
@@ -380,30 +380,81 @@ pub fn float_args_or_bail_at(cx: &mut FunctionContext, start:usize, names:&[&str
 //
 
 
-pub fn css_to_color(css:&str) -> Option<Color> {
-  css.parse::<Rgba>().ok().map(|Rgba{red, green, blue, alpha}|
-    Color::from_argb(
-      (alpha*255.0).round() as u8,
-      (red*255.0).round() as u8,
-      (green*255.0).round() as u8,
-      (blue*255.0).round() as u8,
-    )
+#[derive(Clone, Copy, Debug)]
+pub struct CssColor{
+  pub color: Color4f, // the wide-gamut (extended-sRGB) color
+  parsed: DynamicColor, // the canonicalized string form (for returning via getters)
+}
+
+impl CssColor{
+  pub fn black() -> Self{ CssColor::parse("black").unwrap() }
+  pub fn transparent() -> Self{ CssColor::parse("transparent").unwrap() }
+
+  pub fn parse(css:&str) -> Option<Self>{
+    // linebender covers the full CSS Color 4 syntax (oklch, lab, color(display-p3 ...), etc)
+    parse_color(css).ok().map(|mut parsed|{
+      // clamp % components before conversion (as the spec requires) since linebender leaves them unbounded
+      if matches!(parsed.cs, ColorSpaceTag::Hsl | ColorSpaceTag::Hwb){
+        parsed.components[1] = parsed.components[1].clamp(0.0, 100.0);
+        parsed.components[2] = parsed.components[2].clamp(0.0, 100.0);
+      }
+      // convert to extended sRGB (out-of-gamut components are unclamped until rasterization)
+      let [red, green, blue, alpha] = parsed.to_alpha_color::<Srgb>().components;
+      Self{ color:Color4f::new(red, green, blue, alpha.clamp(0.0, 1.0)), parsed }
+    })
+  }
+
+  pub fn to_css(&self) -> String{
+    // return canonical string (use legacy format for hex/rgba(), CSS Color 4 syntax for everything else)
+    match self.parsed.flags.named() || self.parsed.flags.color_name().is_some(){
+      true if matches!(self.parsed.cs, ColorSpaceTag::Srgb | ColorSpaceTag::Hsl | ColorSpaceTag::Hwb) =>
+        color_to_css_string(&color4f_to_color(self.color)),
+      _ => self.parsed.to_string()
+    }
+  }
+}
+
+pub fn css_to_color4f(css:&str) -> Option<Color4f> {
+  CssColor::parse(css).map(|css_color| css_color.color)
+}
+
+pub fn color4f_to_color(color:Color4f) -> Color {
+  // clamp each component to 8-bit sRGB (emulating browser behavior)
+  Color::from_argb(
+    (color.a.clamp(0.0, 1.0)*255.0).round() as u8,
+    (color.r.clamp(0.0, 1.0)*255.0).round() as u8,
+    (color.g.clamp(0.0, 1.0)*255.0).round() as u8,
+    (color.b.clamp(0.0, 1.0)*255.0).round() as u8,
   )
 }
 
-pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
+pub fn css_to_color(css:&str) -> Option<Color> {
+  css_to_color4f(css).map(color4f_to_color)
+}
+
+fn css_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<String> {
   if val.is_a::<JsString, _>(cx) {
-    let css = val.downcast::<JsString, _>(cx).unwrap().value(cx);
-    return css_to_color(&css)
+    Some(val.downcast::<JsString, _>(cx).unwrap().value(cx))
   }else{
     // for other objects, try calling their .toString() method (if it exists)
     let obj = val.downcast::<JsObject, _>(cx).ok()?;
     let attr = obj.get::<JsValue, _, _>(cx, "toString").ok()?;
     let to_string = attr.downcast::<JsFunction, _>(cx).ok()?;
     let result = to_string.call(cx, obj, vec![]).ok()?;
-    let css = result.downcast::<JsString, _>(cx).ok()?.value(cx);
-    css_to_color(&css)
+    result.downcast::<JsString, _>(cx).ok().map(|css| css.value(cx))
   }
+}
+
+pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
+  css_in(cx, val).and_then(|css| css_to_color(&css))
+}
+
+pub fn color_in_4f<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color4f> {
+  css_in(cx, val).and_then(|css| css_to_color4f(&css))
+}
+
+pub fn css_color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<CssColor> {
+  css_in(cx, val).and_then(|css| CssColor::parse(&css))
 }
 
 pub fn opt_color_arg(cx: &mut FunctionContext, idx: usize) -> Option<Color> {
@@ -413,25 +464,38 @@ pub fn opt_color_arg(cx: &mut FunctionContext, idx: usize) -> Option<Color> {
   }
 }
 
-pub fn opt_color_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<Color>{
+pub fn opt_color_arg_4f(cx: &mut FunctionContext, idx: usize) -> Option<Color4f> {
+  match cx.argument_opt(idx) {
+    Some(arg) => color_in_4f(cx, arg),
+    _ => None
+  }
+}
+
+pub fn opt_css_color_arg(cx: &mut FunctionContext, idx: usize) -> Option<CssColor> {
+  match cx.argument_opt(idx) {
+    Some(arg) => css_color_in(cx, arg),
+    _ => None
+  }
+}
+
+pub fn opt_color_4f_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<Color4f>{
   obj.get(cx, attr).ok()
     .and_then(|val|
-      color_in(cx, val)
+      color_in_4f(cx, val)
     )
 }
 
 
-pub fn color_to_css<'a>(cx: &mut FunctionContext<'a>, color:&Color) -> JsResult<'a, JsValue> {
+pub fn color_to_css_string(color:&Color) -> String {
   let RGB {r, g, b} = color.to_rgb();
-  let css = match color.a() {
+  match color.a() {
     255 => format!("#{:02x}{:02x}{:02x}", r, g, b),
     _ => {
       let alpha = format!("{:.3}", color.a() as f32 / 255.0);
       let alpha = alpha.trim_end_matches('0');
       format!("rgba({}, {}, {}, {})", r, g, b, if alpha=="0."{ "0" } else{ alpha })
     }
-  };
-  Ok(cx.string(css).upcast())
+  }
 }
 
 //
@@ -563,12 +627,12 @@ pub fn image_data_settings_arg(cx: &mut FunctionContext, idx:usize) -> (ColorTyp
   }
 }
 
-pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace, Option<Color>, f32, Option<usize>){
+pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace, Option<Color4f>, f32, Option<usize>){
   match opt_object_arg(cx, idx){
     Some(obj) => {
       let color_type = opt_string_for_key(cx, &obj, "colorType").unwrap_or("rgba".to_string());
       let color_space = opt_string_for_key(cx, &obj, "colorSpace").unwrap_or("srgb".to_string());
-      let matte = opt_color_for_key(cx, &obj, "matte");
+      let matte = opt_color_4f_for_key(cx, &obj, "matte");
       let density = opt_float_for_key(cx, &obj, "density").unwrap_or(1.0);
       let msaa = opt_float_for_key(cx, &obj, "msaa").map(|n| n as usize);
       (to_color_type(&color_type), to_color_space(&color_space), matte, density, msaa)
@@ -578,17 +642,89 @@ pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType,
 }
 
 
+use once_cell::sync::Lazy;
+use skia_safe::{named_primaries, named_transfer_fn};
+
+static SRGB_COLOR_SPACE: Lazy<ColorSpace> = Lazy::new(ColorSpace::new_srgb);
+static DISPLAY_P3_COLOR_SPACE: Lazy<ColorSpace> = Lazy::new(||
+  // Display P3 = P3-D65 primaries + the sRGB transfer curve
+  ColorSpace::new_cicp(named_primaries::CicpId::SMPTE_EG_432_1, named_transfer_fn::CicpId::SRGB)
+    .expect("Could not construct display-p3 color space")
+);
+
 pub fn to_color_space(mode_name:&str) -> ColorSpace{
   match mode_name{
-    // TODO: add display-p3 support
-    "srgb" | _ => ColorSpace::new_srgb()
+    "display-p3" => DISPLAY_P3_COLOR_SPACE.clone(),
+    "srgb" | _ => SRGB_COLOR_SPACE.clone()
   }
 }
 
 pub fn from_color_space(mode:ColorSpace) -> String{
   match mode {
+    p3 if p3 == *DISPLAY_P3_COLOR_SPACE => "display-p3",
     _ => "srgb"
   }.to_string()
+}
+
+use skia_safe::gradient::{Interpolation, interpolation::{ColorSpace as InterpColorSpace, HueMethod, InPremul}};
+
+// The spec-default gradient interpolation: non-premultiplied, sRGB, shorter-hue
+pub fn default_interpolation() -> Interpolation{
+  Interpolation{ in_premul:InPremul::No, color_space:InterpColorSpace::SRGB, hue_method:HueMethod::Shorter }
+}
+
+pub fn color_interpolation_from_str(name:&str) -> Option<InterpColorSpace>{
+  Some(match name.trim().to_lowercase().as_str(){
+    "srgb"         => InterpColorSpace::SRGB,
+    "srgb-linear"  => InterpColorSpace::SRGBLinear,
+    "display-p3"   => InterpColorSpace::DisplayP3,
+    "a98-rgb"      => InterpColorSpace::A98RGB,
+    "prophoto-rgb" => InterpColorSpace::ProphotoRGB,
+    "rec2020"      => InterpColorSpace::Rec2020,
+    "lab"          => InterpColorSpace::Lab,
+    "oklab"        => InterpColorSpace::OKLab,
+    "lch"          => InterpColorSpace::LCH,
+    "oklch"        => InterpColorSpace::OKLCH,
+    "hsl"          => InterpColorSpace::HSL,
+    "hwb"          => InterpColorSpace::HWB,
+    _ => return None,
+  })
+}
+
+pub fn color_interpolation_to_str(space:InterpColorSpace) -> &'static str{
+  match space{
+    InterpColorSpace::SRGBLinear    => "srgb-linear",
+    InterpColorSpace::DisplayP3     => "display-p3",
+    InterpColorSpace::A98RGB        => "a98-rgb",
+    InterpColorSpace::ProphotoRGB   => "prophoto-rgb",
+    InterpColorSpace::Rec2020       => "rec2020",
+    InterpColorSpace::Lab           => "lab",
+    InterpColorSpace::OKLab | InterpColorSpace::OKLabGamutMap => "oklab",
+    InterpColorSpace::LCH           => "lch",
+    InterpColorSpace::OKLCH | InterpColorSpace::OKLCHGamutMap => "oklch",
+    InterpColorSpace::HSL           => "hsl",
+    InterpColorSpace::HWB           => "hwb",
+    _ => "srgb",
+  }
+}
+
+pub fn hue_method_from_str(name:&str) -> Option<HueMethod>{
+  Some(match name.trim().to_lowercase().as_str(){
+    "shorter"    => HueMethod::Shorter,
+    "longer"     => HueMethod::Longer,
+    "increasing" => HueMethod::Increasing,
+    "decreasing" => HueMethod::Decreasing,
+    _ => return None,
+  })
+}
+
+pub fn hue_method_to_str(method:HueMethod) -> &'static str{
+  match method{
+    HueMethod::Longer     => "longer",
+    HueMethod::Increasing => "increasing",
+    HueMethod::Decreasing => "decreasing",
+    _ => "shorter",
+  }
 }
 
 pub fn to_color_type(type_name: &str) -> ColorType {
@@ -659,16 +795,16 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let quality = float_for_key(cx, &opts, "quality")?;
   let density = float_for_key(cx, &opts, "density")?;
   let jpeg_downsample = bool_for_key(cx, &opts, "downsample")?;
-  let matte = opt_color_for_key(cx, &opts, "matte");
+  let matte = opt_color_4f_for_key(cx, &opts, "matte");
   let msaa = opt_float_for_key(cx, &opts, "msaa")
     .map(|num| num.floor() as usize);
   let color_type = opt_string_for_key(cx, &opts, "colorType")
     .map(|mode| to_color_type(&mode)).unwrap_or(ColorType::RGBA8888);
+  let color_space = opt_string_for_key(cx, &opts, "colorSpace")
+    .map(|name| to_color_space(&name)).unwrap_or_else(|| to_color_space("srgb"));
   let text_contrast = float_for_key(cx, &opts, "textContrast")?;
   let text_gamma = float_for_key(cx, &opts, "textGamma")?;
   let outline = bool_for_key(cx, &opts, "outline")?;
-
-  let color_space = ColorSpace::new_srgb();
 
   Ok(ExportOptions{
     format, quality, density, outline, matte, msaa, color_type, color_space, jpeg_downsample, text_contrast, text_gamma
@@ -722,7 +858,7 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, V
         let nums = values.to_vec(cx)?;
         let dims = floats_in(cx, &nums);
         let color_str = values.get::<JsString, _, _>(cx, 3)?.value(cx);
-        if let Some(color) = css_to_color(&color_str) {
+        if let Some(color) = css_to_color4f(&color_str) {
           filters.push(FilterSpec::Shadow{
             offset: Point::new(dims[0], dims[1]), blur: dims[2], color
           });

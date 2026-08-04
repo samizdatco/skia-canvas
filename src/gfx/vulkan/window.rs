@@ -35,7 +35,7 @@ pub struct VulkanRenderer{
 }
 
 impl VulkanRenderer {
-    pub fn for_window(_event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
+    pub fn for_window(_event_loop: &ActiveEventLoop, window: Arc<Window>, _is_transparent: bool) -> Self {
         // all windows and the offscreen engine share one instance/physical-device; each window
         // keeps its own swapchain, logical device, queue, and Skia DirectContext
         let shared = VulkanShared::get().expect("Vulkan initialization failed");

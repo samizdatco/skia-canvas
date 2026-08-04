@@ -6,7 +6,7 @@ use neon::prelude::*;
 use skia_safe::{
   svg::{self, canvas::Flags},
   image::BitDepth, images, pdf,
-  Canvas as SkCanvas, ClipOp, Color, ColorSpace, ColorType, AlphaType, Document, Surface,
+  Canvas as SkCanvas, ClipOp, Color, Color4f, ColorSpace, ColorType, AlphaType, Document, Surface,
   Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size, ISize,
   SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder
 };
@@ -200,8 +200,10 @@ impl PageRecorder{
       .get_page()
       .get_picture(None)
       .and_then(|pict| {
+        // rasterize using wide-gamut F16 colors so it can be converted into whatever colorSpace
+        // drawImage(canvas) is using
         images::deferred_from_picture(
-          pict, size, None, None, BitDepth::U8, Some(ColorSpace::new_srgb()), None
+          pict, size, None, None, BitDepth::F16, Some(ColorSpace::new_srgb()), None
         )
       })
   }
@@ -259,7 +261,7 @@ impl Drop for PageRecorder{
 pub struct RecordingSurface{
   surface: Option<Surface>,
   depth: usize,
-  matte: Option<Color>,
+  matte: Option<Color4f>,
   msaa: Option<usize>,
   gpu: Option<bool>,
   color_space: ColorSpace,
@@ -323,7 +325,7 @@ impl RecordingSurface{
         self.depth = cache_depth;
       }else if self.depth==0 {
         // otherwise, fill the canvas if requested
-        canvas.clear(self.matte.unwrap_or(Color::TRANSPARENT));
+        canvas.clear(self.matte.unwrap_or(Color::TRANSPARENT.into()));
       }
 
 
@@ -388,7 +390,7 @@ impl Page{
     Size::new(self.bounds.width() * density, self.bounds.height() * density).to_floor()
   }
 
-  pub fn get_picture(&self, matte:Option<Color>) -> Option<Picture> {
+  pub fn get_picture(&self, matte:Option<Color4f>) -> Option<Picture> {
     let mut compositor = PictureRecorder::new();
     let output = compositor.begin_recording(self.bounds, true);
     matte.map(|c| output.clear(c));
@@ -434,7 +436,7 @@ impl Page{
 
         enum Rendered{ Encodable(SkImage), Raw(Vec<u8>) }
         let rendered = engine.render(move || {
-          let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(ColorSpace::new_srgb()));
+          let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(opts.color_space.clone()));
           let mut surface = engine.make_surface(&img_info, &opts)?;
           let canvas = surface.canvas();
 
@@ -467,7 +469,7 @@ impl Page{
           match opts.format.as_str() {
             "raw" => {
               // return a Rendered::Raw buffer of pixels converted to destination color type
-              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, AlphaType::Unpremul, Some(ColorSpace::new_srgb()));
+              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, AlphaType::Unpremul, Some(opts.color_space.clone()));
               let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
               match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
                 true => Ok(Rendered::Raw(buffer)),
@@ -588,7 +590,7 @@ impl Page{
     )
   }
 
-  fn append_to<'a>(&self, doc:Document<'a>, matte:Option<Color>) -> Result<Document<'a>, String>{
+  fn append_to<'a>(&self, doc:Document<'a>, matte:Option<Color4f>) -> Result<Document<'a>, String>{
     if !self.bounds.is_empty(){
       let mut doc = doc.begin_page(self.bounds.size(), None);
       let canvas = doc.canvas();
@@ -703,7 +705,7 @@ pub struct ExportOptions{
   pub quality: f32,
   pub density: f32,
   pub outline: bool,
-  pub matte: Option<Color>,
+  pub matte: Option<Color4f>,
   pub msaa: Option<usize>,
   pub color_type: ColorType,
   pub color_space: ColorSpace,

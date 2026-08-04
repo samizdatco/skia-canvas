@@ -262,6 +262,27 @@ describe("Image", () => {
     test("WEBP", async () => await testFormat("webp") )
     test("SVG", async () => await testFormat("svg") )
   })
+
+  describe("preserves wide-gamut color", () => {
+    for (const ext of ['png', 'jpg']){
+      test(`in ICC-tagged ${ext.toUpperCase()}s`, async () => {
+        // the fixture's pixels are 'display-p3 red': the full-intensity primary outside sRGB's gamut
+        let img = await loadImage(`tests/assets/image/p3-red.${ext}`)
+
+        // on an srgb canvas the color clips to the gamut's edge, discarding its extra intensity…
+        let srgb = new Canvas(8, 8).getContext('2d')
+        srgb.drawImage(img, 0, 0)
+        assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+        assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
+
+        // …but survives intact on a display-p3 canvas (modulo jpeg lossiness)
+        let p3 = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
+        p3.drawImage(img, 0, 0)
+        let [r, g, b, a] = p3.getImageData(0, 0, 1, 1).data
+        assert.ok(r >= 254 && g == 0 && b == 0 && a == 255)
+      })
+    }
+  })
 })
 
 describe("ImageData", () => {
@@ -292,6 +313,14 @@ describe("ImageData", () => {
       let bgraData = ctx.getImageData(0, 0, 60, 60, {colorType:'bgra'})
       assert.matchesSubset(bgraData, BGRA)
     })
+  })
+
+  test("supports colorSpace setting", () => {
+    assert.equal(new ImageData(8, 8).colorSpace, 'srgb')
+    assert.equal(new ImageData(8, 8, {colorSpace:'display-p3'}).colorSpace, 'display-p3')
+
+    // outside of SKIA_CANVAS_STRICT mode, unsupported spaces quietly fall back to srgb
+    assert.equal(new ImageData(8, 8, {colorSpace:'rec2020'}).colorSpace, 'srgb')
   })
 })
 
