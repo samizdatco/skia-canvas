@@ -37,12 +37,11 @@ check:
 	cargo check
 
 clean:
+	cargo clean -p skia-canvas
 	rm -f $(LIB)
 
 distclean: clean
 	rm -rf $(NPM)
-	rm -rf $(CURDIR)/target/debug
-	rm -rf $(CURDIR)/target/release
 	cargo clean
 
 release:

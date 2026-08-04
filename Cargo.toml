@@ -17,7 +17,7 @@ lto = "fat"
 freetype = ["skia-safe/embed-freetype", "skia-safe/freetype-woff2"]
 metal = ["skia-safe/metal", "dep:metal", "dep:raw-window-handle", "dep:raw-window-metal", "dep:core-graphics-types", "dep:cocoa", "dep:objc"]
 vulkan = ["skia-safe/vulkan", "winit/rwh_05", "dep:ash", "dep:vulkano"]
-window = ["dep:winit", "dep:spin_sleep"]
+window = ["dep:winit", "dep:spin_sleep", "dep:drm"]
 
 [dependencies]
 neon = "1.0"
@@ -49,3 +49,8 @@ objc = { version = "0.2.7", optional = true }
 # window
 winit = { version = '0.30.13', features = ["serde"], optional = true }
 spin_sleep = {version = "1.2.1", optional = true }
+
+# window: X11/Linux vblank source (drm-rs). Linux-only, so it never touches the macOS/Windows
+# builds; pulled in only with the `window` feature.
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+drm = { version = "0.15", optional = true }

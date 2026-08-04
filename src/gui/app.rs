@@ -1,7 +1,7 @@
 use neon::prelude::*;
 use serde_json::Value;
 use std::{
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, atomic::{AtomicBool, Ordering}},
     iter::zip,
     cell::RefCell,
     time::{Duration, Instant},
@@ -9,9 +9,8 @@ use std::{
 use winit::{
     application::ApplicationHandler,
     platform::pump_events::EventLoopExtPumpEvents,
-    platform::run_on_demand::EventLoopExtRunOnDemand,
     event::{ElementState, KeyEvent, WindowEvent},
-    event_loop::{EventLoop, EventLoopProxy, ActiveEventLoop, ControlFlow},
+    event_loop::{EventLoop, EventLoopProxy, ActiveEventLoop},
     keyboard::{PhysicalKey, KeyCode},
     window::WindowId,
 };
@@ -21,6 +20,7 @@ use super::{
     event::AppEvent,
     window_mgr::WindowManager,
     window::WindowSpec,
+    cadence::Cadence,
 };
 
 thread_local!(
@@ -33,13 +33,10 @@ thread_local!(
 
 static RENDER_CALLBACK: OnceLock<Arc<Root<JsFunction>>> = OnceLock::new();
 
-#[derive(Copy, Clone)]
-pub enum LoopMode{
-    Native, Node
-}
+// how often the event_pump wakes to service node's event loop when no Tick has arrived in the meantime
+const NODE_IDLE_WAKE_MS: u64 = 100;
 
 pub struct App{
-    pub mode: LoopMode,
     windows: WindowManager,
     cadence: Cadence,
 }
@@ -49,7 +46,6 @@ impl Default for App{
         Self{
             windows: WindowManager::default(),
             cadence: Cadence::default(),
-            mode: LoopMode::Native,
         }
     }
 }
@@ -58,13 +54,13 @@ fn add_event(event: AppEvent){
     PROXY.with_borrow_mut(|proxy| proxy.send_event(event).ok() );
 }
 
+fn get_proxy() -> EventLoopProxy<AppEvent>{
+    PROXY.with_borrow_mut(|proxy| proxy.clone())
+}
+
 impl App{
     pub fn register(callback:Root<JsFunction>){
         RENDER_CALLBACK.get_or_init(|| Arc::new(callback));
-    }
-
-    pub fn set_mode(mode:LoopMode){
-        APP.with_borrow_mut(|app| app.mode = mode );
     }
 
     pub fn set_fps(fps:f32){
@@ -88,28 +84,16 @@ impl App{
         std::thread::spawn(move || {
             loop{
                 // schedule a callback on the node event loop
-                let keep_running = channel.send(move |mut cx| {
-
-                    // define closure to relay events to js and receive canvas updates in return
-                    let dispatch = |payload:Value, windows:Option<&mut WindowManager>| -> NeonResult<()>{
-                        App::dispatch_events(&mut cx, payload, windows)
-                    };
-
-                    // run the winit event loop (either once or until all windows are closed depending on mode)
+                let keep_running = channel.send(move |cx| {
+                    // wait for events to arrive (unless interrupted by a vblank tick or 'idle wake'
+                    // duration if windows are fully static) and then yield to node (for gc & timers).
                     APP.with_borrow_mut(|app| {
                         EVENT_LOOP.with_borrow_mut(|event_loop|{
-                            match app.mode{
-                                LoopMode::Native => {
-                                    event_loop.set_control_flow(ControlFlow::Wait);
-                                    event_loop.run_app_on_demand(&mut AppHandler{app, dispatch}).ok();
-                                    Ok(false) // final window was closed
-                                }
-                                LoopMode::Node => {
-                                    let poll_time = app.cadence.next_wakeup() - Instant::now();
-                                    event_loop.pump_app_events(Some(poll_time), &mut AppHandler{app: &mut *app, dispatch});
-                                    Ok(app.cadence.should_continue() || !app.windows.is_empty())
-                                }
-                            }
+                            event_loop.pump_app_events(
+                              Some(Duration::from_millis(NODE_IDLE_WAKE_MS)), 
+                              &mut AppHandler{app: &mut *app, cx}
+                            );
+                            Ok(app.cadence.should_continue() || !app.windows.is_empty())
                         })
                     })
                 }).join();
@@ -125,76 +109,96 @@ impl App{
         });
     }
 
-    fn dispatch_events(cx:&mut TaskContext, events:Value, window_mgr:Option<&mut WindowManager>) -> NeonResult<()>{
-        // window_mgr is only present if it's time to collect updated canvas contents from js
-        let is_render = window_mgr.is_some();
-
-        // js callback is passed render flag & json-encoded event queue
-        let mut call = match RENDER_CALLBACK.get(){
-            None => return Ok(()),
-            Some(callback)=> callback.to_inner(cx).call_with(cx),
+    // run the per-frame javascript call, passing a payload of queued changes and receiving back
+    // canvas contents (and possibly programmatic window state changes). also updates vblank status 
+    // based on whether any of the windows have `draw` or `frame` listeners    
+    fn roundtrip(&mut self, cx:&mut TaskContext, with_payload:With){
+        // collect the outbound payload (draining each window's sieve as a side effect)
+        let changes = match with_payload{
+            With::Events => self.windows.get_ui_changes(),
+            With::Geometry => self.windows.get_geometry(),
         };
-        call.arg(cx.boolean(is_render))
-            .arg(cx.string(events.to_string()));
+        let windows = &mut self.windows;
 
-        match window_mgr{
-            None => call.exec(cx)?, // if this is just a UI-event delivery, fire & forget
+        // track whether any windows have ongoing animations in need of vblank ticks
+        let mut is_animating = true; // to be updated with response from js
 
-            Some(window_mgr) => {
-                // for a full roundtrip, first pass events to js
-                let response = call.apply::<JsValue, _>(cx)?
-                    .downcast::<JsArray, _>(cx).or_throw(cx)?
-                    .to_vec(cx)?;
+        // enclose js<->rust bridging in a nested scope to release the js handles immediately rather 
+        // than letting them accumulate in the pump_events scope
+        cx.execute_scoped(|mut cx| -> NeonResult<()> {
+            let cx = &mut cx;
 
-                // then unpack the returned window specs & contexts
-                let specs_json = response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
-                let specs:Vec<WindowSpec> = serde_json::from_str(&specs_json)
-                    .or_else(|err| cx.throw_error(format!("Malformed response from window event handler: {}", err)) )?;
+            // pass the json-encoded event queue to the js callback and collect its response array
+            let Some(callback) = RENDER_CALLBACK.get() else { return Ok(()) };
+            let mut call = callback.to_inner(cx).call_with(cx);
+            call.arg(cx.string(changes.to_string()));
+            let response = call.apply::<JsValue, _>(cx)?
+                .downcast::<JsArray, _>(cx).or_throw(cx)?
+                .to_vec(cx)?;
 
-                let contexts = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
-                let pages = contexts.iter().map(|boxed|
-                    boxed.downcast::<BoxedContext2D, _>(cx).ok()
-                        .map(|ctx| ctx.borrow().get_page())
-                );
+            // unpack the returned window specs, contexts, and is_animating flag
+            let specs_json = response[0].downcast::<JsString, _>(cx).or_throw(cx)?.value(cx);
+            let specs:Vec<WindowSpec> = serde_json::from_str(&specs_json)
+                .or_else(|err| cx.throw_error(format!("Malformed response from window event handler: {}", err)) )?;
 
-                // update each window with its new state & content
-                zip(specs, pages)
-                    .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
-                    .for_each(|(spec, page)| window_mgr.update_window(spec, page) );
-            }
-        };
+            // extract page snapshots from the contexts
+            let contexts = response[1].downcast::<JsArray, _>(cx).or_throw(cx)?.to_vec(cx)?;
+            let pages = contexts.iter().map(|boxed|
+                boxed.downcast::<BoxedContext2D, _>(cx).ok()
+                    .map(|ctx| ctx.borrow().get_page())
+            );
 
-        Ok(())
+            // update windows with the unpacked specs & pages
+            zip(specs, pages)
+                .filter_map(|(spec, page)| page.map(|page| (spec, page) ))
+                .for_each(|(spec, page)| windows.update_window(spec, page) );
+
+            // note whether any window still has a frame/draw listener, so vblank can be paused when idle
+            is_animating = response.get(2)
+                .and_then(|val| val.downcast::<JsBoolean, _>(cx).ok())
+                .map(|flag| flag.value(cx))
+                .unwrap_or(true);
+
+            Ok(())
+        }).ok();
+
+        // check the updated animation status and only have the vblank source run if needed
+        if is_animating{
+            self.cadence.run(get_proxy(), &self.windows);
+        }else if !self.cadence.is_idle(){
+            self.cadence.stop();
+        }
     }
-
 }
 
-// ephemeral event handler: borrows the persistent App state and a dispatch closure (which
-// holds the neon context for the current tick) only for the duration of a single pump/run call
-struct AppHandler<'a, F>{
+// identify the app state that should be passed to the js side in a roundtrip() call
+enum With { Events, Geometry }
+
+// ephemeral event handler: borrows the persistent App state and holds the neon context for the
+// current tick, only for the duration of a single pump/run call. carrying `cx` here is what lets
+// winit event handlers make synchronous js roundtrips mid-pump (see `roundtrip`).
+struct AppHandler<'a, 'cx>{
     app: &'a mut App,
-    dispatch: F,
+    cx: TaskContext<'cx>,
 }
 
-impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
-    where F:FnMut(Value, Option<&mut WindowManager>) -> NeonResult<()>
-{
+
+impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
     fn resumed(&mut self, _event_loop:&ActiveEventLoop){}
 
-    fn window_event(&mut self, event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
-        let Self{app, dispatch} = self;
+    fn window_event(&mut self, _event_loop:&ActiveEventLoop, window_id:WindowId, event:WindowEvent){
+        let Self{app, cx} = self;
         app.windows.find(&window_id, |win| win.sieve.capture(&event) );
 
         match event {
             WindowEvent::Destroyed | WindowEvent::CloseRequested => {
                 app.windows.remove(&window_id);
 
-                // after the last window is closed, either exit (in run_app_on_demand mode)
-                // or wait for the window destructor to run (in pump_app_events mode)
-                if app.windows.is_empty(){ match app.mode{
-                    LoopMode::Native => event_loop.exit(),
-                    LoopMode::Node => app.cadence.loop_again(),
-                }}
+                // after the last window is closed...
+                if app.windows.is_empty(){
+                    app.cadence.stop(); // stop ticking once no windows remain
+                    app.cadence.loop_again(); // run one more cycle to let its destructor run
+                }
             }
 
             WindowEvent::KeyboardInput {
@@ -220,7 +224,7 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
                 // dispatch the resize to js and repaint with the updated canvas content before
                 // returning: during a live-resize the OS runs a modal loop, so waiting for the
                 // next frame tick would leave the window contents lagging behind the new size
-                dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
+                app.roundtrip(cx, With::Events);
                 app.windows.find(&window_id, |win| win.redraw() );
             }
 
@@ -230,19 +234,42 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             }
 
             WindowEvent::RedrawRequested => {
-                app.windows.find(&window_id, |win| win.redraw() );
+                if app.cadence.is_redraw_driven(){
+                    // on wayland, this event *is* the vblank, so it's time to run the js-roundtrip
+                    // (all other platforms trigger the roundtrip through AppEvent::Tick)
+                    if app.cadence.tick(Instant::now()){
+                        app.roundtrip(cx, With::Events); // may drop vblank need if app goes idle
+                    }
+                    app.windows.find(&window_id, |win|{
+                        win.redraw(); // update the window contents immediately
+
+                        // only request the next vblank if the app is still animating post-roundtrip
+                        if app.cadence.is_redraw_driven(){
+                            win.handle.request_redraw(); 
+                        }
+                    });
+                }else{
+                    // on all other platforms just update the window
+                    app.windows.find(&window_id, |win|{ win.redraw(); });                    
+                }
             }
 
             _ => {}
         }
+
+        // when idle (no vblank source) the loop is event-driven: flush queued UI events
+        //  to js and repaint right away, since no Tick event will arrive to do it
+        if app.cadence.is_idle(){
+            app.roundtrip(cx, With::Events);
+        }
     }
 
     fn user_event(&mut self, event_loop:&ActiveEventLoop, event:AppEvent){
-        let Self{app, dispatch} = self;
+        let Self{app, cx} = self;
         match event{
             AppEvent::Open(spec, page) => {
                 app.windows.add(event_loop, spec, page);
-                dispatch(app.windows.get_geometry(), Some(&mut app.windows)).ok();
+                app.roundtrip(cx, With::Geometry);
             }
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
@@ -250,91 +277,16 @@ impl<F> ApplicationHandler<AppEvent> for AppHandler<'_, F>
             AppEvent::FrameRate(fps) => {
                 app.cadence.set_frame_rate(fps)
             }
+            AppEvent::Tick{ at } => {
+                // a tick arrives every vblank and the cadence handles triggering roundtrips & redraws (at the target fps)
+                if app.cadence.tick(at){
+                    app.roundtrip(cx, With::Events); // pause the source if the app just went idle
+                }
+            }
             AppEvent::Quit => {
+                app.cadence.stop();
                 event_loop.exit();
             }
-        }
-    }
-
-    fn about_to_wait(&mut self, event_loop:&ActiveEventLoop){
-        let Self{app, dispatch} = self;
-        event_loop.set_control_flow(
-            // let the cadence decide when to switch to poll-mode or sleep the thread
-            app.cadence.on_next_frame(app.mode, || {
-                // relay UI-driven state changes to js and render the next frame in the (active) cadence
-                dispatch(app.windows.get_ui_changes(), Some(&mut app.windows)).ok();
-            })
-        );
-    }
-}
-
-
-struct Cadence{
-    rate: u64,
-    last: Instant,
-    needs_cleanup: Option<bool>,
-}
-
-impl Default for Cadence {
-    fn default() -> Self {
-        Self{
-            rate: 60,
-            last: Instant::now(),
-            needs_cleanup: Some(true), // ensure at least one post-Init loop
-        }
-    }
-}
-
-impl Cadence{
-    fn loop_again(&mut self){
-        // flag that a clean-up event-loop pass is necessary (e.g., for reflecting window closures)
-        self.needs_cleanup = Some(true)
-    }
-
-    fn should_continue(&mut self) -> bool{
-        self.needs_cleanup.take().is_some()
-    }
-
-    fn set_frame_rate(&mut self, rate:u64){
-        self.rate = rate;
-    }
-
-    pub fn next_wakeup(&self) -> Instant{
-        let frame_time = 1_000_000_000/self.rate.max(1);
-        let watch_interval = 1_500_000.min(frame_time/10);
-        let wakeup = Duration::from_nanos(frame_time - watch_interval);
-        self.last + wakeup
-    }
-
-    pub fn on_next_frame<F:FnMut()>(&mut self, mode:LoopMode, mut draw:F) -> ControlFlow{
-        // determine the upcoming deadlines for actually rendering and for spinning in preparation
-        let frame_time = 1_000_000_000/self.rate.max(1);
-        let watch_interval = 1_500_000.min(frame_time/10);
-        let render = Duration::from_nanos(frame_time);
-        let wakeup = Duration::from_nanos(frame_time - watch_interval);
-
-        // if node is handling the event loop, we can't use polling to wait for the render
-        // deadline. so instead we'll pause the thread for the last 10% of the inter-frame
-        // time (up to 1.5ms), making sure we can then draw immediately after
-        let dt = self.last.elapsed();
-        if matches!(mode, LoopMode::Node) && dt >= wakeup && dt < render{
-            if let Some(sleep_time) = render.checked_sub(self.last.elapsed()){
-                spin_sleep::sleep(sleep_time);
-            }
-        }
-
-        // call the draw callback if it's time & make sure the next deadline is in the future
-        if self.last.elapsed() >= render{
-            draw();
-            while self.last < Instant::now() - render{
-                self.last += render
-            }
-        }
-
-        // if winit is in control, we can use waiting & polling to hit the deadline
-        match self.last.elapsed() < wakeup {
-            true => ControlFlow::WaitUntil(self.last + wakeup),
-            false => ControlFlow::Poll,
         }
     }
 }

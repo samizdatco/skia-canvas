@@ -7,6 +7,7 @@ use winit::{
   keyboard::{ModifiersState, KeyCode, KeyLocation, NamedKey, PhysicalKey::Code, Key::{Character, Named}},
 };
 
+use std::time::Instant;
 use crate::context::page::Page;
 use super::window::WindowSpec;
 
@@ -15,6 +16,7 @@ pub enum AppEvent{
   Open(WindowSpec, Page),
   Close(u32),
   FrameRate(u64),
+  Tick{ at: Instant },
   Quit,
 }
 

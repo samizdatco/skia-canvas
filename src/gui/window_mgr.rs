@@ -1,3 +1,4 @@
+use std::time::Duration;
 use serde_json::json;
 use serde_json::{Map, Value};
 use winit::{
@@ -115,6 +116,11 @@ impl WindowManager {
         self.windows.iter_mut().find(|win| win.id() == *id).map(f);
     }
 
+    pub fn request_redraw_all(&self){
+        // used to kick Wayland's redraw-driven frame-callback loop (incl. newly-opened windows)
+        self.windows.iter().for_each(|win| win.handle.request_redraw());
+    }
+
     pub fn has_ui_changes(&self) -> bool {
         self.windows.iter().any(|win| !win.sieve.is_empty() )
     }
@@ -143,7 +149,25 @@ impl WindowManager {
     pub fn is_empty(&self) -> bool {
         self.windows.len() == 0
     }
+
+    pub fn refresh_interval(&self) -> Duration {
+        // pace against the first window's monitor; fall back to 60Hz when the platform
+        // can't report a refresh rate (multi-monitor phase handling is future work)
+        let hz = self.windows.first()
+            .and_then(|win| win.handle.current_monitor())
+            .and_then(|monitor| monitor.refresh_rate_millihertz())
+            .map(|millihertz| millihertz as f64 / 1000.0)
+            .filter(|hz| *hz > 0.0)
+            .unwrap_or(60.0);
+        Duration::from_secs_f64(1.0 / hz)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn primary_display_id(&self) -> Option<u32> {
+        // CGDirectDisplayID of the first window's monitor, for CVDisplayLink
+        use winit::platform::macos::MonitorHandleExtMacOS;
+        self.windows.first()
+            .and_then(|win| win.handle.current_monitor())
+            .map(|monitor| monitor.native_id())
+    }
 }
-
-
-
