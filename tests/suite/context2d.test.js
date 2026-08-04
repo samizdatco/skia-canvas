@@ -3,7 +3,7 @@
 "use strict"
 
 
-const {assert} = require('../runner/assert'), 
+const {assert} = require('../runner/assert'),
       {describe, test, beforeEach, afterEach} = require('node:test'),
       {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../../lib'),
       css = require('../../lib/classes/css')
@@ -868,6 +868,59 @@ describe("Context2D", ()=>{
       ctx.font = '80px Monoton'
       ctx.fillText('O', 50, 120)
       assert(inked() > stroked)
+    })
+
+    describe("baseline metrics without an explicit font", () => {
+      let inkTop = () => {
+        let {data} = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+        for (let y=0; y<HEIGHT; y++)
+          for (let x=0; x<WIDTH; x++)
+            if (data[(y*WIDTH + x)*4 + 3] > 0) return y
+        return null
+      }
+
+      test("fillText honors textBaseline", () => {
+        let topAt = baseline => {
+          canvas.width = WIDTH // reset surface + context state (still no explicit font)
+          ctx.textBaseline = baseline
+          ctx.fillText('Mg', 20, 100)
+          return inkTop()
+        }
+
+        let top = topAt('top'), bottom = topAt('bottom')
+        assert(top != null && bottom != null, "expected text to render for both baselines")
+        // 'top' baseline drops the glyphs below the origin; 'bottom' lifts them above it,
+        // so the first inked row for 'top' must land well below the one for 'bottom'.
+        assert(top > bottom + 4, `expected 'top' baseline ink (${top}) below 'bottom' (${bottom})`)
+      })
+
+      test("measureText reports non-alphabetic baselines", () => {
+        let m = ctx.measureText('Mg')
+        assert.equal(m.alphabeticBaseline, 0)
+        assert(m.hangingBaseline > 0, `expected positive hangingBaseline, got ${m.hangingBaseline}`)
+        assert(m.ideographicBaseline < 0, `expected negative ideographicBaseline, got ${m.ideographicBaseline}`)
+      })
+
+      test("outlineText honors textBaseline", () => {
+        ctx.textBaseline = 'top'
+        let topPath = ctx.outlineText('Mg')
+        ctx.textBaseline = 'bottom'
+        let bottomPath = ctx.outlineText('Mg')
+        assert(topPath && bottomPath, "expected outlineText to return a path for both baselines")
+        assert(topPath.bounds.top > bottomPath.bounds.top + 4,
+          `expected 'top' outline (${topPath.bounds.top}) below 'bottom' (${bottomPath.bounds.top})`)
+      })
+
+      test("implicit default font matches an explicit assignment", () => {
+        // Re-assigning `font` to the value it already reports must be a no-op: the implicit
+        // default has to resolve the same metrics as the explicit one.
+        let implicit = ctx.measureText('Mg')
+        ctx.font = ctx.font
+        let explicit = ctx.measureText('Mg')
+        assert.nearEqual(implicit.hangingBaseline, explicit.hangingBaseline)
+        assert.nearEqual(implicit.ideographicBaseline, explicit.ideographicBaseline)
+        assert.nearEqual(implicit.fontBoundingBoxAscent, explicit.fontBoundingBoxAscent)
+      })
     })
 
     test("roundRect()", () => {
