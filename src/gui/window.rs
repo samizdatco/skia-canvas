@@ -1,5 +1,5 @@
 use std::{str::FromStr, sync::Arc};
-use skia_safe::{Matrix, Color, SurfaceProps, SurfacePropsFlags, PixelGeometry};
+use skia_safe::{Matrix, Color4f, SurfaceProps, SurfacePropsFlags, PixelGeometry};
 use serde::{Serialize, Deserialize};
 use winit::{
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
@@ -8,7 +8,7 @@ use winit::{
     event_loop::ActiveEventLoop,
 };
 
-use crate::utils::css_to_color;
+use crate::utils::css_to_color4f;
 use crate::gfx::Renderer;
 use crate::gfx::page::Page;
 use super::event::Sieve;
@@ -56,7 +56,7 @@ pub struct Window {
     pub sieve: Sieve,
     pub monitor: Option<MonitorHandle>, // the display the window was on as of the last update_monitor
     renderer: Renderer,
-    background: Color,
+    background: Color4f,
     page: Page,
     suspended: bool,
     present_pending: bool, // request_redraw() was called by this window but RedrawRequest has not yet arrived
@@ -65,25 +65,25 @@ pub struct Window {
 impl Window {
     pub fn new(event_loop:&ActiveEventLoop, mut spec:WindowSpec, page:&Page) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
-        let background = match css_to_color(&spec.background){
+        let background = match css_to_color4f(&spec.background){
             Some(color) => color,
             None => {
                 spec.background = "rgba(16,16,16,0.85)".to_string();
-                css_to_color(&spec.background).unwrap()
+                css_to_color4f(&spec.background).unwrap()
             }
         };
 
         let window_attributes = WinitWindow::default_attributes()
             .with_fullscreen(if spec.fullscreen{ Some(Fullscreen::Borderless(None)) }else{ None })
             .with_inner_size(size)
-            .with_transparent(background.a() < 255)
+            .with_transparent(background.a < 1.0)
             .with_title(spec.title.clone())
             .with_visible(false)
             .with_resizable(spec.resizable)
             .with_decorations(!spec.borderless);
 
         let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let renderer = Renderer::for_window(&event_loop, handle.clone(), background.a() < 255);
+        let renderer = Renderer::for_window(&event_loop, handle.clone(), background.a < 1.0);
         let sieve = Sieve::new();
 
         let cursor_icon = CursorIcon::from_str(&spec.cursor).ok();
@@ -245,7 +245,7 @@ impl Window {
         self.spec.fit = mode;
     }
 
-    pub fn set_background(&mut self, color:Color){
+    pub fn set_background(&mut self, color:Color4f){
         if self.background != color{
             self.background = color;
             self.handle.request_redraw();

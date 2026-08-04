@@ -8,7 +8,7 @@ use objc2_metal::{
 use objc2_quartz_core::{kCAGravityBottomLeft, kCAGravityTopLeft, CAMetalDrawable, CAMetalLayer};
 use objc2_core_graphics::{CGColorSpace, kCGColorSpaceDisplayP3};
 use skia_safe::{
-    scalar, ColorType, ColorSpace, Size, Matrix, Color, Paint, BlendMode, SurfaceProps,
+    scalar, ColorType, ColorSpace, Size, Matrix, Color4f, Paint, BlendMode, SurfaceProps,
     canvas::SrcRectConstraint,
 };
 use skia_safe::gpu::{ mtl, surfaces, backend_render_targets, SurfaceOrigin, DirectContext };
@@ -95,7 +95,7 @@ impl MetalRenderer{
         self.frame.start_resizing();
     }
 
-    pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color){
+    pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color4f){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
         let sync = self.frame.is_resizing();

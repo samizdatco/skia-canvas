@@ -4,7 +4,7 @@ use std::ops::Range;
 use std::iter::zip;
 use neon::prelude::*;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, PathBuilder, Color};
+use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, PathBuilder, Color4f};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
   Decoration, FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
@@ -58,7 +58,7 @@ impl Typesetter{
     let mut char_style = self.char_style.clone();
     char_style.set_foreground_paint(paint);
     char_style.set_decoration(
-      &self.text_decoration.for_layout(&char_style, paint.color())
+      &self.text_decoration.for_layout(&char_style, paint.color4f())
     );
 
     // set the `wght` coordinate so variable fonts will instance at the correct weight
@@ -509,7 +509,7 @@ pub struct DecorationStyle{
   pub css: String,
   pub decoration: Decoration,
   pub size: Option<Spacing>,
-  pub color: Option<Color>,
+  pub color: Option<CssColor>,
 }
 
 
@@ -520,7 +520,7 @@ impl Default for DecorationStyle{
 }
 
 impl DecorationStyle{
-  pub fn for_layout(&self, style:&TextStyle, text_color:Color) -> Decoration{
+  pub fn for_layout(&self, style:&TextStyle, text_color:Color4f) -> Decoration{
     // convert `size` into a multiple of the current font's default thickness
     let em_size = style.font_size();
     let thickness = style.font_metrics()
@@ -529,7 +529,7 @@ impl DecorationStyle{
     let thickness_multiplier = self.size.clone()
       .map(|size| size.in_px(em_size) / thickness)
       .unwrap_or(1.0);
-    let color = self.color.unwrap_or(text_color);
+    let color = color4f_to_color(self.color.map(|css| css.color).unwrap_or(text_color));
     Decoration{thickness_multiplier, color, ..self.decoration}
   }
 }
@@ -541,7 +541,7 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
     // inherit the fill color unless textDecoration specifies a css color to use
     let color = match string_for_key(cx, &deco, "color")?.as_str(){
       "currentColor" => None,
-      color_str => match css_to_color(&color_str){
+      color_str => match CssColor::parse(&color_str){
         Some(color) => Some(color),
         None => return cx.throw_type_error(format!("⚠️Invalid text decoration: {:?}", css)),
       }

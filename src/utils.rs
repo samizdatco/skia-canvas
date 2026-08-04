@@ -427,10 +427,6 @@ pub fn color4f_to_color(color:Color4f) -> Color {
   )
 }
 
-pub fn css_to_color(css:&str) -> Option<Color> {
-  css_to_color4f(css).map(color4f_to_color)
-}
-
 fn css_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<String> {
   if val.is_a::<JsString, _>(cx) {
     Some(val.downcast::<JsString, _>(cx).unwrap().value(cx))
@@ -444,23 +440,12 @@ fn css_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<
   }
 }
 
-pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
-  css_in(cx, val).and_then(|css| css_to_color(&css))
-}
-
 pub fn color_in_4f<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color4f> {
   css_in(cx, val).and_then(|css| css_to_color4f(&css))
 }
 
 pub fn css_color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<CssColor> {
   css_in(cx, val).and_then(|css| CssColor::parse(&css))
-}
-
-pub fn opt_color_arg(cx: &mut FunctionContext, idx: usize) -> Option<Color> {
-  match cx.argument_opt(idx) {
-    Some(arg) => color_in(cx, arg),
-    _ => None
-  }
 }
 
 pub fn opt_color_arg_4f(cx: &mut FunctionContext, idx: usize) -> Option<Color4f> {

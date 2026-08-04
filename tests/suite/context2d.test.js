@@ -1056,6 +1056,14 @@ describe("Context2D", ()=>{
       assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
     })
 
+    test('wide-gamut textures', () => {
+      // a texture drawn in an out-of-sRGB color survives on a display-p3 surface
+      let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+      p3.fillStyle = p3.createTexture(4, {line:8, color:'color(display-p3 1 0 0)'})
+      p3.fillRect(0, 0, 4, 4)
+      assert.deepEqual(Array.from(p3.getImageData(1, 1, 1, 1).data), [255, 0, 0, 255])
+    })
+
     test('wide-gamut auxiliary colors', async () => {
       // shadows cast in wide-gamut colors survive on a display-p3 surface
       let p3 = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
