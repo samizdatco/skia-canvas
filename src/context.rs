@@ -11,7 +11,7 @@ use skia_safe::{
   textlayout::{ParagraphStyle, TextStyle, StrutStyle},
   canvas::SrcRectConstraint::Strict,
   path_utils::fill_path_with_paint,
-  font_style::{FontStyle, Width},
+  font_style::{FontStyle, Width, Weight, Slant},
 };
 
 #[path = "context_api.rs"]
@@ -94,8 +94,23 @@ impl Default for State {
       .set_style(PaintStyle::Fill);
 
     let graf_style = ParagraphStyle::new();
-    let mut char_style = TextStyle::new();
-    char_style.set_font_size(10.0);
+    let font_spec = FontSpec{
+      families: vec!["sans-serif".to_string()],
+      size: 10.0,
+      line_height: None,
+      weight: Weight::NORMAL,
+      width: Width::NORMAL,
+      slant: Slant::Upright,
+      features: vec![],
+      variant: "normal".to_string(),
+      canonical: "10px sans-serif".to_string(),
+    };
+    let char_style = {
+      let mut style = TextStyle::new();
+      style.set_font_size(font_spec.size);
+      FontLibrary::with_shared(|lib| lib.update_style(&style, &font_spec)).unwrap_or(style)
+    };
+    let FontSpec{ canonical: font, variant: font_variant, width: font_width, .. } = font_spec;
 
     State {
       clip: None,
@@ -119,9 +134,9 @@ impl Default for State {
       shadow_color: CssColor::transparent(),
       shadow_offset: (0.0, 0.0).into(),
 
-      font: "10px sans-serif".to_string(),
-      font_variant: "normal".to_string(),
-      font_width: Width::NORMAL,
+      font,
+      font_variant,
+      font_width,
       font_hinting: false,
       font_smoothing: true,
       font_synthesis: true,
