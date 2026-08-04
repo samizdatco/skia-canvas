@@ -126,7 +126,7 @@ export function loadImageData(src: string | Buffer | URL, width: number, height?
 export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
 export function loadImageData(src: Sharp): Promise<ImageData>
 
-export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
+export type ColorSpace = "srgb" | "display-p3"
 export type ColorType = "Alpha8" | "Gray8" | "R8UNorm" | // 1 byte/px
   "A16Float" | "A16UNorm" | "ARGB4444" | "R8G8UNorm" | "RGB565" | // 2 bytes/px
   "rgb"|"RGB888x" | "rgba"|"RGBA8888" | "bgra"|"BGRA8888" | "BGR101010x" | "BGRA1010102" | // 4 bytes/px
@@ -149,7 +149,7 @@ interface ImageDataExportSettings {
   /** Number of samples used for antialising each pixel */
   msaa?: number | boolean
 
-  /** Color space (must be "srgb") */
+  /** Color space to convert pixels into (defaults to "srgb") */
   colorSpace?: ColorSpace
 
   /** Color type to use when exporting in "raw" format */
@@ -309,6 +309,9 @@ export interface ExportOptions extends RenderOptions {
 
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType
+
+  /** Color space to render into (defaults to "srgb") */
+  colorSpace?: ColorSpace
 }
 
 export interface SaveOptions extends ExportOptions {
@@ -333,6 +336,11 @@ export interface TextOptions{
   textGamma?: number
 }
 
+export interface CanvasRenderingContext2DSettings {
+  /** Color space used when rasterizing the canvas for exports & getImageData (defaults to "srgb") */
+  colorSpace?: ColorSpace
+}
+
 /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas) */
 export class Canvas {
   static contexts: WeakMap<Canvas, readonly CanvasRenderingContext2D[]>
@@ -355,10 +363,11 @@ export class Canvas {
   /**
    * Returns an object that provides methods and properties for drawing and manipulating images and graphics on a canvas element in a document. A context object includes information about colors, line widths, fonts, and other graphic parameters that can be drawn on a canvas.
    * @param type The type of canvas to create. Skia Canvas only supports a 2-D context using canvas.getContext("2d")
+   * @param settings Context attributes (only honored by the first getContext call for a given canvas)
    *
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/getContext)
    */
-  getContext(type?: "2d"): CanvasRenderingContext2D
+  getContext(type?: "2d", settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
   newPage(width?: number, height?: number): CanvasRenderingContext2D
   readonly pages: CanvasRenderingContext2D[]
 
@@ -418,6 +427,13 @@ export class CanvasPattern{
  *
  * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient)
  */
+// Non-polar interpolation spaces (interpolated by rectangular/cartesian coordinates)
+export type RectangularColorSpace = "srgb" | "srgb-linear" | "display-p3" | "a98-rgb" | "prophoto-rgb" | "rec2020" | "lab" | "oklab"
+// Cylindrical spaces with a hue angle (the only ones `hueInterpolationMethod` affects)
+export type PolarColorSpace = "hsl" | "hwb" | "lch" | "oklch"
+export type ColorInterpolationMethod = RectangularColorSpace | PolarColorSpace
+export type HueInterpolationMethod = "shorter" | "longer" | "increasing" | "decreasing"
+
 interface CanvasGradient {
   /**
    * Adds a color stop with the given color to the gradient at the given offset. 0.0 is the offset at one end of the gradient, 1.0 is the offset at the other end.
@@ -427,6 +443,12 @@ interface CanvasGradient {
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient/addColorStop)
    */
   addColorStop(offset: number, color: string): void;
+  /** Color space in which the gradient's colors are interpolated (default `"srgb"`). */
+  colorInterpolationMethod: ColorInterpolationMethod;
+  /** Hue-interpolation direction for polar spaces — hsl/hwb/lch/oklch (default `"shorter"`). */
+  hueInterpolationMethod: HueInterpolationMethod;
+  /** Whether colors are interpolated with premultiplied alpha (default `false`). */
+  premultipliedAlpha: boolean;
 }
 
 declare var CanvasGradient: {
@@ -726,7 +748,7 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   set currentTransform(matrix: Matrix)
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
-  // getContextAttributes(): CanvasRenderingContext2DSettings;
+  getContextAttributes(): {alpha: boolean, colorSpace: ColorSpace, desynchronized: boolean, willReadFrequently: boolean}
 
   // add optional maxWidth to work in conjunction with textWrap
   measureText(text: string, maxWidth?: number): TextMetrics

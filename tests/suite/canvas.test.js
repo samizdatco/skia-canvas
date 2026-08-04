@@ -426,6 +426,62 @@ describe("Canvas", ()=>{
       assert.equal(outlined.includes('<text'), false)
       assert.equal(outlined.includes('<path'), true)
     })
+
+    test("colorSpace", async () => {
+      canvas.width = canvas.height = 8
+      ctx.fillStyle = '#f00'
+      ctx.fillRect(0, 0, 8, 8)
+
+      // raw exports convert pixel values into the requested space
+      let srgb = await canvas.toBuffer('raw'),
+          p3 = await canvas.toBuffer('raw', {colorSpace:'display-p3'})
+      assert.deepEqual(Array.from(srgb.slice(0, 4)), [255, 0, 0, 255])
+      assert.deepEqual(Array.from(p3.slice(0, 4)), [234, 51, 35, 255])
+
+      // png output embeds an ICC profile for display-p3 (vs a bare sRGB chunk by default)
+      let sPng = await canvas.toBuffer('png'),
+          pPng = await canvas.toBuffer('png', {colorSpace:'display-p3'})
+      assert(sPng.includes('sRGB') && !sPng.includes('iCCP'))
+      assert(pPng.includes('iCCP') && !pPng.includes('sRGB'))
+
+      // …while jpeg embeds it in an APP2 segment
+      let pJpg = await canvas.toBuffer('jpg', {colorSpace:'display-p3'})
+      assert(pJpg.includes('ICC_PROFILE'))
+    })
+
+    test("colorSpace (RGBAF16)", async () => {
+      // decode an IEEE-754 binary16 (half-float) channel from a raw buffer
+      let f16 = (buf, i) => {
+        let h = buf.readUInt16LE(i*2),
+            sign = (h & 0x8000) ? -1 : 1,
+            exp = (h >> 10) & 0x1f,
+            frac = h & 0x3ff
+        return exp==0    ? sign * 2**-14 * (frac/1024)
+             : exp==0x1f ? sign * (frac ? NaN : Infinity)
+             :             sign * 2**(exp-15) * (1 + frac/1024)
+      }
+
+      canvas.width = canvas.height = 8
+      ctx.fillStyle = '#f00'
+      ctx.fillRect(0, 0, 8, 8)
+
+      // an RGBAF16 raw export carries 8 bytes/pixel (4 channels × binary16), and
+      // its display-p3 values match the 8-bit conversion ([234, 51, 35, 255]) — but
+      // at float precision rather than quantized to 1/255 steps. Note that F16 buys
+      // precision here, not out-of-gamut headroom: read_pixels still clamps to the
+      // destination gamut during conversion regardless of bit depth.
+      let p3 = await canvas.toBuffer('raw', {colorType:'RGBAF16', colorSpace:'display-p3'})
+      assert.equal(p3.length, 8 * 8 * 8)
+      assert.nearEqual(f16(p3, 0), 234/255)
+      assert.nearEqual(f16(p3, 1), 51/255)
+      assert.nearEqual(f16(p3, 2), 35/255)
+      assert.nearEqual(f16(p3, 3), 1.0)
+
+      // the same colorType works for the default sRGB space (pure red is exact in F16)
+      let srgb = await canvas.toBuffer('raw', {colorType:'RGBAF16'})
+      assert.equal(srgb.length, 8 * 8 * 8)
+      assert.deepEqual([0,1,2,3].map(c => f16(srgb, c)), [1, 0, 0, 1])
+    })
   })
 
   describe("can create | sync", ()=>{

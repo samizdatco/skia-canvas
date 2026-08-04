@@ -15,14 +15,13 @@ lto = "fat"
 
 [features]
 freetype = ["skia-safe/embed-freetype", "skia-safe/freetype-woff2"]
-metal = ["skia-safe/metal", "dep:raw-window-metal", "dep:objc2", "dep:objc2-core-foundation", "dep:objc2-metal", "dep:objc2-quartz-core"]
+metal = ["skia-safe/metal", "dep:raw-window-metal", "dep:objc2", "dep:objc2-core-foundation", "dep:objc2-metal", "dep:objc2-quartz-core", "dep:objc2-core-graphics", "objc2-quartz-core/objc2-core-graphics"]
 vulkan = ["skia-safe/vulkan", "winit/rwh_05", "dep:ash", "dep:vulkano"]
 window = ["dep:winit", "dep:spin_sleep", "dep:drm", "dep:objc2-core-foundation", "dep:objc2-core-video"]
 
 [dependencies]
 neon = "1.0"
 crc = "^3.0"
-css-color = "^0.2"
 rayon = "^1.5"
 crossbeam = "0.8.2"
 once_cell = "1.13"
@@ -47,6 +46,7 @@ raw-window-metal = { version = "1.1", optional = true }
 # window
 winit = { version = '0.30.13', features = ["serde"], optional = true }
 spin_sleep = {version = "1.2.1", optional = true }
+color = "0.3"
 
 # window: X11/Linux vblank source (drm-rs). Linux-only, so it never touches the macOS/Windows
 # builds; pulled in only with the `window` feature.
@@ -58,3 +58,4 @@ drm = { version = "0.15", optional = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-foundation = { version = "0.3", optional = true, default-features = false, features = ["std", "CFCGTypes"] }
 objc2-core-video = { version = "0.3", optional = true, default-features = false, features = ["std", "CVBase", "CVReturn", "CVDisplayLink", "objc2-core-graphics"] }
+objc2-core-graphics = { version = "0.3", optional = true, default-features = false, features = ["std", "CGColorSpace"] }

@@ -403,6 +403,63 @@ describe("Context2D", ()=>{
         assert.deepEqual(pixel(256, 500), WHITE)
         assert.deepEqual(pixel(256, 5), BLACK)
       })
+
+      test("interpolation", () => {
+        // render a red→blue ramp and sample its midpoint under different interpolation settings
+        let midpoint = configure => {
+          let g = ctx.createLinearGradient(0, 0, WIDTH, 0)
+          if (configure) configure(g)
+          g.addColorStop(0, 'red')
+          g.addColorStop(1, 'blue')
+          ctx.fillStyle = g
+          ctx.fillRect(0, 0, WIDTH, HEIGHT)
+          return pixel(WIDTH/2, 0)
+        }
+
+        // the default (srgb) blends straight through RGB — a dim purple midpoint…
+        let base = midpoint(null)
+        assert(base[1] < 10 && base[0] > 100 && base[2] > 100, `expected a purple midpoint, got ${base}`)
+        assert.deepEqual(midpoint(g => g.colorInterpolationMethod = 'srgb'), base) // …explicit srgb is identical
+
+        // oklch takes the perceptually-uniform path: a more saturated magenta
+        let oklch = midpoint(g => g.colorInterpolationMethod = 'oklch')
+        assert(oklch[0] > base[0] && oklch[2] > base[2], `expected a more saturated midpoint, got ${oklch}`)
+
+        // …and `longer` hue interpolation sweeps the long way around the wheel, through green
+        let longWay = midpoint(g => { g.colorInterpolationMethod = 'oklch'; g.hueInterpolationMethod = 'longer' })
+        assert(longWay[1] === Math.max(...longWay.slice(0, 3)), `expected a green midpoint, got ${longWay}`)
+
+        // getters always report the current setting; defaults are the spec defaults
+        let probe = ctx.createLinearGradient(0, 0, 1, 0)
+        assert.deepEqual(
+          [probe.colorInterpolationMethod, probe.hueInterpolationMethod, probe.premultipliedAlpha],
+          ['srgb', 'shorter', false]
+        )
+        probe.colorInterpolationMethod = 'OKLCH' // case-insensitive
+        assert.equal(probe.colorInterpolationMethod, 'oklch')
+        probe.hueInterpolationMethod = 'increasing'
+        assert.equal(probe.hueInterpolationMethod, 'increasing')
+        probe.premultipliedAlpha = true
+        assert.equal(probe.premultipliedAlpha, true)
+
+        // premultiplied alpha keeps a fade-to-transparent from darkening through the transparent stop:
+        // non-premultiplied lerps the red channel toward 0 as alpha drops; premultiplied keeps it red
+        let fadeRed = premul => {
+          let g = ctx.createLinearGradient(0, 0, WIDTH, 0)
+          g.premultipliedAlpha = premul
+          g.addColorStop(0, 'red')
+          g.addColorStop(1, 'transparent')
+          ctx.clearRect(0, 0, WIDTH, HEIGHT)
+          ctx.fillStyle = g
+          ctx.fillRect(0, 0, WIDTH, HEIGHT)
+          return pixel(WIDTH/2, 0)[0]
+        }
+        assert(fadeRed(true) > fadeRed(false), 'premultiplied should keep the midpoint red channel brighter')
+
+        // unknown values throw
+        assert.throws(() => probe.colorInterpolationMethod = 'bogus', /Unsupported colorInterpolationMethod/)
+        assert.throws(() => probe.hueInterpolationMethod = 'sideways', /Unsupported hueInterpolationMethod/)
+      })
     })
 
     describe("CanvasTexture", () => {
@@ -833,6 +890,126 @@ describe("Context2D", ()=>{
           }
         }
       }
+    })
+
+    test('getImageData() with colorSpace', () => {
+      ctx.fillStyle = '#f00'
+      ctx.fillRect(0, 0, 4, 4)
+
+      // srgb is the default and reads back unconverted
+      let srgb = ctx.getImageData(0, 0, 1, 1)
+      assert.equal(srgb.colorSpace, 'srgb')
+      assert.deepEqual(Array.from(srgb.data), [255, 0, 0, 255])
+
+      // sRGB red sits inside display-p3's wider gamut, so its converted coordinates pull in from the edge
+      let p3 = ctx.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'})
+      assert.equal(p3.colorSpace, 'display-p3')
+      assert.deepEqual(Array.from(p3.data), [234, 51, 35, 255])
+
+      // …and putting the converted bitmap back onto the (srgb) canvas converts it home again
+      ctx.putImageData(p3, 4, 0)
+      let [r, g, b, a] = pixel(4, 0)
+      assert.ok(Math.abs(r - 255) <= 1 && g <= 1 && b <= 1 && a == 255)
+    })
+
+    test('getContext() colorSpace setting', async () => {
+      let canvas = new Canvas(4, 4),
+          ctx = canvas.getContext('2d', {colorSpace:'display-p3'})
+      // full browser-parity shape: colorSpace is latched, the other fields are fixed defaults
+      assert.deepEqual(ctx.getContextAttributes(), {alpha:true, colorSpace:'display-p3', desynchronized:false, willReadFrequently:false})
+
+      ctx.fillStyle = '#f00'
+      ctx.fillRect(0, 0, 4, 4)
+
+      // getImageData/createImageData & exports default to the canvas's space…
+      let bmp = ctx.getImageData(0, 0, 1, 1)
+      assert.equal(bmp.colorSpace, 'display-p3')
+      assert.deepEqual(Array.from(bmp.data), [234, 51, 35, 255])
+      assert.equal(ctx.createImageData(2, 2).colorSpace, 'display-p3')
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw')).slice(0, 4)), [234, 51, 35, 255])
+      assert((await canvas.toBuffer('png')).includes('iCCP'))
+
+      // …but per-call settings still override
+      assert.deepEqual(Array.from(ctx.getImageData(0, 0, 1, 1, {colorSpace:'srgb'}).data), [255, 0, 0, 255])
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {colorSpace:'srgb'})).slice(0, 4)), [255, 0, 0, 255])
+
+      // only the first getContext call's settings are honored
+      assert.equal(canvas.getContext('2d', {colorSpace:'srgb'}), ctx)
+      assert.equal(ctx.getContextAttributes().colorSpace, 'display-p3')
+
+      // a canvas whose context was created without settings defaults to srgb
+      let plain = new Canvas(4, 4).getContext('2d')
+      assert.equal(plain.getContextAttributes().colorSpace, 'srgb')
+    })
+
+    test('wide-gamut fillStyle', () => {
+      // a color() fill outside the sRGB gamut survives to a display-p3 surface losslessly…
+      let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+      p3.fillStyle = 'color(display-p3 1 0 0)'
+      p3.fillRect(0, 0, 4, 4)
+      assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+
+      // …while an srgb surface clamps it at draw time
+      let srgb = new Canvas(4, 4).getContext('2d')
+      srgb.fillStyle = 'color(display-p3 1 0 0)'
+      srgb.fillRect(0, 0, 4, 4)
+      assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+      assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
+    })
+
+    test('wide-gamut gradient stops', () => {
+      let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'}),
+          grad = p3.createLinearGradient(0, 0, 4, 0)
+      grad.addColorStop(0, 'color(display-p3 1 0 0)')
+      grad.addColorStop(1, 'color(display-p3 1 0 0)')
+      p3.fillStyle = grad
+      p3.fillRect(0, 0, 4, 4)
+      assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+    })
+
+    test('wide-gamut auxiliary colors', async () => {
+      // shadows cast in wide-gamut colors survive on a display-p3 surface
+      let p3 = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
+      p3.shadowColor = 'color(display-p3 1 0 0)'
+      assert.equal(p3.shadowColor, 'color(display-p3 1 0 0)')
+      p3.shadowOffsetX = 4
+      p3.fillStyle = 'black'
+      p3.fillRect(0, 2, 2, 2) // shadow lands at x:4-6
+      assert.deepEqual(Array.from(p3.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
+
+      // …as do matte backgrounds
+      let blank = new Canvas(4, 4)
+      blank.getContext('2d', {colorSpace:'display-p3'})
+      let raw = await blank.toBuffer('raw', {matte:'color(display-p3 1 0 0)'})
+      assert.deepEqual(Array.from(raw.slice(0, 4)), [255, 0, 0, 255])
+
+      // …and drop-shadow() filter colors
+      let f = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
+      f.filter = 'drop-shadow(4px 0px 0px color(display-p3 1 0 0))'
+      f.fillStyle = 'black'
+      f.fillRect(0, 2, 2, 2)
+      assert.deepEqual(Array.from(f.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
+    })
+
+    test('wide-gamut drawImage(canvas)', () => {
+      // a source canvas holding an out-of-sRGB-gamut fill…
+      let srcCanvas = new Canvas(4, 4),
+          src = srcCanvas.getContext('2d')
+      src.fillStyle = 'color(display-p3 1 0 0)'
+      src.fillRect(0, 0, 4, 4)
+
+      // …survives being composited onto a display-p3 canvas via drawImage(). The source is
+      // snapshotted to an intermediate raster first (unlike drawCanvas's vector path), so
+      // this only holds because that intermediate is F16 extended-sRGB rather than 8-bit —
+      // an 8-bit intermediate would clip the P3 red down to sRGB red ([234, 51, 35] in p3).
+      let viaImage = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+      viaImage.drawImage(srcCanvas, 0, 0)
+      assert.deepEqual(Array.from(viaImage.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+
+      // the vector drawCanvas() path (no intermediate raster) preserves it too
+      let viaCanvas = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+      viaCanvas.drawCanvas(srcCanvas, 0, 0)
+      assert.deepEqual(Array.from(viaCanvas.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
     })
 
     test('putImageData()', () => {
@@ -1402,6 +1579,50 @@ describe("Context2D", ()=>{
 
       ctx.fillStyle = 'hsl(1.24e2, 760e-1%, 4.7e1%)';
       assert.equal(ctx.fillStyle, '#1dd329');
+
+      // CSS Color 4 syntaxes (parsed in full; non-legacy forms serialize canonically, not as hex)
+
+      ctx.fillStyle = 'color(srgb 0.5 0.25 1)'
+      assert.equal(ctx.fillStyle, 'color(srgb 0.5 0.25 1)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), [128, 64, 255, 255])
+
+      ctx.fillStyle = 'color(display-p3 0.5 0.5 0.5)' // achromatic values are gamut-neutral
+      assert.equal(ctx.fillStyle, 'color(display-p3 0.5 0.5 0.5)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), [128, 128, 128, 255])
+
+      ctx.fillStyle = 'color(display-p3 1 0 0)' // P3 red clamps to the sRGB gamut's edge when drawn
+      assert.equal(ctx.fillStyle, 'color(display-p3 1 0 0)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), [255, 0, 0, 255])
+
+      ctx.fillStyle = 'color(srgb 1 none 0)' // `none` components are treated as 0 when drawing
+      assert.equal(ctx.fillStyle, 'color(srgb 1 none 0)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), [255, 0, 0, 255])
+
+      ctx.fillStyle = 'oklch(100% 0 0)'
+      assert.equal(ctx.fillStyle, 'oklch(1 0 0)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), WHITE)
+
+      ctx.fillStyle = 'lab(0% 0 0)'
+      assert.equal(ctx.fillStyle, 'lab(0 0 0)')
+      ctx.fillRect(0, 0, 1, 1)
+      assert.deepEqual(pixel(0, 0), BLACK)
+
+      ctx.fillStyle = 'oklab(1 0 0 / 0.5)'
+      assert.equal(ctx.fillStyle, 'oklab(1 0 0 / 0.5)')
+
+      // not-yet-supported syntax is ignored like any other invalid value
+
+      ctx.fillStyle = '#8040ff'
+      ctx.fillStyle = 'rgb(from rebeccapurple r g b)' // relative color syntax
+      assert.equal(ctx.fillStyle, '#8040ff')
+
+      ctx.fillStyle = 'currentcolor'
+      assert.equal(ctx.fillStyle, '#8040ff')
 
       // case-insensitive css names
 
