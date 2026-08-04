@@ -9,7 +9,7 @@ use winit::{
     window::WindowId,
 };
 
-use crate::utils::css_to_color;
+use crate::utils::css_to_color4f;
 use crate::gfx::page::Page;
 use super::window::{Window, WindowSpec};
 
@@ -101,7 +101,7 @@ impl WindowManager {
             }
 
             if spec.background != win.spec.background {
-                if let Some(color) = css_to_color(&spec.background) {
+                if let Some(color) = css_to_color4f(&spec.background) {
                     win.set_background(color);
                 }else{
                     spec.background = win.spec.background.clone();

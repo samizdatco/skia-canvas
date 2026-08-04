@@ -21,7 +21,7 @@ use crate::gfx::page::{ExportOptions, RecordingSurface};
 use crate::mem;
 
 #[cfg(feature = "window")]
-use skia_safe::{Color, Rect, Matrix};
+use skia_safe::{Rect, Matrix};
 #[cfg(feature = "window")]
 use crate::gfx::page::Page;
 
@@ -175,7 +175,7 @@ pub struct Frame {
     image: Option<SkImage>,
     content: Rect,
     page: Page,
-    matte: Color,
+    matte: Color4f,
     dpr: f32,
     state: FrameState,
 }
@@ -183,13 +183,13 @@ pub struct Frame {
 #[cfg(feature = "window")]
 impl Default for Frame{
     fn default() -> Self {
-        Self{image:None, content:Rect::new_empty(), page:Page::default(), dpr:0.0, matte:Color::TRANSPARENT, state:FrameState::Clean}
+        Self{image:None, content:Rect::new_empty(), page:Page::default(), dpr:0.0, matte:Color4f::new(0.0, 0.0, 0.0, 0.0), state:FrameState::Clean}
     }
 }
 
 #[cfg(feature = "window")]
 impl Frame{
-    pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32, clip:Rect) -> Option<(&SkImage, &Rect, Rect)>{
+    pub fn validate(&mut self, page:&Page, matte:Color4f, dpr:f32, clip:Rect) -> Option<(&SkImage, &Rect, Rect)>{
         if
             self.state == FrameState::Dirty ||
             self.page.id != page.id ||
@@ -209,7 +209,7 @@ impl Frame{
         self.page.layers.len()
     }
 
-    pub fn wants_snapshot(&self, page:&Page, matte:Color, dpr:f32, last_id:usize) -> bool{
+    pub fn wants_snapshot(&self, page:&Page, matte:Color4f, dpr:f32, last_id:usize) -> bool{
         // decide (before rendering) whether the frame's snapshot would ever be drawn: skip the
         // GPU→GPU copy when it would just be discarded
         if self.state == FrameState::Resizing{
@@ -231,7 +231,7 @@ impl Frame{
         }
     }
 
-    pub fn update(&mut self, image:Option<SkImage>, page:&Page, matte:Color, dpr:f32, content:Rect){
+    pub fn update(&mut self, image:Option<SkImage>, page:&Page, matte:Color4f, dpr:f32, content:Rect){
         if self.state==FrameState::Resizing{
             // mark the framebuffer as needing a full redraw and skip updating cached image during resize
             self.state = FrameState::Dirty;

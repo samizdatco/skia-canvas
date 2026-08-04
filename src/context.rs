@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::{
   Canvas as SkCanvas, Paint, Path, PathBuilder, PathOp, Image, ImageInfo, Contains,
-  Rect, IRect, Point, Size, Color, ColorSpace, PathFillType,
+  Rect, IRect, Point, Size, ColorSpace, Color4f, PathFillType,
   PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture, FontHinting,
   font::Edging,
   images, image_filters, dash_path_effect, path_1d_path_effect,
@@ -29,9 +29,6 @@ use crate::texture::{CanvasTexture, BoxedCanvasTexture};
 use crate::image::ImageData;
 use crate::gfx::RenderingEngine;
 use crate::gfx::page::{PageRecorder, Page, ExportOptions};
-
-const BLACK:Color = Color::BLACK;
-const TRANSPARENT:Color = Color::TRANSPARENT;
 
 pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
 impl Finalize for Context2D {}
@@ -88,7 +85,7 @@ impl Default for State {
     let mut paint = Paint::default();
     paint
       .set_stroke_miter(10.0)
-      .set_color(BLACK)
+      .set_color4f(Color4f::new(0.0, 0.0, 0.0, 1.0), None)
       .set_anti_alias(true)
       .set_stroke_width(1.0)
       .set_style(PaintStyle::Fill);
@@ -845,7 +842,7 @@ impl Dye{
              .set_alpha_f(alpha);
       }
       Dye::Texture(texture) =>{
-        paint.set_color(texture.to_color(alpha));
+        paint.set_color4f(texture.to_color_4f(alpha), None);
       }
     };
   }

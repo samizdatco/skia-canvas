@@ -15,7 +15,7 @@ use vulkano::{
 use skia_safe::{
     gpu::{self, backend_render_targets, surfaces, vk},
     canvas::SrcRectConstraint,
-    Color, Matrix, Paint, BlendMode, SurfaceProps
+    Color4f, Matrix, Paint, BlendMode, SurfaceProps
 };
 use winit::{
     dpi::PhysicalSize,
@@ -123,7 +123,7 @@ impl VulkanRenderer {
         self.backend.prepare_swapchain(size.into());
     }
 
-    pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color){
+    pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color4f){
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
         let take_snapshot = self.frame.wants_snapshot(&page, matte, dpr, self.last_page_id);

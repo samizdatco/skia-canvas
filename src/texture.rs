@@ -3,14 +3,14 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Color, Color4f, Matrix, Paint, PaintStyle, PaintCap, Point};
+use skia_safe::{Path, Color4f, Matrix, Paint, PaintStyle, PaintCap, Point};
 use skia_safe::{line_2d_path_effect, path_2d_path_effect};
 
 use crate::utils::*;
 
 struct Texture{
   path: Option<Path>,
-  color: Color,
+  color: Color4f,
   line: f32,
   cap: PaintCap,
   angle: f32,
@@ -23,7 +23,7 @@ impl Finalize for CanvasTexture {}
 
 impl Default for Texture {
   fn default() -> Self {
-    Texture{path:None, color:Color::BLACK, line:1.0, cap:PaintCap::Butt, angle:0.0, scale:(1.0, 1.0), shift:(0.0, 0.0)}
+    Texture{path:None, color:Color4f::new(0.0, 0.0, 0.0, 1.0), line:1.0, cap:PaintCap::Butt, angle:0.0, scale:(1.0, 1.0), shift:(0.0, 0.0)}
   }
 }
 
@@ -63,9 +63,9 @@ impl CanvasTexture{
       paint.set_style(PaintStyle::Fill);
     }
 
-    let mut color:Color4f = tile.color.into();
+    let mut color = tile.color;
     color.a *= alpha;
-    paint.set_color(color.to_color());
+    paint.set_color4f(color, None);
   }
 
   pub fn use_clip(&self) -> bool{
@@ -77,11 +77,11 @@ impl CanvasTexture{
     tile.scale.into()
   }
 
-  pub fn to_color(&self, alpha:f32) -> Color {
+  pub fn to_color_4f(&self, alpha:f32) -> Color4f {
     let tile = self.texture.borrow();
-    let mut color:Color4f = tile.color.into();
+    let mut color = tile.color;
     color.a *= alpha;
-    color.to_color()
+    color
   }
 
 }
@@ -92,7 +92,7 @@ impl CanvasTexture{
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvasTexture> {
   let path = opt_skpath_arg(&mut cx, 1);
-  let color = opt_color_arg(&mut cx, 2).unwrap_or(Color::BLACK);
+  let color = opt_color_arg_4f(&mut cx, 2).unwrap_or(Color4f::new(0.0, 0.0, 0.0, 1.0));
 
   let line = match opt_float_arg(&mut cx, 3){
     Some(weight) => weight,
