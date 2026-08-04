@@ -1683,16 +1683,16 @@ describe("Context2D", ()=>{
       assert.equal(ctx.fillStyle, '#000000');
 
       ctx.fillStyle = 'rgba( 255, 200, 90, 0.5)';
-      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.502)');
+      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.5)');
 
       ctx.fillStyle = 'rgba( 255, 200, 90, 0.75)';
-      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.749)');
+      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.75)');
 
       ctx.fillStyle = 'rgba( 255, 200, 90, 0.7555)';
-      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.757)');
+      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.756)');
 
       ctx.fillStyle = 'rgba( 255, 200, 90, .7555)';
-      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.757)');
+      assert.equal(ctx.fillStyle, 'rgba(255, 200, 90, 0.756)');
 
       ctx.fillStyle = 'rgb(0, 0, 9000)';
       assert.equal(ctx.fillStyle, '#0000ff');
@@ -1736,10 +1736,10 @@ describe("Context2D", ()=>{
       assert.equal(ctx.fillStyle, '#ffffff');
 
       ctx.fillStyle = 'hsla(120, 25%, 75%, 0.5)';
-      assert.equal(ctx.fillStyle, 'rgba(175, 207, 175, 0.502)');
+      assert.equal(ctx.fillStyle, 'rgba(175, 207, 175, 0.5)');
 
       ctx.fillStyle = 'hsla(240, 75%, 25%, 0.75)';
-      assert.equal(ctx.fillStyle, 'rgba(16, 16, 112, 0.749)');
+      assert.equal(ctx.fillStyle, 'rgba(16, 16, 112, 0.75)');
 
       ctx.fillStyle = 'hsla(172.0, 33.00000e0%, 42%, 1)';
       assert.equal(ctx.fillStyle, '#488e85');

@@ -395,10 +395,20 @@ impl CssColor{
 
   pub fn to_css(&self) -> String{
     // return canonical string (use legacy format for hex/rgba(), CSS Color 4 syntax for everything else)
-    match self.parsed.flags.named() || self.parsed.flags.color_name().is_some(){
-      true if matches!(self.parsed.cs, ColorSpaceTag::Srgb | ColorSpaceTag::Hsl | ColorSpaceTag::Hwb) =>
-        color_to_css_string(&color4f_to_color(self.color)),
-      _ => self.parsed.to_string()
+    if self.parsed.flags.named()
+      && matches!(self.parsed.cs, ColorSpaceTag::Srgb | ColorSpaceTag::Hsl | ColorSpaceTag::Hwb)
+    {
+      let color = color4f_to_color(self.color);
+      let RGB {r, g, b} = color.to_rgb();
+      if self.color.a >= 1.0{
+        format!("#{:02x}{:02x}{:02x}", r, g, b)
+      }else{
+        let alpha = format!("{:.3}", self.color.a);
+        let alpha = alpha.trim_end_matches('0').trim_end_matches('.');
+        format!("rgba({}, {}, {}, {})", r, g, b, alpha)
+      }
+    }else{
+      self.parsed.to_string()
     }
   }
 }
@@ -472,19 +482,6 @@ pub fn opt_color_4f_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, at
     .and_then(|val|
       color_in_4f(cx, val)
     )
-}
-
-
-pub fn color_to_css_string(color:&Color) -> String {
-  let RGB {r, g, b} = color.to_rgb();
-  match color.a() {
-    255 => format!("#{:02x}{:02x}{:02x}", r, g, b),
-    _ => {
-      let alpha = format!("{:.3}", color.a() as f32 / 255.0);
-      let alpha = alpha.trim_end_matches('0');
-      format!("rgba({}, {}, {}, {})", r, g, b, if alpha=="0."{ "0" } else{ alpha })
-    }
-  }
 }
 
 //
