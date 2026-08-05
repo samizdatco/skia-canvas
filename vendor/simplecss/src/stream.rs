@@ -68,6 +68,9 @@ impl<'a> Stream<'a> {
         self.pos
     }
 
+    // skia-canvas: no longer called after declaration-list error recovery replaced the tokenizer's
+    // `jump_to_end(); None` abort (see recover_declaration in lib.rs); kept for parity with upstream.
+    #[allow(dead_code)]
     #[inline]
     pub fn jump_to_end(&mut self) {
         self.pos = self.end;

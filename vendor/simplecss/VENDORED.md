@@ -48,3 +48,14 @@ pseudo-classes live in the downstream `simplecss::Element` impl in skia-canvas's
   the argument can't leak into the stream and corrupt later tokens.
 - **Graceful skip.** An unknown or malformed pseudo becomes `PseudoClass::Unsupported(name)`
   (never matches) instead of dropping the whole selector — so grouped siblings survive.
+- **Declaration-list error recovery.** A malformed declaration is now skipped up to the next
+  top-level `;` and parsing continues, instead of aborting the whole list at the first invalid
+  token (upstream's `DeclarationTokenizer::next` did `jump_to_end()`; `consume_declarations` did
+  `consume_until_block_end(); break`). A single unparseable declaration — e.g. a custom property
+  (`--x: …`), a `var()` fallback with nested parens, or a `font: 16px/1.4` shorthand — no longer
+  discards the valid declarations after it (matters for both inline `style="…"` re-parsing and
+  `<style>` rule bodies). New `recover_declaration(stop_at_brace)` helper steps over strings and
+  balanced `()`/`[]`/`{}` so a `;` inside a value or nested block doesn't cut recovery short.
+  Leaves `jump_to_end` unused (kept, `#[allow(dead_code)]`). Added tests in
+  `tests/declaration_tokenizer.rs` and `tests/stylesheet.rs`; `style_15`'s pre-existing
+  `// TODO` outcome is now achieved.
