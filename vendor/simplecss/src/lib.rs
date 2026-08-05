@@ -547,7 +547,18 @@ fn consume_declaration<'a>(s: &mut Stream<'a>) -> Result<Declaration<'a>, Error>
         s.advance(1);
     }
 
-    let name = s.consume_ident()?;
+    // skia-canvas: accept custom-property names (`--foo`). consume_ident rejects the second dash,
+    // so capture `--` + name-chars directly. The value is still parsed as a normal declaration
+    // value (fine now that nested parens parse); we don't interpret custom properties, just keep
+    // them from tripping the parser and pass them along like any other declaration.
+    let name = if s.slice_tail().starts_with("--") {
+        let start = s.pos();
+        s.advance(2); // the `--`
+        s.skip_bytes(|c| c == b'-' || c == b'_' || c.is_ascii_alphanumeric());
+        s.slice_range(start, s.pos())
+    } else {
+        s.consume_ident()?
+    };
 
     s.skip_spaces_and_comments()?;
     s.consume_byte(b':')?;
@@ -646,8 +657,23 @@ fn consume_term(s: &mut Stream<'_>) -> Result<(), Error> {
 
             // Consume function.
             if s.curr_byte() == Ok(b'(') {
-                s.skip_bytes(|c| c != b')');
-                s.consume_byte(b')')?;
+                // skia-canvas: balance nested parens (and step over strings) so values like
+                // calc((a) - (b)), var(--x, rgb(...)), or a gradient with color-function args
+                // aren't truncated at the first ')'. Upstream skipped to the first ')' only.
+                s.advance(1); // past '('
+                let mut depth = 1u32;
+                while depth > 0 {
+                    match s.curr_byte()? {
+                        b'(' => depth += 1,
+                        b')' => depth -= 1,
+                        b'"' | b'\'' => {
+                            s.consume_string()?;
+                            continue;
+                        }
+                        _ => {}
+                    }
+                    s.advance(1);
+                }
             }
         }
     }
