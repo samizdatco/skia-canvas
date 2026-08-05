@@ -446,19 +446,52 @@ fn consume_declarations<'a>(s: &mut Stream<'a>) -> Result<Vec<Declaration<'a>>, 
     while !s.at_end() && s.curr_byte() != Ok(b'}') {
         match consume_declaration(s) {
             Ok(declaration) => declarations.push(declaration),
-            Err(_) => {
-                consume_until_block_end(s);
-                break;
-            }
+            // skia-canvas: recover past the malformed declaration to the next `;` (staying inside
+            // the block) instead of abandoning the rest of the rule. Upstream did
+            // `consume_until_block_end(s); break;`, discarding every later declaration.
+            Err(_) => recover_declaration(s, true),
         }
     }
 
     Ok(declarations)
 }
 
+// skia-canvas: CSS declaration-list error recovery. Skips past a malformed declaration to the next
+// top-level `;`. Quoted strings are consumed whole, and `()`/`[]`/`{}` are balanced (the brace
+// nesting matches upstream's `consume_until_block_end`, extended with string/paren awareness), so a
+// `;` inside a value, url(...), or a stray nested block doesn't end recovery early. When
+// `stop_at_brace` is set, the rule's own closing `}` (nesting depth 0) stops recovery without being
+// consumed, so the caller can close the block. Leaves the stream just past the `;`, at that `}`, or
+// at EOF. Both call sites previously aborted the whole declaration list on the first invalid token.
+fn recover_declaration(s: &mut Stream<'_>, stop_at_brace: bool) {
+    let mut depth = 0u32;
+    while let Ok(c) = s.curr_byte() {
+        match c {
+            b'"' | b'\'' => {
+                if s.consume_string().is_err() {
+                    return; // unterminated string: consume_string already ran to EOF
+                }
+                continue; // it advanced past the closing quote; don't double-advance
+            }
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' => depth = depth.saturating_sub(1),
+            b'}' if depth > 0 => depth -= 1,   // closes a nested block
+            b'}' if stop_at_brace => return,   // the rule's own block end (depth 0)
+            b';' if depth == 0 => {
+                s.advance(1);
+                return;
+            }
+            _ => {}
+        }
+        s.advance(1);
+    }
+}
+
 /// A declaration tokenizer.
 ///
-/// Tokenizer will stop at the first invalid token.
+/// skia-canvas: a malformed declaration is skipped (up to the next `;`) and iteration continues, so
+/// one invalid declaration no longer discards the declarations after it (CSS declaration-list
+/// recovery). Upstream stopped at the first invalid token.
 ///
 /// # Example
 ///
@@ -485,17 +518,20 @@ impl<'a> Iterator for DeclarationTokenizer<'a> {
     type Item = Declaration<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let _ = self.stream.skip_spaces_and_comments();
+        // skia-canvas: loop so a malformed declaration is skipped (see recover_declaration) and
+        // iteration continues, instead of upstream's `jump_to_end(); None` which discarded every
+        // declaration after the first invalid one.
+        loop {
+            let _ = self.stream.skip_spaces_and_comments();
 
-        if self.stream.at_end() {
-            return None;
-        }
+            if self.stream.at_end() {
+                return None;
+            }
 
-        match consume_declaration(&mut self.stream) {
-            Ok(v) => Some(v),
-            Err(_) => {
-                self.stream.jump_to_end();
-                None
+            match consume_declaration(&mut self.stream) {
+                Ok(v) => return Some(v),
+                // no block context here, so stop_at_brace = false
+                Err(_) => recover_declaration(&mut self.stream, false),
             }
         }
     }
