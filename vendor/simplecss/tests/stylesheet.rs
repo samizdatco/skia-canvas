@@ -154,7 +154,7 @@ fn style_21() {
 
 #[test]
 fn recover_bad_name_in_rule() {
-    let style = StyleSheet::parse("a { --x:red; fill:blue }");
+    let style = StyleSheet::parse("a { 9x:red; fill:blue }");
     assert_eq!(style.to_string(), "a { fill:blue; }");
 }
 
@@ -166,25 +166,39 @@ fn recover_missing_colon_in_rule() {
 
 #[test]
 fn recover_semicolon_in_string_in_rule() {
-    let style = StyleSheet::parse("a { --x:\"y; z\"; fill:blue }");
+    let style = StyleSheet::parse("a { tip \"y; z\"; fill:blue }");
     assert_eq!(style.to_string(), "a { fill:blue; }");
 }
 
 #[test]
 fn recover_semicolon_in_parens_in_rule() {
-    let style = StyleSheet::parse("a { --bg:url(a;b.png); fill:blue }");
+    let style = StyleSheet::parse("a { bg url(a;b.png); fill:blue }");
     assert_eq!(style.to_string(), "a { fill:blue; }");
 }
 
 #[test]
 fn recover_between_valid_in_rule() {
-    let style = StyleSheet::parse("a { fill:blue; --x:red; stroke:green }");
+    let style = StyleSheet::parse("a { fill:blue; color red; stroke:green }");
     assert_eq!(style.to_string(), "a { fill:blue;stroke:green; }");
 }
 
 #[test]
 fn recover_stays_within_block() {
     // recovery must stop at the rule's own `}` and not bleed into the next rule
-    let style = StyleSheet::parse("a { --x:red } b { color:blue }");
+    let style = StyleSheet::parse("a { 9x:red } b { color:blue }");
     assert_eq!(style.to_string(), "b { color:blue; }");
+}
+
+// skia-canvas: nested parens and custom-property declarations parse inside rule bodies.
+
+#[test]
+fn nested_paren_in_rule() {
+    let style = StyleSheet::parse("a { transform: translate(calc(1px + 2px)) }");
+    assert_eq!(style.to_string(), "a { transform:translate(calc(1px + 2px)); }");
+}
+
+#[test]
+fn custom_prop_in_rule() {
+    let style = StyleSheet::parse("a { --accent:#f00; fill:blue }");
+    assert_eq!(style.to_string(), "a { --accent:#f00;fill:blue; }");
 }

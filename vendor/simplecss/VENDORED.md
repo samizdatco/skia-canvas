@@ -59,3 +59,15 @@ pseudo-classes live in the downstream `simplecss::Element` impl in skia-canvas's
   Leaves `jump_to_end` unused (kept, `#[allow(dead_code)]`). Added tests in
   `tests/declaration_tokenizer.rs` and `tests/stylesheet.rs`; `style_15`'s pre-existing
   `// TODO` outcome is now achieved.
+- **Nested parens in values.** `consume_term`'s function handling now balances nested parens
+  (and steps over quoted args) instead of skipping to the first `)`, so `calc((a) - (b))`,
+  `var(--x, rgb(...))`, gradients with color-function args, and `url("a)b")` parse whole rather
+  than truncating.
+- **Custom-property declarations.** `consume_declaration` now accepts `--foo` names (which
+  `consume_ident` rejects at the second dash), capturing `--` + name-chars directly. Custom
+  properties are **not** interpreted — they're parsed and passed along like any other declaration
+  so they stop tripping the parser. The value is still parsed as a normal declaration value
+  (adequate now that nested parens parse); an exotic custom-property value can still fall to
+  declaration-list recovery. Because `--x`/`--bg` are now valid, the recovery tests that used them
+  as their "malformed" example were re-pointed at still-malformed triggers (missing colon,
+  digit-leading name). Added tests in `tests/declaration_tokenizer.rs` / `tests/stylesheet.rs`.
