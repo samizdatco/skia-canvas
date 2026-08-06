@@ -794,6 +794,33 @@ describe("Context2D", ()=>{
         assert.nearEqual(ctx.measureText(text).width, 74)
     })
 
+    test("textDecoration", () => {
+        FontLibrary.use('Raleway', ['tests/assets/Raleway/Raleway-VariableFont_wght.ttf'])
+
+        let [x, y] = [40, 100]
+        let text = "RR" // no descenders
+        ctx.font = '32px Raleway'
+        ctx.fillStyle = 'red'
+
+        // no ink below the baseline when undecorated
+        ctx.fillText(text, x, y)
+        assert.equal(ctx.getImageData(x, y+1, 50, 12).data.some(a => a), false)
+
+        // 'underline' should draw below the baseline, in the text color, even with no color specified
+        ctx.textDecoration = 'underline'
+        ctx.fillText(text, x, y)
+        let px = ctx.getImageData(x, y+1, 50, 12).data
+        assert.equal(px.some(a => a), true)
+        assert.equal(px.some((a, i) => i % 4 == 0 && a == 255), true) // red channel
+
+        // explicit colors override the text color
+        ctx.clearRect(0, 0, WIDTH, HEIGHT)
+        ctx.textDecoration = 'underline blue'
+        ctx.fillText(text, x, y)
+        px = ctx.getImageData(x, y+1, 50, 12).data
+        assert.equal(px.some((a, i) => i % 4 == 2 && a == 255), true) // blue channel
+    })
+
     test("measureText()", () => {
       ctx.font = "20px Arial, DejaVu Sans"
 

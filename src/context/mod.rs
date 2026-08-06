@@ -585,8 +585,7 @@ impl Context2D{
       self.draw_path(Some(typesetter.path(origin)), style, None);
     }else{
       self.render_to_canvas(&paint, |canvas, paint| {
-        let (paragraph, offset) = typesetter.layout(paint);
-        paragraph.paint(canvas, origin + offset);
+        typesetter.draw(canvas, origin, paint);
       });
     }
   }
