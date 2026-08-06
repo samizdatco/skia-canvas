@@ -29,19 +29,20 @@ impl Accounting {
     pub fn charge(&self, delta: i64) {
         if delta != 0 {
             self.pending.fetch_add(delta, Ordering::Relaxed);
-            self.schedule();
+            self.schedule_flush();
         }
     }
 
     // enqueue a channel flush, coalescing subsequent requests until it fires
-    fn schedule(&self) {
+    fn schedule_flush(&self) {
         // only start a new flush if one wasn't already scheduled
         if !self.scheduled.swap(true, Ordering::AcqRel) {
             CHANNEL.get()
-                .and_then(|ch| ch.try_send(|mut cx| {
-                    // clear the flag, *then* flush so any updates that arrive concurrently re-enqueue
+                .and_then(|ch| ch.try_send(|cx| {
+                    // clear the flag *before* flushing to v8, so any updates that arrive
+                    // concurrently re-enqueue and aren't left stranded
                     ACCOUNTING.scheduled.store(false, Ordering::Release);
-                    ACCOUNTING.flush(&mut cx);
+                    NAPI.adjust_external_memory(&cx, ACCOUNTING.pending.swap(0, Ordering::Relaxed));
                     Ok(())
                 }).ok())
                 .or_else(|| {
@@ -50,11 +51,6 @@ impl Accounting {
                     None
                 });
         }
-    }
-
-    // pass the accumulated delta to V8 (NB: must run on the main thread)
-    pub fn flush<'a, C: Context<'a>>(&self, cx: &mut C) {
-        NAPI.adjust_external_memory(cx, self.pending.swap(0, Ordering::Relaxed));
     }
 }
 
@@ -129,9 +125,4 @@ impl Drop for Footprint {
             ACCOUNTING.charge(-(self.0 as i64));
         }
     }
-}
-
-// convenience method for external callers to update the budget synchronously
-pub fn flush<'a, C: Context<'a>>(cx: &mut C) {
-    ACCOUNTING.flush(cx);
 }
