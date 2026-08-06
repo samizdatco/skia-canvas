@@ -403,7 +403,6 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
   this.footprint.set(bytes); // record the allocation size for v8
   let drawable = this.content.is_drawable();
   drop(this); // release the RefCell borrow before calling into cx (since it might reenter)
-  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(cx.boolean(drawable))
 }
 
@@ -415,7 +414,6 @@ pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   std::mem::take(&mut this.content).release();
   this.footprint.clear(); // record the dealloc for v8
   drop(this); // release the RefCell borrow before calling into cx (since it might reenter)
-  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(cx.undefined())
 }
 

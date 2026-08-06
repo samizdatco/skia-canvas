@@ -6,7 +6,6 @@ use serde_json::json;
 use crate::utils::*;
 use crate::gfx::page::{ExportOptions, pages_arg};
 use crate::gfx;
-use crate::mem;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -70,7 +69,6 @@ pub fn get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   this.borrow_mut().engine = None; // drop the (potentially GPU-backed) rendering context
-  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(cx.undefined())
 }
 
@@ -147,7 +145,6 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
     };
 
     deferred.settle_with(&channel, move |mut cx| {
-      mem::v8::flush(&mut cx); // update v8's memory tally (now that we're back on the main thread)
       let data = result.or_else(|err| cx.throw_error(err))?;
       let buffer = JsBuffer::from_slice(&mut cx, &data)?;
       Ok(buffer)
@@ -169,9 +166,6 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
       pages.first().encoded_as(options, pages.engine)
     }
   };
-
-  // update v8's memory tally (reflecting the new RasterCache entry)
-  mem::v8::flush(&mut cx);
 
   match encoded{
     Ok(data) => {
@@ -204,7 +198,6 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
     };
 
     deferred.settle_with(&channel, move |mut cx| {
-      mem::v8::flush(&mut cx); // update v8's memory tally (now that we're back on the main thread)
       match result{
         Err(msg) => cx.throw_error(format!("I/O Error: {}", msg)),
         _ => Ok(cx.undefined())
@@ -232,9 +225,6 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       pages.write_image(&name_pattern, options)
     }
   };
-
-  // update v8's memory tally (reflecting the new RasterCache entry)
-  mem::v8::flush(&mut cx);
 
   match result{
     Ok(_) => Ok(cx.undefined()),
