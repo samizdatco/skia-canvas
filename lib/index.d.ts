@@ -359,6 +359,8 @@ export interface CanvasBackend{
 export interface CanvasRenderingContext2DSettings {
   /** Color space used when rasterizing the canvas for exports & getImageData (defaults to "srgb") */
   colorSpace?: ColorSpace
+  /** Hint that the canvas will be read back frequently via getImageData (defaults to false) */
+  willReadFrequently?: boolean
 }
 
 /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas) */
