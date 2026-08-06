@@ -2,34 +2,26 @@
 // render-thread lifetime, and eviction policy for the backends' cached page rasters:
 //
 //   • SurfaceCache — the render thread's live RecordingSurfaces, keyed by PageRecorder id. The
-//     RecordingSurface values are defined over in gfx::page (where they interoperate with the
-//     RasterCache); this module owns only their storage and render-thread lifetime.
-//
-//   • RasterCache — persistent snapshot bitmaps (Raster) of the last raster generated for a
-//     given page, keyed by page id. Read/written from both the render thread and CPU exports.
+//     RecordingSurface values are defined over in gfx::page; this module owns only their storage
+//     and render-thread lifetime.
 //
 //   • Frame — the last on-screen raster a windowed renderer painted, held as a single slot per
 //     renderer (not a keyed lookup) and reused as the backdrop the next frame composites onto.
 //
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
-use skia_safe::{Color4f, ColorSpace, Image as SkImage};
-use dashmap::DashMap;
 
-use crate::gfx::page::{ExportOptions, RecordingSurface};
-use crate::mem;
+use crate::gfx::page::RecordingSurface;
 
 #[cfg(feature = "window")]
-use skia_safe::{Rect, Matrix};
+use skia_safe::{Rect, Matrix, Color4f, Image as SkImage};
 #[cfg(feature = "window")]
 use crate::gfx::page::Page;
 
-// evict every gpu-derived cache resource: called by the render thread just before it retires an
-// idle gpu context, since both live surfaces and texture-backed snapshots are bound to that context
+// evict every live gpu surface: called by the render thread just before it retires an idle gpu
+// context, since the surfaces are bound to that context
 pub fn evict_idle(){
   SurfaceCache::evict_all();
-  RasterCache::evict_textures();
 }
 
 //
@@ -50,11 +42,6 @@ impl SurfaceCache{
     RECORDING_SURFACES.with_borrow_mut(|surfaces| f(surfaces.entry(id).or_default()))
   }
 
-  // run `f` against the surface for `id` only if one already exists (no insert)
-  pub fn with_existing<T>(id:usize, f:impl FnOnce(&mut RecordingSurface) -> T) -> Option<T> {
-    RECORDING_SURFACES.with_borrow_mut(|surfaces| surfaces.get_mut(&id).map(f))
-  }
-
   // evict the surface for a single recorder (its PageRecorder is being released)
   pub fn evict(id:usize){
     RECORDING_SURFACES.with_borrow_mut(|surfaces|{ surfaces.remove(&id); })
@@ -64,105 +51,6 @@ impl SurfaceCache{
   // context, since everything derived from that context must be evicted along with it
   pub fn evict_all(){
     RECORDING_SURFACES.with_borrow_mut(|surfaces| surfaces.clear());
-  }
-}
-
-//
-// RasterCache: the last bitmap generated for a given page, keyed by page id
-//
-
-static CACHE: OnceLock<Arc<DashMap<usize, Raster>>> = OnceLock::new();
-
-pub struct RasterCache;
-
-impl RasterCache{
-  fn shared<'a>() -> &'a Arc<DashMap<usize, Raster>>{
-    CACHE.get_or_init(|| Arc::new(DashMap::new()))
-  }
-
-  pub fn add(id:usize){
-    Self::shared().insert(id, Raster::default());
-  }
-
-  // evict the entry but also return it (in case it contains textures that need to be dropped on the render thread)
-  pub fn evict(id:usize) -> Option<Raster>{
-    Self::shared().remove(&id).map(|(_, cache)| cache)
-  }
-
-  pub fn get(id:usize, opts:&ExportOptions, depth:usize, gpu:bool) -> (Option<SkImage>, usize){
-    Self::shared().get(&id).map(|raster|{
-      // only give access to texture-backed entries is called from the gpu context's thread
-      let compatible = gpu || !raster.is_texture_backed();
-      match compatible && raster.is_valid(opts) && depth >= raster.depth{
-        true => (raster.image.clone(), raster.depth),
-        false => (None, 0)
-      }
-    })
-    .unwrap_or((None, 0))
-  }
-
-  pub fn set(id:usize, image:SkImage, opts:&ExportOptions, depth:usize){
-    Self::shared().get_mut(&id).map(|mut raster|{
-      // save the bitmap if it's newer than the cached version, or is replacing an invaildated cache
-      if !raster.is_valid(opts) || depth > raster.depth{
-        *raster = Raster::new(image, opts, depth);
-      }
-    });
-  }
-
-  // evict texture-backed cache entries: called by the render thread just before it retires an idle
-  // gpu context, since the textures those entries hold are derived from that context
-  pub fn evict_textures(){
-    Self::shared().iter_mut().for_each(|mut raster|{
-      if raster.is_texture_backed(){
-        raster.footprint.clear(); // report the snapshot's dealloc to v8
-        raster.image = None;
-        raster.depth = 0;
-      }
-    });
-  }
-}
-
-//
-// Raster: a cached Page snapshot and the export settings that were used to render it
-//
-
-#[derive(Debug)]
-pub(crate) struct Raster{
-  image: Option<SkImage>,
-  footprint: mem::v8::Footprint,
-  density: f32,
-  matte: Option<Color4f>,
-  msaa: Option<usize>,
-  color_space: ColorSpace,
-  depth: usize,
-}
-
-impl Default for Raster{
-  fn default() -> Self {
-    Self{image:None, footprint:mem::v8::Footprint::default(), depth:0, density:1.0, matte:None, msaa:None, color_space:ColorSpace::new_srgb()}
-  }
-}
-
-impl Raster{
-  // build a cached raster from a freshly-rendered snapshot and the opts it was rendered under
-  fn new(image:SkImage, opts:&ExportOptions, depth:usize) -> Self{
-    let footprint = mem::v8::Footprint::new(image.image_info().compute_min_byte_size()); // report the image/texture allocation size to v8
-    Self{ image:Some(image), footprint, density:opts.density, matte:opts.matte, msaa:opts.msaa, color_space:opts.color_space.clone(), depth }
-  }
-
-  // whether the cached snapshot holds a gpu texture (so its drop must run on the render thread)
-  pub(crate) fn is_texture_backed(&self) -> bool{
-    self.image.as_ref().map(|img| img.is_texture_backed()).unwrap_or(false)
-  }
-
-  pub fn is_valid(&self, opts:&ExportOptions) -> bool{
-    self.density == opts.density &&
-    self.matte == opts.matte &&
-    self.msaa == opts.msaa &&
-    self.color_space == opts.color_space &&
-    self.image.is_some() &&
-    opts.is_raster()
   }
 }
 

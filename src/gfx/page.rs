@@ -17,7 +17,7 @@ const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
 use crate::gfx::RenderingEngine;
-use crate::gfx::cache::{SurfaceCache, RasterCache};
+use crate::gfx::cache::SurfaceCache;
 use crate::mem;
 
 //
@@ -42,7 +42,6 @@ impl PageRecorder{
   pub fn new(bounds:Rect) -> Self {
     static COUNTER:AtomicUsize = AtomicUsize::new(1);
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-    RasterCache::add(id);
 
     PageRecorder{
       current:None, layers:vec![], changed:false, disposed:false,
@@ -167,34 +166,6 @@ impl PageRecorder{
     }
   }
 
-  pub fn get_page_for_export(&mut self, opts:&ExportOptions, engine:&RenderingEngine) -> Page{
-    // update the RasterCache with the surface bitmap (if it's valid for this export)
-    let page = self.get_page();
-    if opts.is_raster(){
-      match engine{
-        RenderingEngine::GPU => {
-          // use the render-thread to rasterize (using the cached surface for this page)
-          // then save a snapshot to the RasterCache. (uses render_soon because any subsequent
-          // export is guaranteed to run after this since the render-thread's queue is FIFO)
-          let (page, opts) = (page.clone(), opts.clone());
-          crate::gfx::render_soon(move ||{
-            SurfaceCache::with_existing(page.id, |surface|{
-              if let Some(image) = surface.snapshot_if_valid(&page, &opts, &RenderingEngine::GPU){
-                RasterCache::set(page.id, image, &opts, surface.depth);
-              }
-            });
-          });
-        }
-        RenderingEngine::CPU => {
-          if let Some(image) = self.surface.snapshot_if_valid(&page, &opts, engine){
-            RasterCache::set(self.id, image, &opts, self.surface.depth);
-          }
-        }
-      }
-    }
-    page
-  }
-
   pub fn get_image(&mut self) -> Option<SkImage>{
     let size = self.bounds.size().to_floor();
     self
@@ -228,17 +199,11 @@ impl PageRecorder{
     self.layers.clear();
     self.surface = RecordingSurface::default();
 
-    // if the cached page image is gpu-backed (or an export has used a gpu surface)
-    // the buffers can only be dropped on the render thread
+    // if an export has used a gpu surface, its RecordingSurface lives on the render thread
+    // (in the SurfaceCache) and can only be dropped there
     let id = self.id;
-    let cache = RasterCache::evict(id);
-    let texture_backed = cache.as_ref()
-      .map(|c| c.is_texture_backed())
-      .unwrap_or(false);
-
-    if texture_backed || self.has_gpu_surface{
+    if self.has_gpu_surface{
       crate::gfx::render_soon(move ||{
-        drop(cache); // may release a texture-backed SkImage — must happen here, on the render thread
         SurfaceCache::evict(id);
       });
       self.has_gpu_surface = false;
@@ -322,17 +287,12 @@ impl RecordingSurface{
 
     if let Some(surface) = self.surface.as_mut(){
       let canvas = surface.canvas();
-      let (cache_image, cache_depth) = RasterCache::get(page.id, &opts, page.depth(), matches!(engine, RenderingEngine::GPU));
 
-      if let Some(image) = cache_image{
-        // use the cached bitmap as the background (if present)
-        canvas.draw_image(image, (0,0), None);
-        self.depth = cache_depth;
-      }else if self.depth==0 {
-        // otherwise, fill the canvas if requested
+      // fill a fresh/recreated surface with the matte; a persistent surface keeps its prior contents
+      // and just replays the layers added since the last update
+      if self.depth==0 {
         canvas.clear(self.matte.unwrap_or(Color::TRANSPARENT.into()));
       }
-
 
       // only add new layers to surface
       canvas.scale((self.density, self.density));
@@ -342,15 +302,6 @@ impl RecordingSurface{
         pict.playback(canvas);
       }
       self.depth = page.layers.len();
-    }
-  }
-
-  pub fn snapshot_if_valid(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> Option<SkImage>{
-    match !(self.is_config_stale(&opts) || self.is_surface_stale(&page, &opts, &engine) || self.depth==0){
-      true => self.surface.as_mut().and_then(|surface|
-        surface.image_snapshot_with_bounds(surface.image_info().bounds())
-      ),
-      false => None,
     }
   }
 
@@ -445,18 +396,14 @@ impl Page{
           let mut surface = engine.make_surface(&img_info, &opts)?;
           let canvas = surface.canvas();
 
-          let (cache_image, cache_depth) = RasterCache::get(page.id, &opts, page.depth(), matches!(engine, RenderingEngine::GPU));
-          if let Some(image) = cache_image{
-            // use the cached bitmap as the background
-            canvas.draw_image(image, (0,0), None);
-          }else if let Some(color) = opts.matte{
-            // otherwise, fill the canvas if requested
+          // fill the canvas if a matte was requested
+          if let Some(color) = opts.matte{
             canvas.clear(color);
           }
 
-          // draw newly added layers and cache the full-canvas bitmap
+          // replay all recorded layers into the transient surface (freed at closure end)
           canvas.set_matrix(&Matrix::scale((opts.density, opts.density)).into());
-          for pict in page.layers.iter().skip(cache_depth){
+          for pict in page.layers.iter(){
             pict.playback(canvas);
           }
 
@@ -464,12 +411,6 @@ impl Page{
           let image = surface.make_temporary_image()
             .or_else(|| surface.image_snapshot_with_bounds(img_info.bounds()))
             .ok_or("Could not read canvas contents (GPU context lost)".to_string())?;
-
-          // update the cache with the snapshot itself: texture-backed images stay resident,
-          // since the cache is only ever read back on this thread
-          if page.depth() > cache_depth{
-            RasterCache::set(page.id, image.clone(), &opts, page.depth());
-          }
 
           match opts.format.as_str() {
             "raw" => {
@@ -678,14 +619,14 @@ impl PageSequence{
 // Helpers
 //
 
-pub fn pages_arg(cx: &mut FunctionContext, idx:usize, opts:&ExportOptions, canvas:&BoxedCanvas) -> NeonResult<PageSequence> {
+pub fn pages_arg(cx: &mut FunctionContext, idx:usize, canvas:&BoxedCanvas) -> NeonResult<PageSequence> {
   let engine = canvas.borrow_mut().engine();
   let pages = cx.argument::<JsArray>(idx)?
       .to_vec(cx)?
       .iter()
       .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
       .filter( |ctx| ctx.is_ok() )
-      .map(|obj| obj.unwrap().borrow().get_page_for_export(opts, &engine))
+      .map(|obj| obj.unwrap().borrow().get_page())
       .collect();
   Ok(PageSequence::from(pages, engine))
 }
@@ -753,9 +694,5 @@ impl ExportOptions{
       true => Ok(samples),
       false => Err(format!("{}x MSAA not supported by GPU (options: {:?})", samples, valid_msaa))
     }
-  }
-
-  pub fn is_raster(&self) -> bool{
-    self.format!="pdf" && self.format!="svg"
   }
 }

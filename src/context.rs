@@ -544,10 +544,6 @@ impl Context2D{
     self.recorder.borrow_mut().get_page()
   }
 
-  pub fn get_page_for_export(&self, opts:&ExportOptions, engine:&RenderingEngine) -> Page {
-    self.recorder.borrow_mut().get_page_for_export(opts, engine)
-  }
-
   pub fn get_image(&self) -> Option<Image> {
     self.recorder.borrow_mut().get_image()
   }
