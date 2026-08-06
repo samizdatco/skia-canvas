@@ -602,3 +602,65 @@ fn resolve_inline_cascade() {
     // nothing applies → empty string
     assert_eq!(StyleSheet::parse("circle{fill:green}").resolve_inline(&el, ""), "");
 }
+
+// skia-canvas: var() substitution with root-only scoping. References resolve against the document
+// root's custom properties (`:root`/`svg`/matching rules) overlaid with the element's own.
+#[test]
+fn resolve_inline_vars() {
+    let doc = roxmltree::Document::parse("<svg><rect class='x'/></svg>").unwrap();
+    let rect = doc.descendants().find(|n| n.has_tag_name("rect")).unwrap();
+    let el = XmlNode(rect);
+
+    // a :root-defined custom property resolves for a descendant
+    assert_eq!(
+        StyleSheet::parse(":root{--c:red} .x{fill:var(--c)}").resolve_inline(&el, ""),
+        "fill:red;"
+    );
+    // an svg type-selector-defined property works too
+    assert_eq!(
+        StyleSheet::parse("svg{--c:blue} .x{fill:var(--c)}").resolve_inline(&el, ""),
+        "fill:blue;"
+    );
+    // same-element inline define-and-use; the custom property is consumed, not emitted
+    assert_eq!(
+        StyleSheet::parse("").resolve_inline(&el, "--c:green;fill:var(--c)"),
+        "fill:green;"
+    );
+    // fallback is used when the referenced property is undefined
+    assert_eq!(
+        StyleSheet::parse("").resolve_inline(&el, "fill:var(--missing, orange)"),
+        "fill:orange;"
+    );
+    // a var() nested in the fallback slot is resolved
+    assert_eq!(
+        StyleSheet::parse(":root{--c:teal} .x{fill:var(--missing, var(--c))}").resolve_inline(&el, ""),
+        "fill:teal;"
+    );
+    // the element's own custom property overrides the root's
+    assert_eq!(
+        StyleSheet::parse(":root{--c:red} .x{--c:blue;fill:var(--c)}").resolve_inline(&el, ""),
+        "fill:blue;"
+    );
+    // multiple / partial var() in a single value
+    assert_eq!(
+        StyleSheet::parse(":root{--w:2px;--c:navy} .x{stroke:var(--w) solid var(--c)}")
+            .resolve_inline(&el, ""),
+        "stroke:2px solid navy;"
+    );
+    // an undefined var() with no fallback is left verbatim (Skia drops just that declaration)
+    assert_eq!(
+        StyleSheet::parse("").resolve_inline(&el, "fill:var(--nope)"),
+        "fill:var(--nope);"
+    );
+}
+
+// skia-canvas: :root matches the document root element, not its descendants
+#[test]
+fn root_pseudo() {
+    let doc = roxmltree::Document::parse("<svg><rect/></svg>").unwrap();
+    let svg = doc.root_element();
+    let rect = doc.descendants().find(|n| n.has_tag_name("rect")).unwrap();
+    let sel = Selector::parse(":root").unwrap();
+    assert!(sel.matches(&XmlNode(svg)));
+    assert!(!sel.matches(&XmlNode(rect)));
+}

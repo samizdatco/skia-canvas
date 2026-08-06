@@ -291,6 +291,57 @@ impl StyleSheet<'_> {
     /// callers that splice the result into a renderer which ignores `!important` (e.g. skia-canvas's
     /// SVG `<style>` support, where Skia discards any declaration whose value carries the keyword).
     pub fn resolve_inline<E: Element>(&self, element: &E, inline: &str) -> String {
+        let winners = self.cascade(element, inline);
+
+        // skia-canvas: assemble the custom-property scope for var() resolution — the document
+        // root's custom properties, overridden by the element's own. Root scope is walked via the
+        // Element trait (parent_element), so only the root's *rule*-defined `--*` are visible; a
+        // `style="--x"` inline on the root element isn't reachable here. No inheritance from
+        // intermediate ancestors (that's the deliberate low-complexity cut).
+        let mut vars: BTreeMap<&str, &str> = BTreeMap::new();
+        let mut ancestor = element.parent_element();
+        let mut root = None;
+        while let Some(node) = ancestor {
+            ancestor = node.parent_element();
+            root = Some(node);
+        }
+        if let Some(root) = root {
+            for (name, (_, value)) in self.cascade(&root, "") {
+                if name.starts_with("--") {
+                    vars.insert(name, value);
+                }
+            }
+        }
+        for (name, (_, value)) in &winners {
+            if name.starts_with("--") {
+                vars.insert(name, value); // element's own custom props win over the root's
+            }
+        }
+
+        // skia-canvas: emit non-custom declarations, substituting var() from `vars`; `--*` are
+        // consumed (resolved away), not emitted.
+        let mut budget = 64u32; // runaway guard for var() expansion
+        winners
+            .iter()
+            .filter(|(name, _)| !name.starts_with("--"))
+            .map(|(name, (_, value))| {
+                if value.contains("var(") {
+                    format!("{}:{};", name, substitute_vars(value, &vars, &mut budget))
+                } else {
+                    format!("{}:{};", name, value)
+                }
+            })
+            .collect()
+    }
+
+    // skia-canvas: compute the winning declaration per property for `element` — matched rules by
+    // specificity/source-order, then the element's own inline style as the top author tier. Shared
+    // by resolve_inline (for the element and, via the root walk, for the document root).
+    fn cascade<'m, E: Element>(
+        &'m self,
+        element: &E,
+        inline: &'m str,
+    ) -> BTreeMap<&'m str, (CascadeKey, &'m str)> {
         let mut winners: BTreeMap<&str, (CascadeKey, &str)> = BTreeMap::new();
         let mut order = 0usize; // strict source order → last of equal priority wins
 
@@ -309,10 +360,86 @@ impl StyleSheet<'_> {
         }
 
         winners
-            .iter()
-            .map(|(name, (_, value))| format!("{}:{};", name, value))
-            .collect()
     }
+}
+
+// skia-canvas: expand `var(--name)` / `var(--name, fallback)` in `value` using `vars`. A missing
+// name with a fallback expands the fallback (which may itself contain var()); missing with no
+// fallback is left verbatim so the renderer drops just that declaration. Map values are literal —
+// never re-expanded — so custom-property chains don't resolve but also can't form cycles. `budget`
+// caps total expansions as a runaway guard.
+fn substitute_vars(value: &str, vars: &BTreeMap<&str, &str>, budget: &mut u32) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(i) = rest.find("var(") {
+        out.push_str(&rest[..i]);
+        let args_and_tail = &rest[i + 4..]; // past "var("
+
+        // find the matching ')' for this var(, balancing nested parens
+        let mut depth = 1usize;
+        let mut close = None;
+        for (j, b) in args_and_tail.bytes().enumerate() {
+            match b {
+                b'(' => depth += 1,
+                b')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close = Some(j);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(close) = close else {
+            // unbalanced — emit the remainder verbatim and stop
+            out.push_str(&rest[i..]);
+            return out;
+        };
+        let args = &args_and_tail[..close];
+        rest = &args_and_tail[close + 1..];
+
+        let (name, fallback) = match split_top_comma(args) {
+            Some((n, f)) => (n.trim(), Some(f.trim())),
+            None => (args.trim(), None),
+        };
+
+        if *budget == 0 {
+            // guard exhausted: emit verbatim
+            out.push_str("var(");
+            out.push_str(args);
+            out.push(')');
+        } else if let Some(v) = vars.get(name) {
+            *budget -= 1;
+            out.push_str(v);
+        } else if let Some(fb) = fallback {
+            *budget -= 1;
+            let sub = substitute_vars(fb, vars, budget);
+            out.push_str(&sub);
+        } else {
+            // guaranteed-invalid: leave verbatim so the renderer drops just this declaration
+            out.push_str("var(");
+            out.push_str(args);
+            out.push(')');
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+// skia-canvas: split a var() argument list on its first top-level comma (parens balanced), giving
+// (name, fallback). Returns None when there's no top-level comma (name only).
+fn split_top_comma(s: &str) -> Option<(&str, &str)> {
+    let mut depth = 0i32;
+    for (i, b) in s.bytes().enumerate() {
+        match b {
+            b'(' => depth += 1,
+            b')' => depth -= 1,
+            b',' if depth == 0 => return Some((&s[..i], &s[i + 1..])),
+            _ => {}
+        }
+    }
+    None
 }
 
 impl fmt::Display for StyleSheet<'_> {
