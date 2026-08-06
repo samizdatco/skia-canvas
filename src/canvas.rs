@@ -41,6 +41,7 @@ impl Canvas{
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
+  crate::gfx::cache::SurfaceCache::sweep(); // opportunistic readback-cache sweep (a JS-thread activity point)
   let opts = cx.argument::<JsObject>(1)?;
   let text_contrast = opt_double_for_key(&mut cx, &opts, "textContrast").unwrap_or(0.0);
   let (min_c, max_c) = (SurfaceProps::MIN_CONTRAST_INCLUSIVE as _, SurfaceProps::MAX_CONTRAST_INCLUSIVE as _);

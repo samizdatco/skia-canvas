@@ -74,6 +74,7 @@ pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   this.borrow_mut().release(); // free the PageRecorder & its readback surface
+  crate::gfx::cache::SurfaceCache::sweep(); // and reclaim any now-idle readback surfaces
   Ok(cx.undefined())
 }
 
@@ -548,6 +549,7 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let h = float_arg(&mut cx, 4, "height")?.floor();
   let (color_type, color_space, matte, density, msaa) = image_data_export_arg(&mut cx, 5);
   let parent = cx.argument::<BoxedCanvas>(6)?;
+  let read_frequently = bool_arg_or(&mut cx, 7, false);
   let canvas = &mut parent.borrow_mut();
 
   let opts = ExportOptions{matte, density, msaa, color_type, color_space, ..canvas.export_options()};
@@ -557,7 +559,7 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type, AlphaType::Unpremul, opts.color_space.clone());
   let mut buffer = cx.buffer(dst_info.compute_min_byte_size())?;
   let dst = buffer.as_mut_slice(&mut cx);
-  let result = this.borrow_mut().write_pixels(dst, &dst_info, crop, opts, engine);
+  let result = this.borrow_mut().write_pixels(dst, &dst_info, crop, opts, engine, read_frequently);
   result.or_else(|e| cx.throw_error(e))?;
 
   Ok(buffer)
