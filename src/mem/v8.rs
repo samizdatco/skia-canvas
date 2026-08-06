@@ -10,16 +10,28 @@ static PENDING: AtomicI64 = AtomicI64::new(0);
 type AdjustFn = unsafe extern "C" fn(*mut c_void, i64, *mut i64) -> i32;
 type Adjust = dyn Fn(*mut c_void, i64) + Send + Sync;
 
+// A handle to the host process's own symbols, obtained exactly the way neon resolves every
+// napi symbol (`Library::this()`). This guarantees `napi_adjust_external_memory` is reachable
+// wherever neon's own napi calls resolve. Infallible on unix, fallible on Windows — mirroring
+// neon's `not(windows)`/`windows` split so every platform is covered.
+#[cfg(not(windows))]
+fn host_lib() -> Option<libloading::Library> {
+    Some(libloading::os::unix::Library::this().into())
+}
+#[cfg(windows)]
+fn host_lib() -> Option<libloading::Library> {
+    libloading::os::windows::Library::this().ok().map(Into::into)
+}
+
 // Run `f` with the resolved adjuster (or do nothing if it isn't available)
-#[cfg(unix)]
 fn with_adjust(f: impl FnOnce(&Adjust)) {
     static F: OnceLock<Option<Box<Adjust>>> = OnceLock::new();
     let adjust = F.get_or_init(|| {
-        // use RTLD_DEFAULT to search loaded objects and find the napi symbol
-        let name = c"napi_adjust_external_memory";
-        let p = unsafe { libc::dlsym(libc::RTLD_DEFAULT, name.as_ptr()) };
-        let adjust: AdjustFn = (!p.is_null())
-            .then(|| unsafe { std::mem::transmute::<usize, AdjustFn>(p as usize) })?;
+        let host = host_lib()?;
+        let sym = unsafe { host.get::<AdjustFn>(b"napi_adjust_external_memory") }.ok()?;
+        // copy the fn pointer out; the host module stays mapped for the process lifetime, so
+        // it remains callable after `host` drops here
+        let adjust = *sym;
         // store an `adjust` wrapper that handles the out-param napi expects
         Some(Box::new(move |env, delta| {
             let mut adjusted = 0i64;
@@ -30,10 +42,6 @@ fn with_adjust(f: impl FnOnce(&Adjust)) {
         f(adjust);
     }
 }
-
-// Windows would need GetProcAddress rather than dlsym; not wired, so accounting is inactive.
-#[cfg(not(unix))]
-fn with_adjust(_f: impl FnOnce(&Adjust)) {}
 
 // Update the pending byte delta: + on allocation, - when it's freed
 pub fn charge(delta: i64) {

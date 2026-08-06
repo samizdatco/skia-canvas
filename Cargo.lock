@@ -1933,6 +1933,7 @@ dependencies = [
  "dashmap",
  "drm",
  "libc",
+ "libloading",
  "little_exif",
  "neon",
  "objc2 0.6.2",
