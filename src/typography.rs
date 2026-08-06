@@ -576,10 +576,8 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
       "solid" | _ => TextDecorationStyle::Solid,
     };
 
-    let color = match string_for_key(cx, &deco, "color")?.as_str(){
-      "currentColor" => None,
-      color_str => css_to_color(&color_str),
-    };
+    let color_str = string_for_key(cx, &deco, "color")?;
+    let color = css_to_color(&color_str);
 
     let inherit = string_for_key(cx, &deco, "inherit")?;
     let size = match inherit.as_str(){
@@ -590,8 +588,9 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
       }
     };
 
-    // if the setting is invalid, it should just be ignored
-    if css.is_empty() || color.is_none(){ return Ok(None) }
+    // if the setting is invalid, it should just be ignored (n.b. `currentColor` is valid but has
+    // no fixed color; leaving it None defers to the text color at draw time)
+    if css.is_empty() || (color.is_none() && color_str != "currentColor"){ return Ok(None) }
 
     // As of skia_safe 0.78.2, `Gaps` mode is too buggy, with random breaks in places that don't have
     // descenders. It would be nice to enable this in a future release once it stabilizes…
