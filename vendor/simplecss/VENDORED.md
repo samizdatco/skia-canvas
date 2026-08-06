@@ -71,3 +71,13 @@ pseudo-classes live in the downstream `simplecss::Element` impl in skia-canvas's
   declaration-list recovery. Because `--x`/`--bg` are now valid, the recovery tests that used them
   as their "malformed" example were re-pointed at still-malformed triggers (missing colon,
   digit-leading name). Added tests in `tests/declaration_tokenizer.rs` / `tests/stylesheet.rs`.
+- **`var()` substitution (root-only scoping).** `resolve_inline` now expands
+  `var(--name[, fallback])` in emitted values and consumes `--*` declarations instead of passing
+  them through. The custom-property scope is the **document root's** custom properties (walked via
+  the `Element` trait's `parent_element`, so `:root`/`svg`/matching-rule `--*` — see the new
+  `PseudoClass::Root`) overlaid with the element's own; there is **no** inheritance from
+  intermediate ancestors and a `style="--x"` on the root element isn't reachable (deliberate
+  low-complexity cut). Custom-property values are literal — no chained `var()` and thus no cycles;
+  a `budget` caps expansion. `resolve_inline`'s winner computation was factored into a private
+  `cascade` shared with the root walk; helpers `substitute_vars`/`split_top_comma` added. `:root`
+  matches an element with no parent element. Added tests in `tests/select.rs`.

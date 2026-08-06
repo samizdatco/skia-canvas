@@ -58,6 +58,8 @@ pub enum PseudoClass<'a> {
     NthLastChild(Nth),
     NthOfType(Nth),
     NthLastOfType(Nth),
+    // skia-canvas: :root — matches the document root element (for root-scoped custom properties).
+    Root,
     // skia-canvas: :not() stores its argument's source text (re-parsed on match) so that
     // PseudoClass stays Copy; comma-separated lists are rejected at parse time, leaving a
     // single (possibly complex) inner selector.
@@ -116,6 +118,7 @@ impl fmt::Display for PseudoClass<'_> {
             PseudoClass::NthLastChild(n) => write!(f, "nth-last-child({})", n),
             PseudoClass::NthOfType(n) => write!(f, "nth-of-type({})", n),
             PseudoClass::NthLastOfType(n) => write!(f, "nth-last-of-type({})", n),
+            PseudoClass::Root => write!(f, "root"),
             PseudoClass::Not(inner) => write!(f, "not({})", inner),
             PseudoClass::Link => write!(f, "link"),
             PseudoClass::Visited => write!(f, "visited"),
@@ -358,6 +361,8 @@ fn match_pseudo_class<E: Element>(class: PseudoClass<'_>, element: &E) -> bool {
         PseudoClass::NthLastChild(nth) => nth.matches(nth_index(element, false, false)),
         PseudoClass::NthOfType(nth) => nth.matches(nth_index(element, true, true)),
         PseudoClass::NthLastOfType(nth) => nth.matches(nth_index(element, false, true)),
+        // skia-canvas: :root matches the element with no parent element (the document root)
+        PseudoClass::Root => element.parent_element().is_none(),
         PseudoClass::Not(inner) => Selector::parse(inner).map_or(false, |s| !s.matches(element)),
         // state-dependent — only the downstream impl can decide (false under static rendering)
         PseudoClass::Link
@@ -490,6 +495,8 @@ pub(crate) fn parse(text: &str) -> (Option<Selector<'_>>, usize) {
                     "first-of-type" => PseudoClass::FirstOfType,
                     "last-of-type" => PseudoClass::LastOfType,
                     "only-of-type" => PseudoClass::OnlyOfType,
+                    // skia-canvas: :root
+                    "root" => PseudoClass::Root,
                     "link" => PseudoClass::Link,
                     "visited" => PseudoClass::Visited,
                     "hover" => PseudoClass::Hover,
