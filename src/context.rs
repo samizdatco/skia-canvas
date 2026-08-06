@@ -552,8 +552,8 @@ impl Context2D{
     self.recorder.borrow_mut().get_page().get_picture(None)
   }
 
-  pub fn write_pixels(&mut self, dst_buffer:&mut [u8], dst_info:&ImageInfo, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<(), String>{
-    self.recorder.borrow_mut().write_pixels(dst_buffer, dst_info, crop, opts, engine)
+  pub fn write_pixels(&mut self, dst_buffer:&mut [u8], dst_info:&ImageInfo, crop:IRect, opts:ExportOptions, engine:RenderingEngine, read_frequently:bool) -> Result<(), String>{
+    self.recorder.borrow_mut().write_pixels(dst_buffer, dst_info, crop, opts, engine, read_frequently)
   }
 
   pub fn blit_pixels(&mut self, image_data:ImageData, src_rect:&Rect, dst_rect:&Rect){

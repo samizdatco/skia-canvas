@@ -30,7 +30,6 @@ pub struct PageRecorder{
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
-  surface: RecordingSurface,
   changed: bool,
   disposed: bool, // flag that drawing ops should be ignored after PictureRecorder has been dropped
   id: usize,
@@ -46,7 +45,7 @@ impl PageRecorder{
     PageRecorder{
       current:None, layers:vec![], changed:false, disposed:false,
       matrix:Matrix::default(), clip:None, bounds, id,
-      surface:RecordingSurface::default(), has_gpu_surface:false,
+      has_gpu_surface:false,
       approx_ops:0,
     }
   }
@@ -102,7 +101,7 @@ impl PageRecorder{
     }
   }
 
-  pub fn write_pixels(&mut self, dst_buffer:&mut [u8], dst_info:&ImageInfo, crop:IRect, opts:ExportOptions, engine:RenderingEngine) -> Result<(), String>{
+  pub fn write_pixels(&mut self, dst_buffer:&mut [u8], dst_info:&ImageInfo, crop:IRect, opts:ExportOptions, engine:RenderingEngine, read_frequently:bool) -> Result<(), String>{
     // dst_buffer must be zero-filled since regions of the crop outside the canvas bounds won't be updated
     if !self.bounds.intersects(Rect::from_irect(crop)){
       return Ok(())
@@ -116,7 +115,7 @@ impl PageRecorder{
         self.has_gpu_surface = true; // remember to free the gpu-backed export surface
         let dst_info = dst_info.clone();
         let pixels = engine.render(move ||{
-          SurfaceCache::with_entry(page.id, |surface|{
+          SurfaceCache::with_entry(page.id, read_frequently, |surface|{
             surface.update(&page, &opts, &engine);
             let mut pixels = vec![0u8; dst_info.compute_min_byte_size()];
             match surface.copy_pixels(&dst_info, crop, &mut pixels){
@@ -130,11 +129,13 @@ impl PageRecorder{
       }
 
       RenderingEngine::CPU => {
-        self.surface.update(&page, &opts, &engine);
-        match self.surface.copy_pixels(dst_info, crop, dst_buffer){
-          true => Ok(()),
-          false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
-        }
+        SurfaceCache::with_entry(page.id, read_frequently, |surface|{
+          surface.update(&page, &opts, &engine);
+          match surface.copy_pixels(dst_info, crop, dst_buffer){
+            true => Ok(()),
+            false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
+          }
+        })
       }
     }
   }
@@ -197,11 +198,12 @@ impl PageRecorder{
 
     self.current = None;
     self.layers.clear();
-    self.surface = RecordingSurface::default();
+
+    let id = self.id;
+    SurfaceCache::evict(id); // JS-thread map (CPU surface) → drop inline on this (the owning) thread
 
     // if an export has used a gpu surface, its RecordingSurface lives on the render thread
-    // (in the SurfaceCache) and can only be dropped there
-    let id = self.id;
+    // (in the SurfaceCache's render-thread map) and can only be dropped there
     if self.has_gpu_surface{
       crate::gfx::render_soon(move ||{
         SurfaceCache::evict(id);
@@ -309,6 +311,11 @@ impl RecordingSurface{
     self.surface.as_mut().map(|surface|{
       surface.read_pixels(dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()))
     }).unwrap_or(false)
+  }
+
+  // logical byte-size of the current surface (w×h×4×density²), 0 if none — for the cache budget
+  pub fn byte_size(&mut self) -> u64{
+    self.surface.as_mut().map(|s| s.image_info().compute_min_byte_size() as u64).unwrap_or(0)
   }
 }
 
@@ -620,6 +627,7 @@ impl PageSequence{
 //
 
 pub fn pages_arg(cx: &mut FunctionContext, idx:usize, canvas:&BoxedCanvas) -> NeonResult<PageSequence> {
+  SurfaceCache::sweep(); // opportunistic readback-cache sweep on export (a JS-thread activity point)
   let engine = canvas.borrow_mut().engine();
   let pages = cx.argument::<JsArray>(idx)?
       .to_vec(cx)?
