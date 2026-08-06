@@ -4,7 +4,7 @@ use std::ops::Range;
 use std::iter::zip;
 use neon::prelude::*;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, Color};
+use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, Color, Canvas as SkCanvas, BlendMode};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
   Decoration, FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
@@ -74,6 +74,55 @@ impl Typesetter{
     );
 
     (paragraph, offset)
+  }
+
+  pub fn draw(&self, canvas:&SkCanvas, origin:Point, paint:&Paint){
+    // lay out with a no-op foreground so the paragraph's own `paint` call (used below to draw
+    // text decorations, if any) won't re-draw the glyphs
+    let mut decoration_paint = paint.clone();
+    decoration_paint.set_blend_mode(BlendMode::Dst);
+    let (mut paragraph, offset) = self.layout(&decoration_paint);
+    let origin = origin + offset;
+
+    // note each line's terminus and the byte offsets where its runs begin: the visitor reports
+    // where each glyph's utf8 cluster *starts*, so the extent of a run's final cluster (and of
+    // RTL runs, whose offsets descend) must be inferred from whatever follows it on the line
+    let mut splits:Vec<Vec<u32>> = (0..paragraph.line_number())
+      .map(|ln| vec![paragraph.get_actual_text_range(ln, true).end as u32])
+      .collect();
+    paragraph.visit(|ln, run|{
+      if let Some(run) = run{
+        if let Some(first) = run.utf8_starts()[..run.count()].iter().min(){
+          splits[ln].push(*first);
+        }
+      }
+    });
+
+    // draw each run's glyphs directly, attaching utf8 text & cluster mappings so the PDF exporter
+    // can generate a valid /ToUnicode table (even for glyphs unreachable through the font's cmap);
+    // runs tile each line's text, so each one's clusters end where its logical successor begins
+    paragraph.visit(|ln, run|{
+      if let Some(run) = run{
+        let starts = &run.utf8_starts()[..run.count()];
+        if let Some(first) = starts.iter().min(){
+          let end = splits[ln].iter().filter(|s| *s > first).min().copied().unwrap_or(self.text.len() as u32);
+          match self.text.get(..end as usize){
+            Some(text) => canvas.draw_glyphs_utf8(
+              run.glyphs(), run.positions(), starts, text, origin + run.origin(), run.font(), paint
+            ),
+            // if the utf8 offsets are unusable, at least draw the glyphs themselves
+            None => canvas.draw_glyphs_at(
+              run.glyphs(), run.positions(), origin + run.origin(), run.font(), paint
+            )
+          }
+        }
+      }
+    });
+
+    // draw underlines/overlines/strikethroughs on top of the glyphs
+    if self.text_decoration.decoration.ty != TextDecoration::NO_DECORATION{
+      paragraph.paint(canvas, origin);
+    }
   }
 
   pub fn metrics(&self) -> Value {

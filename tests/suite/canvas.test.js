@@ -5,8 +5,9 @@
 const fs = require('fs'),
       tmp = require('tmp'),
       path = require('path'),
+      zlib = require('zlib'),
       {assert, describe, test, beforeEach, afterEach} = require('../runner'),
-      {Canvas, Image} = require('../../lib');
+      {Canvas, Image, FontLibrary} = require('../../lib');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -447,6 +448,33 @@ describe("Canvas", ()=>{
         let header = fs.readFileSync(path).slice(0, magic.length)
         assert(header.equals(magic))
       }
+    })
+
+    test("PDFs with extractable text", ()=>{
+      // Caveat's contextual alternates & ligatures replace most letters with glyphs that can't be
+      // reached through the font's cmap table (and would otherwise be unmappable in the PDF)
+      FontLibrary.use('Caveat', ['tests/assets/Caveat/Caveat-VariableFont_wght.ttf'])
+      ctx.font = '32px Caveat'
+      ctx.fillText("difficult offer", 20, 60)
+
+      // collect the inflated contents of the pdf's flate-encoded streams
+      let pdf = canvas.toBufferSync("pdf"),
+          streams = '',
+          pos = 0
+      while ((pos = pdf.indexOf('stream', pos)) != -1){
+        if (pdf.toString('latin1', pos-3, pos) == 'end'){ pos += 6; continue }
+        let start = pdf.indexOf('\n', pos) + 1,
+            end = pdf.indexOf('endstream', start)
+        try{ streams += zlib.inflateSync(pdf.subarray(start, end)).toString('latin1') }catch(e){}
+        pos = end
+      }
+
+      // the /ToUnicode tables should map every glyph to a character (rather than to <0000>)
+      assert.match(streams, /beginbfchar/)
+      assert.doesNotMatch(streams, /<[0-9A-F]+> <0000>/)
+
+      // the ligatures' glyphs can't be mapped through the cmap, so they need /ActualText spans
+      assert.match(streams, /ActualText/)
     })
 
     test("image-sequences", async ()=>{
