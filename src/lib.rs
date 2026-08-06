@@ -31,6 +31,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     }
   }
 
+  // retire the GPU context cleanly at process (so its destructor runs while the driver is still alive)
+  utils::install_exit_handler(&mut cx, || gfx::engine::retire_gpu())?;
+
   // -- Image -------------------------------------------------------------------------------------
 
   cx.export_function("Image_new", image::new)?;
@@ -237,13 +240,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("App_openWindow", gui::open)?;
     cx.export_function("App_setRate", gui::set_rate)?;
   }
-
-  // -- GPU teardown (run by node at exit) -------------------------------------------------------
-
-  cx.export_function("gfx_retireGPU", |mut cx: FunctionContext| {
-      gfx::engine::retire_gpu();
-      Ok(cx.undefined())
-  })?;
 
   Ok(())
 }

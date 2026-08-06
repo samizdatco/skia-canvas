@@ -7,23 +7,6 @@ use color::{parse_color, ColorSpaceTag, DynamicColor, Srgb};
 use skia_safe::{ Path, Matrix, Point, Color, Color4f, RGB, Data };
 
 //
-// panic recovery
-//
-
-// runs a closure and turns any panic into `Err(message)` instead of letting it unwind propagate
-pub fn catch_panic<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String>{
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|payload|{
-        Err(match payload.downcast::<&str>(){
-            Ok(msg) => msg.to_string(),
-            Err(payload) => match payload.downcast::<String>(){
-                Ok(msg) => *msg,
-                Err(_) => "render thread panicked".to_string(),
-            }
-        })
-    })
-}
-
-//
 // meta-helpers
 //
 
@@ -1117,3 +1100,34 @@ pub fn from_engine(engine:RenderingEngine) -> String{
 //                             Exclusion, Hue, Saturation, Color, Luminosity, or Modulate")
 //   }
 // }
+
+
+//
+// exit in an orderly fashion
+//
+
+// runs a closure and turns any panic into `Err(message)` instead of letting it unwind propagate
+pub fn catch_panic<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String>{
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|payload|{
+        Err(match payload.downcast::<&str>(){
+            Ok(msg) => msg.to_string(),
+            Err(payload) => match payload.downcast::<String>(){
+                Ok(msg) => *msg,
+                Err(_) => "render thread panicked".to_string(),
+            }
+        })
+    })
+}
+
+// Install a `process.once('exit', …)` listener that runs `on_exit` at termination
+pub fn install_exit_handler(cx: &mut ModuleContext, on_exit: impl Fn() + 'static) -> NeonResult<()> {
+  let process: Handle<JsObject> = cx.global("process")?;
+  let once: Handle<JsFunction> = process.get(cx, "once")?;
+  let handler = JsFunction::new(cx, move |mut cx| {
+    on_exit();
+    Ok(cx.undefined())
+  })?;
+  let event = cx.string("exit");
+  once.call_with(cx).this(process).arg(event).arg(handler).exec(cx)?;
+  Ok(())
+}
