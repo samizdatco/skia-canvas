@@ -12,6 +12,7 @@ use skia_safe::path::{self, AddPathMode, Verb};
 
 use crate::utils::*;
 use crate::drawlist::Pen;
+use crate::mem;
 
 pub type BoxedPath2D = JsBox<RefCell<Path2D>>;
 impl Finalize for Path2D {}
@@ -19,32 +20,39 @@ impl Finalize for Path2D {}
 pub struct Path2D{
   builder: PathBuilder,
   cache: RefCell<Option<Path>>, // lazy snapshot of the builder; invalidated on every append
+  footprint: RefCell<mem::v8::Footprint>, // retained geometry size reported to V8 (charged lazily in `path`)
 }
 
 impl Default for Path2D {
   fn default() -> Self {
-    Self{ builder:PathBuilder::new(), cache:RefCell::new(None) }
+    Self{ builder:PathBuilder::new(), cache:RefCell::new(None), footprint:RefCell::new(mem::v8::Footprint::default()) }
   }
 }
 
 impl From<PathBuilder> for Path2D{
   fn from(builder: PathBuilder) -> Self {
-    Self{ builder, cache:RefCell::new(None) }
+    // leave the cache empty: the geometry is charged when `path()` first materializes it
+    Self{ builder, cache:RefCell::new(None), footprint:RefCell::new(mem::v8::Footprint::default()) }
   }
 }
 
 impl From<Path> for Path2D{
   fn from(path: Path) -> Self {
-    Self{ builder:PathBuilder::new_path(&path), cache:RefCell::new(Some(path)) }
+    let footprint = mem::v8::Footprint::new(path.approximate_bytes_used());
+    Self{ builder:PathBuilder::new_path(&path), cache:RefCell::new(Some(path)), footprint:RefCell::new(footprint) }
   }
 }
 
 impl Path2D{
   // either return the cached path (if no additional appends have happened) or replay the builder to generate a new one
   pub fn path(&self) -> Path {
-    self.cache.borrow_mut()
-      .get_or_insert_with(|| self.builder.snapshot())
-      .clone()
+    let mut cache = self.cache.borrow_mut();
+    if cache.is_none() {
+      let snapshot = self.builder.snapshot();
+      self.footprint.borrow_mut().set(snapshot.approximate_bytes_used());
+      *cache = Some(snapshot);
+    }
+    cache.as_ref().unwrap().clone()
   }
 
   // generate a fresh path from the geometry with the transform baked into it
