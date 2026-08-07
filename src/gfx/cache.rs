@@ -1,168 +1,82 @@
-// Caches for gpu-backed (and gpu-adjacent) page resources. This module owns the storage,
-// render-thread lifetime, and eviction policy for the backends' cached page rasters:
-//
-//   • SurfaceCache — the render thread's live RecordingSurfaces, keyed by PageRecorder id. The
-//     RecordingSurface values are defined over in gfx::page (where they interoperate with the
-//     RasterCache); this module owns only their storage and render-thread lifetime.
-//
-//   • RasterCache — persistent snapshot bitmaps (Raster) of the last raster generated for a
-//     given page, keyed by page id. Read/written from both the render thread and CPU exports.
-//
-//   • Frame — the last on-screen raster a windowed renderer painted, held as a single slot per
-//     renderer (not a keyed lookup) and reused as the backdrop the next frame composites onto.
-//
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{Arc, OnceLock};
-use skia_safe::{Color4f, ColorSpace, Image as SkImage};
-use dashmap::DashMap;
+use std::time::{Duration, Instant};
 
-use crate::gfx::page::{ExportOptions, RecordingSurface};
-use crate::mem;
-
-#[cfg(feature = "window")]
-use skia_safe::{Rect, Matrix};
-#[cfg(feature = "window")]
-use crate::gfx::page::Page;
-
-// evict every gpu-derived cache resource: called by the render thread just before it retires an
-// idle gpu context, since both live surfaces and texture-backed snapshots are bound to that context
-pub fn evict_idle(){
-  SurfaceCache::evict_all();
-  RasterCache::evict_textures();
-}
+use crate::gfx::page::RecordingSurface;
 
 //
-// SurfaceCache: the render thread's live getImageData surfaces, keyed by PageRecorder id
+// SurfaceCache: persistent readback surfaces for `getImageData`, expired after TTL unless pinned via willReadFrequnetly
 //
-
-thread_local!(
-    // gpu-backed RecordingSurfaces, keyed by PageRecorder id: only ever touched on the render
-    // thread (via engine.render/render_soon jobs), so gpu surfaces never cross threads
-    static RECORDING_SURFACES: RefCell<HashMap<usize, RecordingSurface>> = RefCell::new(HashMap::new());
-);
 
 pub struct SurfaceCache;
 
+thread_local!(
+    // per-thread storage means CPU surfaces stay on the main thread and GPU on render_thread
+    static SURFACES: RefCell<Surfaces> = RefCell::new(Surfaces::default());
+);
+
 impl SurfaceCache{
-  // run `f` against the surface for `id`, creating a default entry if none exists yet
-  pub fn with_entry<T>(id:usize, f:impl FnOnce(&mut RecordingSurface) -> T) -> T {
-    RECORDING_SURFACES.with_borrow_mut(|surfaces| f(surfaces.entry(id).or_default()))
-  }
-
-  // run `f` against the surface for `id` only if one already exists (no insert)
-  pub fn with_existing<T>(id:usize, f:impl FnOnce(&mut RecordingSurface) -> T) -> Option<T> {
-    RECORDING_SURFACES.with_borrow_mut(|surfaces| surfaces.get_mut(&id).map(f))
-  }
-
-  // evict the surface for a single recorder (its PageRecorder is being released)
-  pub fn evict(id:usize){
-    RECORDING_SURFACES.with_borrow_mut(|surfaces|{ surfaces.remove(&id); })
-  }
-
-  // evict every recording surface: called by the render thread just before it retires an idle gpu
-  // context, since everything derived from that context must be evicted along with it
-  pub fn evict_all(){
-    RECORDING_SURFACES.with_borrow_mut(|surfaces| surfaces.clear());
-  }
-}
-
-//
-// RasterCache: the last bitmap generated for a given page, keyed by page id
-//
-
-static CACHE: OnceLock<Arc<DashMap<usize, Raster>>> = OnceLock::new();
-
-pub struct RasterCache;
-
-impl RasterCache{
-  fn shared<'a>() -> &'a Arc<DashMap<usize, Raster>>{
-    CACHE.get_or_init(|| Arc::new(DashMap::new()))
-  }
-
-  pub fn add(id:usize){
-    Self::shared().insert(id, Raster::default());
-  }
-
-  // evict the entry but also return it (in case it contains textures that need to be dropped on the render thread)
-  pub fn evict(id:usize) -> Option<Raster>{
-    Self::shared().remove(&id).map(|(_, cache)| cache)
-  }
-
-  pub fn get(id:usize, opts:&ExportOptions, depth:usize, gpu:bool) -> (Option<SkImage>, usize){
-    Self::shared().get(&id).map(|raster|{
-      // only give access to texture-backed entries is called from the gpu context's thread
-      let compatible = gpu || !raster.is_texture_backed();
-      match compatible && raster.is_valid(opts) && depth >= raster.depth{
-        true => (raster.image.clone(), raster.depth),
-        false => (None, 0)
-      }
+  // pass a RecordingSurface to the callback (creating it first if necessary)
+  pub fn with_entry<T>(id:usize, read_frequently:bool, f:impl FnOnce(&mut RecordingSurface) -> T) -> T {
+    SURFACES.with_borrow_mut(|state|{
+      let now = Instant::now();
+      let result = {
+        let entry = state.map.entry(id).or_insert_with(|| Entry{
+          surface: RecordingSurface::default(), bytes: 0, last_read: now, pinned: read_frequently,
+        });
+        entry.last_read = now; // mark as fresher than TTL (so it will survive the sweep below)
+        let result = f(&mut entry.surface);
+        entry.bytes = entry.surface.byte_size(); // the surface may have been (re)created in f
+        result
+      };
+      state.sweep();
+      result
     })
-    .unwrap_or((None, 0))
   }
 
-  pub fn set(id:usize, image:SkImage, opts:&ExportOptions, depth:usize){
-    Self::shared().get_mut(&id).map(|mut raster|{
-      // save the bitmap if it's newer than the cached version, or is replacing an invaildated cache
-      if !raster.is_valid(opts) || depth > raster.depth{
-        *raster = Raster::new(image, opts, depth);
+  // evict for stale surfaces (called opportunistically from main thread)
+  pub fn sweep(){ SURFACES.with_borrow_mut(|state| state.sweep()); }
+
+  // evict the surface for a specific recorder (called from main thread for CPU, render_thread for GPU)
+  pub fn evict(id:usize){ SURFACES.with_borrow_mut(|state|{ state.map.remove(&id); }) }
+
+  // evict every live surface (called by the render thread just before it retires an idle GPU context)
+  pub fn evict_all(){ SURFACES.with_borrow_mut(|state| state.map.clear()); }
+}
+
+#[derive(Default)]
+struct Surfaces{
+  map: HashMap<usize, Entry>,
+}
+
+const SURFACE_BUDGET: u64 = 128 * 1024 * 1024; // maximum total byte count for the whole cache
+const SURFACE_TTL: Duration = Duration::from_millis(500); // maximum time since last access per-entry
+
+struct Entry{
+  surface: RecordingSurface,
+  bytes: u64,         // surface byte-size
+  last_read: Instant, // time of last read (idle surfaces are evicted first in sweeps)
+  pinned: bool,       // exclude from sweeps if willReadFrequently is set
+}
+
+impl Surfaces{
+  fn sweep(&mut self){
+    // drop anything that's been idle longer than TTL
+    let now = Instant::now();
+    self.map.retain(|_, e| e.pinned || now.duration_since(e.last_read) < SURFACE_TTL);
+
+    // keep dropping (stalest to freshest) until total size is below the budget
+    let mut total: u64 = self.map.values().map(|e| e.bytes).sum();
+    while total > SURFACE_BUDGET {
+      let stalest = self.map.iter()
+        .filter(|(_, e)| !e.pinned)
+        .min_by_key(|(_, e)| e.last_read)
+        .map(|(&id, e)| (id, e.bytes));
+      match stalest{
+        Some((id, bytes)) => { self.map.remove(&id); total -= bytes; }
+        None => break, // only pinned surfaces remain
       }
-    });
-  }
-
-  // evict texture-backed cache entries: called by the render thread just before it retires an idle
-  // gpu context, since the textures those entries hold are derived from that context
-  pub fn evict_textures(){
-    Self::shared().iter_mut().for_each(|mut raster|{
-      if raster.is_texture_backed(){
-        raster.footprint.clear(); // report the snapshot's dealloc to v8
-        raster.image = None;
-        raster.depth = 0;
-      }
-    });
-  }
-}
-
-//
-// Raster: a cached Page snapshot and the export settings that were used to render it
-//
-
-#[derive(Debug)]
-pub(crate) struct Raster{
-  image: Option<SkImage>,
-  footprint: mem::v8::Footprint,
-  density: f32,
-  matte: Option<Color4f>,
-  msaa: Option<usize>,
-  color_space: ColorSpace,
-  depth: usize,
-}
-
-impl Default for Raster{
-  fn default() -> Self {
-    Self{image:None, footprint:mem::v8::Footprint::default(), depth:0, density:1.0, matte:None, msaa:None, color_space:ColorSpace::new_srgb()}
-  }
-}
-
-impl Raster{
-  // build a cached raster from a freshly-rendered snapshot and the opts it was rendered under
-  fn new(image:SkImage, opts:&ExportOptions, depth:usize) -> Self{
-    let footprint = mem::v8::Footprint::new(image.image_info().compute_min_byte_size()); // report the image/texture allocation size to v8
-    Self{ image:Some(image), footprint, density:opts.density, matte:opts.matte, msaa:opts.msaa, color_space:opts.color_space.clone(), depth }
-  }
-
-  // whether the cached snapshot holds a gpu texture (so its drop must run on the render thread)
-  pub(crate) fn is_texture_backed(&self) -> bool{
-    self.image.as_ref().map(|img| img.is_texture_backed()).unwrap_or(false)
-  }
-
-  pub fn is_valid(&self, opts:&ExportOptions) -> bool{
-    self.density == opts.density &&
-    self.matte == opts.matte &&
-    self.msaa == opts.msaa &&
-    self.color_space == opts.color_space &&
-    self.image.is_some() &&
-    opts.is_raster()
+    }
   }
 }
 
@@ -171,94 +85,99 @@ impl Raster{
 //
 
 #[cfg(feature = "window")]
-pub struct Frame {
-    image: Option<SkImage>,
-    content: Rect,
-    page: Page,
-    matte: Color4f,
-    dpr: f32,
-    state: FrameState,
+mod frame {
+    use skia_safe::{Rect, Matrix, Color4f, Image as SkImage};
+    use crate::gfx::page::Page;
+
+    pub struct Frame {
+        image: Option<SkImage>,
+        content: Rect,
+        page: Page,
+        matte: Color4f,
+        dpr: f32,
+        state: FrameState,
+    }
+
+    impl Default for Frame{
+        fn default() -> Self {
+            Self{image:None, content:Rect::new_empty(), page:Page::default(), dpr:0.0, matte:Color4f::new(0.0, 0.0, 0.0, 0.0), state:FrameState::Clean}
+        }
+    }
+
+    impl Frame{
+        pub fn validate(&mut self, page:&Page, matte:Color4f, dpr:f32, clip:Rect) -> Option<(&SkImage, &Rect, Rect)>{
+            if
+                self.state == FrameState::Dirty ||
+                self.page.id != page.id ||
+                self.matte != matte ||
+                self.dpr != dpr
+            {
+                *self = Self::default();
+            }
+
+            self.image.as_ref().map(|img| {
+                let (dst, _) = Matrix::scale((dpr, dpr)).map_rect(clip);
+                (img, &self.content, dst)
+            })
+        }
+
+        pub fn depth(&self) -> usize {
+            self.page.layers.len()
+        }
+
+        pub fn wants_snapshot(&self, page:&Page, matte:Color4f, dpr:f32, last_id:usize) -> bool{
+            // decide (before rendering) whether the frame's snapshot would ever be drawn: skip the
+            // GPU→GPU copy when it would just be discarded
+            if self.state == FrameState::Resizing{
+                return false // update() drops the image during resizes
+            }
+
+            let cache_is_current = self.state == FrameState::Clean &&
+                self.image.is_some() &&
+                self.page.id == page.id &&
+                self.matte == matte &&
+                self.dpr == dpr;
+
+            match cache_is_current{
+                // only re-snapshot when new layers extend the cached content
+                true => page.depth() > self.page.depth(),
+                // otherwise snapshot only for pages that persist across frames (an id that churns
+                // frame-to-frame means full-page redraws that invalidate the cache before reuse)
+                false => page.id == last_id
+            }
+        }
+
+        pub fn update(&mut self, image:Option<SkImage>, page:&Page, matte:Color4f, dpr:f32, content:Rect){
+            if self.state==FrameState::Resizing{
+                // mark the framebuffer as needing a full redraw and skip updating cached image during resize
+                self.state = FrameState::Dirty;
+            }else if let Some(image) = image{
+                // replace snapshot if new drawing has been layered on top
+                let state = FrameState::Clean;
+                let (content, _) = Matrix::scale((dpr, dpr)).map_rect(content);
+                *self = Self{image: Some(image), page:page.clone(), matte, dpr, content, state};
+            }
+        }
+
+        // a resizing invalidates the cached frame until the next full redraw completes
+        pub fn start_resizing(&mut self){
+            self.state = FrameState::Resizing;
+        }
+
+        // only metal needs this (used so it can draw synchronously during the resize)
+        #[cfg_attr(not(feature = "metal"), allow(dead_code))]
+        pub fn is_resizing(&self) -> bool{
+            self.state == FrameState::Resizing
+        }
+    }
+
+    #[derive(Debug, PartialEq, Clone, Copy)]
+    enum FrameState{
+        Clean,
+        Dirty,
+        Resizing
+    }
 }
 
 #[cfg(feature = "window")]
-impl Default for Frame{
-    fn default() -> Self {
-        Self{image:None, content:Rect::new_empty(), page:Page::default(), dpr:0.0, matte:Color4f::new(0.0, 0.0, 0.0, 0.0), state:FrameState::Clean}
-    }
-}
-
-#[cfg(feature = "window")]
-impl Frame{
-    pub fn validate(&mut self, page:&Page, matte:Color4f, dpr:f32, clip:Rect) -> Option<(&SkImage, &Rect, Rect)>{
-        if
-            self.state == FrameState::Dirty ||
-            self.page.id != page.id ||
-            self.matte != matte ||
-            self.dpr != dpr
-        {
-            *self = Self::default();
-        }
-
-        self.image.as_ref().map(|img| {
-            let (dst, _) = Matrix::scale((dpr, dpr)).map_rect(clip);
-            (img, &self.content, dst)
-        })
-    }
-
-    pub fn depth(&self) -> usize {
-        self.page.layers.len()
-    }
-
-    pub fn wants_snapshot(&self, page:&Page, matte:Color4f, dpr:f32, last_id:usize) -> bool{
-        // decide (before rendering) whether the frame's snapshot would ever be drawn: skip the
-        // GPU→GPU copy when it would just be discarded
-        if self.state == FrameState::Resizing{
-            return false // update() drops the image during resizes
-        }
-
-        let cache_is_current = self.state == FrameState::Clean &&
-            self.image.is_some() &&
-            self.page.id == page.id &&
-            self.matte == matte &&
-            self.dpr == dpr;
-
-        match cache_is_current{
-            // only re-snapshot when new layers extend the cached content
-            true => page.depth() > self.page.depth(),
-            // otherwise snapshot only for pages that persist across frames (an id that churns
-            // frame-to-frame means full-page redraws that invalidate the cache before reuse)
-            false => page.id == last_id
-        }
-    }
-
-    pub fn update(&mut self, image:Option<SkImage>, page:&Page, matte:Color4f, dpr:f32, content:Rect){
-        if self.state==FrameState::Resizing{
-            // mark the framebuffer as needing a full redraw and skip updating cached image during resize
-            self.state = FrameState::Dirty;
-        }else if let Some(image) = image{
-            // replace snapshot if new drawing has been layered on top
-            let state = FrameState::Clean;
-            let (content, _) = Matrix::scale((dpr, dpr)).map_rect(content);
-            *self = Self{image: Some(image), page:page.clone(), matte, dpr, content, state};
-        }
-    }
-
-    // a resizing invalidates the cached frame until the next full redraw completes
-    pub fn start_resizing(&mut self){
-        self.state = FrameState::Resizing;
-    }
-
-    // only metal needs this (used so it can draw synchronously during the resize)
-    #[cfg_attr(not(feature = "metal"), allow(dead_code))]
-    pub fn is_resizing(&self) -> bool{
-        self.state == FrameState::Resizing
-    }
-}
-
-#[cfg(feature = "window")]
-#[derive(Debug, PartialEq, Clone, Copy)]
-enum FrameState{
-    Clean,
-    Dirty,
-    Resizing
-}
+pub use frame::Frame;

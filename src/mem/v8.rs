@@ -1,63 +1,98 @@
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::OnceLock;
 use neon::prelude::*;
 
-// Net native bytes charged to V8 but not yet flushed, will be reset to 0 at the next flush
-static PENDING: AtomicI64 = AtomicI64::new(0);
+// a neon channel used for sending scheduled flushes back to node, keeping its memory estimate up-to-date
+static CHANNEL: OnceLock<Channel> = OnceLock::new();
 
-// napi_adjust_external_memory(env, change_in_bytes, *adjusted_value) -> napi_status
-type AdjustFn = unsafe extern "C" fn(*mut c_void, i64, *mut i64) -> i32;
-type Adjust = dyn Fn(*mut c_void, i64) + Send + Sync;
-
-// Run `f` with the resolved adjuster (or do nothing if it isn't available)
-#[cfg(unix)]
-fn with_adjust(f: impl FnOnce(&Adjust)) {
-    static F: OnceLock<Option<Box<Adjust>>> = OnceLock::new();
-    let adjust = F.get_or_init(|| {
-        // use RTLD_DEFAULT to search loaded objects and find the napi symbol
-        let name = c"napi_adjust_external_memory";
-        let p = unsafe { libc::dlsym(libc::RTLD_DEFAULT, name.as_ptr()) };
-        let adjust: AdjustFn = (!p.is_null())
-            .then(|| unsafe { std::mem::transmute::<usize, AdjustFn>(p as usize) })?;
-        // store an `adjust` wrapper that handles the out-param napi expects
-        Some(Box::new(move |env, delta| {
-            let mut adjusted = 0i64;
-            unsafe { adjust(env, delta, &mut adjusted) };
-        }))
-    });
-    if let Some(adjust) = adjust {
-        f(adjust);
-    }
+pub fn install_channel<'a, C: Context<'a>>(cx: &mut C) {
+    let mut channel = Channel::new(cx);
+    channel.unref(cx);
+    let _ = CHANNEL.set(channel);
 }
 
-// Windows would need GetProcAddress rather than dlsym; not wired, so accounting is inactive.
-#[cfg(not(unix))]
-fn with_adjust(_f: impl FnOnce(&Adjust)) {}
+// the process-wide v8 external-memory ledger
+static ACCOUNTING: Accounting = Accounting::new();
 
-// Update the pending byte delta: + on allocation, - when it's freed
-pub fn charge(delta: i64) {
-    if delta == 0 {
-        return;
-    }
-    PENDING.fetch_add(delta, Ordering::Relaxed);
+pub struct Accounting {
+    pending: AtomicI64, // net change in allocated bytes (to be flushed to v8)
+    scheduled: AtomicBool, // flag when a channel flush has been enqueued
 }
 
-// pass the accumulated delta to V8. requires a cx reference and must run on the main thread
-// (cf. the changes to PENDING which can happen from any thread)
-pub fn flush<'a, C: Context<'a>>(cx: &mut C) {
-    with_adjust(|adjust| {
-        let delta = PENDING.swap(0, Ordering::Relaxed);
+impl Accounting {
+    const fn new() -> Self {
+        Self { pending: AtomicI64::new(0), scheduled: AtomicBool::new(false) }
+    }
+
+    // update the `pending` byte delta: + on allocation, - when it's freed and enqueue a flush
+    pub fn charge(&self, delta: i64) {
         if delta != 0 {
-            adjust(cx.to_raw() as *mut c_void, delta);
+            self.pending.fetch_add(delta, Ordering::Relaxed);
+            self.schedule_flush();
         }
-    });
+    }
+
+    // enqueue a channel flush, coalescing subsequent requests until it fires
+    fn schedule_flush(&self) {
+        // only start a new flush if one wasn't already scheduled
+        if !self.scheduled.swap(true, Ordering::AcqRel) {
+            CHANNEL.get()
+                .and_then(|ch| ch.try_send(|cx| {
+                    // clear the flag *before* flushing to v8, so any updates that arrive
+                    // concurrently re-enqueue and aren't left stranded
+                    ACCOUNTING.scheduled.store(false, Ordering::Release);
+                    NAPI.adjust_external_memory(&cx, ACCOUNTING.pending.swap(0, Ordering::Relaxed));
+                    Ok(())
+                }).ok())
+                .or_else(|| {
+                    // the channel send failed: release the flag so it can be retried later
+                    self.scheduled.store(false, Ordering::Release);
+                    None
+                });
+        }
+    }
 }
 
-// RAII accounting token. adds to the v8 memory budget on creation and deducts from it
-// on drop. the byte-count can also be updated after-the-fact with `.set()` (in case
-// incremental allocations/frees happen later). does not support Clone (because that would
-// double-count the same allocation).
+// wrapper for the napi_adjust_external_memory call (finds the raw fn via libloading)
+static NAPI: Napi = Napi::new();
+
+struct Napi {
+    adjust: OnceLock<Option<unsafe extern "C" fn(*mut c_void, i64, *mut i64) -> i32>>,
+}
+
+impl Napi {
+    const fn new() -> Self {
+        Self { adjust: OnceLock::new() }
+    }
+
+    // find the (platform-specific) handle to the process's symbol table
+    fn host_lib() -> Option<libloading::Library> {
+        #[cfg(windows)] // fallible on windows
+        let lib = libloading::os::windows::Library::this().ok().map(Into::into);
+        #[cfg(not(windows))] // always works on unix
+        let lib = Some(libloading::os::unix::Library::this().into());
+        lib
+    }
+
+    // update v8 if the current delta is non-zero
+    fn adjust_external_memory<'a, C: Context<'a>>(&self, cx: &C, delta: i64) {
+        if delta != 0 {
+            // resolve (and memoize) the raw napi fn pointer
+            self.adjust.get_or_init(|| {
+                let host = Self::host_lib()?;
+                let sym = unsafe { host.get(b"napi_adjust_external_memory") }.ok()?;
+                Some(*sym)
+            }).map(|napi_adjust_external_memory| unsafe {
+                // call it to update napi's external memory size estimate
+                napi_adjust_external_memory(cx.to_raw() as *mut c_void, delta, &mut 0i64);
+            });
+        }
+    }
+}
+
+// RAII accounting token. adds to the v8 memory budget on creation and subtracts from it
+// on drop. must not support Clone (since that would double-count the same allocation)
 #[derive(Default, Debug)]
 pub struct Footprint(usize);
 
@@ -72,8 +107,16 @@ impl Footprint {
     // manually set the number of native bytes represented
     pub fn set(&mut self, bytes: usize) {
         if bytes != self.0 {
-            charge(bytes as i64 - self.0 as i64);
+            ACCOUNTING.charge(bytes as i64 - self.0 as i64);
             self.0 = bytes;
+        }
+    }
+
+    // grow the tracked total by `bytes` (charging just the delta)
+    pub fn grow(&mut self, bytes: usize) {
+        if bytes != 0 {
+            ACCOUNTING.charge(bytes as i64);
+            self.0 += bytes;
         }
     }
 
@@ -87,7 +130,7 @@ impl Footprint {
 impl Drop for Footprint {
     fn drop(&mut self) {
         if self.0 != 0 {
-            charge(-(self.0 as i64));
+            ACCOUNTING.charge(-(self.0 as i64));
         }
     }
 }

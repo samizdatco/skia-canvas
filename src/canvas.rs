@@ -6,7 +6,6 @@ use serde_json::json;
 use crate::utils::*;
 use crate::gfx::page::{ExportOptions, pages_arg};
 use crate::gfx;
-use crate::mem;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -42,6 +41,7 @@ impl Canvas{
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
+  crate::gfx::cache::SurfaceCache::sweep(); // opportunistic readback-cache sweep (a JS-thread activity point)
   let opts = cx.argument::<JsObject>(1)?;
   let text_contrast = opt_double_for_key(&mut cx, &opts, "textContrast").unwrap_or(0.0);
   let (min_c, max_c) = (SurfaceProps::MIN_CONTRAST_INCLUSIVE as _, SurfaceProps::MAX_CONTRAST_INCLUSIVE as _);
@@ -70,7 +70,6 @@ pub fn get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   this.borrow_mut().engine = None; // drop the (potentially GPU-backed) rendering context
-  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(cx.undefined())
 }
 
@@ -133,7 +132,7 @@ pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let options = export_options_arg(&mut cx, 2)?;
-  let pages = pages_arg(&mut cx, 1, &options, &this)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
@@ -147,7 +146,6 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
     };
 
     deferred.settle_with(&channel, move |mut cx| {
-      mem::v8::flush(&mut cx); // update v8's memory tally (now that we're back on the main thread)
       let data = result.or_else(|err| cx.throw_error(err))?;
       let buffer = JsBuffer::from_slice(&mut cx, &data)?;
       Ok(buffer)
@@ -160,7 +158,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
 pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let options = export_options_arg(&mut cx, 2)?;
-  let pages = pages_arg(&mut cx, 1, &options, &this)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
 
   let encoded = {
     if options.format=="pdf" && pages.len() > 1 {
@@ -169,9 +167,6 @@ pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
       pages.first().encoded_as(options, pages.engine)
     }
   };
-
-  // update v8's memory tally (reflecting the new RasterCache entry)
-  mem::v8::flush(&mut cx);
 
   match encoded{
     Ok(data) => {
@@ -188,7 +183,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
   let options = export_options_arg(&mut cx, 4)?;
-  let pages = pages_arg(&mut cx, 1, &options, &this)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
@@ -204,7 +199,6 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
     };
 
     deferred.settle_with(&channel, move |mut cx| {
-      mem::v8::flush(&mut cx); // update v8's memory tally (now that we're back on the main thread)
       match result{
         Err(msg) => cx.throw_error(format!("I/O Error: {}", msg)),
         _ => Ok(cx.undefined())
@@ -221,7 +215,7 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
   let options = export_options_arg(&mut cx, 4)?;
-  let pages = pages_arg(&mut cx, 1, &options, &this)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
 
   let result = {
     if sequence {
@@ -232,9 +226,6 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       pages.write_image(&name_pattern, options)
     }
   };
-
-  // update v8's memory tally (reflecting the new RasterCache entry)
-  mem::v8::flush(&mut cx);
 
   match result{
     Ok(_) => Ok(cx.undefined()),

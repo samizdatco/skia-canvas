@@ -34,6 +34,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // retire the GPU context cleanly at process (so its destructor runs while the driver is still alive)
   utils::install_exit_handler(&mut cx, || gfx::engine::retire_gpu())?;
 
+  // create a channel for telling v8 about native allocations associated with GC-able handles
+  mem::v8::install_channel(&mut cx);
+
   // -- Image -------------------------------------------------------------------------------------
 
   cx.export_function("Image_new", image::new)?;
