@@ -35,6 +35,7 @@ pub struct PageRecorder{
   id: usize,
   has_gpu_surface: bool, // flag that drops need to happen on render thread
   approx_ops: usize, // draw ops recorded into `current` since the last get_page() flush (see release())
+  footprint: mem::v8::Footprint, // report the retained display-list size to V8's GC accounting
 }
 
 impl PageRecorder{
@@ -47,6 +48,7 @@ impl PageRecorder{
       matrix:Matrix::default(), clip:None, bounds, id,
       has_gpu_surface:false,
       approx_ops:0,
+      footprint:mem::v8::Footprint::default(),
     }
   }
 
@@ -148,6 +150,9 @@ impl PageRecorder{
         let mut wrapper = PictureRecorder::new();
         wrapper.begin_recording(self.bounds, true).draw_drawable(&mut drawable, None);
         if let Some(pict) = wrapper.finish_recording_as_picture(None){
+          // report just the new layer's size to V8 (layers are append-only until release, so this
+          // accumulates the whole retained display list without re-summing the list each get_page)
+          self.footprint.grow(pict.approximate_bytes_used());
           self.layers.push(pict);
         }
         self.approx_ops = 0; // flushed content is now measurable via the layer picture itself
@@ -196,6 +201,7 @@ impl PageRecorder{
       + self.layers.iter().map(|pict| pict.approximate_bytes_used()).sum::<usize>()
       + self.approx_ops * APPROX_OP_BYTES;
 
+    self.footprint.clear(); // credit the display-list charge back to V8
     self.current = None;
     self.layers.clear();
 
