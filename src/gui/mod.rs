@@ -27,20 +27,14 @@ fn validate_gpu(cx:&mut FunctionContext) -> NeonResult<()>{
     Ok(())
 }
 
-pub fn register(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let callback = cx.argument::<JsFunction>(1)?.root(&mut cx);
-    App::register(callback);
-    Ok(cx.undefined())
-}
-
-
 pub fn activate(mut cx: FunctionContext) -> JsResult<JsPromise> {
     validate_gpu(&mut cx)?;
 
+    let callback = cx.argument::<JsFunction>(1)?.root(&mut cx);
     let (deferred, promise) = cx.promise();
     let channel = cx.channel();
 
-    App::activate(channel, deferred);
+    App::activate(channel, deferred, callback);
 
     Ok(promise)
 }
