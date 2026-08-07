@@ -280,7 +280,8 @@ impl RecordingSurface{
       if recreate{
         let page_size = page.scaled_dimensions(opts.density);
         let img_info = ImageInfo::new_n32_premul(page_size, opts.color_space.clone());
-        self.surface = engine.make_surface(&img_info, &opts).ok();
+        let budgeted = false; // SurfaceCache owns this, so keep out of skia's glyph/texture/scratch budget
+        self.surface = engine.make_surface(&img_info, &opts, budgeted).ok();
 
         let bytes = if self.surface.is_some(){ img_info.compute_min_byte_size() } else { 0 };
         self.footprint.set(bytes); // record the allocation size for v8
@@ -400,7 +401,8 @@ impl Page{
         enum Rendered{ Encodable(SkImage), Raw(Vec<u8>) }
         let rendered = engine.render(move || {
           let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(opts.color_space.clone()));
-          let mut surface = engine.make_surface(&img_info, &opts)?;
+          let budgeted = true; // the export surface is transient, so it's fine as a purgeable skia resource
+          let mut surface = engine.make_surface(&img_info, &opts, budgeted)?;
           let canvas = surface.canvas();
 
           // fill the canvas if a matte was requested

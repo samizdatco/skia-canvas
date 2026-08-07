@@ -84,8 +84,8 @@ impl MetalEngine {
         Self::with_context(|ctx| Ok(f(Some(&mut ctx.context))) ).ok();
     }
 
-    pub fn make_surface(image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
-        Self::with_context(|ctx| ctx.surface(image_info, opts) )
+    pub fn make_surface(image_info: &ImageInfo, opts:&ExportOptions, budgeted:bool) -> Result<Surface, String>{
+        Self::with_context(|ctx| ctx.surface(image_info, opts, budgeted) )
     }
 
     // allow the render thread to check how long the context has gone unused
@@ -137,11 +137,11 @@ impl MetalContext{
         })
     }
 
-    fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
+    fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions, budgeted:bool) -> Result<Surface, String> {
         self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,
-            Budgeted::Yes,
+            if budgeted { Budgeted::Yes } else { Budgeted::No },
             image_info,
             Some(opts.msaa_from(&self.msaa)?),
             SurfaceOrigin::BottomLeft,

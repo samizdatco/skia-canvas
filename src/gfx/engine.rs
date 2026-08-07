@@ -26,7 +26,7 @@ impl Engine {
     })}
     // placeholders that match the GPU signatures (for the type-checker) but will never be called
     // (see the RenderingEngine methods for their inline implementation when in CPU mode)
-    pub fn make_surface(_info: &ImageInfo, _opts:&ExportOptions) -> Result<Surface, String>{ panic!() }
+    pub fn make_surface(_info: &ImageInfo, _opts:&ExportOptions, _budgeted:bool) -> Result<Surface, String>{ panic!() }
     pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
     pub fn context_is_idle() -> bool{ false }
     pub fn retire(){ }
@@ -55,9 +55,9 @@ impl RenderingEngine{
         }
     }
 
-    pub fn make_surface(&self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
+    pub fn make_surface(&self, image_info: &ImageInfo, opts:&ExportOptions, budgeted:bool) -> Result<Surface, String>{
         match self {
-            Self::GPU => Engine::make_surface(image_info, opts),
+            Self::GPU => Engine::make_surface(image_info, opts, budgeted),
             Self::CPU => skia_safe::surfaces::raster(image_info, None, Some(&opts.surface_props()))
                 .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
         }
