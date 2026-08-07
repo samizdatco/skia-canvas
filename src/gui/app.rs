@@ -1,7 +1,7 @@
 use neon::prelude::*;
 use serde_json::Value;
 use std::{
-    sync::{Arc, OnceLock, atomic::{AtomicBool, Ordering}},
+    sync::atomic::{AtomicBool, Ordering},
     iter::zip,
     cell::RefCell,
     time::{Duration, Instant},
@@ -32,14 +32,13 @@ thread_local!(
     ));
 );
 
-static RENDER_CALLBACK: OnceLock<Arc<Root<JsFunction>>> = OnceLock::new();
-
 // how often the event_pump wakes to service node's event loop when no Tick has arrived in the meantime
 const NODE_IDLE_WAKE_MS: u64 = 100;
 
 pub struct App{
     windows: WindowManager,
     cadence: Cadence,
+    callback: Option<Root<JsFunction>>,
 }
 
 impl Default for App{
@@ -47,6 +46,7 @@ impl Default for App{
         Self{
             windows: WindowManager::default(),
             cadence: Cadence::default(),
+            callback: None,
         }
     }
 }
@@ -60,10 +60,6 @@ fn get_proxy() -> EventLoopProxy<AppEvent>{
 }
 
 impl App{
-    pub fn register(callback:Root<JsFunction>){
-        RENDER_CALLBACK.get_or_init(|| Arc::new(callback));
-    }
-
     pub fn set_fps(fps:f32){
         add_event(AppEvent::FrameRate(fps as u64));
     }
@@ -81,7 +77,10 @@ impl App{
         add_event(AppEvent::Quit);
     }
 
-    pub fn activate(channel:Channel, deferred:neon::types::Deferred){
+    pub fn activate(channel:Channel, deferred:neon::types::Deferred, callback:Root<JsFunction>){
+        // root the js dispatch callback just for the duration of the session
+        APP.with_borrow_mut(|app| app.callback = Some(callback));
+
         std::thread::spawn(move || {
             loop{
                 // schedule a callback on the node event loop
@@ -105,8 +104,13 @@ impl App{
                 }
             }
 
-            // resolve the promise
-            deferred.settle_with(&channel, move |mut cx| Ok(cx.undefined()) );
+            // resolve the promise and release the rooted callback
+            deferred.settle_with(&channel, move |mut cx| {
+                if let Some(cb) = APP.with_borrow_mut(|app| app.callback.take()){
+                    cb.drop(&mut cx);
+                }
+                Ok(cx.undefined())
+            });
         });
     }
 
@@ -119,6 +123,7 @@ impl App{
             With::Events => self.windows.get_ui_changes(),
             With::Geometry => self.windows.get_geometry(),
         };
+        let callback = self.callback.as_ref();
         let windows = &mut self.windows;
 
         // track whether any windows have ongoing animations in need of vblank ticks
@@ -130,7 +135,7 @@ impl App{
             let cx = &mut cx;
 
             // pass the json-encoded event queue to the js callback and collect its response array
-            let Some(callback) = RENDER_CALLBACK.get() else { return Ok(()) };
+            let Some(callback) = callback else { return Ok(()) };
             let mut call = callback.to_inner(cx).call_with(cx);
             call.arg(cx.string(changes.to_string()));
             let response = call.apply::<JsValue, _>(cx)?
