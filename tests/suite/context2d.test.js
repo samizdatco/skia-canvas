@@ -1203,10 +1203,13 @@ describe("Context2D", ()=>{
         // check whether upstream has fixed the indent bug and our compensation is now outdenting
         assert.equal(ctx.getImageData(x-20, y-size, 18, size).data.some(a => a), false)
 
-        // make sure the extra space skia adds to the beginning/end have been subtracted
-        assert.nearEqual(ctx.measureText(text).width, 74)
+        // width keeps the trailing letter-space (full advance), matching Chrome/Safari
+        let m = ctx.measureText(text)
+        assert.nearEqual(m.width, 94)
+        // actualBoundingBox is ink-based, so its right edge stops short of the advance width
+        assert.nearEqual(m.actualBoundingBoxRight, 75)
         ctx.textWrap = true
-        assert.nearEqual(ctx.measureText(text).width, 74)
+        assert.nearEqual(ctx.measureText(text).width, 94)
     })
 
     test("textWrap", () => {

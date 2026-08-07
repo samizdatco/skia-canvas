@@ -90,7 +90,8 @@ impl Typesetter{
 
   pub fn metrics(&self) -> Value {
     let (mut paragraph, origin) = self.layout(&Paint::default());
-    let mut line_rects:Vec<Rect> = vec![]; // accumulate line rects to calculate full bounds
+    let mut line_rects:Vec<Rect> = vec![]; // advance-based line rects (for the top-level `width`)
+    let mut ink_rects:Vec<Rect> = vec![]; // glyph-ink line bounds (for `actualBoundingBox*`)
 
     // calculate baseline offsets (relative to line_metrics.baseline which reflects ctx.textBaseline setting)
     let shift = self.char_style.baseline_shift();
@@ -136,15 +137,18 @@ impl Typesetter{
         .reduce(Rect::join2)
         .unwrap_or(Rect::new_empty());
 
-      // calculate horizontal line bounds that include trailing whitespace for use in `actualBoundingBox`
-      // (and compensate for the extra half-letterspace added to the start & end of each line)
+      // the glyph-ink bounds give the tight `actualBoundingBox*` edges (ink-based, like Chrome)
+      ink_rects.push(text_bounds);
+
+      // the advance-based layout rect gives the top-level `width`; keep its full advance
+      // (including any trailing letter-space) so `width` matches Chrome/Safari
       line_rects.push(
         paragraph
           .get_rects_for_range(char_range.clone(), RectHeightStyle::Tight, RectWidthStyle::Tight).iter()
           .map(|tb| {
             let Rect{top, bottom, ..} = text_bounds;
             let Rect{left, right, ..} = tb.rect.with_offset(origin);
-            Rect::new(left, top, right - self.char_style.letter_spacing(), bottom)
+            Rect::new(left, top, right, bottom)
           })
           .reduce(Rect::join2)
           .unwrap_or(text_bounds)
@@ -181,8 +185,12 @@ impl Typesetter{
       }))
     }).collect::<Vec<Value>>();
 
-    // combine all the individual line measurements to find the `actualBoundingBox`
-    let full_bounds = line_rects.into_iter()
+    // combine the individual line measurements: the advance join sets `width`, while the
+    // glyph-ink join sets the tight `actualBoundingBox*` edges
+    let advance_bounds = line_rects.into_iter()
+      .reduce(Rect::join2)
+      .unwrap_or(Rect::new_empty());
+    let ink_bounds = ink_rects.into_iter()
       .reduce(Rect::join2)
       .unwrap_or(Rect::new_empty());
 
@@ -196,11 +204,11 @@ impl Typesetter{
     });
 
     json!({
-      "width": full_bounds.right - full_bounds.left,
-      "actualBoundingBoxLeft": -full_bounds.left,
-      "actualBoundingBoxRight": full_bounds.right,
-      "actualBoundingBoxAscent": -full_bounds.top,
-      "actualBoundingBoxDescent": full_bounds.bottom,
+      "width": advance_bounds.right - advance_bounds.left,
+      "actualBoundingBoxLeft": -ink_bounds.left,
+      "actualBoundingBoxRight": ink_bounds.right,
+      "actualBoundingBoxAscent": -ink_bounds.top,
+      "actualBoundingBoxDescent": ink_bounds.bottom,
       "fontBoundingBoxAscent": ascent,
       "fontBoundingBoxDescent": descent,
       "emHeightAscent": ascent,
