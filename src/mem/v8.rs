@@ -112,6 +112,16 @@ impl Footprint {
         }
     }
 
+    // grow the tracked total by `bytes` (charging just that delta). for incrementally-accumulating
+    // payloads where recomputing the full size each time would be wasteful; `clear`/drop still
+    // credit the whole accumulated total, so the ledger stays balanced.
+    pub fn grow(&mut self, bytes: usize) {
+        if bytes != 0 {
+            ACCOUNTING.charge(bytes as i64);
+            self.0 += bytes;
+        }
+    }
+
     // mark the allocation as having been fully released
     pub fn clear(&mut self) {
         self.set(0);
