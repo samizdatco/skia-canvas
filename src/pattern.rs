@@ -96,7 +96,6 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
   let boxed = cx.boxed(this);
-  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(boxed)
 }
 
@@ -111,7 +110,6 @@ pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> 
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
   let boxed = cx.boxed(this);
-  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(boxed)
 }
 
@@ -130,7 +128,6 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
   let boxed = cx.boxed(this);
-  mem::v8::flush(&mut cx); // update v8's memory tally
   Ok(boxed)
 }
 
