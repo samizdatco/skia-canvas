@@ -64,6 +64,16 @@ describe("Context2D", ()=>{
       assert.equal(ctx.font, canonical)
       ctx.font = 'invalid'
       assert.equal(ctx.font, canonical)
+
+      // re-assigning `font` to the value it already reports is a no-op — the implicit default must
+      // resolve the same metrics as an explicit assignment (fresh ctx so no font was ever set)
+      let dctx = new Canvas(WIDTH, HEIGHT).getContext('2d')
+      let implicit = dctx.measureText('Mg')
+      dctx.font = dctx.font
+      let explicit = dctx.measureText('Mg')
+      assert.nearEqual(implicit.hangingBaseline, explicit.hangingBaseline)
+      assert.nearEqual(implicit.ideographicBaseline, explicit.ideographicBaseline)
+      assert.nearEqual(implicit.fontBoundingBoxAscent, explicit.fontBoundingBoxAscent)
     })
 
     test('globalAlpha', () => {
@@ -189,6 +199,36 @@ describe("Context2D", ()=>{
       assert.strictEqual(canvas.getContext("2d"), ctx)
       assert.strictEqual(canvas.pages[0], ctx)
       assert.strictEqual(ctx.canvas, canvas)
+    })
+
+    test('a display-p3 colorSpace', async () => {
+      let canvas = new Canvas(4, 4),
+          ctx = canvas.getContext('2d', {colorSpace:'display-p3'})
+      // full browser-parity shape: colorSpace is latched, the other fields are fixed defaults
+      assert.deepEqual(ctx.getContextAttributes(), {alpha:true, colorSpace:'display-p3', desynchronized:false, willReadFrequently:false})
+
+      ctx.fillStyle = '#f00'
+      ctx.fillRect(0, 0, 4, 4)
+
+      // getImageData/createImageData & exports default to the canvas's space…
+      let bmp = ctx.getImageData(0, 0, 1, 1)
+      assert.equal(bmp.colorSpace, 'display-p3')
+      assert.deepEqual(Array.from(bmp.data), [234, 51, 35, 255])
+      assert.equal(ctx.createImageData(2, 2).colorSpace, 'display-p3')
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw')).slice(0, 4)), [234, 51, 35, 255])
+      assert((await canvas.toBuffer('png')).includes('iCCP'))
+
+      // …but per-call settings still override
+      assert.deepEqual(Array.from(ctx.getImageData(0, 0, 1, 1, {colorSpace:'srgb'}).data), [255, 0, 0, 255])
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {colorSpace:'srgb'})).slice(0, 4)), [255, 0, 0, 255])
+
+      // only the first getContext call's settings are honored
+      assert.equal(canvas.getContext('2d', {colorSpace:'srgb'}), ctx)
+      assert.equal(ctx.getContextAttributes().colorSpace, 'display-p3')
+
+      // a canvas whose context was created without settings defaults to srgb
+      let plain = new Canvas(4, 4).getContext('2d')
+      assert.equal(plain.getContextAttributes().colorSpace, 'srgb')
     })
 
     test('multiple pages', () => {
@@ -543,6 +583,7 @@ describe("Context2D", ()=>{
   })
 
   describe("supports", () => {
+
     test("filter", () => {
       // results differ b/t cpu & gpu renderers so make sure test doesn't fail if gpu support isn't present
       let {gpu} = canvas
@@ -552,9 +593,7 @@ describe("Context2D", ()=>{
       ctx.fillRect(0,0,20,20)
       assert.deepEqual(pixel(10, 10), [0, 162, 213, 245])
       canvas.gpu = gpu
-    })
 
-    test("filter rejects a chain whole if any term is invalid (all-or-nothing)", () => {
       // an invalid term drops the entire declaration and keeps the prior filter — matching CSS
       // (and `font`/`fontVariant`) rather than salvaging the valid terms
       ctx.filter = 'blur(2px)'
@@ -852,6 +891,45 @@ describe("Context2D", ()=>{
         ctx.fillText(...args)
         assert.equal(ctx.getImageData(0, 0, 20, 20).data.some(a => a), shouldDraw)
       })
+
+      // baseline metrics resolve without an explicit font: reset to clear the state above (still the
+      // implicit default), then 'top' drops glyphs below the origin while 'bottom' lifts them above —
+      // so 'top' ink lands well below 'bottom' ink
+      let topAt = baseline => {
+        canvas.width = WIDTH
+        ctx.textBaseline = baseline
+        ctx.fillText('Mg', 20, 100)
+        let {data} = ctx.getImageData(0, 0, WIDTH, HEIGHT)
+        for (let y=0; y<HEIGHT; y++)
+          for (let x=0; x<WIDTH; x++)
+            if (data[(y*WIDTH + x)*4 + 3] > 0) return y
+        return null
+      }
+      let top = topAt('top'), bottom = topAt('bottom')
+      assert(top != null && bottom != null, "expected text to render for both baselines")
+      assert(top > bottom + 4, `expected 'top' baseline ink (${top}) below 'bottom' (${bottom})`)
+
+      // glyphs draw at their exact fractional baseline, not snapped to the pixel grid the way
+      // skparagraph's paint() did. A 10x vertical scale magnifies any leftover sub-pixel snap into
+      // whole device rows: 'E' has a flat bottom on the baseline, so at 40px under scale(1,10) with a
+      // user-space baseline of y=20 the device baseline is 200, and the ink must land within a pixel
+      // of it (the old snap could round the baseline by up to 0.5px → up to 5px here)
+      let inkBottom = draw => {
+        const W = 120, H = 400
+        const c = new Canvas(W, H), cx = c.getContext('2d')
+        cx.fillStyle = 'white'; cx.fillRect(0, 0, W, H)
+        cx.fillStyle = 'black'; cx.textBaseline = 'alphabetic'
+        draw(cx)
+        const {data} = cx.getImageData(0, 0, W, H)
+        let row = -1
+        for (let y = 0; y < H; y++) for (let px = 0; px < W; px++){
+          const i = (y*W + px) * 4
+          if (data[i] < 128 && data[i+3] > 128){ row = y; break }
+        }
+        return row
+      }
+      let exactY = inkBottom(cx => { cx.font = '40px Helvetica'; cx.scale(1, 10); cx.fillText('E', 4, 20) })
+      assert(Math.abs(exactY - 200) <= 2, `expected the baseline near 200, got ${exactY}`)
     })
 
     test("strokeText()", () => {
@@ -870,57 +948,15 @@ describe("Context2D", ()=>{
       assert(inked() > stroked)
     })
 
-    describe("baseline metrics without an explicit font", () => {
-      let inkTop = () => {
-        let {data} = ctx.getImageData(0, 0, WIDTH, HEIGHT)
-        for (let y=0; y<HEIGHT; y++)
-          for (let x=0; x<WIDTH; x++)
-            if (data[(y*WIDTH + x)*4 + 3] > 0) return y
-        return null
-      }
-
-      test("fillText honors textBaseline", () => {
-        let topAt = baseline => {
-          canvas.width = WIDTH // reset surface + context state (still no explicit font)
-          ctx.textBaseline = baseline
-          ctx.fillText('Mg', 20, 100)
-          return inkTop()
-        }
-
-        let top = topAt('top'), bottom = topAt('bottom')
-        assert(top != null && bottom != null, "expected text to render for both baselines")
-        // 'top' baseline drops the glyphs below the origin; 'bottom' lifts them above it,
-        // so the first inked row for 'top' must land well below the one for 'bottom'.
-        assert(top > bottom + 4, `expected 'top' baseline ink (${top}) below 'bottom' (${bottom})`)
-      })
-
-      test("measureText reports non-alphabetic baselines", () => {
-        let m = ctx.measureText('Mg')
-        assert.equal(m.alphabeticBaseline, 0)
-        assert(m.hangingBaseline > 0, `expected positive hangingBaseline, got ${m.hangingBaseline}`)
-        assert(m.ideographicBaseline < 0, `expected negative ideographicBaseline, got ${m.ideographicBaseline}`)
-      })
-
-      test("outlineText honors textBaseline", () => {
-        ctx.textBaseline = 'top'
-        let topPath = ctx.outlineText('Mg')
-        ctx.textBaseline = 'bottom'
-        let bottomPath = ctx.outlineText('Mg')
-        assert(topPath && bottomPath, "expected outlineText to return a path for both baselines")
-        assert(topPath.bounds.top > bottomPath.bounds.top + 4,
-          `expected 'top' outline (${topPath.bounds.top}) below 'bottom' (${bottomPath.bounds.top})`)
-      })
-
-      test("implicit default font matches an explicit assignment", () => {
-        // Re-assigning `font` to the value it already reports must be a no-op: the implicit
-        // default has to resolve the same metrics as the explicit one.
-        let implicit = ctx.measureText('Mg')
-        ctx.font = ctx.font
-        let explicit = ctx.measureText('Mg')
-        assert.nearEqual(implicit.hangingBaseline, explicit.hangingBaseline)
-        assert.nearEqual(implicit.ideographicBaseline, explicit.ideographicBaseline)
-        assert.nearEqual(implicit.fontBoundingBoxAscent, explicit.fontBoundingBoxAscent)
-      })
+    test("outlineText()", () => {
+      // outlineText resolves baseline metrics on the implicit default font (no ctx.font set)
+      ctx.textBaseline = 'top'
+      let topPath = ctx.outlineText('Mg')
+      ctx.textBaseline = 'bottom'
+      let bottomPath = ctx.outlineText('Mg')
+      assert(topPath && bottomPath, "expected outlineText to return a path for both baselines")
+      assert(topPath.bounds.top > bottomPath.bounds.top + 4,
+        `expected 'top' outline (${topPath.bounds.top}) below 'bottom' (${bottomPath.bounds.top})`)
     })
 
     test("roundRect()", () => {
@@ -979,134 +1015,23 @@ describe("Context2D", ()=>{
           }
         }
       }
-    })
 
-    test('getImageData() with colorSpace', () => {
+      // the `colorSpace` option converts on read (and putImageData converts back)
+      canvas.width = WIDTH
       ctx.fillStyle = '#f00'
       ctx.fillRect(0, 0, 4, 4)
-
       // srgb is the default and reads back unconverted
       let srgb = ctx.getImageData(0, 0, 1, 1)
       assert.equal(srgb.colorSpace, 'srgb')
       assert.deepEqual(Array.from(srgb.data), [255, 0, 0, 255])
-
       // sRGB red sits inside display-p3's wider gamut, so its converted coordinates pull in from the edge
       let p3 = ctx.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'})
       assert.equal(p3.colorSpace, 'display-p3')
       assert.deepEqual(Array.from(p3.data), [234, 51, 35, 255])
-
       // …and putting the converted bitmap back onto the (srgb) canvas converts it home again
       ctx.putImageData(p3, 4, 0)
       let [r, g, b, a] = pixel(4, 0)
       assert.ok(Math.abs(r - 255) <= 1 && g <= 1 && b <= 1 && a == 255)
-    })
-
-    test('getContext() colorSpace setting', async () => {
-      let canvas = new Canvas(4, 4),
-          ctx = canvas.getContext('2d', {colorSpace:'display-p3'})
-      // full browser-parity shape: colorSpace is latched, the other fields are fixed defaults
-      assert.deepEqual(ctx.getContextAttributes(), {alpha:true, colorSpace:'display-p3', desynchronized:false, willReadFrequently:false})
-
-      ctx.fillStyle = '#f00'
-      ctx.fillRect(0, 0, 4, 4)
-
-      // getImageData/createImageData & exports default to the canvas's space…
-      let bmp = ctx.getImageData(0, 0, 1, 1)
-      assert.equal(bmp.colorSpace, 'display-p3')
-      assert.deepEqual(Array.from(bmp.data), [234, 51, 35, 255])
-      assert.equal(ctx.createImageData(2, 2).colorSpace, 'display-p3')
-      assert.deepEqual(Array.from((await canvas.toBuffer('raw')).slice(0, 4)), [234, 51, 35, 255])
-      assert((await canvas.toBuffer('png')).includes('iCCP'))
-
-      // …but per-call settings still override
-      assert.deepEqual(Array.from(ctx.getImageData(0, 0, 1, 1, {colorSpace:'srgb'}).data), [255, 0, 0, 255])
-      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {colorSpace:'srgb'})).slice(0, 4)), [255, 0, 0, 255])
-
-      // only the first getContext call's settings are honored
-      assert.equal(canvas.getContext('2d', {colorSpace:'srgb'}), ctx)
-      assert.equal(ctx.getContextAttributes().colorSpace, 'display-p3')
-
-      // a canvas whose context was created without settings defaults to srgb
-      let plain = new Canvas(4, 4).getContext('2d')
-      assert.equal(plain.getContextAttributes().colorSpace, 'srgb')
-    })
-
-    test('wide-gamut fillStyle', () => {
-      // a color() fill outside the sRGB gamut survives to a display-p3 surface losslessly…
-      let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
-      p3.fillStyle = 'color(display-p3 1 0 0)'
-      p3.fillRect(0, 0, 4, 4)
-      assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
-
-      // …while an srgb surface clamps it at draw time
-      let srgb = new Canvas(4, 4).getContext('2d')
-      srgb.fillStyle = 'color(display-p3 1 0 0)'
-      srgb.fillRect(0, 0, 4, 4)
-      assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
-      assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
-    })
-
-    test('wide-gamut gradient stops', () => {
-      let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'}),
-          grad = p3.createLinearGradient(0, 0, 4, 0)
-      grad.addColorStop(0, 'color(display-p3 1 0 0)')
-      grad.addColorStop(1, 'color(display-p3 1 0 0)')
-      p3.fillStyle = grad
-      p3.fillRect(0, 0, 4, 4)
-      assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
-    })
-
-    test('wide-gamut textures', () => {
-      // a texture drawn in an out-of-sRGB color survives on a display-p3 surface
-      let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
-      p3.fillStyle = p3.createTexture(4, {line:8, color:'color(display-p3 1 0 0)'})
-      p3.fillRect(0, 0, 4, 4)
-      assert.deepEqual(Array.from(p3.getImageData(1, 1, 1, 1).data), [255, 0, 0, 255])
-    })
-
-    test('wide-gamut auxiliary colors', async () => {
-      // shadows cast in wide-gamut colors survive on a display-p3 surface
-      let p3 = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
-      p3.shadowColor = 'color(display-p3 1 0 0)'
-      assert.equal(p3.shadowColor, 'color(display-p3 1 0 0)')
-      p3.shadowOffsetX = 4
-      p3.fillStyle = 'black'
-      p3.fillRect(0, 2, 2, 2) // shadow lands at x:4-6
-      assert.deepEqual(Array.from(p3.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
-
-      // …as do matte backgrounds
-      let blank = new Canvas(4, 4)
-      blank.getContext('2d', {colorSpace:'display-p3'})
-      let raw = await blank.toBuffer('raw', {matte:'color(display-p3 1 0 0)'})
-      assert.deepEqual(Array.from(raw.slice(0, 4)), [255, 0, 0, 255])
-
-      // …and drop-shadow() filter colors
-      let f = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
-      f.filter = 'drop-shadow(4px 0px 0px color(display-p3 1 0 0))'
-      f.fillStyle = 'black'
-      f.fillRect(0, 2, 2, 2)
-      assert.deepEqual(Array.from(f.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
-    })
-
-    test('wide-gamut drawImage(canvas)', () => {
-      // a source canvas holding an out-of-sRGB-gamut fill…
-      let srcCanvas = new Canvas(4, 4),
-          src = srcCanvas.getContext('2d')
-      src.fillStyle = 'color(display-p3 1 0 0)'
-      src.fillRect(0, 0, 4, 4)
-
-      // …survives being composited onto a display-p3 canvas via drawImage(). The source is
-      // snapshotted to an intermediate raster first (unlike drawCanvas's vector path), so
-      // this only holds because that intermediate is F16 extended-sRGB rather than 8-bit —
-      // an 8-bit intermediate would clip the P3 red down to sRGB red ([234, 51, 35] in p3).
-      let viaImage = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
-      viaImage.drawImage(srcCanvas, 0, 0)
-      assert.deepEqual(Array.from(viaImage.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
-
-      // the vector drawCanvas() path (no intermediate raster) preserves it too
-      let viaCanvas = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
-      viaCanvas.drawCanvas(srcCanvas, 0, 0)
-      assert.deepEqual(Array.from(viaCanvas.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
     })
 
     test('putImageData()', () => {
@@ -1271,7 +1196,8 @@ describe("Context2D", ()=>{
       let msg = "Lordran gypsum",
           metrics = ctx.measureText(msg)
 
-      // + means up, - means down when it comes to baselines
+      // + means up, - means down when it comes to baselines; these also confirm the implicit
+      // default font (no ctx.font set) reports non-alphabetic baselines
       assert.equal(metrics.alphabeticBaseline, 0)
       assert(metrics.hangingBaseline > 0)
       assert(metrics.ideographicBaseline < 0)
@@ -1570,6 +1496,88 @@ describe("Context2D", ()=>{
         assert.doesNotThrow( () => ctx.transform(0, 0, 0, NaN, 0, 0))
       })
 
+    })
+
+
+    describe("wide-gamut color", () => {
+
+      test('fillStyle', () => {
+        // a color() fill outside the sRGB gamut survives to a display-p3 surface losslessly…
+        let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+        p3.fillStyle = 'color(display-p3 1 0 0)'
+        p3.fillRect(0, 0, 4, 4)
+        assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+
+        // …while an srgb surface clamps it at draw time
+        let srgb = new Canvas(4, 4).getContext('2d')
+        srgb.fillStyle = 'color(display-p3 1 0 0)'
+        srgb.fillRect(0, 0, 4, 4)
+        assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+        assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
+      })
+
+      test('CanvasGradient stops', () => {
+        let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'}),
+            grad = p3.createLinearGradient(0, 0, 4, 0)
+        grad.addColorStop(0, 'color(display-p3 1 0 0)')
+        grad.addColorStop(1, 'color(display-p3 1 0 0)')
+        p3.fillStyle = grad
+        p3.fillRect(0, 0, 4, 4)
+        assert.deepEqual(Array.from(p3.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+      })
+
+      test('CanvasTexture', () => {
+        // a texture drawn in an out-of-sRGB color survives on a display-p3 surface
+        let p3 = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+        p3.fillStyle = p3.createTexture(4, {line:8, color:'color(display-p3 1 0 0)'})
+        p3.fillRect(0, 0, 4, 4)
+        assert.deepEqual(Array.from(p3.getImageData(1, 1, 1, 1).data), [255, 0, 0, 255])
+      })
+
+      test('auxiliary colors', async () => {
+        // shadows cast in wide-gamut colors survive on a display-p3 surface
+        let p3 = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
+        p3.shadowColor = 'color(display-p3 1 0 0)'
+        assert.equal(p3.shadowColor, 'color(display-p3 1 0 0)')
+        p3.shadowOffsetX = 4
+        p3.fillStyle = 'black'
+        p3.fillRect(0, 2, 2, 2) // shadow lands at x:4-6
+        assert.deepEqual(Array.from(p3.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
+
+        // …as do matte backgrounds
+        let blank = new Canvas(4, 4)
+        blank.getContext('2d', {colorSpace:'display-p3'})
+        let raw = await blank.toBuffer('raw', {matte:'color(display-p3 1 0 0)'})
+        assert.deepEqual(Array.from(raw.slice(0, 4)), [255, 0, 0, 255])
+
+        // …and drop-shadow() filter colors
+        let f = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
+        f.filter = 'drop-shadow(4px 0px 0px color(display-p3 1 0 0))'
+        f.fillStyle = 'black'
+        f.fillRect(0, 2, 2, 2)
+        assert.deepEqual(Array.from(f.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
+      })
+
+      test('drawImage(canvas)', () => {
+        // a source canvas holding an out-of-sRGB-gamut fill…
+        let srcCanvas = new Canvas(4, 4),
+            src = srcCanvas.getContext('2d')
+        src.fillStyle = 'color(display-p3 1 0 0)'
+        src.fillRect(0, 0, 4, 4)
+
+        // …survives being composited onto a display-p3 canvas via drawImage(). The source is
+        // snapshotted to an intermediate raster first (unlike drawCanvas's vector path), so
+        // this only holds because that intermediate is F16 extended-sRGB rather than 8-bit —
+        // an 8-bit intermediate would clip the P3 red down to sRGB red ([234, 51, 35] in p3).
+        let viaImage = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+        viaImage.drawImage(srcCanvas, 0, 0)
+        assert.deepEqual(Array.from(viaImage.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+
+        // the vector drawCanvas() path (no intermediate raster) preserves it too
+        let viaCanvas = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+        viaCanvas.drawCanvas(srcCanvas, 0, 0)
+        assert.deepEqual(Array.from(viaCanvas.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+      })
     })
 
   })
