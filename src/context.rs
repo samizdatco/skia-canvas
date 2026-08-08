@@ -603,17 +603,21 @@ impl Context2D{
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, style:PaintStyle){
     let paint = self.paint_for_drawing(style);
-    let mut typesetter = Typesetter::new(&self.state, text, width);
+    let typesetter = Typesetter::new(&self.state, text, width);
     let origin = Point::new(x, y);
+    let layout = typesetter.layout(origin);
 
     if self.state.texture(style).is_some(){
-      // if dye is a texture, convert text to path first
-      self.draw_path(Some(typesetter.path(origin)), style, None);
+      // draw visible decorations & convert text to path (so it can be filled/stroked with the texture)
+      self.render_to_canvas(&paint, |canvas, paint| layout.draw_decorations(canvas, paint));
+      self.draw_path(Some(layout.to_path()), style, None);
+
+      // add an invisible text run that embeds the selectable text
+      let mut invisible = Paint::default();
+      invisible.set_color4f(Color4f::new(0.0, 0.0, 0.0, 0.0), None);
+      self.render_to_canvas(&invisible, |canvas, paint| layout.draw_glyphs(canvas, paint));
     }else{
-      self.render_to_canvas(&paint, |canvas, paint| {
-        let (paragraph, offset) = typesetter.layout(paint);
-        paragraph.paint(canvas, origin + offset);
-      });
+      self.render_to_canvas(&paint, |canvas, paint| layout.draw(canvas, paint));
     }
   }
 

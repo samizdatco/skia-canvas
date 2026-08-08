@@ -1,24 +1,23 @@
 #![allow(dead_code)]
 #![allow(non_snake_case)]
-use std::ops::Range;
 use std::iter::zip;
+use std::collections::BTreeSet;
 use neon::prelude::*;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, PathBuilder, Color4f};
+use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, dash_path_effect, path_utils::fill_path_with_paint};
+use skia_safe::paint::{Style as PaintStyle, Cap as PaintCap};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
-  Decoration, FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
-  TextAlign, TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextStyle,
+  FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
+  TextAlign, TextDecorationStyle, TextDirection, TextStyle,
 };
 use crate::font_library::{FontLibrary, RenderAttrs};
 use crate::utils::*;
 use crate::context::State;
 
 //
-// Text layout and metrics
+// Text layout, metrics, and rendering
 //
-
-const GALLEY:f32 = 100_000.0;
 
 pub struct Typesetter{
   text: String,
@@ -45,7 +44,7 @@ impl Typesetter{
         })
         .font_collection()
     );
-    let width = width.unwrap_or(GALLEY);
+    let width = width.unwrap_or(100_000.0); // if not wrapping, pick an effectively infinite width
     let text = match text_wrap{
       true => text.to_string(),
       false => text.replace("\n", " ")
@@ -54,12 +53,10 @@ impl Typesetter{
     Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration, text_wrap}
   }
 
-  pub fn layout(&self, paint:&Paint) -> (Paragraph, Point) {
+  // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`) and
+  // provide a y-axis offset from the requested origin to the alphabetic baseline
+  fn shape_text(&self) -> (Paragraph, Point) {
     let mut char_style = self.char_style.clone();
-    char_style.set_foreground_paint(paint);
-    char_style.set_decoration(
-      &self.text_decoration.for_layout(&char_style, paint.color4f())
-    );
 
     // set the `wght` coordinate so variable fonts will instance at the correct weight
     // (non-variable fonts will just ignore the setting)
@@ -88,10 +85,73 @@ impl Typesetter{
     (paragraph, offset)
   }
 
+  // construct a `Layout` composed of text decorations (if any) and the shaped paragraph's sequence
+  // of `GlyphRun`s, each containing the geometry, text, and font information needed to typeset a
+  // contiguous run of characters (or generate a path outline of them).
+  pub fn layout(&self, point:impl Into<Point>) -> Layout {
+    let (mut paragraph, offset) = self.shape_text();
+    let base = offset + point.into();
+    let text = self.text.as_str();
+    let shift = self.char_style.baseline_shift(); // `textBaseline`'s offset from the alphabetic baseline
+
+    // collect GlyphRuns (character geometry) and run_clusters (start-indicies as utf-8 character offsets)
+    let mut runs:Vec<GlyphRun> = vec![];
+    let mut run_clusters:Vec<Vec<u32>> = vec![];
+    paragraph.extended_visit(|_line, visit|{
+      if let Some(info) = visit {
+        let count = info.glyphs().len();
+        if count == 0 { return }
+        let origin = Point::new(
+          info.origin().x + base.x,
+          base.y + info.origin().y + shift, // use the subpixel position (don't snap-to-integer like Paragraph.paint())
+        );
+
+        run_clusters.push(info.utf8_starts()[..count].to_vec()); // index relative to full `text` string
+        runs.push(GlyphRun{
+          font: info.font().clone(),
+          origin,
+          advance: info.advance().width,
+          glyphs: info.glyphs().to_vec(),
+          positions: info.positions().to_vec(),
+          blob: None,
+        });
+      }
+    });
+
+    // find the utf-8 offset range that corresponds to each run. `run_clusters` counts in glyph order
+    // (either LTR or RTL) while `bounds` is sorted (so we can easily find the 'next' cluster)
+    let mut bounds:BTreeSet<u32> = run_clusters.iter().flatten().copied().collect();
+    bounds.insert(text.len() as u32);
+    let ranges:Vec<_> = run_clusters.iter_mut().map(|starts|{
+      let lo = starts.iter().copied().min().unwrap_or(0);
+      let hi = starts.iter().copied().max()
+        .and_then(|furthest| bounds.range(furthest+1..).next().copied())
+        .unwrap_or(lo);
+      for c in starts.iter_mut() { *c -= lo; } // rebase indices into slice-local coords
+      lo as usize .. hi as usize
+    }).collect();
+
+    // create a TextBlob for each run (baking in its utf-8 text so it can be selectable in PDFs)
+    for ((run, clusters), span) in runs.iter_mut().zip(&run_clusters).zip(&ranges) {
+      let mut builder = TextBlobBuilder::new();
+      let n = run.glyphs.len();
+      let slice = text.get(span.clone())
+        .expect("run text slice is outside source string (only reachable via ellipsis truncation)");
+
+      let (glyphs, pos, txt, cl) = builder.alloc_run_text_pos(&run.font, n, slice.len(), None);
+      glyphs.copy_from_slice(&run.glyphs);
+      pos.copy_from_slice(&run.positions);
+      txt.copy_from_slice(slice.as_bytes());
+      cl.copy_from_slice(clusters);
+      run.blob = builder.make();
+    }
+
+    let decorations = Decorations::from_style(&self.text_decoration, &self.char_style);
+    Layout{ runs, decorations }
+  }
+
   pub fn metrics(&self) -> Value {
-    let (mut paragraph, origin) = self.layout(&Paint::default());
-    let mut line_rects:Vec<Rect> = vec![]; // advance-based line rects (for the top-level `width`)
-    let mut ink_rects:Vec<Rect> = vec![]; // glyph-ink line bounds (for `actualBoundingBox*`)
+    let (mut paragraph, origin) = self.shape_text();
 
     // calculate baseline offsets (relative to line_metrics.baseline which reflects ctx.textBaseline setting)
     let shift = self.char_style.baseline_shift();
@@ -100,14 +160,14 @@ impl Typesetter{
     let ideo = Baseline::Ideographic.get_offset(&self.char_style) - shift;
 
     // calculate bounds for each single-font block of glyphs on each line (and gather font info)
-    struct TextRun{ line: usize, family: String, metrics: FontMetrics, bounds: Rect }
-    let mut text_runs:Vec<TextRun> = vec![];
+    struct RunMetrics{ line: usize, family: String, font: FontMetrics, bounds: Rect }
+    let mut text_runs:Vec<RunMetrics> = vec![];
     paragraph.extended_visit(|line, visit|{
       if let Some(info) = visit{
-        text_runs.push(TextRun{
+        text_runs.push(RunMetrics{
           line,
           family: info.font().typeface().family_name(),
-          metrics: info.font().metrics().1,
+          font: info.font().metrics().1,
           bounds: zip(info.positions(), info.bounds())
             .filter(|(_, rect)| !rect.is_empty())
             .map(|(pt, rect)| rect.with_offset(*pt + info.origin() + origin - Point::new(0.0, norm)))
@@ -117,7 +177,9 @@ impl Typesetter{
       }
     });
 
-    // measure each line and add its layout rect to `line_rects`
+    // measure each line: its glyph-ink bounds (the tight `actualBoundingBox*` edges) and its
+    // advance-based layout rect (which feeds the top-level `width`), plus the per-line JSON
+    struct LineMeasure{ ink: Rect, advance: Rect, json: Value }
     let lines = (0..paragraph.line_number()).filter_map(|ln|{
       // find the range of byte & char indices that are on this line (includes trailing whitespace if not wrapping)
       let text_range = paragraph.get_actual_text_range(ln, !self.text_wrap);
@@ -126,73 +188,65 @@ impl Typesetter{
       // calculate this line's vertical offsets relative to the typesetting origin
       let line_metrics = paragraph.get_line_metrics_at(ln)?;
       let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
-      let baseline = line_metrics.baseline as f32 + origin.y - half_leading;
+      let baseline = line_metrics.baseline as f32 + origin.y - half_leading; // the textBaseline-selected origin
+      let alpha = baseline - norm; // the line's alphabetic baseline (the font-metric origin)
       let line_ascent = baseline - line_metrics.ascent as f32;
       let line_descent = baseline + line_metrics.descent as f32;
 
       // combine the glyph bounds of all single-font runs on this line (potentially omitting trailing spaces)
-      let font_runs = text_runs.iter().filter(|r| r.line==ln).collect::<Vec<&TextRun>>();
-      let text_bounds = font_runs.iter()
+      let font_runs = text_runs.iter().filter(|r| r.line==ln).collect::<Vec<&RunMetrics>>();
+      let ink = font_runs.iter()
         .map(|run| run.bounds)
         .reduce(Rect::join2)
         .unwrap_or(Rect::new_empty());
 
-      // the glyph-ink bounds give the tight `actualBoundingBox*` edges (ink-based, like Chrome)
-      ink_rects.push(text_bounds);
-
       // the advance-based layout rect gives the top-level `width`; keep its full advance
       // (including any trailing letter-space) so `width` matches Chrome/Safari
-      line_rects.push(
-        paragraph
-          .get_rects_for_range(char_range.clone(), RectHeightStyle::Tight, RectWidthStyle::Tight).iter()
-          .map(|tb| {
-            let Rect{top, bottom, ..} = text_bounds;
-            let Rect{left, right, ..} = tb.rect.with_offset(origin);
-            Rect::new(left, top, right, bottom)
-          })
-          .reduce(Rect::join2)
-          .unwrap_or(text_bounds)
-      );
+      let advance = paragraph
+        .get_rects_for_range(char_range.clone(), RectHeightStyle::Tight, RectWidthStyle::Tight).iter()
+        .map(|tb| {
+          let Rect{top, bottom, ..} = ink;
+          let Rect{left, right, ..} = tb.rect.with_offset(origin);
+          Rect::new(left, top, right, bottom)
+        })
+        .reduce(Rect::join2)
+        .unwrap_or(ink);
 
-      Some(json!({
-        "x": text_bounds.left,
-        "y": text_bounds.top,
-        "width": text_bounds.width(),
-        "height": text_bounds.height(),
+      Some(LineMeasure{ ink, advance, json: json!({
+        "x": ink.left,
+        "y": ink.top,
+        "width": ink.width(),
+        "height": ink.height(),
         "baseline": baseline, // corresponds to the ctx.textBaseline selection
         "hangingBaseline": baseline - hang,
-        "alphabeticBaseline": baseline - norm,
+        "alphabeticBaseline": alpha,
         "ideographicBaseline": baseline - ideo,
         "ascent": line_ascent,
         "descent": line_descent,
         "startIndex": char_range.start,
         "endIndex": char_range.end,
-        "runs": font_runs.iter().map(|TextRun{family, metrics, bounds, ..}| {
+        "runs": font_runs.iter().map(|RunMetrics{family, font, bounds, ..}| {
           json!({
             "x": bounds.left,
             "y": bounds.top,
             "width": bounds.width(),
             "height": bounds.height(),
             "family": family,
-            "ascent": baseline - norm + metrics.ascent,
-            "descent": baseline - norm + metrics.descent,
-            "capHeight": baseline - norm - metrics.cap_height,
-            "xHeight": baseline - norm - metrics.x_height,
-            "underline": metrics.underline_position().map(|ulH| baseline - norm + ulH ),
-            "strikethrough": metrics.strikeout_position().map(|stH| baseline - norm + stH ),
+            "ascent": alpha + font.ascent,
+            "descent": alpha + font.descent,
+            "capHeight": alpha - font.cap_height,
+            "xHeight": alpha - font.x_height,
+            "underline": font.underline_position().map(|ulH| alpha + ulH ),
+            "strikethrough": font.strikeout_position().map(|stH| alpha + stH ),
           })
         }).collect::<Vec<Value>>()
-      }))
-    }).collect::<Vec<Value>>();
+      }) })
+    }).collect::<Vec<LineMeasure>>();
 
-    // combine the individual line measurements: the advance join sets `width`, while the
-    // glyph-ink join sets the tight `actualBoundingBox*` edges
-    let advance_bounds = line_rects.into_iter()
-      .reduce(Rect::join2)
-      .unwrap_or(Rect::new_empty());
-    let ink_bounds = ink_rects.into_iter()
-      .reduce(Rect::join2)
-      .unwrap_or(Rect::new_empty());
+    // use `advance_bounds` to set `width` & `ink_bounds` for the tight `actualBoundingBox*` edges
+    let advance_bounds = lines.iter().map(|l| l.advance).reduce(Rect::join2).unwrap_or(Rect::new_empty());
+    let ink_bounds = lines.iter().map(|l| l.ink).reduce(Rect::join2).unwrap_or(Rect::new_empty());
+    let lines = lines.into_iter().map(|l| l.json).collect::<Vec<Value>>();
 
     // use line metrics to find maximal ascent/descent of all fonts on first line
     let (ascent, descent) = paragraph.get_line_metrics_at(0).map(|line|
@@ -204,7 +258,7 @@ impl Typesetter{
     });
 
     json!({
-      "width": advance_bounds.right - advance_bounds.left,
+      "width": advance_bounds.width(),
       "actualBoundingBoxLeft": -ink_bounds.left,
       "actualBoundingBoxRight": ink_bounds.right,
       "actualBoundingBoxAscent": -ink_bounds.top,
@@ -220,19 +274,9 @@ impl Typesetter{
     })
   }
 
-  pub fn path(&mut self, point:impl Into<Point>) -> SkPath {
-    let (mut paragraph, mut origin) = self.layout(&Paint::default());
-    let headroom = self.char_style.font_metrics().ascent + paragraph.alphabetic_baseline();
-    let offset = self.baseline.get_offset(&self.char_style);
-    origin += point.into();
-    origin.y -= headroom - offset;
-
-    let mut path = PathBuilder::new();
-    for idx in 0..paragraph.line_number(){
-      let (_skipped, line) = paragraph.get_path_at(idx);
-      path.add_path_with_offset(&line, origin, None);
-    };
-    path.detach()
+  // outline the text as a single path
+  pub fn path(&self, point:impl Into<Point>) -> SkPath {
+    self.layout(point).to_path()
   }
 
   fn alignment_offset(&self) -> f32{
@@ -256,24 +300,218 @@ impl Typesetter{
   }
 }
 
-//
-// Convert utf-8 byte indices -> utf-16 codepoint indices
-//
-fn utf16_range(text:&str, byte_range:&Range<usize>) -> Range<usize>{
-  let chars:Vec<(usize, usize)> = text.char_indices()
-    .map(|(idx, c)| (idx, c.len_utf16()))
-    .collect::<Vec<(usize, usize)>>();
+pub struct Layout{
+  runs: Vec<GlyphRun>,
+  decorations: Option<Decorations>, // None when no line (underline/overline/line-through) is set
+}
 
-  // find the char indices corresponding to the byte range endpoints
-  let start = chars.iter().position(|(i, _)| *i >= byte_range.start).unwrap_or(0);
-  let end = chars.iter().rposition(|(i, _)| *i < byte_range.end).map(|i| i + 1).unwrap_or(start);
+impl Layout{
+  pub fn draw(&self, canvas:&SkCanvas, paint:&Paint){
+    self.draw_decorations(canvas, paint);
+    self.draw_glyphs(canvas, paint);
+  }
 
-  // sum up the number of utf-16 code units needed for all chars in the range
-  let sum = |a,b|{a+b};
-  let len = |&(_, len)|{len};
-  let head = chars.iter().take(start).map(len).reduce(sum).unwrap_or(0);
-  let tail = chars.iter().skip(start).take(end-start).map(len).reduce(sum).unwrap_or(head);
-  head..head+tail
+  pub fn draw_decorations(&self, canvas:&SkCanvas, paint:&Paint){
+    if let Some(deco) = &self.decorations {
+      deco.draw(canvas, &self.runs, paint);
+    }
+  }
+
+  pub fn draw_glyphs(&self, canvas:&SkCanvas, paint:&Paint){
+    self.runs.iter().for_each(|run| run.draw(canvas, paint));
+  }
+
+  pub fn to_path(&self) -> SkPath {
+    let mut path = PathBuilder::new();
+    self.runs.iter().for_each(|run| run.outline(&mut path));
+    path.detach()
+  }
+}
+
+// a run of contiguous characters sharing the same font from a single line of the paragraph
+pub struct GlyphRun{
+  font: Font,             // used for converting glyphs to paths and its font_metrics field
+  origin: Point,          // the baseline-left paragraph origin
+  advance: f32,           // full horizontal extent (for decoration line length)
+  glyphs: Vec<GlyphId>,   // per-glyph outline IDs
+  positions: Vec<Point>,  // per-glyph x-positions
+  blob: Option<TextBlob>, // drawable blob (including text for selectable PDF)
+}
+
+impl GlyphRun{
+  // draw the run's blob at its baseline origin
+  fn draw(&self, canvas:&SkCanvas, paint:&Paint){
+    if let Some(blob) = self.blob.as_ref() { canvas.draw_text_blob(blob, self.origin, paint); }
+  }
+
+  // append the run's glyph outlines to a mutable path (positioned at the run origin)
+  fn outline(&self, out:&mut PathBuilder){
+    for (glyph, pos) in self.glyphs.iter().zip(&self.positions) {
+      if let Some(glyph_path) = self.font.get_path(*glyph) {
+        out.add_path_with_offset(&glyph_path, self.origin + *pos, None);
+      }
+    }
+  }
+
+  // find locations where a glyph's descender breaks into the vertical zone occupied by the text-decoration.
+  // to be a true gap, the descender has to go all the way through the decoration (past its `graze_floor`)
+  fn descender_gaps(&self, rule:&Rule) -> Vec<(f32,f32)>{
+    let Some(blob) = self.blob.as_ref() else { return vec![] };
+    let top = (rule.pos - rule.thickness/2.0).max(rule.graze_floor);
+    let bottom = rule.pos + rule.thickness/2.0;
+    if bottom <= top { return vec![] }
+    let mut probe = Paint::default();
+    probe.set_style(PaintStyle::Stroke).set_stroke_width(rule.thickness).set_anti_alias(true);
+    blob.get_intercepts([top, bottom], Some(&probe))
+      .chunks_exact(2)
+      .map(|c| (self.origin.x + c[0], self.origin.x + c[1]))
+      .collect()
+  }
+}
+
+// The underline/overline/line-through renderer for a particular `Layout`
+struct Decorations{
+  line: DecorationLine,    // the active line (kind + style); Decorations exists only when there is one
+  size: Option<Spacing>,   // explicit thickness override, else the font metric
+  color: Option<CssColor>, // explicit color, else `currentColor` (the fill color)
+  font_size: f32,          // for the default `fontSize/14` thickness and dash/wave scaling
+}
+
+// each distinct line gets a Rule record (i.e., normally there's one but double-underline has two)
+struct Rule{ x0:f32, x1:f32, pos:f32, thickness:f32, style:TextDecorationStyle, skip:bool, graze_floor:f32 }
+
+impl Decorations{
+  // return a configured `Decorations` for the reqeusted style (or None if decorations are off)
+  fn from_style(style:&DecorationStyle, char_style:&TextStyle) -> Option<Self>{
+    style.line.clone().map(|line| Decorations{
+      line,
+      size: style.size.clone(),
+      color: style.color,
+      font_size: char_style.font_size(),
+    })
+  }
+
+  // walk the runs and collect their decorations into a single fill path
+  fn draw(&self, canvas:&SkCanvas, runs:&[GlyphRun], paint:&Paint){
+    let base = self.fill_paint(paint);
+    let mut deco_path = PathBuilder::new();
+    for run in runs {
+      self.trace_run(&mut deco_path, run);
+    }
+    let deco_path = deco_path.detach();
+    if !deco_path.is_empty() {
+      canvas.draw_path(&deco_path, &base);
+    }
+  }
+
+  // inherit the current fill color unless a decoration color was explicitly specified
+  fn fill_paint(&self, base:&Paint) -> Paint {
+    let mut paint = base.clone();
+    paint.set_path_effect(None);
+    paint.set_anti_alias(true);
+    paint.set_style(PaintStyle::Fill);
+    if let Some(css) = self.color {
+      paint.set_shader(None);
+      paint.set_color(color4f_to_color(css.color));
+    }
+    paint
+  }
+
+  // add the underline/overline/line-through geometry for a single run to the mutable path
+  fn trace_run(&self, out:&mut PathBuilder, run:&GlyphRun){
+    let (_, metrics) = run.font.metrics();
+    let x0 = run.origin.x;
+    let x1 = run.origin.x + run.advance;
+    let (thick_metric, pos) = self.line.kind.placement(&metrics);
+    let graze_floor = pos; // check for descenders reaching the (topmost) underline's position
+    let thickness = self.size.as_ref()
+      .map(|s| s.in_px(self.font_size))
+      .unwrap_or_else(|| thick_metric.unwrap_or(self.font_size / 14.0))
+      .max(1.0);
+    let skip = run.blob.is_some() && self.line.kind == DecorationKind::Underline; // only add descender gaps for underlines
+
+    match self.line.style {
+      TextDecorationStyle::Double => {
+        // draw double-underscores with a space between them equal to the stroke thickness and calculate gaps independently
+        let style = TextDecorationStyle::Solid;
+        self.append_rule(out, run, &Rule{x0, x1, pos:pos,                 thickness, style, skip, graze_floor});
+        self.append_rule(out, run, &Rule{x0, x1, pos:pos + thickness*2.0, thickness, style, skip, graze_floor});
+      }
+      style => self.append_rule(out, run, &Rule{ x0, x1, pos, thickness, style, skip, graze_floor }),
+    }
+  }
+
+  // add a single decoration line to the mutable path (potentially with gaps to dodge descenders)
+  fn append_rule(&self, out:&mut PathBuilder, run:&GlyphRun, rule:&Rule){
+    let yc = run.origin.y + rule.pos;
+    let segments = match rule.skip && run.blob.is_some() {
+      true => {
+        // when leaving gaps for descenders, add a 'halo' on either side horizontally
+        let halo = rule.thickness;
+        let mut segs = vec![];
+        let mut start = rule.x0;
+        for (a, b) in run.descender_gaps(rule) {
+          let end = a - halo;
+          if end - start >= halo { segs.push((start, end)) } // only keep if segment width >= halo
+          start = start.max(b + halo);
+        }
+        if rule.x1 - start > halo { segs.push((start, rule.x1)) }
+        segs
+      }
+      _ => vec![(rule.x0, rule.x1)],
+    };
+    for (sx, ex) in segments {
+      self.append_rule_segment(out, sx, ex, yc, rule.thickness, rule.style);
+    }
+  }
+
+  // add one segment of a decoration rule (as a *fill* contour) to the mutable path
+  fn append_rule_segment(&self, out:&mut PathBuilder, x0:f32, x1:f32, yc:f32, t:f32, style:TextDecorationStyle){
+    use TextDecorationStyle::*;
+    if x1 - x0 <= 0.0 { return }
+    let mut stroke_path = PathBuilder::new();
+
+    match style {
+      Solid | Double => {
+        out.add_rect(Rect::new(x0, yc - t/2.0, x1, yc + t/2.0), None, None);
+      }
+      Dotted | Dashed => {
+        // use a dash_path_effect with spacing proportional to font size
+        let s = (self.font_size / 14.0).max(1.0);
+        let (intervals, cap) = if matches!(style, Dotted){ ([s, 1.5*s], PaintCap::Round) }else{ ([4.0*s, 2.0*s], PaintCap::Butt) };
+        let mut p = Paint::default();
+        p.set_style(PaintStyle::Stroke).set_stroke_width(t).set_stroke_cap(cap);
+        p.set_path_effect(dash_path_effect::new(&intervals, 0.0));
+        let mut line = PathBuilder::new();
+        line.move_to((x0, yc)); line.line_to((x1, yc));
+        if fill_path_with_paint(&line.detach(), &p, &mut stroke_path, None, None) {
+          out.add_path(&stroke_path.detach(), skia_safe::path::AddPathMode::Append);
+        }
+      }
+      Wavy => {
+        // draw a rounded-off zig-zag
+        let step = (t * 2.0).max(2.0); // wavelength = 400% of line-thickness
+        let ctrl = t * 1.4;            // amplitude = ±70% of line-thickness
+        let mut wave = PathBuilder::new();
+        wave.move_to((x0, yc));
+        let mut x = x0;
+        let mut up = true;
+        while x < x1 {
+          let nx = (x + step).min(x1);
+          let cx = (x + nx) / 2.0;
+          let cy = if up { yc - ctrl } else { yc + ctrl };
+          wave.quad_to((cx, cy), (nx, yc));
+          x = nx;
+          up = !up;
+        }
+        let mut p = Paint::default();
+        p.set_style(PaintStyle::Stroke).set_stroke_width(t);
+        if fill_path_with_paint(&wave.detach(), &p, &mut stroke_path, None, None) {
+          out.add_path(&stroke_path.detach(), skia_safe::path::AddPathMode::Append);
+        }
+      }
+    }
+  }
 }
 
 //
@@ -512,33 +750,36 @@ impl Baseline{
   }
 }
 
-#[derive(Clone, Debug)]
-pub struct DecorationStyle{
-  pub css: String,
-  pub decoration: Decoration,
-  pub size: Option<Spacing>,
-  pub color: Option<CssColor>,
-}
+// the kind of line a text-decoration draws (and where it sits relative to the baseline)
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum DecorationKind{ Underline, Overline, LineThrough }
 
-
-impl Default for DecorationStyle{
-  fn default() -> Self {
-    Self{decoration:Decoration::default(), size:None, color:None, css:"none".to_string()}
+impl DecorationKind{
+  // this line's (thickness metric, baseline-relative position) from the run's font metrics
+  fn placement(&self, m:&FontMetrics) -> (Option<f32>, f32){
+    match self{
+      DecorationKind::Underline   => (m.underline_thickness(), m.underline_position().unwrap_or(0.0)),
+      DecorationKind::Overline    => (m.underline_thickness(), m.ascent),
+      DecorationKind::LineThrough => (m.strikeout_thickness(), m.strikeout_position().unwrap_or(-m.x_height/2.0)),
+    }
   }
 }
 
-impl DecorationStyle{
-  pub fn for_layout(&self, style:&TextStyle, text_color:Color4f) -> Decoration{
-    // convert `size` into a multiple of the current font's default thickness
-    let em_size = style.font_size();
-    let thickness = style.font_metrics()
-      .underline_thickness()
-      .unwrap_or(1.0);
-    let thickness_multiplier = self.size.clone()
-      .map(|size| size.in_px(em_size) / thickness)
-      .unwrap_or(1.0);
-    let color = color4f_to_color(self.color.map(|css| css.color).unwrap_or(text_color));
-    Decoration{thickness_multiplier, color, ..self.decoration}
+// the selected combination of line position (kind) and stroke/shape (style)
+#[derive(Clone, Debug)]
+struct DecorationLine{ kind: DecorationKind, style: TextDecorationStyle }
+
+#[derive(Clone, Debug)]
+pub struct DecorationStyle{
+  pub css: String,
+  line: Option<DecorationLine>, // None if no decoration is active
+  size: Option<Spacing>,
+  color: Option<CssColor>,
+}
+
+impl Default for DecorationStyle{
+  fn default() -> Self {
+    Self{ css:"none".to_string(), line:None, size:None, color:None }
   }
 }
 
@@ -556,10 +797,10 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
     };
 
     let line = string_for_key(cx, &deco, "line")?;
-    let ty = match line.as_str(){
-      "underline" => TextDecoration::UNDERLINE,
-      "overline" => TextDecoration::OVERLINE,
-      "line-through" => TextDecoration::LINE_THROUGH,
+    let kind = match line.as_str(){
+      "underline" => DecorationKind::Underline,
+      "overline" => DecorationKind::Overline,
+      "line-through" => DecorationKind::LineThrough,
       "none" | _ => return Ok(Some(DecorationStyle::default()))
     };
 
@@ -581,15 +822,7 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
       }
     };
 
-    // an empty decoration string is a no-op (a None color here just means `currentColor`)
-    if css.is_empty(){ return Ok(None) }
-
-    // As of skia_safe 0.78.2, `Gaps` mode is too buggy, with random breaks in places that don't have
-    // descenders. It would be nice to enable this in a future release once it stabilizes…
-    let mode = TextDecorationMode::Through;
-
-    let decoration = Decoration{ ty, style, mode, ..Decoration::default() };
-    Ok(Some(DecorationStyle{ decoration, size, color, css} ))
+    Ok(Some(DecorationStyle{ css, line:Some(DecorationLine{ kind, style }), size, color }))
   }else{
     Ok(None)
   }

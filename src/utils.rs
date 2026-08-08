@@ -38,6 +38,26 @@ pub fn almost_zero(a: f32) -> bool{
   a.abs() < 0.00001
 }
 
+//
+// Convert utf-8 byte indices -> utf-16 codepoint indices
+//
+pub fn utf16_range(text:&str, byte_range:&Range<usize>) -> Range<usize>{
+  let chars:Vec<(usize, usize)> = text.char_indices()
+    .map(|(idx, c)| (idx, c.len_utf16()))
+    .collect::<Vec<(usize, usize)>>();
+
+  // find the char indices corresponding to the byte range endpoints
+  let start = chars.iter().position(|(i, _)| *i >= byte_range.start).unwrap_or(0);
+  let end = chars.iter().rposition(|(i, _)| *i < byte_range.end).map(|i| i + 1).unwrap_or(start);
+
+  // sum up the number of utf-16 code units needed for all chars in the range
+  let sum = |a,b|{a+b};
+  let len = |&(_, len)|{len};
+  let head = chars.iter().take(start).map(len).reduce(sum).unwrap_or(0);
+  let tail = chars.iter().skip(start).take(end-start).map(len).reduce(sum).unwrap_or(head);
+  head..head+tail
+}
+
 pub fn to_degrees(radians: f32) -> f32{
   radians / PI * 180.0
 }
