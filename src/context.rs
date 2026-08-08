@@ -616,6 +616,13 @@ impl Context2D{
       let mut invisible = Paint::default();
       invisible.set_color4f(Color4f::new(0.0, 0.0, 0.0, 0.0), None);
       self.render_to_canvas(&invisible, |canvas, paint| layout.draw_glyphs(canvas, paint));
+    }else if self.has_shadow() && layout.is_multi_op(){
+      // shadows + mutiple lines and/or text decorations can get wildly expensive because they're
+      // separate draw-ops that the shadow is applied to independently. instead, flatten to a picture
+      // so the shadow blur only has to composite *once*
+      if let Some(pic) = layout.to_picture(&paint){
+        self.render_to_canvas(&paint, |canvas, paint| { canvas.draw_picture(&pic, None, Some(paint)); });
+      }
     }else{
       self.render_to_canvas(&paint, |canvas, paint| layout.draw(canvas, paint));
     }
@@ -668,6 +675,11 @@ impl Context2D{
     self.state.filter.mix_into(&mut paint, self.state.matrix, true)
       .set_alpha_f(self.state.global_alpha);
     paint
+  }
+
+  pub fn has_shadow(&self) -> bool {
+    let State {shadow_color, shadow_blur, shadow_offset, ..} = &self.state;
+    shadow_color.color.a != 0.0 && (*shadow_blur != 0.0 || !shadow_offset.is_zero())
   }
 
   pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint> {

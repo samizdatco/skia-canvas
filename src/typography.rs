@@ -4,7 +4,7 @@ use std::iter::zip;
 use std::collections::BTreeSet;
 use neon::prelude::*;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, dash_path_effect, path_utils::fill_path_with_paint};
+use skia_safe::{FontMetrics, Typeface, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
 use skia_safe::paint::{Style as PaintStyle, Cap as PaintCap};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::textlayout::{
@@ -325,6 +325,24 @@ impl Layout{
     let mut path = PathBuilder::new();
     self.runs.iter().for_each(|run| run.outline(&mut path));
     path.detach()
+  }
+
+  // flag whether there are multiple glyph runs or a decoration (implying to_picture should be used for render)
+  pub fn is_multi_op(&self) -> bool {
+    self.runs.len() > 1 || self.decorations.is_some()
+  }
+
+  // flatten the draw into a Picture, condensing multiple ops into a single draw_picture
+  pub fn to_picture(&self, paint:&Paint) -> Option<Picture> {
+    // Record with a flattened paint (alpha 1, no image filter) so the outer paint applies
+    // globalAlpha / blend / drop-shadow exactly once.
+    let mut flat = paint.clone();
+    flat.set_alpha_f(1.0).set_image_filter(None);
+    let unbounded = Rect::new(f32::MIN, f32::MIN, f32::MAX, f32::MAX);
+    let mut recorder = PictureRecorder::new();
+    let canvas = recorder.begin_recording(unbounded, true);
+    self.draw(canvas, &flat);
+    recorder.finish_recording_as_picture(None)
   }
 }
 
