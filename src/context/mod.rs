@@ -356,7 +356,9 @@ impl Context2D{
       self.state.fill_style.is_opaque() &&
       self.state.global_alpha == 1.0 &&
       self.state.clip.is_none() &&
-      path.conservatively_contains_rect(self.bounds)
+      // conservativelyContainsRect rejects even an exactly-fitting rect, so test those directly
+      (path.is_rect().is_some_and(|(rect, _, _)| self.state.matrix.map_rect(rect).0.contains(self.bounds)) ||
+       path.conservatively_contains_rect(self.bounds))
     {
       // ...erase existing vector content layers (but preserve CTM & clip path)
       self.with_recorder(|mut recorder|{
