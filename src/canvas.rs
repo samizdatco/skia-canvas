@@ -132,13 +132,13 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
   rayon::spawn_fifo(move || {
-    let result = {
+    let result = gpu::autorelease(|| {
       if options.format=="pdf" && pages.len() > 1 {
         pages.as_pdf(options)
       }else{
         pages.first().encoded_as(options, pages.engine)
       }
-    };
+    });
 
     deferred.settle_with(&channel, move |mut cx| {
       let data = result.or_else(|err| cx.throw_error(err))?;
@@ -186,7 +186,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
   rayon::spawn_fifo(move || {
-    let result = {
+    let result = gpu::autorelease(|| {
       if sequence {
         pages.write_sequence(&name_pattern, padding, options)
       } else if options.format == "pdf" {
@@ -194,7 +194,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
       } else {
         pages.write_image(&name_pattern, options)
       }
-    };
+    });
 
     deferred.settle_with(&channel, move |mut cx| match result{
       Err(msg) => cx.throw_error(format!("I/O Error: {}", msg)),

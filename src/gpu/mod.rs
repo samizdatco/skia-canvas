@@ -36,6 +36,14 @@ impl Engine {
     pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
 }
 
+// rayon's workers have no autorelease pool of their own, so Metal's objc allocations would
+// accumulate until the thread exits. the main thread gets one from node's event loop.
+#[cfg(feature = "metal")]
+pub fn autorelease<T>(f:impl FnOnce() -> T) -> T { objc::rc::autoreleasepool(f) }
+
+#[cfg(not(feature = "metal"))]
+pub fn autorelease<T>(f:impl FnOnce() -> T) -> T { f() }
+
 #[derive(Copy, Clone, Debug)]
 pub enum RenderingEngine{
     CPU,
