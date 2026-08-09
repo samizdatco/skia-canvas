@@ -12,7 +12,6 @@
 //
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use crate::gfx::page::RecordingSurface;
@@ -31,24 +30,16 @@ pub fn evict_idle(){
 //
 // SurfaceCache: live getImageData surfaces (CPU- or GPU-backed), keyed by PageRecorder id, bounded
 // by a byte budget (B, access-time LRU) plus an idle timeout (T) cull. willReadFrequently pins
-// against both. B/T are env-overridable for memory-constrained deployments.
+// against both.
 //
 
-// byte budget (MB via SKIA_CANVAS_SURFACE_BUDGET): evict least-recently-read unpinned surfaces past
-// it. sized to cover a realistic reuse working set (single full-frame … ~32 concurrent 720p).
-fn budget_bytes() -> u64 {
-  static BUDGET: OnceLock<u64> = OnceLock::new();
-  *BUDGET.get_or_init(|| std::env::var("SKIA_CANVAS_SURFACE_BUDGET").ok()
-    .and_then(|v| v.parse::<u64>().ok()).unwrap_or(128) * 1024 * 1024)
-}
+// byte budget: evict least-recently-read unpinned surfaces past it. sized to cover a realistic
+// reuse working set (single full-frame … ~32 concurrent 720p).
+const SURFACE_BUDGET: u64 = 128 * 1024 * 1024;
 
-// idle timeout (ms via SKIA_CANVAS_SURFACE_TTL): cull unpinned surfaces not read within it, so a
-// warm surface survives active reads + a brief pause but is reclaimed once the reader stops.
-fn ttl() -> Duration {
-  static TTL: OnceLock<Duration> = OnceLock::new();
-  *TTL.get_or_init(|| Duration::from_millis(std::env::var("SKIA_CANVAS_SURFACE_TTL").ok()
-    .and_then(|v| v.parse::<u64>().ok()).unwrap_or(500)))
-}
+// idle timeout: cull unpinned surfaces not read within it, so a warm surface survives active reads
+// + a brief pause but is reclaimed once the reader stops.
+const SURFACE_TTL: Duration = Duration::from_millis(500);
 
 struct Entry{
   surface: RecordingSurface,
@@ -68,12 +59,11 @@ impl Surfaces{
   // accounting); for the render thread's map that happens inside engine.render — the only place a
   // gpu surface may drop.
   fn sweep(&mut self){
-    let (now, ttl) = (Instant::now(), ttl());
-    self.map.retain(|_, e| e.pinned || now.duration_since(e.last_read) < ttl);
+    let now = Instant::now();
+    self.map.retain(|_, e| e.pinned || now.duration_since(e.last_read) < SURFACE_TTL);
 
-    let budget = budget_bytes();
     let mut total: u64 = self.map.values().map(|e| e.bytes).sum();
-    while total > budget {
+    while total > SURFACE_BUDGET {
       let victim = self.map.iter()
         .filter(|(_, e)| !e.pinned)
         .min_by_key(|(_, e)| e.last_read)
