@@ -3,7 +3,7 @@ use skia_safe::{gpu::DirectContext, ImageInfo, Surface};
 #[cfg(feature = "window")]
 use skia_safe::Image; // RenderOutcome carries a snapshot destined for the Frame cache
 use serde_json::{json, Value};
-use crate::gfx::{self, page::ExportOptions};
+use crate::gfx::{self, page::ExportOptions, cache::SurfaceCache};
 use crate::utils::catch_panic;
 
 #[cfg(feature = "metal")]
@@ -120,7 +120,7 @@ mod render_thread{
     use std::panic::{catch_unwind, AssertUnwindSafe};
     use std::sync::{mpsc, OnceLock};
     use std::time::Duration;
-    use super::{gfx, Engine};
+    use super::{Engine, gfx::cache::SurfaceCache};
 
     type Job = Box<dyn FnOnce() + Send>;
     static SENDER: OnceLock<mpsc::Sender<Job>> = OnceLock::new();
@@ -139,7 +139,7 @@ mod render_thread{
                         Ok(job) => { Engine::with_cleanup(|| catch_unwind(AssertUnwindSafe(job)).ok()); },
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             if Engine::context_is_idle(){
-                                gfx::cache::evict_idle(); // free recording surfaces and snapshots
+                                SurfaceCache::evict_all(); // free recording surfaces and snapshots
                                 Engine::retire(); // drop the context
                             } else {
                                 Engine::purge_stale(); // trim oldest entries in skia's internal cache
@@ -195,7 +195,7 @@ pub fn render_soon(f: impl FnOnce() + Send + 'static){
 pub fn retire_gpu(){
     if !render_thread::is_running(){ return }
     render_thread::run(|| {
-        gfx::cache::evict_idle(); // free recording surfaces and snapshots
+        SurfaceCache::evict_all(); // free recording surfaces and snapshots
         Engine::retire(); // drop the context
         Ok::<(), String>(())
     }).ok();
