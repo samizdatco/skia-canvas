@@ -171,9 +171,12 @@ export class Image extends EventEmitter{
   readonly complete: boolean
   decode(): Promise<Image>
 
-  /** Release native state synchronously rather than waiting for the GC's deferred finalizers. The image may no longer be used after disposal. Can also be triggered via `using`. */
+  /** Release native state synchronously rather than waiting for the GC's deferred finalizers. Abandons an in-flight load, rejecting any pending `decode()`. The image may no longer be used after disposal. Can also be triggered via `using`. */
   dispose(): void
   [Symbol.dispose](): void
+  /** Dispose of the image then yield until the next event loop tick so other deferred finalizers can run. Can also be triggered via `await using`. */
+  release(): Promise<void>
+  [Symbol.asyncDispose](): Promise<void>
 }
 
 //
