@@ -302,8 +302,8 @@ describe("Canvas", ()=>{
         assert.equal(img.height, dim)
       }
 
-      // only one colorSpace can be applied per export, so a sequence whose pages agree on
-      // a space uses it and one whose pages disagree falls back to the canvas-wide default
+      // each file in a sequence is written in its own page's color space, so pages that
+      // disagree don't have to be reconciled down to a single value for the batch
       let seq = async (...spaces) => {
         let dir = tmp.dirSync().name,
             canvas = new Canvas(4, 4)
@@ -319,13 +319,13 @@ describe("Canvas", ()=>{
 
       let P3 = [234, 51, 35, 255], SRGB = [255, 0, 0, 255]
 
-      // unanimous pages export in their shared space
+      // pages that agree on a space all export in it
       assert.deepEqual(await seq('display-p3', 'display-p3'), [P3, P3])
       assert.deepEqual(await seq('srgb', 'srgb'), [SRGB, SRGB])
 
-      // a mixed batch falls back to the canvas default (set by whichever page was created first)
-      assert.deepEqual(await seq('display-p3', 'srgb'), [P3, P3])
-      assert.deepEqual(await seq('srgb', 'display-p3'), [SRGB, SRGB])
+      // …and a mixed batch writes each file in its own page's space, in page order
+      assert.deepEqual(await seq('display-p3', 'srgb'), [P3, SRGB])
+      assert.deepEqual(await seq('srgb', 'display-p3'), [SRGB, P3])
     })
 
     test("multi-page PDFs", async () => {
@@ -458,24 +458,29 @@ describe("Canvas", ()=>{
     })
 
     test("colorSpace", async () => {
+      // a page renders in the space its context was created with — there's no export-time setting
+      let wide = new Canvas(8, 8),
+          wideCtx = wide.getContext('2d', {colorSpace:'display-p3'})
       canvas.width = canvas.height = 8
-      ctx.fillStyle = '#f00'
-      ctx.fillRect(0, 0, 8, 8)
+      for (const c of [ctx, wideCtx]){
+        c.fillStyle = '#f00'
+        c.fillRect(0, 0, 8, 8)
+      }
 
-      // raw exports convert pixel values into the requested space
+      // raw exports convert pixel values into the page's space
       let srgb = await canvas.toBuffer('raw'),
-          p3 = await canvas.toBuffer('raw', {colorSpace:'display-p3'})
+          p3 = await wide.toBuffer('raw')
       assert.deepEqual(Array.from(srgb.slice(0, 4)), [255, 0, 0, 255])
       assert.deepEqual(Array.from(p3.slice(0, 4)), [234, 51, 35, 255])
 
       // png output embeds an ICC profile for display-p3 (vs a bare sRGB chunk by default)
       let sPng = await canvas.toBuffer('png'),
-          pPng = await canvas.toBuffer('png', {colorSpace:'display-p3'})
+          pPng = await wide.toBuffer('png')
       assert(sPng.includes('sRGB') && !sPng.includes('iCCP'))
       assert(pPng.includes('iCCP') && !pPng.includes('sRGB'))
 
       // …while jpeg embeds it in an APP2 segment
-      let pJpg = await canvas.toBuffer('jpg', {colorSpace:'display-p3'})
+      let pJpg = await wide.toBuffer('jpg')
       assert(pJpg.includes('ICC_PROFILE'))
     })
 
@@ -491,16 +496,20 @@ describe("Canvas", ()=>{
              :             sign * 2**(exp-15) * (1 + frac/1024)
       }
 
+      let wide = new Canvas(8, 8),
+          wideCtx = wide.getContext('2d', {colorSpace:'display-p3'})
       canvas.width = canvas.height = 8
-      ctx.fillStyle = '#f00'
-      ctx.fillRect(0, 0, 8, 8)
+      for (const c of [ctx, wideCtx]){
+        c.fillStyle = '#f00'
+        c.fillRect(0, 0, 8, 8)
+      }
 
       // an RGBAF16 raw export carries 8 bytes/pixel (4 channels × binary16), and
       // its display-p3 values match the 8-bit conversion ([234, 51, 35, 255]) — but
       // at float precision rather than quantized to 1/255 steps. Note that F16 buys
       // precision here, not out-of-gamut headroom: read_pixels still clamps to the
       // destination gamut during conversion regardless of bit depth.
-      let p3 = await canvas.toBuffer('raw', {colorType:'RGBAF16', colorSpace:'display-p3'})
+      let p3 = await wide.toBuffer('raw', {colorType:'RGBAF16'})
       assert.equal(p3.length, 8 * 8 * 8)
       assert.nearEqual(f16(p3, 0), 234/255)
       assert.nearEqual(f16(p3, 1), 51/255)

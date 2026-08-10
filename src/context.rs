@@ -206,12 +206,16 @@ impl State{
 }
 
 impl Context2D{
-  pub fn new() -> Self {
+  pub fn color_space(&self) -> ColorSpace {
+    self.recorder.borrow().color_space()
+  }
+
+  pub fn new(color_space:ColorSpace) -> Self {
     let bounds = Rect::from_wh(300.0, 150.0);
 
     Context2D{
       bounds,
-      recorder: RefCell::new(PageRecorder::new(bounds)),
+      recorder: RefCell::new(PageRecorder::new(bounds, color_space)),
       path: Path2D::default(),
       stack: vec![],
       state: State::default(),

@@ -31,21 +31,22 @@ pub struct PageRecorder{
   matrix: Matrix,
   clip: Option<Path>,
   changed: bool,
+  color_space: ColorSpace,
   disposed: bool, // flag that drawing ops should be ignored after PictureRecorder has been dropped
-  id: usize,
   has_gpu_surface: bool, // flag that drops need to happen on render thread
   approx_ops: usize, // draw ops recorded into `current` since the last get_page() flush (see release())
   footprint: mem::v8::Footprint, // report the retained display-list size to V8's GC accounting
+  id: usize,
 }
 
 impl PageRecorder{
-  pub fn new(bounds:Rect) -> Self {
+  pub fn new(bounds:Rect, color_space:ColorSpace) -> Self {
     static COUNTER:AtomicUsize = AtomicUsize::new(1);
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
 
     PageRecorder{
       current:None, layers:vec![], changed:false, disposed:false,
-      matrix:Matrix::default(), clip:None, bounds, id,
+      matrix:Matrix::default(), clip:None, bounds, id, color_space,
       has_gpu_surface:false,
       approx_ops:0,
       footprint:mem::v8::Footprint::default(),
@@ -72,8 +73,12 @@ impl PageRecorder{
     }
   }
 
+  pub fn color_space(&self) -> ColorSpace{
+    self.color_space.clone()
+  }
+
   pub fn set_bounds(&mut self, bounds:Rect){
-    *self = PageRecorder::new(bounds);
+    *self = PageRecorder::new(bounds, self.color_space.clone());
   }
 
   pub fn update_bounds(&mut self, bounds:Rect){
@@ -169,6 +174,7 @@ impl PageRecorder{
       layers: self.layers.clone(),
       bounds: self.bounds,
       id: self.id,
+      color_space: self.color_space.clone(),
     }
   }
 
@@ -261,22 +267,24 @@ impl RecordingSurface{
     gpu_toggled || resized
   }
 
-  fn is_config_stale(&self, opts:&ExportOptions) -> bool{
+  fn is_config_stale(&self, opts:&ExportOptions, color_space:&ColorSpace) -> bool{
     self.density != opts.density ||
     self.matte != opts.matte ||
     self.msaa != opts.msaa ||
-    self.color_space != opts.color_space
+    self.color_space != *color_space
   }
 
   pub fn update(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine){
+    let color_space = opts.color_space.clone().unwrap_or_else(|| page.color_space.clone());
+
     // check for anything that would invalidate the previous contents
-    let reconfigure = self.is_config_stale(&opts);
+    let reconfigure = self.is_config_stale(&opts, &color_space);
     let recreate = self.is_surface_stale(&page, &opts, &engine);
 
     // start from scratch if invalidated
     if reconfigure || recreate{
       self.gpu = Some(matches!(engine, RenderingEngine::GPU));
-      self.color_space = opts.color_space.clone();
+      self.color_space = color_space.clone();
       self.density = opts.density;
       self.matte = opts.matte;
       self.msaa = opts.msaa;
@@ -285,7 +293,7 @@ impl RecordingSurface{
       // only allocate a new surface if the dimensions (size * density) have changed or engine switched
       if recreate{
         let page_size = page.scaled_dimensions(opts.density);
-        let img_info = ImageInfo::new_n32_premul(page_size, opts.color_space.clone());
+        let img_info = ImageInfo::new_n32_premul(page_size, color_space.clone());
         let budgeted = false; // SurfaceCache owns this, so keep out of skia's glyph/texture/scratch budget
         self.surface = engine.make_surface(&img_info, &opts, budgeted).ok();
 
@@ -336,6 +344,7 @@ pub struct Page{
   pub id: usize,
   pub bounds: Rect,
   pub layers: Vec<Picture>,
+  pub color_space: ColorSpace, // inherited from the context that recorded this page
 }
 
 impl PartialEq for Page {
@@ -347,7 +356,7 @@ impl PartialEq for Page {
 
 impl Default for Page {
   fn default() -> Self {
-    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![] }
+    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![], color_space: ColorSpace::new_srgb() }
   }
 }
 
@@ -406,7 +415,8 @@ impl Page{
 
         enum Rendered{ Encodable(SkImage), Raw(Vec<u8>) }
         let rendered = engine.render(move || {
-          let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(opts.color_space.clone()));
+          let color_space = opts.color_space.clone().unwrap_or_else(|| page.color_space.clone());
+          let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(color_space.clone()));
           let budgeted = true; // the export surface is transient, so it's fine as a purgeable skia resource
           let mut surface = engine.make_surface(&img_info, &opts, budgeted)?;
           let canvas = surface.canvas();
@@ -430,7 +440,7 @@ impl Page{
           match opts.format.as_str() {
             "raw" => {
               // return a Rendered::Raw buffer of pixels converted to destination color type
-              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, AlphaType::Unpremul, Some(opts.color_space.clone()));
+              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, AlphaType::Unpremul, Some(color_space.clone()));
               let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
               match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
                 true => Ok(Rendered::Raw(buffer)),
@@ -670,7 +680,7 @@ pub struct ExportOptions{
   pub matte: Option<Color4f>,
   pub msaa: Option<usize>,
   pub color_type: ColorType,
-  pub color_space: ColorSpace,
+  pub color_space: Option<ColorSpace>, // when unset, the Page being rendered supplies its own
   pub jpeg_downsample: bool,
   pub text_contrast: f32,
   pub text_gamma: f32,
@@ -681,7 +691,7 @@ impl Default for ExportOptions{
     Self{
       format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
       jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
-      color_type:ColorType::RGBA8888, color_space:ColorSpace::new_srgb(), outline:true,
+      color_type:ColorType::RGBA8888, color_space:None, outline:true,
     }
   }
 }
