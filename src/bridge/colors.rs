@@ -123,13 +123,12 @@ pub fn to_color_space(mode_name:&str) -> ColorSpace{
   }
 }
 
-#[allow(dead_code)] // kept as the counterpart to to_color_space
-pub fn from_color_space(mode:ColorSpace) -> String{
-  match mode {
-    p3 if p3 == *DISPLAY_P3_COLOR_SPACE => "display-p3",
-    _ => "srgb"
-  }.to_string()
-}
+// pub fn from_color_space(mode:ColorSpace) -> String{
+//   match mode {
+//     p3 if p3 == *DISPLAY_P3_COLOR_SPACE => "display-p3",
+//     _ => "srgb"
+//   }.to_string()
+// }
 
 use skia_safe::gradient::{Interpolation, interpolation::{ColorSpace as InterpColorSpace, HueMethod, InPremul}};
 

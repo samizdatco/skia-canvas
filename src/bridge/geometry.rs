@@ -8,10 +8,9 @@ use super::{arg_num, floats_in};
 // Math
 //
 
-#[allow(dead_code)] // kept as the counterpart to almost_zero
-pub fn almost_equal(a: f32, b: f32) -> bool{
-  (a-b).abs() < 0.00001
-}
+// pub fn almost_equal(a: f32, b: f32) -> bool{
+//   (a-b).abs() < 0.00001
+// }
 
 pub fn almost_zero(a: f32) -> bool{
   a.abs() < 0.00001

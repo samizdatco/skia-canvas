@@ -25,10 +25,9 @@ pub struct FontSpec{
 }
 
 impl FontSpec{
-  #[allow(dead_code)] // kept alongside FontSpec::style for width-fallback lookups
-  pub fn with_width(&self, width:Width) -> Self{
-    Self{width, ..self.clone()}
-  }
+  // pub fn with_width(&self, width:Width) -> Self{
+  //   Self{width, ..self.clone()}
+  // }
 
   pub fn style(&self) -> FontStyle{
     FontStyle::new(self.weight, self.width, self.slant)

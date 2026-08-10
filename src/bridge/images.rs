@@ -95,34 +95,33 @@ pub fn to_color_type(type_name: &str) -> ColorType {
   }
 }
 
-#[allow(dead_code)] // kept as the counterpart to to_color_type
-pub fn from_color_type(color_type: ColorType) -> String {
-  match color_type {
-    ColorType::Alpha8 => "Alpha8",
-    ColorType::RGB565 => "RGB565",
-    ColorType::ARGB4444 => "ARGB4444",
-    ColorType::RGBA8888 => "RGBA8888",
-    ColorType::RGB888x => "RGB888x",
-    ColorType::BGRA8888 => "BGRA8888",
-    ColorType::RGBA1010102 => "RGBA1010102",
-    ColorType::BGRA1010102 => "BGRA1010102",
-    ColorType::RGB101010x => "RGB101010x",
-    ColorType::BGR101010x => "BGR101010x",
-    ColorType::Gray8 => "Gray8",
-    ColorType::RGBAF16Norm => "RGBAF16Norm",
-    ColorType::RGBAF16 => "RGBAF16",
-    ColorType::RGBAF32 => "RGBAF32",
-    ColorType::R8G8UNorm => "R8G8UNorm",
-    ColorType::A16Float => "A16Float",
-    ColorType::R16G16Float => "R16G16Float",
-    ColorType::A16UNorm => "A16UNorm",
-    ColorType::R16G16UNorm => "R16G16UNorm",
-    ColorType::R16G16B16A16UNorm => "R16G16B16A16UNorm",
-    ColorType::SRGBA8888 => "SRGBA8888",
-    ColorType::R8UNorm => "R8UNorm",
-    _ => "unknown"
-  }.to_string()
-}
+// pub fn from_color_type(color_type: ColorType) -> String {
+//   match color_type {
+//     ColorType::Alpha8 => "Alpha8",
+//     ColorType::RGB565 => "RGB565",
+//     ColorType::ARGB4444 => "ARGB4444",
+//     ColorType::RGBA8888 => "RGBA8888",
+//     ColorType::RGB888x => "RGB888x",
+//     ColorType::BGRA8888 => "BGRA8888",
+//     ColorType::RGBA1010102 => "RGBA1010102",
+//     ColorType::BGRA1010102 => "BGRA1010102",
+//     ColorType::RGB101010x => "RGB101010x",
+//     ColorType::BGR101010x => "BGR101010x",
+//     ColorType::Gray8 => "Gray8",
+//     ColorType::RGBAF16Norm => "RGBAF16Norm",
+//     ColorType::RGBAF16 => "RGBAF16",
+//     ColorType::RGBAF32 => "RGBAF32",
+//     ColorType::R8G8UNorm => "R8G8UNorm",
+//     ColorType::A16Float => "A16Float",
+//     ColorType::R16G16Float => "R16G16Float",
+//     ColorType::A16UNorm => "A16UNorm",
+//     ColorType::R16G16UNorm => "R16G16UNorm",
+//     ColorType::R16G16B16A16UNorm => "R16G16B16A16UNorm",
+//     ColorType::SRGBA8888 => "SRGBA8888",
+//     ColorType::R8UNorm => "R8UNorm",
+//     _ => "unknown"
+//   }.to_string()
+// }
 
 //
 // ExportOptions

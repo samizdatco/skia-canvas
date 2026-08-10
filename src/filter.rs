@@ -1,7 +1,6 @@
 #![allow(unused_mut)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-#![allow(dead_code)]
 use std::fmt;
 use skia_safe::{Paint, Matrix, Point, Color, Color4f, MaskFilter, ImageFilter as SkImageFilter,
                 BlurStyle, FilterMode, MipmapMode, SamplingOptions, TileMode, ColorSpace,

@@ -2,7 +2,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(non_snake_case)]
-#![allow(dead_code)]
 use std::cell::RefCell;
 use std::f32::EPSILON;
 use neon::prelude::*;

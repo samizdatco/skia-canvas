@@ -1,5 +1,4 @@
 #![allow(unused_imports)]
-#![allow(dead_code)]
 use std::cell::RefCell;
 use std::borrow::Cow;
 use neon::{prelude::*, types::buffer::TypedArray};
