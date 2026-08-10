@@ -7,7 +7,7 @@ use skia_safe::{Paint, Matrix, Point, Color, Color4f, MaskFilter, ImageFilter as
                 BlurStyle, FilterMode, MipmapMode, SamplingOptions, TileMode, ColorSpace,
                 image_filters, color_filters, table_color_filter};
 
-use crate::utils::*;
+use crate::bridge::*;
 
 #[derive(Clone, Debug)]
 pub enum FilterSpec{

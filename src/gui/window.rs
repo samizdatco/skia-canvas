@@ -8,7 +8,7 @@ use winit::{
     event_loop::ActiveEventLoop,
 };
 
-use crate::utils::css_to_color4f;
+use crate::bridge::css_to_color4f;
 use crate::gfx::Renderer;
 use crate::gfx::page::Page;
 use super::event::Sieve;

@@ -10,7 +10,7 @@ use skia_safe::{Path, Point, PathFillType, PathDirection, PathBuilder, Rect, RRe
 use skia_safe::{PathEffect, trim_path_effect};
 use skia_safe::path::{self, AddPathMode, Verb};
 
-use crate::utils::*;
+use crate::bridge::*;
 use crate::drawlist::Pen;
 use crate::mem;
 

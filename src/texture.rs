@@ -6,7 +6,7 @@ use neon::prelude::*;
 use skia_safe::{Path, Color4f, Matrix, Paint, PaintStyle, PaintCap, Point};
 use skia_safe::{line_2d_path_effect, path_2d_path_effect};
 
-use crate::utils::*;
+use crate::bridge::*;
 
 struct Texture{
   path: Option<Path>,

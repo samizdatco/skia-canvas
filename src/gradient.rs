@@ -5,7 +5,7 @@ use neon::prelude::*;
 use skia_safe::{Shader, Color4f, Point, TileMode, Matrix};
 use skia_safe::gradient::{self, Colors as GradientColors, Interpolation, interpolation::{ColorSpace as InterpColorSpace, HueMethod, InPremul}};
 
-use crate::utils::*;
+use crate::bridge::*;
 
 enum Gradient{
   Linear{

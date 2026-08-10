@@ -12,12 +12,7 @@ use crate::canvas::BoxedCanvas;
 use crate::path::Path2D;
 use crate::image::{BoxedImage, Content};
 use crate::filter::Filter;
-use crate::typography::{
-  font_arg, decoration_arg, font_features, from_width, to_width,
-  from_text_align, to_text_align, from_text_baseline, to_text_baseline,
-  opt_spacing_arg
-};
-use crate::utils::*;
+use crate::bridge::*;
 
 //
 // The js interface for the Context2D struct

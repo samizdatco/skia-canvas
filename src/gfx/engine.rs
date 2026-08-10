@@ -4,7 +4,6 @@ use skia_safe::{gpu::DirectContext, ImageInfo, Surface};
 use skia_safe::Image; // RenderOutcome carries a snapshot destined for the Frame cache
 use serde_json::{json, Value};
 use crate::gfx::{self, page::ExportOptions, cache::SurfaceCache};
-use crate::utils::catch_panic;
 
 #[cfg(feature = "metal")]
 use crate::gfx::metal::offscreen::MetalEngine as Engine;
@@ -162,7 +161,7 @@ mod render_thread{
         }
         let (tx, rx) = mpsc::channel();
         sender().send(Box::new(move || {
-            tx.send(crate::utils::catch_panic(f)).ok();
+            tx.send(super::catch_panic(f)).ok();
         })).expect("Render thread unavailable");
         rx.recv().unwrap_or_else(|_| Err("Render thread unavailable".to_string()))
     }
@@ -199,4 +198,17 @@ pub fn retire_gpu(){
         Engine::retire(); // drop the context
         Ok::<(), String>(())
     }).ok();
+}
+
+// runs a closure and turns any panic into `Err(message)` instead of letting it unwind propagate
+pub fn catch_panic<T>(f: impl FnOnce() -> Result<T, String>) -> Result<T, String>{
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or_else(|payload|{
+        Err(match payload.downcast::<&str>(){
+            Ok(msg) => msg.to_string(),
+            Err(payload) => match payload.downcast::<String>(){
+                Ok(msg) => *msg,
+                Err(_) => "render thread panicked".to_string(),
+            }
+        })
+    })
 }

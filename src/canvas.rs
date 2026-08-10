@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::SurfaceProps;
 use serde_json::json;
-use crate::utils::*;
+use crate::bridge::*;
 use crate::gfx::page::{ExportOptions, pages_arg};
 use crate::gfx;
 
