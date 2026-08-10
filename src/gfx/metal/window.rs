@@ -23,7 +23,7 @@ use winit::{
 use crate::gfx::page::Page;
 use crate::gfx::RenderOutcome;
 use crate::gfx::cache::Frame;
-use crate::utils::to_color_space;
+use crate::bridge::to_color_space;
 use super::make_direct_context;
 
 pub struct MetalRenderer {

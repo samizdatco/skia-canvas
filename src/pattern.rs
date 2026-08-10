@@ -4,7 +4,7 @@ use std::rc::Rc;
 use neon::prelude::*;
 use skia_safe::{Shader, TileMode, Size, Rect, Matrix, FilterMode};
 
-use crate::utils::*;
+use crate::bridge::*;
 use crate::image::{BoxedImage, Content};
 use crate::context::BoxedContext2D;
 use crate::filter::ImageFilter;

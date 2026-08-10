@@ -3,7 +3,7 @@
 #![allow(dead_code)]
 use neon::prelude::*;
 
-use crate::utils::*;
+use crate::bridge::*;
 use crate::context::BoxedContext2D;
 use crate::gfx::RenderingEngine;
 

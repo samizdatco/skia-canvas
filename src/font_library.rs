@@ -14,8 +14,8 @@ use skia_safe::font_style::FontStyle;
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
 use skia_safe::utils::OrderedFontMgr;
 
-use crate::utils::*;
-use crate::typography::{FontSpec, from_width, from_slant, typeface_wght_range, typeface_details};
+use crate::bridge::*;
+
 
 #[cfg(target_os = "windows")]
 use allsorts::{

@@ -17,11 +17,11 @@ use skia_safe::{
 #[path = "context_api.rs"]
 pub mod api;
 
-use crate::utils::*;
+use crate::bridge::*;
 use crate::font_library::FontLibrary;
 use crate::path::Path2D;
 use crate::drawlist::{Pen, Plotter};
-use crate::typography::{Typesetter, FontSpec, Baseline, Spacing, DecorationStyle};
+use crate::typography::{Typesetter, Baseline, DecorationStyle};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};

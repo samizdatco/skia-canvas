@@ -8,7 +8,7 @@ use skia_safe::{
   FontMgr, Picture, PictureRecorder, Rect, image::images,
   svg::{self, Length, LengthUnit},
 };
-use crate::utils::*;
+use crate::bridge::*;
 use crate::context::Context2D;
 use crate::font_library::FontLibrary;
 use crate::mem;
