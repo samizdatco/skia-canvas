@@ -387,13 +387,21 @@ export class Canvas {
   /**
    * Returns an object that provides methods and properties for drawing and manipulating images and graphics on a canvas element in a document. A context object includes information about colors, line widths, fonts, and other graphic parameters that can be drawn on a canvas.
    * @param type The type of canvas to create. Skia Canvas only supports a 2-D context using canvas.getContext("2d")
-   * @param settings Context attributes (only honored by the first getContext call for a given canvas)
+   * @param settings Context attributes (only honored by the first getContext call for a given canvas — use newPage() to set them on subsequent pages)
    *
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/getContext)
    */
   getContext(type: "2d", settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
   getContext(type?: string, settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D | null
-  newPage(width?: number, height?: number): CanvasRenderingContext2D
+
+  /**
+   * Adds a new page to the canvas, optionally resizing it and/or overriding the context
+   * attributes inherited from the canvas's first page.
+   *
+   * [Skia Canvas Docs](https://skia-canvas.org/api/canvas#newpage)
+   */
+  newPage(settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
+  newPage(width?: number, height?: number, settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
   readonly pages: CanvasRenderingContext2D[]
 
   get gpu(): boolean

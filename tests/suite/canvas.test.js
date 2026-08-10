@@ -5,7 +5,7 @@
 const fs = require('fs'),
       tmp = require('tmp'),
       path = require('path'),
-      {assert} = require('../runner/assert'), 
+      {assert} = require('../runner/assert'),
       {describe, test, beforeEach, afterEach} = require('node:test'),
       {Canvas, Image, FontLibrary, loadImage} = require('../../lib');
 
@@ -302,6 +302,30 @@ describe("Canvas", ()=>{
         assert.equal(img.height, dim)
       }
 
+      // only one colorSpace can be applied per export, so a sequence whose pages agree on
+      // a space uses it and one whose pages disagree falls back to the canvas-wide default
+      let seq = async (...spaces) => {
+        let dir = tmp.dirSync().name,
+            canvas = new Canvas(4, 4)
+        for (const colorSpace of spaces){
+          let ctx = canvas.pages.length ? canvas.newPage({colorSpace}) : canvas.getContext('2d', {colorSpace})
+          ctx.fillStyle = '#f00'
+          ctx.fillRect(0, 0, 4, 4)
+        }
+        await canvas.toFile(`${dir}/seq-{2}.raw`)
+        return fs.readdirSync(dir).sort()
+          .map(fn => Array.from(fs.readFileSync(path.join(dir, fn)).slice(0, 4)))
+      }
+
+      let P3 = [234, 51, 35, 255], SRGB = [255, 0, 0, 255]
+
+      // unanimous pages export in their shared space
+      assert.deepEqual(await seq('display-p3', 'display-p3'), [P3, P3])
+      assert.deepEqual(await seq('srgb', 'srgb'), [SRGB, SRGB])
+
+      // a mixed batch falls back to the canvas default (set by whichever page was created first)
+      assert.deepEqual(await seq('display-p3', 'srgb'), [P3, P3])
+      assert.deepEqual(await seq('srgb', 'display-p3'), [SRGB, SRGB])
     })
 
     test("multi-page PDFs", async () => {

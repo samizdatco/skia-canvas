@@ -241,6 +241,59 @@ describe("Context2D", ()=>{
       assert.strictEqual(ctx2.canvas, canvas)
     })
 
+    test('per-page context attributes', async () => {
+      let canvas = new Canvas(4, 4),
+          p1 = canvas.getContext('2d', {colorSpace:'display-p3', willReadFrequently:true})
+
+      // the first page's settings become the defaults inherited by every page after it
+      assert.matchesSubset(p1.getContextAttributes(), {colorSpace:'display-p3', willReadFrequently:true})
+      assert.matchesSubset(canvas.newPage().getContextAttributes(), {colorSpace:'display-p3', willReadFrequently:true})
+      assert.matchesSubset(canvas.newPage(8, 8).getContextAttributes(), {colorSpace:'display-p3', willReadFrequently:true})
+
+      // …but an individual page can override them
+      let srgb = canvas.newPage({colorSpace:'srgb', willReadFrequently:false})
+      assert.matchesSubset(srgb.getContextAttributes(), {colorSpace:'srgb', willReadFrequently:false})
+      assert.equal(canvas.width, 8) // the settings-only form doesn't resize
+
+      // an override applies to that page alone & doesn't redefine what later pages inherit
+      assert.matchesSubset(canvas.newPage().getContextAttributes(), {colorSpace:'display-p3', willReadFrequently:true})
+      assert.matchesSubset(p1.getContextAttributes(), {colorSpace:'display-p3', willReadFrequently:true})
+
+      // the three-argument form both resizes and overrides
+      let big = canvas.newPage(16, 32, {colorSpace:'srgb'})
+      assert.matchesSubset(big.getContextAttributes(), {colorSpace:'srgb', willReadFrequently:true})
+      assert.equal(canvas.width, 16)
+      assert.equal(canvas.height, 32)
+
+      // each page rasterizes in its own space
+      for (const [ctx, expected] of [[p1, [234, 51, 35, 255]], [srgb, [255, 0, 0, 255]]]){
+        ctx.fillStyle = '#f00'
+        ctx.fillRect(0, 0, 8, 8)
+        assert.deepEqual(Array.from(ctx.getImageData(0, 0, 1, 1).data), expected)
+        assert.deepEqual(Array.from((await canvas.toBuffer('raw', {page:canvas.pages.indexOf(ctx) + 1})).slice(0, 4)), expected)
+      }
+    })
+
+    test('per-export color spaces', async () => {
+      let canvas = new Canvas(4, 4)
+      canvas.getContext('2d', {colorSpace:'display-p3'})
+      canvas.newPage({colorSpace:'srgb'})
+      for (const ctx of canvas.pages){
+        ctx.fillStyle = '#f00'
+        ctx.fillRect(0, 0, 4, 4)
+      }
+
+      // a single-page export uses that page's own space…
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {page:1})).slice(0, 4)), [234, 51, 35, 255])
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {page:2})).slice(0, 4)), [255, 0, 0, 255])
+
+      // …including when it's implicitly the 'current' page
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw')).slice(0, 4)), [255, 0, 0, 255])
+
+      // …and an explicit setting still overrides it
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {colorSpace:'display-p3'})).slice(0, 4)), [234, 51, 35, 255])
+    })
+
     test("ImageData", () => {
       let [width, height] = [123, 456],
           bmp = ctx.createImageData(width, height);
