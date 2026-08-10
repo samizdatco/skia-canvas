@@ -42,6 +42,7 @@
     "nock": "^14.0.16",
     "tmp": "^0.2.7"
   },
+  "engines": {"node": ">=18.18"},
   "files": [
     "lib/*js",
     "lib/*ts",
