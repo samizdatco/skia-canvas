@@ -40,16 +40,6 @@ pub enum Fit{
   None, ContainX, ContainY, Contain, Cover, Fill, ScaleDown, Resize
 }
 
-#[non_exhaustive]
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case", remote = "CursorIcon" )]
-pub enum Cursor {
-    Alias, AllScroll, Cell, ColResize, ContextMenu, Copy, Crosshair, Default, EResize,
-    EwResize, Grab, Grabbing, Help, Move, NeResize, NeswResize, NoDrop, NotAllowed,
-    NResize, NsResize, NwResize, NwseResize, Pointer, Progress, RowResize, SeResize,
-    SResize, SwResize, Text, VerticalText, Wait, WResize, ZoomIn, ZoomOut,
-}
-
 pub struct Window {
     pub handle: Arc<WinitWindow>,
     pub spec: WindowSpec,

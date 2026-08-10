@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::{
@@ -140,7 +139,7 @@ impl Default for State {
 }
 
 impl State{
-  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, Baseline, bool) {
+  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, bool) {
     let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
     if char_style.typeface().is_none() { // if still using the implicit default font, resolve it now
       char_style = FontLibrary::with_shared(|lib| lib.update_style(&char_style, &FontSpec::default()))
@@ -189,7 +188,7 @@ impl State{
     char_style.set_font_edging(edging);
     char_style.set_subpixel(subpixel);
 
-    ( char_style, graf_style, self.text_decoration.clone(), self.text_baseline, self.text_wrap )
+    ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap )
   }
 
   fn dye(&self, style:PaintStyle) -> &Dye{

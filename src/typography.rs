@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 #![allow(non_snake_case)]
 use std::iter::zip;
 use std::collections::BTreeSet;
@@ -20,7 +19,6 @@ use crate::context::State;
 pub struct Typesetter{
   text: String,
   width: f32,
-  baseline: Baseline,
   typefaces: FontCollection,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
@@ -30,7 +28,7 @@ pub struct Typesetter{
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
-    let (char_style, graf_style, text_decoration, baseline, text_wrap) = state.typography();
+    let (char_style, graf_style, text_decoration, text_wrap) = state.typography();
 
     let typefaces = FontLibrary::with_shared(|lib|
       lib
@@ -48,7 +46,7 @@ impl Typesetter{
       false => text.replace("\n", " ")
     };
 
-    Typesetter{text, width, baseline, typefaces, char_style, graf_style, text_decoration, text_wrap}
+    Typesetter{text, width, typefaces, char_style, graf_style, text_decoration, text_wrap}
   }
 
   // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`) and

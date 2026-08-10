@@ -32,13 +32,12 @@ pub fn opt_object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsO
   None
 }
 
-#[allow(dead_code)] // kept as the throwing counterpart to opt_object_for_key
-pub fn object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsObject>, attr:&str) -> NeonResult<Handle<'a, JsObject>>{
-  match opt_object_for_key(cx, &obj, attr){
-    Some(val) => Ok(val),
-    None => cx.throw_type_error(format!("Exptected an object for \"{}\"", attr))
-  }
-}
+// pub fn object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsObject>, attr:&str) -> NeonResult<Handle<'a, JsObject>>{
+//   match opt_object_for_key(cx, &obj, attr){
+//     Some(val) => Ok(val),
+//     None => cx.throw_type_error(format!("Exptected an object for \"{}\"", attr))
+//   }
+// }
 
 //
 // strings
