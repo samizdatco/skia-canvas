@@ -19,8 +19,9 @@ use crate::bridge::*;
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedContext2D> {
-  let this = RefCell::new(Context2D::new());
   let parent = cx.argument::<BoxedCanvas>(1)?;
+  let color_space = to_color_space(&opt_string_arg(&mut cx, 2).unwrap_or("srgb".to_string()));
+  let this = RefCell::new(Context2D::new(color_space));
   let parent = parent.borrow();
 
   this.borrow_mut().reset_size((parent.width, parent.height));
@@ -547,11 +548,12 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let read_frequently = bool_arg_or(&mut cx, 7, false);
   let canvas = &mut parent.borrow_mut();
 
-  let opts = ExportOptions{matte, density, msaa, color_type, color_space, ..canvas.export_options()};
+  let color_space = color_space.unwrap_or_else(|| this.borrow().color_space());
+  let opts = ExportOptions{matte, density, msaa, color_type, color_space:Some(color_space.clone()), ..canvas.export_options()};
   let crop = normalized_rect(x*density, y*density, w*density, h*density).round();
   let engine = canvas.engine();
 
-  let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type, AlphaType::Unpremul, opts.color_space.clone());
+  let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type, AlphaType::Unpremul, color_space);
   let mut buffer = cx.buffer(dst_info.compute_min_byte_size())?;
   let dst = buffer.as_mut_slice(&mut cx);
   let result = this.borrow_mut().write_pixels(dst, &dst_info, crop, opts, engine, read_frequently);

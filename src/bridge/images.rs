@@ -53,17 +53,17 @@ pub fn image_data_settings_arg(cx: &mut FunctionContext, idx:usize) -> (ColorTyp
   }
 }
 
-pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, ColorSpace, Option<Color4f>, f32, Option<usize>){
+pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType, Option<ColorSpace>, Option<Color4f>, f32, Option<usize>){
   match opt_object_arg(cx, idx){
     Some(obj) => {
       let color_type = opt_string_for_key(cx, &obj, "colorType").unwrap_or("rgba".to_string());
-      let color_space = opt_string_for_key(cx, &obj, "colorSpace").unwrap_or("srgb".to_string());
+      let color_space = opt_string_for_key(cx, &obj, "colorSpace").map(|name| to_color_space(&name));
       let matte = opt_color_4f_for_key(cx, &obj, "matte");
       let density = opt_float_for_key(cx, &obj, "density").unwrap_or(1.0);
       let msaa = opt_float_for_key(cx, &obj, "msaa").map(|n| n as usize);
-      (to_color_type(&color_type), to_color_space(&color_space), matte, density, msaa)
+      (to_color_type(&color_type), color_space, matte, density, msaa)
     }
-    None => (ColorType::RGBA8888, ColorSpace::new_srgb(), None, 1.0, None)
+    None => (ColorType::RGBA8888, None, None, 1.0, None)
   }
 }
 
@@ -140,8 +140,7 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
     .map(|num| num.floor() as usize);
   let color_type = opt_string_for_key(cx, &opts, "colorType")
     .map(|mode| to_color_type(&mode)).unwrap_or(ColorType::RGBA8888);
-  let color_space = opt_string_for_key(cx, &opts, "colorSpace")
-    .map(|name| to_color_space(&name)).unwrap_or_else(|| to_color_space("srgb"));
+  let color_space = opt_string_for_key(cx, &opts, "colorSpace").map(|name| to_color_space(&name));
   let text_contrast = float_for_key(cx, &opts, "textContrast")?;
   let text_gamma = float_for_key(cx, &opts, "textGamma")?;
   let outline = bool_for_key(cx, &opts, "outline")?;

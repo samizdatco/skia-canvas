@@ -218,9 +218,9 @@ describe("Context2D", ()=>{
       assert.deepEqual(Array.from((await canvas.toBuffer('raw')).slice(0, 4)), [234, 51, 35, 255])
       assert((await canvas.toBuffer('png')).includes('iCCP'))
 
-      // …but per-call settings still override
+      // …and getImageData's per-call setting can still override (exports cannot: they always
+      // render in the page's own space)
       assert.deepEqual(Array.from(ctx.getImageData(0, 0, 1, 1, {colorSpace:'srgb'}).data), [255, 0, 0, 255])
-      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {colorSpace:'srgb'})).slice(0, 4)), [255, 0, 0, 255])
 
       // only the first getContext call's settings are honored
       assert.equal(canvas.getContext('2d', {colorSpace:'srgb'}), ctx)
@@ -266,7 +266,7 @@ describe("Context2D", ()=>{
       assert.equal(canvas.height, 32)
 
       // each page rasterizes in its own space
-      for (const [ctx, expected] of [[p1, [234, 51, 35, 255]], [srgb, [255, 0, 0, 255]]]){
+      for (const {ctx, expected} of [{ctx:p1, expected:[234, 51, 35, 255]}, {ctx:srgb, expected:[255, 0, 0, 255]}]){
         ctx.fillStyle = '#f00'
         ctx.fillRect(0, 0, 8, 8)
         assert.deepEqual(Array.from(ctx.getImageData(0, 0, 1, 1).data), expected)
@@ -274,7 +274,7 @@ describe("Context2D", ()=>{
       }
     })
 
-    test('per-export color spaces', async () => {
+    test('per-page color spaces', async () => {
       let canvas = new Canvas(4, 4)
       canvas.getContext('2d', {colorSpace:'display-p3'})
       canvas.newPage({colorSpace:'srgb'})
@@ -283,15 +283,26 @@ describe("Context2D", ()=>{
         ctx.fillRect(0, 0, 4, 4)
       }
 
-      // a single-page export uses that page's own space…
+      // each page exports in the space it was created with…
       assert.deepEqual(Array.from((await canvas.toBuffer('raw', {page:1})).slice(0, 4)), [234, 51, 35, 255])
       assert.deepEqual(Array.from((await canvas.toBuffer('raw', {page:2})).slice(0, 4)), [255, 0, 0, 255])
 
       // …including when it's implicitly the 'current' page
       assert.deepEqual(Array.from((await canvas.toBuffer('raw')).slice(0, 4)), [255, 0, 0, 255])
 
-      // …and an explicit setting still overrides it
-      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {colorSpace:'display-p3'})).slice(0, 4)), [234, 51, 35, 255])
+      // there's no export-level override: a colorSpace option is simply not a thing
+      // @ts-expect-error — deliberately removed export option
+      assert.deepEqual(Array.from((await canvas.toBuffer('raw', {colorSpace:'display-p3'})).slice(0, 4)), [255, 0, 0, 255])
+
+      // resizing a page keeps its color space (the recorder is rebuilt from scratch)
+      canvas.width = 8
+      assert.equal(canvas.pages[1].getContextAttributes().colorSpace, 'srgb')
+      let p3 = new Canvas(4, 4)
+      let p3ctx = p3.getContext('2d', {colorSpace:'display-p3'})
+      p3.width = 8
+      p3ctx.fillStyle = '#f00'
+      p3ctx.fillRect(0, 0, 8, 8)
+      assert.deepEqual(Array.from((await p3.toBuffer('raw')).slice(0, 4)), [234, 51, 35, 255])
     })
 
     test("ImageData", () => {
