@@ -527,8 +527,39 @@ describe("Path2D", ()=>{
       assert.deepEqual(right(), BLACK)
       assert.deepEqual(bottom(), BLACK)
 
+      // the result is normalized, so the shared square stays empty under either rule. it used to
+      // fill in under 'nonzero' — only even-odd could read the un-normalized geometry correctly
+      scrub()
       ctx.fill(c, 'nonzero')
-      assert.deepEqual(center(), BLACK)
+      assert.deepEqual(center(), CLEAR)
+    })
+
+    test("without depending on the result's fill type", () => {
+      // pathops tags every result as even-odd, but per spec a Path2D carries no intrinsic winding
+      // rule — it comes from the fill()/clip() call site, defaulting to "nonzero". So a hole has to
+      // survive the default rule rather than only appearing under an explicit 'evenodd'.
+      let outer = new Path2D(), inner = new Path2D()
+      outer.arc(60, 60, 40, 0, TAU)
+      inner.arc(60, 60, 18, 0, TAU)
+
+      for (const rule of /** @type {const} */ ([undefined, 'nonzero', 'evenodd'])){
+        scrub()
+        let ring = outer.difference(inner)
+        rule ? ctx.fill(ring, rule) : ctx.fill(ring)
+        assert.deepEqual(center(), CLEAR, `hole filled in with fillRule=${rule}`)
+        assert.deepEqual(pixel(60, 30), BLACK, `ring band missing with fillRule=${rule}`)
+      }
+
+      // a region that pinches to a point needs the simplify() pass as well: as_winding() can't
+      // split a self-touching contour, so on its own it left the crossed bars' shared square
+      // filling in under nonzero
+      for (const rule of /** @type {const} */ ([undefined, 'nonzero', 'evenodd'])){
+        scrub()
+        let crossed = a.xor(b)
+        rule ? ctx.fill(crossed, rule) : ctx.fill(crossed)
+        assert.deepEqual(center(), CLEAR, `pinch point filled in with fillRule=${rule}`)
+        assert.deepEqual(top(), BLACK, `arm missing with fillRule=${rule}`)
+      }
     })
 
     test("simplify", () => {
@@ -540,8 +571,35 @@ describe("Path2D", ()=>{
       assert.deepEqual(right(), BLACK)
       assert.deepEqual(bottom(), BLACK)
 
+      // `c` is already rule-independent, so reading it as 'nonzero' selects that same
+      // plus-with-a-hole region, and the simplified copy is normalized too — so the hole survives
+      // the default fill rule. it used to fill in, which was the retained-fill-type bug itself
+      scrub()
       ctx.fill(c.simplify())
-      assert.deepEqual(center(), BLACK)
+      assert.deepEqual(center(), CLEAR)
+      assert.deepEqual(top(), BLACK)
+    })
+
+    test("simplify without depending on the result's fill type", () => {
+      // reading the crossed bars as even-odd hollows out the square where they overlap. that hole
+      // has to be encoded in the geometry, since fill() supplies its own rule (nonzero by default)
+      let cross = new Path2D()
+      cross.addPath(a)
+      cross.addPath(b)
+
+      for (const rule of /** @type {const} */ ([undefined, 'nonzero', 'evenodd'])){
+        scrub()
+        let hollow = cross.simplify('evenodd')
+        rule ? ctx.fill(hollow, rule) : ctx.fill(hollow)
+        assert.deepEqual(center(), CLEAR, `overlap filled in with fillRule=${rule}`)
+        assert.deepEqual(top(), BLACK, `arm missing with fillRule=${rule}`)
+      }
+
+      // simplify() returns a new path and must leave the receiver alone. contains() hit-tests using
+      // the retained rule, so stamping the original silently changes the answer it gives
+      assert.equal(cross.contains(60, 60), true)
+      cross.simplify('evenodd')
+      assert.equal(cross.contains(60, 60), true)
     })
 
     test("unwind", () => {
@@ -556,6 +614,17 @@ describe("Path2D", ()=>{
       assert.deepEqual(pixel(165, 55), BLACK)
       ctx.fill(d.unwind().offset(200,40))
       assert.deepEqual(pixel(215, 55), CLEAR)
+
+      // now deprecated, and delegates to simplify('evenodd') — which selects the same region but
+      // also copes with curved contours. the bare re-orientation it used to do returns wrong
+      // geometry for anything built from arcs or béziers, filling the hole back in
+      scrub()
+      let ring = new Path2D()
+      ring.arc(60, 60, 40, 0, TAU)
+      ring.arc(60, 60, 18, 0, TAU)
+      ctx.fill(ring.unwind())
+      assert.deepEqual(center(), CLEAR)
+      assert.deepEqual(pixel(60, 30), BLACK)
     })
 
     test("interpolate", () => {
