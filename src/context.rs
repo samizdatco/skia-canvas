@@ -611,8 +611,7 @@ impl Context2D{
     let layout = typesetter.layout(origin);
 
     if self.state.texture(style).is_some(){
-      // draw visible decorations & convert text to path (so it can be filled/stroked with the texture)
-      self.render_to_canvas(&paint, |canvas, paint| layout.draw_decorations(canvas, paint));
+      // convert text to path (so it can be filled/stroked with the texture)
       self.draw_path(Some(layout.to_path()), style, None);
 
       // add an invisible text run that embeds the selectable text

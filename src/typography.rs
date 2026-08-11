@@ -303,11 +303,19 @@ pub struct Layout{
 
 impl Layout{
   pub fn draw(&self, canvas:&SkCanvas, paint:&Paint){
-    self.draw_decorations(canvas, paint);
-    self.draw_glyphs(canvas, paint);
+    let should_overprint = self.decorations.as_ref()
+      .is_some_and(|deco| matches!(deco.line.kind, DecorationKind::LineThrough));
+
+    if should_overprint { // line-through
+      self.draw_glyphs(canvas, paint);
+      self.draw_decorations(canvas, paint);
+    }else{ // underline & overline
+      self.draw_decorations(canvas, paint);
+      self.draw_glyphs(canvas, paint);
+    }
   }
 
-  pub fn draw_decorations(&self, canvas:&SkCanvas, paint:&Paint){
+  fn draw_decorations(&self, canvas:&SkCanvas, paint:&Paint){
     if let Some(deco) = &self.decorations {
       deco.draw(canvas, &self.runs, paint);
     }
