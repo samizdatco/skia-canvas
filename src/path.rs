@@ -229,6 +229,16 @@ pub fn addPath(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+// convert skia's path-op results (which all expect to be drawn with `even-odd` winding) so they'll
+// work correctly in the `nonzero` world of canvas's Path2D
+fn rule_independent(path:Path) -> Path {
+  let mut path = path;
+  path.set_fill_type(PathFillType::EvenOdd);
+  let mut path = match path.as_winding(){ Some(rewound) => rewound, None => path };
+  path.set_fill_type(PathFillType::EvenOdd);
+  match path.simplify(){ Some(simpler) => simpler, None => path }
+}
+
 // Applies a boolean operator to this and a second path, returning a new Path2D with their combination
 pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
@@ -239,7 +249,7 @@ pub fn op(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
     let this = this.borrow();
     let other = other_path.borrow();
     match this.path().op(&other.path(), path_op) {
-      Some(path) => Ok(cx.boxed(RefCell::new(Path2D::from(path)))),
+      Some(path) => Ok(cx.boxed(RefCell::new(Path2D::from(rule_independent(path))))),
       None => cx.throw_error("path operation failed")
     }
   }else{
@@ -266,15 +276,15 @@ pub fn interpolate(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 pub fn simplify(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let rule = fill_rule_arg_or(&mut cx, 1, "nonzero")?;
-  let mut this = this.borrow_mut();
+  let this = this.borrow();
 
-  this.update().set_fill_type(rule);
+  let mut path = this.path();
+  path.set_fill_type(rule);
 
-  let path = this.path();
-  let new_path = Path2D::from(match path.simplify(){
+  let new_path = Path2D::from(rule_independent(match this.path().set_fill_type(rule).simplify(){
     Some(simpler) => simpler,
     None => path
-  });
+  }));
 
   Ok(cx.boxed(RefCell::new(new_path)))
 }
