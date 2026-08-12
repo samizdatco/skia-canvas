@@ -11,6 +11,19 @@ use crate::image::ImageData;
 use neon::types::buffer::TypedArray;
 use skia_safe::{ColorType, ColorSpace, ImageInfo, AlphaType};
 
+// truncate toward zero rather than flooring (following the spec for get/setImageData coords)
+pub fn long_args_at(cx: &mut FunctionContext, start:usize, names:&[&str]) -> NeonResult<Vec<f32>>{
+  let nums = float_args_at(cx, start, names)?;
+  for (i, (num, name)) in nums.iter().zip(names).enumerate(){
+    if *num < i32::MIN as f32 || *num > i32::MAX as f32 {
+      return cx.throw_type_error(
+        format!("Expected an integer for `{}` as {} arg", name, arg_num(start + i))
+      );
+    }
+  }
+  Ok(nums.iter().map(|num| num.trunc()).collect())
+}
+
 pub fn opt_image_info_arg(cx: &mut FunctionContext, idx:usize) -> NeonResult<Option<ImageInfo>>{
   if let Some(raw_info) = opt_object_arg(cx, idx){
      Ok(Some(ImageInfo::new(
