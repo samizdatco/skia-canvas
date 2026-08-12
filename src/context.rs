@@ -508,6 +508,7 @@ impl Context2D{
         let mut paint = Paint::default();
         paint.set_anti_alias(true)
              .set_style(PaintStyle::Fill)
+             .set_color4f(Color4f::new(1.0, 1.0, 1.0, 1.0), None) // white for SVG's benefit
              .set_blend_mode(BlendMode::Clear);
         canvas.draw_rect(rect, &paint);
       })
