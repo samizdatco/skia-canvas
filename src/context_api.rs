@@ -537,12 +537,11 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   }
 }
 
-pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
+pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsObject> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let x = float_arg(&mut cx, 1, "x")?.floor();
-  let y = float_arg(&mut cx, 2, "y")?.floor();
-  let w = float_arg(&mut cx, 3, "width")?.floor();
-  let h = float_arg(&mut cx, 4, "height")?.floor();
+  let [x, y, w, h] = long_args_at(&mut cx, 1, &["sx", "sy", "sw", "sh"])?[..] else {
+    return cx.throw_type_error("Expected four coordinates")
+  };
   let (color_type, color_space, matte, density, msaa) = image_data_export_arg(&mut cx, 5);
   let parent = cx.argument::<BoxedCanvas>(6)?;
   let read_frequently = bool_arg_or(&mut cx, 7, false);
@@ -559,7 +558,13 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsBuffer> {
   let result = this.borrow_mut().write_pixels(dst, &dst_info, crop, opts, engine, read_frequently);
   result.or_else(|e| cx.throw_error(e))?;
 
-  Ok(buffer)
+  let pixels = cx.empty_object();
+  let width = cx.number(crop.width());
+  let height = cx.number(crop.height());
+  pixels.set(&mut cx, "data", buffer)?;
+  pixels.set(&mut cx, "width", width)?;
+  pixels.set(&mut cx, "height", height)?;
+  Ok(pixels)
 }
 
 pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
@@ -568,10 +573,11 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let img_data = image_data_arg(&mut cx, 1)?;
 
   // determine geometry
-  let x = float_arg(&mut cx, 2, "dx")?;
-  let y = float_arg(&mut cx, 3, "dy")?;
+  let [x, y] = long_args_at(&mut cx, 2, &["dx", "dy"])?[..] else {
+    return cx.throw_type_error("Expected a destination x/y")
+  };
   let dirty = match cx.len(){
-    5.. => float_args_at(&mut cx, 4, &["dirtyX", "dirtyY", "dirtyWidth", "dirtyHeight"])?,
+    5.. => long_args_at(&mut cx, 4, &["dirtyX", "dirtyY", "dirtyWidth", "dirtyHeight"])?,
     _ => [].to_vec()
   };
   let (src, dst) = match dirty.as_slice(){

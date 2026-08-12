@@ -1080,6 +1080,23 @@ describe("Context2D", ()=>{
         }
       }
 
+      // per spec every coordinate is `[EnforceRange] long`, so fractional values truncate toward
+      // zero (not floor) and out-of-int32 values are a TypeError. truncation, not floor: sx of
+      // -0.5 reads from 0 (in bounds), -1 reads out of bounds
+      ctx.reset()
+      ctx.fillStyle = 'red'
+      ctx.fillRect(0, 0, 4, 4)
+      assert.equal(ctx.getImageData(-0.5, 0, 2, 1).data[3], 255)
+      assert.equal(ctx.getImageData(-1, 0, 2, 1).data[3], 0)
+
+      // dimensions are truncated before being scaled by `density`, so the buffer the rust side
+      // allocates always matches the ImageData it's wrapped in
+      assert.deepEqual([10, 10, 400], (d => [d.width, d.height, d.data.length])(ctx.getImageData(0, 0, 10.7, 10.7)))
+      assert.deepEqual([20, 20, 1600], (d => [d.width, d.height, d.data.length])(ctx.getImageData(0, 0, 10.7, 10.7, {density: 2})))
+      assert.deepEqual([3, 1], (d => [d.width, d.height])(ctx.getImageData(5, 0, -3.7, 1)))
+
+      assert.throws(() => ctx.getImageData(1e12, 0, 10, 10), /Expected an integer for `sx`/)
+
       // the `colorSpace` option converts on read (and putImageData converts back)
       canvas.width = WIDTH
       ctx.fillStyle = '#f00'
@@ -1133,6 +1150,26 @@ describe("Context2D", ()=>{
         1,2,3,255, 0,0,0,0,
         0,0,0,0,   0,0,0,0
       ])
+
+      // per spec every coordinate is `[EnforceRange] long`, so fractional values truncate toward
+      // zero (not floor) and out-of-int32 values are a TypeError
+      let dot = ctx.createImageData(1, 1)
+      dot.data.set([255, 0, 0, 255], 0)
+
+      for (const [dx, landsAt] of [[10, 10], [10.5, 10], [10.9, 10], [-0.5, 0]]){
+        ctx.reset()
+        ctx.putImageData(dot, dx, 0)
+        assert.deepEqual(pixel(landsAt, 0), [255, 0, 0, 255], `putImageData(dx=${dx})`)
+      }
+
+      // the dirty rect truncates the same way
+      ctx.reset()
+      let quad = ctx.createImageData(2, 2)
+      quad.data.set([1,2,3,255, 5,6,7,255, 0,1,2,255, 4,5,6,255], 0)
+      ctx.putImageData(quad, 0, 0, 1.9, 1.9, 1, 1)
+      assert.deepEqual(pixel(1, 1), [4, 5, 6, 255])
+
+      assert.throws(() => ctx.putImageData(dot, 1e12, 0), /Expected an integer for `dx`/)
     })
 
     test("isPointInPath()", () => {
