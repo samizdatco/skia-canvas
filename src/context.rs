@@ -614,10 +614,10 @@ impl Context2D{
       // convert text to path (so it can be filled/stroked with the texture)
       self.draw_path(Some(layout.to_path()), style, None);
 
-      // add an invisible text run that embeds the selectable text
+      // add an invisible text run that embeds the selectable text (skipping render_to_canvas's shadows & compositing)
       let mut invisible = Paint::default();
       invisible.set_color4f(Color4f::new(0.0, 0.0, 0.0, 0.0), None);
-      self.render_to_canvas(&invisible, |canvas, paint| layout.draw_glyphs(canvas, paint));
+      self.with_canvas(|canvas| layout.draw_glyphs(canvas, &invisible));
     }else if self.has_shadow() && layout.is_multi_op(){
       // shadows + mutiple lines and/or text decorations can get wildly expensive because they're
       // separate draw-ops that the shadow is applied to independently. instead, flatten to a picture

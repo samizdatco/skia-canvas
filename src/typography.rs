@@ -341,7 +341,7 @@ impl Layout{
     // Record with a flattened paint (alpha 1, no image filter) so the outer paint applies
     // globalAlpha / blend / drop-shadow exactly once.
     let mut flat = paint.clone();
-    flat.set_alpha_f(1.0).set_image_filter(None);
+    flat.set_alpha_f(1.0).set_image_filter(None).set_blend_mode(skia_safe::BlendMode::SrcOver);
     let unbounded = Rect::new(f32::MIN, f32::MIN, f32::MAX, f32::MAX);
     let mut recorder = PictureRecorder::new();
     let canvas = recorder.begin_recording(unbounded, true);
