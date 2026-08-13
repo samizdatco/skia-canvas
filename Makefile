@@ -4,7 +4,7 @@ LIB_SRC := Cargo.toml lib/prebuild.mjs $(wildcard src/*.rs) $(wildcard src/*/*.r
 GIT_TAG = $(shell git describe)
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | sed -e 's/^.*=/v/')
 PRERELEASE_FLAG = $(subst -rc,--prerelease,$(findstring -rc,$(PACKAGE_VERSION)))
-NPM_VERSION = $(shell npm view skia-canvas version)
+NPM_VERSION = $(shell npm view @documenso/skia-canvas version)
 .PHONY: optimized dev test debug visual check clean distclean release skia-version with-local-skia
 .DEFAULT_GOAL := $(LIB)
 

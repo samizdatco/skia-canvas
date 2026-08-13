@@ -120,22 +120,3 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         cd skia-canvas && npm test && npm run upload
-
-    - name: Add AWS layer to release
-      if: ${{ matrix.libc == 'glibc' }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        export SRC_DIR="$GITHUB_WORKSPACE/skia-canvas"
-        export SRC_DIST="$SRC_DIR/$(cd $SRC_DIR; npm pack)"
-        export LAYER_DIR="$GITHUB_WORKSPACE/layer"
-        export LAYER_ZIP="$GITHUB_WORKSPACE/aws-lambda-${{ matrix.arch }}.zip"
-        export PKG_VERSION=v$(cd $SRC_DIR; npm pkg get version | tr -d '"')
-
-        mkdir -p $LAYER_DIR/nodejs
-        cd $LAYER_DIR/nodejs && \
-           npm install --ignore-scripts $SRC_DIST && \
-           cp $SRC_DIR/lib/skia.node ./node_modules/skia-canvas/lib
-        cd $LAYER_DIR && \
-           zip -r9 $LAYER_ZIP nodejs/node_modules
-        gh release -R samizdatco/skia-canvas upload $PKG_VERSION $LAYER_ZIP

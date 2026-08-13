@@ -1,5 +1,5 @@
 {
-  "name": "skia-canvas",
+  "name": "@documenso/skia-canvas",
   "version": "3.0.8",
   "description": "A multi-threaded, GPU-accelerated, Canvas API for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
@@ -7,10 +7,13 @@
   "homepage": "https://skia-canvas.org",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/samizdatco/skia-canvas.git"
+    "url": "git+https://github.com/documenso/skia-canvas.git"
   },
   "bugs": {
-    "url": "https://github.com/samizdatco/skia-canvas/issues"
+    "url": "https://github.com/documenso/skia-canvas/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "main": "./lib/index.js",
   "exports": {
