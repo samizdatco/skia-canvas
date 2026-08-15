@@ -491,37 +491,43 @@ describe("FontLibrary", ()=>{
     FontLibrary.reset()
   })
 
+  // probe a bundled family rather than a system one — a minimal container (the musl images under
+  // containers/) ships no system fonts at all, so "Arial or DejaVu Sans" isn't a safe assumption.
+  // The alias matters: registering under the font's real name would merge into a system copy of
+  // it, so these would pass on the strength of the *host's* fonts rather than the registration.
+  let useTestFace = () =>
+    FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+
   test("can list families", ()=>{
+    useTestFace()
+
     let fams = FontLibrary.families,
         sorted = fams.slice().sort(),
         unique = [...new Set(sorted)];
 
-    assert(fams.indexOf("Arial")>=0 || fams.indexOf("DejaVu Sans") >= 0)
+    assert.contains(fams, "TestFace")
     assert.deepEqual(fams, sorted)
     assert.deepEqual(fams, unique)
   })
 
   test("can check for a family", ()=>{
-    assert(FontLibrary.has("Arial") || FontLibrary.has("DejaVu Sans"))
+    useTestFace()
+    assert(FontLibrary.has("TestFace"))
     assert(!FontLibrary.has("_n_o_n_e_s_u_c_h_"))
   })
 
   test("can describe a family", ()=>{
-    let fam = FontLibrary.has("Arial") ? "Arial"
-            : FontLibrary.has("DejaVu Sans") ? "DejaVu Sans"
-            : null;
+    useTestFace()
 
-    if (fam){
-      let info = FontLibrary.family(fam)
-      assert(info)
-      assert(Object.hasOwn(info, 'family'))
-      assert(Object.hasOwn(info, 'weights'))
-      assert.equal(info && typeof info.weights[0], 'number');
-      assert(Object.hasOwn(info, 'widths'))
-      assert.equal(info && typeof info.widths[0], 'string');
-      assert(Object.hasOwn(info, 'styles'))
-      assert.equal(info && typeof info.styles[0], 'string');
-    }
+    let info = FontLibrary.family("TestFace")
+    assert(info)
+    assert(Object.hasOwn(info, 'family'))
+    assert(Object.hasOwn(info, 'weights'))
+    assert.equal(info && typeof info.weights[0], 'number');
+    assert(Object.hasOwn(info, 'widths'))
+    assert.equal(info && typeof info.widths[0], 'string');
+    assert(Object.hasOwn(info, 'styles'))
+    assert.equal(info && typeof info.styles[0], 'string');
   })
 
   test("can register fonts", ()=>{

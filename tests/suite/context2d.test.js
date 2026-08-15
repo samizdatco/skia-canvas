@@ -975,9 +975,12 @@ describe("Context2D", ()=>{
 
       // glyphs draw at their exact fractional baseline, not snapped to the pixel grid the way
       // skparagraph's paint() did. A 10x vertical scale magnifies any leftover sub-pixel snap into
-      // whole device rows: 'E' has a flat bottom on the baseline, so at 40px under scale(1,10) with a
-      // user-space baseline of y=20 the device baseline is 200, and the ink must land within a pixel
-      // of it (the old snap could round the baseline by up to 0.5px → up to 5px here)
+      // whole device rows: 'E' has a flat bottom on the baseline, so shifting the user-space baseline
+      // by half a pixel must move the device ink ~5 rows. The *shift* is the assertion rather than an
+      // absolute row because each font's bottom overshoot already lands the ink a row or two off on
+      // its own (and by a different amount per rasterizer), while the shift cancels that out. The old
+      // snap rounded both renders onto the same row, leaving a delta of 0.
+      FontLibrary.use('TestFace', [`tests/assets/fonts/montserrat-latin/montserrat-v30-latin-regular.woff2`])
       let inkBottom = draw => {
         const W = 120, H = 400
         const c = new Canvas(W, H), cx = c.getContext('2d')
@@ -992,8 +995,11 @@ describe("Context2D", ()=>{
         }
         return row
       }
-      let exactY = inkBottom(cx => { cx.font = '40px Helvetica'; cx.scale(1, 10); cx.fillText('E', 4, 20) })
-      assert(Math.abs(exactY - 200) <= 2, `expected the baseline near 200, got ${exactY}`)
+      let bottomAt = uy => inkBottom(cx => { cx.font = '40px TestFace'; cx.scale(1, 10); cx.fillText('E', 4, uy) })
+      let flush = bottomAt(20), nudged = bottomAt(20.5)
+      assert(Math.abs(flush - 200) <= 4, `expected the baseline near 200, got ${flush}`)
+      assert(Math.abs((nudged - flush) - 5) <= 1,
+        `a half-pixel baseline shift should move the ink ~5 device rows, got ${nudged - flush}`)
     })
 
     test("strokeText()", () => {
@@ -1232,8 +1238,13 @@ describe("Context2D", ()=>{
         // width keeps the trailing letter-space (full advance), matching Chrome/Safari
         let m = ctx.measureText(text)
         assert.nearEqual(m.width, 94)
-        // actualBoundingBox is ink-based, so its right edge stops short of the advance width
-        assert.nearEqual(m.actualBoundingBoxRight, 75)
+        // actualBoundingBox is ink-based, so its right edge stops short of the advance width by
+        // roughly the trailing letter-space. Asserted as a relation rather than a fixed number:
+        // ink extents come off the rasterized outline, so FreeType and CoreText legitimately
+        // disagree by a pixel (advances come from the font's hmtx, hence the exact check above).
+        let trailing = m.width - m.actualBoundingBoxRight
+        assert(Math.abs(trailing - 20) <= 2,
+          `expected ink to stop ~20px short of the advance, got ${trailing}`)
         ctx.textWrap = true
         assert.nearEqual(ctx.measureText(text).width, 94)
     })
