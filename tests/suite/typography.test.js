@@ -348,7 +348,18 @@ describe("Typography", () => {
       })
 
     describe("rendering", () => {
-      const W = 300, H = 120, BASELINE = 70, FONT = "40px Helvetica"
+      const W = 300, H = 120, BASELINE = 70, FONT = "40px TestFace"
+
+      // a bundled face, not a system one: Helvetica isn't installed on Linux and isn't reliably
+      // substituted on Windows, and the sample bands below are tuned to the font's underline
+      // position and x-height — so a substitution would silently move the ink out of the band.
+      // Registered under an alias the host can't also have installed: using the font's real name
+      // would merge with a system copy of it (and quietly prefer that copy's faces).
+      // The outer afterEach resets the library, so re-register for each test.
+      beforeEach(() => {
+        FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+        assert(FontLibrary.has("TestFace"), "the bundled face should be registered for each test")
+      })
 
       // Count dark pixels within a horizontal band [y0,y1). "mmmm" has no ascenders/descenders,
       // so the rows just above the glyphs and just below the baseline are otherwise empty —
@@ -561,12 +572,20 @@ describe("Typography", () => {
     const BIDI_CONTROLS = /[‎‏‪-‮⁦-⁩]/g
     const normalize = s => s.replace(BIDI_CONTROLS, "").replace(/\s+/g, " ").trim()
 
+    // a bundled face (under a collision-proof alias) rather than a system font, so the Latin cases
+    // don't depend on what fontconfig substitutes for Helvetica. It carries `fi`/`fl` ligatures,
+    // which is what the ligature case needs — the emoji/RTL cases still fall back to system faces.
+    beforeEach(() => {
+      FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      assert(FontLibrary.has("TestFace"), "the bundled face should be registered for each test")
+    })
+
     let counter = 0
     /**
      * @param {string} str
      * @param {{font?: string, width?: number, setup?: (ctx: import('../../lib').CanvasRenderingContext2D) => void}} [opts]
      */
-    function pdfText(str, {font = "48px Helvetica", width = 600, setup} = {}){
+    function pdfText(str, {font = "48px TestFace", width = 600, setup} = {}){
       const canvas = new Canvas(width, 120)
       const ctx = canvas.getContext('2d')
       ctx.font = font
