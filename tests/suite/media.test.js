@@ -443,6 +443,12 @@ describe("Image", () => {
         assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
         assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
 
+        // …and on an untouched canvas, where no earlier read has left a correctly-spaced surface
+        // behind to rasterize into (see the matching case in context2d's `wide-gamut color`)
+        let cold = new Canvas(8, 8).getContext('2d')
+        cold.drawImage(img, 0, 0)
+        assert.deepEqual(Array.from(cold.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
+
         // …but survives intact on a display-p3 canvas (modulo jpeg lossiness)
         let p3 = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
         p3.drawImage(img, 0, 0)

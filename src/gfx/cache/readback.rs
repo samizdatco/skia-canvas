@@ -39,7 +39,8 @@ impl ReadbackSurface{
   }
 
   pub fn update(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine, cache:super::Cache){
-    let color_space = opts.color_space.clone().unwrap_or_else(|| page.color_space.clone());
+    // use the page's color space for the surface (and only convert if needed in `copy_pixels`)
+    let color_space = page.color_space.clone();
     let config = RasterConfig::new(opts, &color_space);
 
     // check whether the existing surface raster is still valid as a base for new layering
