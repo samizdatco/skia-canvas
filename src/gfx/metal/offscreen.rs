@@ -127,7 +127,7 @@ impl MetalContext{
     fn new() -> Option<Self>{
         autoreleasepool(|_| {
             MTLCreateSystemDefaultDevice().and_then(|device|{
-                let last_use = Instant::now() + MTL_CONTEXT_LIFESPAN;
+                let last_use = Instant::now();
                 let msaa:Vec<usize> = [0,2,4,8,16,32].into_iter().filter(|s|{
                     *s==0 || device.supportsTextureSampleCount(*s as _)
                 }).collect();
@@ -138,7 +138,7 @@ impl MetalContext{
     }
 
     fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions, budgeted:bool) -> Result<Surface, String> {
-        self.last_use = self.last_use.max(Instant::now());
+        self.last_use = Instant::now();
         surfaces::render_target(
             &mut self.context,
             if budgeted { Budgeted::Yes } else { Budgeted::No },
