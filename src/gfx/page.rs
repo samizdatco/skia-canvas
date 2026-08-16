@@ -1,16 +1,18 @@
 use std::fs;
 use std::path::Path as FilePath;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
   svg::{self, canvas::Flags},
   image::BitDepth, images, pdf, BlendMode,
   canvas::SaveLayerRec,
-  Canvas as SkCanvas, ClipOp, Color, Color4f, ColorSpace, ColorType, AlphaType, Document, Paint, Surface,
-  Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size, ISize,
-  SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder
+  Canvas as SkCanvas, ClipOp, Color4f, ColorSpace, ColorType, AlphaType, Document, Paint,
+  Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Point, Rect, IRect, Size, ISize,
+  SurfaceProps, SurfacePropsFlags, PixelGeometry, SamplingOptions, jpeg_encoder, png_encoder, webp_encoder
 };
+use skia_safe::sampling_options::{FilterMode, MipmapMode};
 use little_exif::{metadata::Metadata, exif_tag::ExifTag, filetype::FileExtension};
 use crc::{Crc, CRC_32_ISO_HDLC};
 const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
@@ -18,7 +20,7 @@ const CRC32: Crc<u32> = Crc::<u32>::new(&CRC_32_ISO_HDLC);
 use crate::canvas::BoxedCanvas;
 use crate::context::BoxedContext2D;
 use crate::gfx::RenderingEngine;
-use crate::gfx::cache::SurfaceCache;
+use crate::gfx::cache::{may_snapshot, Cache};
 use crate::mem;
 
 // the page's content is a list of layers which are either normal drawing ops or 'embedded' content from a
@@ -65,13 +67,13 @@ impl Embed{
 
 // each export backend needs a different strategy for handling embeds & transparency groups
 #[derive(Clone, Copy)]
-pub enum Replay{
-  Bitmap,   // raster: replay embeds inside transparency layers
-  Vector,   // pdf: replay embeds inside transparency layers, keeping their content as geometry
-  Geometry, // svg: no transparency layers at all (Skia's SVG support lacks them)
+pub enum Replay<'a>{
+  Raster(Cache<'a>), // bitmap: resolve embeds to cached rasters where applicable (see `resolve`)
+  Vector,            // pdf: replay embeds inside transparency layers, keeping their content as geometry
+  Geometry,          // svg: no transparency layers at all (Skia's SVG support lacks them)
 }
 
-impl Replay{
+impl Replay<'_>{
   fn isolates(&self) -> bool{ !matches!(self, Replay::Geometry) }
 }
 
@@ -90,6 +92,23 @@ impl PageStamp{
   }
 }
 
+// a one-shot latch shared by a recorder and every `Page` it emits. if any Page creates a
+// texture-backed cache image while rendering, they can register the parent PageRecorder
+// to post an eviction request to the render_thread when it is eventually dropped
+#[derive(Debug, Clone, Default)]
+struct PostedEviction(Arc<AtomicBool>);
+
+impl PostedEviction{
+  fn request(&self){
+    self.0.store(true, Ordering::Relaxed)
+  }
+
+  // read and clear: disposal posts exactly one eviction, and a recorder is only released once
+  fn claim(&self) -> bool{
+    self.0.swap(false, Ordering::Relaxed)
+  }
+}
+
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
 //
@@ -102,8 +121,8 @@ pub struct PageRecorder{
   clip: Option<Path>,
   color_space: ColorSpace,
   changed: bool, // whether the recorder contains new ops not yet written to a Layer
-  disposed: bool, // flag that drawing ops should be ignored after PictureRecorder has been dropped
-  has_gpu_surface: bool, // whether drops need to happen on render thread
+  disposed: bool, // prevent additional drawing after PictureRecorder has been dropped
+  eviction: PostedEviction, // whether cached rasters need to be dropped on the render thread
   approx_ops: usize, // draw ops recorded into `current` since the last get_page() flush (see release())
   footprint: mem::v8::Footprint, // report the retained display-list size to V8's GC accounting
   dependent_ops: bool, // contains (non-embed) layers that use a clear, blit, or non-SrcOver blend
@@ -120,7 +139,7 @@ impl PageRecorder{
     PageRecorder{
       current:None, layers:vec![], changed:false, disposed:false,
       matrix:Matrix::default(), clip:None, bounds, id, epoch:0, color_space,
-      has_gpu_surface:false,
+      eviction:PostedEviction::default(),
       approx_ops:0,
       footprint:mem::v8::Footprint::default(),
       dependent_ops:false,
@@ -233,11 +252,12 @@ impl PageRecorder{
       // use the render-thread to rasterize (using the cached surface for this page)
       // then copy the pixels into the js-owned buffer
       RenderingEngine::GPU => {
-        self.has_gpu_surface = true; // remember to free the gpu-backed export surface
+        // no residency test needed: a GPU readback always rasterizes on the render thread
+        self.eviction.request();
         let dst_info = dst_info.clone();
-        let pixels = engine.render(move ||{
-          SurfaceCache::with_entry(page.id, read_frequently, |surface|{
-            surface.update(&page, &opts, &engine);
+        let pixels = engine.render(move |cache|{
+          cache.readback(page.id, read_frequently, |surface|{
+            surface.update(&page, &opts, &engine, cache);
             let mut pixels = vec![0u8; dst_info.compute_min_byte_size()];
             match surface.copy_pixels(&dst_info, crop, &mut pixels){
               true => Ok(pixels),
@@ -250,8 +270,9 @@ impl PageRecorder{
       }
 
       RenderingEngine::CPU => {
-        SurfaceCache::with_entry(page.id, read_frequently, |surface|{
-          surface.update(&page, &opts, &engine);
+        let cache = Cache::shared();
+        cache.readback(page.id, read_frequently, |surface|{
+          surface.update(&page, &opts, &engine, cache);
           match surface.copy_pixels(dst_info, crop, dst_buffer){
             true => Ok(()),
             false => Err(format!("Could not get image data (format: {:?})", dst_info.color_type()))
@@ -272,6 +293,7 @@ impl PageRecorder{
       color_space: self.color_space.clone(),
       dependent_ops: self.dependent_ops,
       has_embeds: self.has_embeds,
+      eviction: self.eviction.clone(),
     }
   }
 
@@ -311,15 +333,13 @@ impl PageRecorder{
     self.layers.clear();
 
     let id = self.id;
-    SurfaceCache::evict(id); // JS-thread map (CPU surface) → drop inline on this (the owning) thread
+    let cache = Cache::shared();
+    cache.evict(id); // drop the CPU rasters + this thread's readback surface
+    cache.sweep(); // opportunistically sweep the rest of the CPU cache
 
-    // if an export has used a gpu surface, its RecordingSurface lives on the render thread
-    // (in the SurfaceCache's render-thread map) and can only be dropped there
-    if self.has_gpu_surface{
-      crate::gfx::render_soon(move ||{
-        SurfaceCache::evict(id);
-      });
-      self.has_gpu_surface = false;
+    if self.eviction.claim(){
+      // any textures this page left on the render thread can only be dropped *by* that thread
+      crate::gfx::render_soon(move |cache| cache.evict(id));
     }
 
     mem::glibc::mark_reclaimable(estimated_bytes);
@@ -329,105 +349,6 @@ impl PageRecorder{
 impl Drop for PageRecorder{
   fn drop(&mut self) {
     self.release();
-  }
-}
-
-
-//
-// Persistent GPU/CPU surface for caching intermediate results of getImageData()
-//
-
-pub struct RecordingSurface{
-  surface: Option<Surface>,
-  footprint: mem::v8::Footprint,
-  depth: usize,
-  matte: Option<Color4f>,
-  msaa: Option<usize>,
-  gpu: Option<bool>,
-  color_space: ColorSpace,
-  density: f32,
-}
-
-impl Default for RecordingSurface{
-  fn default() -> Self {
-    Self{surface:None, footprint:mem::v8::Footprint::default(), depth:0, matte:None, msaa:None, gpu:None, color_space:ColorSpace::new_srgb(), density:0.0}
-  }
-}
-
-impl RecordingSurface{
-
-  fn is_surface_stale(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine) -> bool{
-    let gpu_toggled = self.gpu != Some(matches!(engine, RenderingEngine::GPU));
-    let page_size = page.scaled_dimensions(opts.density);
-    let resized = self.surface.as_mut().map(|surface|{
-      surface.image_info().dimensions() != page_size
-    }).unwrap_or(true);
-
-    gpu_toggled || resized
-  }
-
-  fn is_config_stale(&self, opts:&ExportOptions, color_space:&ColorSpace) -> bool{
-    self.density != opts.density ||
-    self.matte != opts.matte ||
-    self.msaa != opts.msaa ||
-    self.color_space != *color_space
-  }
-
-  pub fn update(&mut self, page:&Page, opts:&ExportOptions, engine:&RenderingEngine){
-    let color_space = opts.color_space.clone().unwrap_or_else(|| page.color_space.clone());
-
-    // check for anything that would invalidate the previous contents
-    let reconfigure = self.is_config_stale(&opts, &color_space);
-    let recreate = self.is_surface_stale(&page, &opts, &engine);
-
-    // start from scratch if invalidated
-    if reconfigure || recreate{
-      self.gpu = Some(matches!(engine, RenderingEngine::GPU));
-      self.color_space = color_space.clone();
-      self.density = opts.density;
-      self.matte = opts.matte;
-      self.msaa = opts.msaa;
-      self.depth = 0;
-
-      // only allocate a new surface if the dimensions (size * density) have changed or engine switched
-      if recreate{
-        let page_size = page.scaled_dimensions(opts.density);
-        let img_info = ImageInfo::new_n32_premul(page_size, color_space.clone());
-        let budgeted = false; // SurfaceCache owns this, so keep out of skia's glyph/texture/scratch budget
-        self.surface = engine.make_surface(&img_info, &opts, budgeted).ok();
-
-        let bytes = if self.surface.is_some(){ img_info.compute_min_byte_size() } else { 0 };
-        self.footprint.set(bytes); // record the allocation size for v8
-      }
-    }
-
-    if let Some(surface) = self.surface.as_mut(){
-      let canvas = surface.canvas();
-
-      // fill a fresh/recreated surface with the matte; a persistent surface keeps its prior contents
-      // and just replays the layers added since the last update
-      if self.depth==0 {
-        canvas.clear(self.matte.unwrap_or(Color::TRANSPARENT.into()));
-      }
-
-      // only add new layers to surface
-      canvas.scale((self.density, self.density));
-
-      // draw newly added layers
-      page.playback_from(canvas, self.depth, None, Replay::Bitmap);
-      self.depth = page.depth();
-    }
-  }
-
-  pub fn copy_pixels(&mut self, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8]) -> bool{
-    self.surface.as_mut().map(|surface|{
-      surface.read_pixels(dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()))
-    }).unwrap_or(false)
-  }
-
-  // logical byte-size of the current surface (w×h×4×density²), 0 if none — for the cache budget
-  pub fn byte_size(&mut self) -> u64{
-    self.surface.as_mut().map(|s| s.image_info().compute_min_byte_size() as u64).unwrap_or(0)
   }
 }
 
@@ -445,6 +366,7 @@ pub struct Page{
   pub color_space: ColorSpace, // inherited from the context that recorded the page
   pub dependent_ops: bool, // contains ops that clear, blit, or use a non-SrcOver blend
   pub has_embeds: bool, // contains other canvases embedded by reference
+  eviction: PostedEviction, // whether any of the page's cached rasters are textures on the render_thread
 }
 
 impl PartialEq for Page {
@@ -456,7 +378,8 @@ impl PartialEq for Page {
 impl Default for Page {
   fn default() -> Self {
     Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![], epoch:0,
-          color_space: ColorSpace::new_srgb(), dependent_ops:false, has_embeds:false }
+          color_space: ColorSpace::new_srgb(), dependent_ops:false, has_embeds:false,
+          eviction: PostedEviction::default() }
   }
 }
 
@@ -467,6 +390,11 @@ impl Page{
 
   pub fn stamp(&self) -> PageStamp{
     PageStamp{ id: self.id, epoch: self.epoch, depth: self.layers.len() }
+  }
+
+  // flag that this page created texture-backed rasters that must be dropped on the render_thread
+  pub fn evict_on_render_thread(&self){
+    self.eviction.request()
   }
 
   pub fn scaled_dimensions(&self, density:f32) -> ISize{
@@ -482,23 +410,91 @@ impl Page{
         Layer::Embed(embed) => {
           let total = match matrix{ Some(m) => Matrix::concat(m, &embed.matrix), None => embed.matrix };
 
+          // prefer rasterization as a cheaper transparency layer equivalent, but only where there's no cost:
+          // i.e., when the target is also a bitmap and the position is pixel grid-aligned
+          let resolved = match replay{
+            Replay::Raster(cache) if embed.page.dependent_ops => Self::resolve(cache, canvas, embed, &total),
+            _ => None,
+          };
+
           // clip before opening the layer, so the boundary encloses the *group* rather than each op
           // inside it (otherwise an erasing op will leave an un-erased fringe along the boundary)
           canvas.save();
           embed.clip_to(canvas, matrix);
-          match replay.isolates(){
-            true => {
-              // use a non-null paint, so skia doesn't filter the transparency layer out as a no-op
-              embed.begin_layer(canvas, matrix, &Paint::default());
-              embed.page.playback_from(canvas, 0, Some(&total), replay);
+          match resolved{
+            Some((image, at)) => {
+              // blit without applying the CTM; the raster is already at device scale
+              canvas.save();
+              canvas.reset_matrix();
+              let sampling = SamplingOptions::new(FilterMode::Linear, MipmapMode::None);
+              canvas.draw_image_with_sampling_options(&image, at, sampling, None);
               canvas.restore();
             }
-            false => embed.page.playback_from(canvas, 0, Some(&total), replay)
+            None => match replay.isolates(){
+              true => {
+                // use a non-null paint, so skia doesn't filter the transparency layer out as a no-op
+                embed.begin_layer(canvas, matrix, &Paint::default());
+                embed.page.playback_from(canvas, 0, Some(&total), replay);
+                canvas.restore();
+              }
+              false => embed.page.playback_from(canvas, 0, Some(&total), replay)
+            }
           }
           canvas.restore();
         }
       }
     }
+  }
+
+  // rasterize (and cache) an embedded canvas at its final scale and sub-pixel position
+  fn resolve(cache:Cache, canvas:&SkCanvas, embed:&Embed, total:&Matrix) -> Option<(SkImage, Point)>{
+    // confirm that the canvas is actually a raster surface
+    if canvas.image_info().color_type() == ColorType::Unknown{ return None }
+
+    // a raster can only be useful for blitting if the placement is axis-aligned and un-flipped
+    let device = Matrix::concat(&canvas.local_to_device_as_3x3(), total);
+    if device.skew_x() != 0.0 || device.skew_y() != 0.0 || device.has_perspective(){ return None }
+    let (sx, sy) = (device.scale_x(), device.scale_y());
+    if !(sx.is_finite() && sy.is_finite() && sx > 0.0 && sy > 0.0){ return None }
+
+    // split the position into a whole-pixel origin and sub-pixel phases (quantized to 16ths)
+    let placed = device.map_rect(embed.page.bounds).0;
+    let origin = Point::new(placed.left.floor(), placed.top.floor());
+    let bucket = |v:f32| ((v * 16.0).round() as u64) & 0xff;
+    let (px, py) = (bucket(placed.left - origin.x), bucket(placed.top - origin.y));
+    let phase = Point::new(px as f32 / 16.0, py as f32 / 16.0);
+
+    let size = embed.page.bounds.size();
+    let (w, h) = ((size.width * sx + phase.x).ceil(), (size.height * sy + phase.y).ceil());
+    if !(w >= 1.0 && h >= 1.0 && w <= 8192.0 && h <= 8192.0){ return None }
+
+    // Pack the scale and sub-pixel phase into the cache's placement key, in disjoint bit fields so
+    // the two can't alias: 5 bits per phase axis (`bucket` above caps each at 16) and 27 per scale,
+    // quantized to 1/64 — which saturates well past any scale the 8192² cap just above admits.
+    let q = |v:f32| ((v * 64.0).round() as u64).min((1 << 27) - 1);
+    let key = (px << 59) | (py << 54) | (q(sx) << 27) | q(sy);
+    let cost = (w as u64) * (h as u64) * 4;
+    let dims = ISize::new(w as i32, h as i32);
+    // the callback runs only when there is no usable raster yet; a reusable one comes back without it, and
+    // so does a full cache — which lands here as `None` and sends the caller off to replay geometry
+    let image = cache.embed(&embed.page, key, dims, cost, |base|{
+      let info = ImageInfo::new_n32_premul(dims, Some(embed.page.color_space.clone()));
+      let mut surface = canvas.new_surface(&info, None)?; // inherit the canvas's device
+      {
+        let target = surface.canvas();
+        let first = match base{
+          // if a raster of an earlier slice exists, use it as a base and add just the new layers
+          Some((image, covered)) => { target.draw_image(image, (0, 0), None); covered },
+          None => 0,
+        };
+        target.translate((phase.x, phase.y));
+        target.scale((sx, sy));
+        embed.page.playback_from(target, first, None, Replay::Raster(cache));
+      }
+      Some(surface.image_snapshot())
+    })?;
+
+    Some((image, origin))
   }
 
   // flatten the page to a matted Picture with embeds handled appropriately for the `replay` destination
@@ -557,24 +553,47 @@ impl Page{
         let opts = options.clone();
 
         enum Rendered{ Encodable(SkImage), Raw(Vec<u8>) }
-        let rendered = engine.render(move || {
+        let rendered = engine.render(move |cache| {
           let color_space = opts.color_space.clone().unwrap_or_else(|| page.color_space.clone());
           let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(color_space.clone()));
-          let budgeted = true; // the export surface is transient, so it's fine as a purgeable skia resource
-          let mut surface = engine.make_surface(&img_info, &opts, budgeted)?;
+          let cached = may_snapshot(page.depth()); // shallow pages re-render cheaply; don't spend a slot
+          let mut surface = engine.make_surface(&img_info, &opts, !cached)?;
           let canvas = surface.canvas();
 
-          // replay all recorded layers into the transient surface (freed at closure end)
-          canvas.set_matrix(&Matrix::scale((opts.density, opts.density)).into());
-          page.playback_from(canvas, 0, None, Replay::Bitmap);
+          // check the cache for a bitmap to provide a base for layered drawing *or* a signal that one had been
+          // previously requested (i.e., that this is a second pass so the bitmap should be kept this time)
+          let (first, keep) = match cached{
+            false => (0, false),
+            true => cache.export(&page, &opts, &color_space, |snap, config|{
+              let first = match snap.accepts(&page, config){
+                true => { canvas.draw_image(snap.image.as_ref().unwrap(), (0,0), None); snap.stamp.depth }
+                false => 0
+              };
+              (first, snap.recur())
+            })
+          };
 
-          // draw the matte underneath as a final pass so the page's content has a transparent
-          // background to work with and can't erase the matte with a region-affecting op
+
+          // replay the layers the snapshot doesn't already cover
+          canvas.set_matrix(&Matrix::scale((opts.density, opts.density)).into());
+          page.playback_from(canvas, first, None, Replay::Raster(cache));
+
+          // cache the raster as the backdrop for the next export of the same page
+          if keep{
+            if let Some(image) = surface.image_snapshot_with_bounds(img_info.bounds()){
+              let bytes = img_info.compute_min_byte_size() as u64;
+              cache.export(&page, &opts, &color_space,
+                |snap, config| snap.store(Some(image), &page, config, bytes));
+            }
+          }
+
+          // draw the matte underneath as a final pass so the page's content has a transparent background
+          // to work with and the cached bitmaps don't have a baked-in matte
           if let Some(color) = opts.matte{
             surface.canvas().draw_color(color, BlendMode::DstOver);
           }
 
-          // extract the results (potentially texture-backed)
+          // extract the results
           let image = surface.make_temporary_image()
             .or_else(|| surface.image_snapshot_with_bounds(img_info.bounds()))
             .ok_or("Could not read canvas contents (GPU context lost)".to_string())?;
@@ -789,7 +808,7 @@ impl PageSequence{
 //
 
 pub fn pages_arg(cx: &mut FunctionContext, idx:usize, canvas:&BoxedCanvas) -> NeonResult<PageSequence> {
-  SurfaceCache::sweep(); // opportunistic readback-cache sweep on export (a JS-thread activity point)
+  Cache::shared().sweep(); // opportunistic cache sweep on export
   let engine = canvas.borrow_mut().engine();
   let pages = cx.argument::<JsArray>(idx)?
       .to_vec(cx)?

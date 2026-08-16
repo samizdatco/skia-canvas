@@ -1,6 +1,7 @@
 use skia_safe::{Rect, Matrix, Color4f, Paint, BlendMode, Image as SkImage,
                 Canvas as SkCanvas, canvas::SrcRectConstraint};
 use crate::gfx::RenderOutcome;
+use crate::gfx::cache::Cache;
 use crate::gfx::page::{Page, PageStamp, Replay};
 
 // settings decided up front before drawing the frame
@@ -45,7 +46,7 @@ impl Frame{
         FramePlan{ clip, dpr, take_snapshot: self.wants_snapshot(page, matte, dpr) }
     }
 
-    pub fn draw(&mut self, canvas:&SkCanvas, page:&Page, matrix:&Matrix, matte:Color4f, plan:&FramePlan){
+    pub fn draw(&mut self, canvas:&SkCanvas, page:&Page, matrix:&Matrix, matte:Color4f, plan:&FramePlan, cache:Cache){
         canvas.clear(matte); // fill the full window bounds (including letterboxing)
         if self.state == FrameState::Dirty || !self.is_current(page, matte, plan.dpr){
             *self = Self::default(); // start from zero if the saved image no longer matches
@@ -62,7 +63,7 @@ impl Frame{
         // replay just the layers that are newer than the snapshot
         canvas.scale((plan.dpr, plan.dpr))
               .clip_rect(plan.clip, None, Some(true));
-        page.playback_from(canvas, self.stamp.depth, Some(matrix), Replay::Bitmap);
+        page.playback_from(canvas, self.stamp.depth, Some(matrix), Replay::Raster(cache));
     }
 
     pub fn commit(&mut self, outcome:RenderOutcome, page:&Page, matte:Color4f, plan:&FramePlan){

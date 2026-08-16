@@ -8,8 +8,7 @@ mod metal;
 mod vulkan;
 pub mod page;
 
-// caches for the render thread's gpu-backed page resources: live recording surfaces
-// (see gfx::page::RecordingSurface) and persistent snapshot bitmaps
+// budgeted storage for readback surfaces, export snapshots, and embedded-canvas rasters
 pub(crate) mod cache;
 
 // a window's last on-screen render, kept as a backdrop for the next one (owned not cached)
