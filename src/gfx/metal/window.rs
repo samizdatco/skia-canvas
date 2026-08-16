@@ -21,6 +21,7 @@ use winit::{
 
 use crate::gfx::page::Page;
 use crate::gfx::RenderOutcome;
+use crate::gfx::cache::{Cache, DeviceStore};
 use crate::gfx::framebuffer::Frame;
 use crate::bridge::to_color_space;
 use super::make_direct_context;
@@ -28,6 +29,7 @@ use super::make_direct_context;
 pub struct MetalRenderer {
     window: Arc<Window>,
     layer: Retained<CAMetalLayer>,
+    store: DeviceStore, // rasters of embedded canvases drawn to this context
     frame: Frame, // framebuffer content from the last render (in case the next draws atop it)
     resizing: bool, // whether we're in macOS's modal redraw-loop during a resize and should block on present
     backend: MetalBackend, // <- MUST be last for proper drop ordering (after Frame and any other derived resources)
@@ -85,7 +87,7 @@ impl MetalRenderer{
         let backend = MetalBackend::for_layer(&layer, color_type);
         let frame = Frame::default();
 
-        Self{window, layer, backend, frame, resizing:false}
+        Self{window, layer, backend, frame, store:DeviceStore::for_window(), resizing:false}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
@@ -96,18 +98,20 @@ impl MetalRenderer{
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color4f){
+        let cache = Cache::Device(&self.store); // all the embed rasters for *this* window's context
         let dpr = self.window.scale_factor() as f32;
         let plan = self.frame.begin(&page, &matrix, matte, dpr);
 
         let outcome = self.backend.render_to_layer(
             &self.layer, &self.window, self.resizing, plan.take_snapshot, &props,
-            |canvas| self.frame.draw(canvas, &page, &matrix, matte, &plan)
+            |canvas| self.frame.draw(canvas, &page, &matrix, matte, &plan, cache)
         );
 
         // only stop presenting synchronously after a frame reaches the screen (i.e., isn't skipped)
         if matches!(outcome, RenderOutcome::Rendered(_)){ self.resizing = false }
 
-        self.frame.commit(outcome, &page, matte, &plan);
+        self.frame.commit(outcome, &page, matte, &plan); // potentially store the frame contents
+        cache.sweep(); // release any rasters that have outlived their TTL
     }
 }
 

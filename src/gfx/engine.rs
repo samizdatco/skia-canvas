@@ -3,7 +3,7 @@ use skia_safe::{gpu::DirectContext, ImageInfo, Surface};
 #[cfg(feature = "window")]
 use skia_safe::Image; // RenderOutcome carries a snapshot destined for the Frame cache
 use serde_json::{json, Value};
-use crate::gfx::{self, page::ExportOptions, cache::SurfaceCache};
+use crate::gfx::{self, page::ExportOptions, cache::Cache};
 
 #[cfg(feature = "metal")]
 use crate::gfx::metal::offscreen::MetalEngine as Engine;
@@ -63,13 +63,14 @@ impl RenderingEngine{
     }
 
     // run a closure on the rendering thread (GPU) or current thread (CPU) and convert panics
-    // into Err values that can be sent back to js as promise rejections
+    // into Err values that can be sent back to js as promise rejections. the correct Cache is
+    // handed to the callback depending on whether the bitmaps are texture-backed
     pub fn render<T, F>(&self, f:F) -> Result<T, String>
-        where F:FnOnce() -> Result<T, String> + Send + 'static, T:Send + 'static
+        where F: for<'a> FnOnce(Cache<'a>) -> Result<T, String> + Send + 'static, T:Send + 'static
     {
         match self {
             Self::GPU => render_thread::run(f),
-            Self::CPU => catch_panic(f)
+            Self::CPU => catch_panic(move || f(Cache::shared()))
         }
     }
 
@@ -115,15 +116,25 @@ pub enum RenderOutcome {
 
 // the single thread that serializes jobs bound for the GPU (and its one, shared Context)
 mod render_thread{
-    use std::cell::Cell;
+    use std::cell::{Cell, OnceCell};
     use std::panic::{catch_unwind, AssertUnwindSafe};
     use std::sync::{mpsc, OnceLock};
     use std::time::Duration;
-    use super::{Engine, gfx::cache::SurfaceCache};
+    use super::{Engine, gfx::cache::{Cache, DeviceStore}};
 
-    type Job = Box<dyn FnOnce() + Send>;
+    type Job = Box<dyn for<'a> FnOnce(Cache<'a>) + Send>;
     static SENDER: OnceLock<mpsc::Sender<Job>> = OnceLock::new();
     thread_local!( static IS_RENDER_THREAD: Cell<bool> = const { Cell::new(false) }; );
+
+    thread_local!(
+        // the store for all texture-backed rasters produced by the thread's DirectContext
+        static STORE: OnceCell<DeviceStore> = const { OnceCell::new() };
+    );
+
+    // hand a `Cache` for the render thread's store to a closure
+    fn with_cache<T>(f:impl FnOnce(Cache) -> T) -> T{
+        STORE.with(|store| f(Cache::Device(store.get_or_init(DeviceStore::for_render_thread))))
+    }
 
     fn sender() -> &'static mpsc::Sender<Job>{
         SENDER.get_or_init(||{
@@ -132,20 +143,26 @@ mod render_thread{
                 IS_RENDER_THREAD.set(true);
                 loop{
                     match rx.recv_timeout(Duration::from_secs(1)){
-                        // jobs from post() have no return channel, so their errors are printed to
-                        // stderr by the default hook then caught here so the thread keeps running.
-                        // jobs from run() catch their own panics and relay an Err through their rx.
-                        Ok(job) => { Engine::with_cleanup(|| catch_unwind(AssertUnwindSafe(job)).ok()); },
-                        Err(mpsc::RecvTimeoutError::Timeout) => {
-                            if Engine::context_is_idle(){
-                                SurfaceCache::evict_all(); // free recording surfaces and snapshots
+                        Ok(job) => with_cache(|cache|{
+                            // jobs from post() have no return channel, so their errors are printed to
+                            // stderr by the default hook then caught here (which keeps the thread running).
+                            // jobs from run() catch their own panics and relay an Err through their rx.
+                            Engine::with_cleanup(|| catch_unwind(AssertUnwindSafe(|| job(cache))).ok());
+                            cache.sweep(); // release any textures that have outlived their TTL
+                        }),
+                        Err(mpsc::RecvTimeoutError::Timeout) => with_cache(|cache|{
+                            cache.sweep(); // expire anything that might spuriously veto retirement
+                            if Engine::context_is_idle() && !cache.holds_live_rasters(){
                                 Engine::retire(); // drop the context
                             } else {
                                 Engine::purge_stale(); // trim oldest entries in skia's internal cache
                             }
-                        },
+                        }),
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     }
+
+                    // the shared store has no thread ot its own to schedule sweeps, so do so on each tick
+                    Cache::shared().sweep();
                 }
             });
             tx
@@ -154,28 +171,30 @@ mod render_thread{
 
     // run closure on the render thread and block until results arrive on response channel
     pub fn run<T, F>(f:F) -> Result<T, String>
-        where F:FnOnce() -> Result<T, String> + Send + 'static, T:Send + 'static
+        where F: for<'a> FnOnce(Cache<'a>) -> Result<T, String> + Send + 'static, T:Send + 'static
     {
         if IS_RENDER_THREAD.get(){
-            return f() // don't deadlock on re-entrant calls from within a render job
+            return with_cache(f) // don't deadlock on re-entrant calls from within a render job
         }
         let (tx, rx) = mpsc::channel();
-        sender().send(Box::new(move || {
-            tx.send(super::catch_panic(f)).ok();
-        })).expect("Render thread unavailable");
+        let job:Job = Box::new(move |cache| {
+            tx.send(super::catch_panic(move || f(cache))).ok();
+        });
+        sender().send(job).expect("Render thread unavailable");
         rx.recv().unwrap_or_else(|_| Err("Render thread unavailable".to_string()))
     }
 
     // send a closure to the render thread without waiting for a response (primarily used
     // for performing deallocations of gpu objects on the same thread as the context)
     pub fn post<F>(f:F)
-        where F:FnOnce() + Send + 'static
+        where F: for<'a> FnOnce(Cache<'a>) + Send + 'static
     {
         if IS_RENDER_THREAD.get(){
-            return f()
+            return with_cache(f)
         }
         if let Some(tx) = SENDER.get(){
-            tx.send(Box::new(f)).ok();
+            let job:Job = Box::new(f);
+            tx.send(job).ok();
         }
     }
 
@@ -184,7 +203,7 @@ mod render_thread{
 
 // fire-and-forget access to the render thread for maintenance of gpu-resident resources
 // (cache seeding, registry removal) from threads that shouldn't block on render traffic
-pub fn render_soon(f: impl FnOnce() + Send + 'static){
+pub fn render_soon(f: impl for<'a> FnOnce(Cache<'a>) + Send + 'static){
     render_thread::post(f)
 }
 
@@ -193,8 +212,8 @@ pub fn render_soon(f: impl FnOnce() + Send + 'static){
 // would run at dll-detach on Windows, when it's too late to cleanly shut down.
 pub fn retire_gpu(){
     if !render_thread::is_running(){ return }
-    render_thread::run(|| {
-        SurfaceCache::evict_all(); // free recording surfaces and snapshots
+    render_thread::run(|cache| {
+        cache.clear(); // drop every cached raster while the context is still alive
         Engine::retire(); // drop the context
         Ok::<(), String>(())
     }).ok();

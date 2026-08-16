@@ -231,6 +231,7 @@ impl Context2D{
     self.stack.shrink_to_fit();
     self.state = State::default();
     self.path = Path2D::default();
+    crate::gfx::cache::Cache::shared().sweep();
   }
 
   pub fn in_local_coordinates(&mut self, x: f32, y: f32) -> Point{
