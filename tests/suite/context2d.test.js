@@ -1759,6 +1759,15 @@ describe("Context2D", ()=>{
         srgb.fillRect(0, 0, 4, 4)
         assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
         assert.deepEqual(Array.from(srgb.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
+
+        // the same read on an untouched canvas: the surface it rasterizes into has to be built in
+        // the *canvas's* space, not the one being read back, or the clamp above never happens and
+        // the p3 red survives to hand back an unconverted [255, 0, 0]. reading in the other order
+        // hides that, since the read above leaves a correctly-spaced surface behind to reuse
+        let cold = new Canvas(4, 4).getContext('2d')
+        cold.fillStyle = 'color(display-p3 1 0 0)'
+        cold.fillRect(0, 0, 4, 4)
+        assert.deepEqual(Array.from(cold.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
       })
 
       test('CanvasGradient stops', () => {

@@ -303,8 +303,8 @@ impl PageRecorder{
       .get_page()
       .to_picture(None)
       .and_then(|pict| {
-        // rasterize using wide-gamut F16 colors so it can be converted into whatever colorSpace
-        // drawImage(canvas) is using
+        // rasterize using *extended-range* sRGB (via F16 colors) so it can later be converted into
+        // whatever colorSpace drawImage(canvas) is using
         images::deferred_from_picture(
           pict, size, None, None, BitDepth::F16, Some(ColorSpace::new_srgb()), None
         )
@@ -554,7 +554,7 @@ impl Page{
 
         enum Rendered{ Encodable(SkImage), Raw(Vec<u8>) }
         let rendered = engine.render(move |cache| {
-          let color_space = opts.color_space.clone().unwrap_or_else(|| page.color_space.clone());
+          let color_space = page.color_space.clone(); // colorSpace currently can't be overridden for exports
           let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(color_space.clone()));
           let cached = may_snapshot(page.depth()); // shallow pages re-render cheaply; don't spend a slot
           let mut surface = engine.make_surface(&img_info, &opts, !cached)?;
