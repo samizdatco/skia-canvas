@@ -75,6 +75,21 @@ impl Replay{
   fn isolates(&self) -> bool{ !matches!(self, Replay::Geometry) }
 }
 
+// identifier for what a rasterized slice of a page's layers contains
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+pub struct PageStamp{
+  pub id: usize,    // the source page.id (reset whenever canvas content is fully cleared)
+  pub epoch: u32,   // incremented when a non-destructive (window fit) resize occurs
+  pub depth: usize, // number of layers incorporated into this raster
+}
+
+impl PageStamp{
+  // whether the raster with this stamp can be the baseline for appending additional drawing
+  pub fn extends(&self, now:&PageStamp) -> bool{
+    self.id == now.id && self.epoch == now.epoch && self.depth <= now.depth
+  }
+}
+
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
 //
@@ -94,6 +109,7 @@ pub struct PageRecorder{
   dependent_ops: bool, // contains (non-embed) layers that use a clear, blit, or non-SrcOver blend
   has_embeds: bool, // contains embed layers (i.e., canvas content added via `drawCanvas`)
   id: usize, // generation id (incremented when the canvas is fully cleared)
+  epoch: u32, // bounds id (incremented by a non-destructive window-fit resize)
 }
 
 impl PageRecorder{
@@ -103,7 +119,7 @@ impl PageRecorder{
 
     PageRecorder{
       current:None, layers:vec![], changed:false, disposed:false,
-      matrix:Matrix::default(), clip:None, bounds, id, color_space,
+      matrix:Matrix::default(), clip:None, bounds, id, epoch:0, color_space,
       has_gpu_surface:false,
       approx_ops:0,
       footprint:mem::v8::Footprint::default(),
@@ -177,7 +193,10 @@ impl PageRecorder{
   }
 
   pub fn update_bounds(&mut self, bounds:Rect){
-    self.bounds = bounds; // non-destructively update the size
+    if bounds != self.bounds{
+      self.bounds = bounds; // non-destructively update the size (the id and its layers survive)
+      self.epoch += 1; // invalidate any rasters derived from the old bounds
+    }
   }
 
   pub fn set_matrix(&mut self, matrix:Matrix){
@@ -249,6 +268,7 @@ impl PageRecorder{
       layers: self.layers.clone(),
       bounds: self.bounds,
       id: self.id,
+      epoch: self.epoch,
       color_space: self.color_space.clone(),
       dependent_ops: self.dependent_ops,
       has_embeds: self.has_embeds,
@@ -421,6 +441,7 @@ pub struct Page{
   pub id: usize,
   pub bounds: Rect,
   layers: Vec<Layer>,
+  epoch: u32, // bounds revision under this id
   pub color_space: ColorSpace, // inherited from the context that recorded the page
   pub dependent_ops: bool, // contains ops that clear, blit, or use a non-SrcOver blend
   pub has_embeds: bool, // contains other canvases embedded by reference
@@ -428,14 +449,13 @@ pub struct Page{
 
 impl PartialEq for Page {
   fn eq(&self, other: &Self) -> bool {
-    self.id == other.id &&
-    self.depth() == other.depth()
+    self.stamp() == other.stamp()
   }
 }
 
 impl Default for Page {
   fn default() -> Self {
-    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![],
+    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![], epoch:0,
           color_space: ColorSpace::new_srgb(), dependent_ops:false, has_embeds:false }
   }
 }
@@ -443,6 +463,10 @@ impl Default for Page {
 impl Page{
   pub fn depth(&self) -> usize{
     self.layers.len()
+  }
+
+  pub fn stamp(&self) -> PageStamp{
+    PageStamp{ id: self.id, epoch: self.epoch, depth: self.layers.len() }
   }
 
   pub fn scaled_dimensions(&self, density:f32) -> ISize{

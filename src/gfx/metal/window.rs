@@ -8,8 +8,7 @@ use objc2_metal::{
 use objc2_quartz_core::{kCAGravityBottomLeft, kCAGravityTopLeft, CAMetalDrawable, CAMetalLayer};
 use objc2_core_graphics::{CGColorSpace, kCGColorSpaceDisplayP3};
 use skia_safe::{
-    scalar, ColorType, ColorSpace, Size, Matrix, Color4f, Paint, BlendMode, SurfaceProps,
-    canvas::SrcRectConstraint,
+    scalar, ColorType, ColorSpace, Size, Matrix, Color4f, SurfaceProps,
 };
 use skia_safe::gpu::{ mtl, surfaces, backend_render_targets, SurfaceOrigin, DirectContext };
 use raw_window_metal::Layer;
@@ -20,18 +19,18 @@ use winit::{
     event_loop::ActiveEventLoop,
 };
 
-use crate::gfx::page::{Page, Replay};
+use crate::gfx::page::Page;
 use crate::gfx::RenderOutcome;
-use crate::gfx::cache::Frame;
+use crate::gfx::framebuffer::Frame;
 use crate::bridge::to_color_space;
 use super::make_direct_context;
 
 pub struct MetalRenderer {
     window: Arc<Window>,
-    backend: MetalBackend,
     layer: Retained<CAMetalLayer>,
-    frame: Frame,
-    last_page_id: usize, // previous frame's page id — render-loop history, not cache state
+    frame: Frame, // framebuffer content from the last render (in case the next draws atop it)
+    resizing: bool, // whether we're in macOS's modal redraw-loop during a resize and should block on present
+    backend: MetalBackend, // <- MUST be last for proper drop ordering (after Frame and any other derived resources)
 }
 
 impl MetalRenderer{
@@ -86,42 +85,29 @@ impl MetalRenderer{
         let backend = MetalBackend::for_layer(&layer, color_type);
         let frame = Frame::default();
 
-        Self{window, layer, backend, frame, last_page_id:0}
+        Self{window, layer, backend, frame, resizing:false}
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         let cg_size = CGSize::new(size.width as f64, size.height as f64);
         unsafe{ self.layer.setDrawableSize(cg_size) };
-        self.frame.start_resizing();
+        self.frame.start_resizing(); // invalidate the cached backdrop (shared with vulkan)
+        self.resizing = true;        // …and draw the next frame synchronously
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color4f){
-        let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
-        let sync = self.frame.is_resizing();
-        let take_snapshot = self.frame.wants_snapshot(&page, matte, dpr, self.last_page_id);
+        let plan = self.frame.begin(&page, &matrix, matte, dpr);
 
-        let outcome = self.backend.render_to_layer(&self.layer, &self.window, sync, take_snapshot, &props, |canvas| {
-            // fill the full surface (including any letterboxing) with the window’s background
-            // color, then lay the raster cache (if any) over the content area
-            canvas.clear(matte);
-            if let Some((image, src, dst)) = self.frame.validate(&page, matte, dpr, clip){
-                let mut paint = Paint::default();
-                paint.set_blend_mode(BlendMode::Src); // cached frame already includes the matte
-                canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &paint);
-            }
+        let outcome = self.backend.render_to_layer(
+            &self.layer, &self.window, self.resizing, plan.take_snapshot, &props,
+            |canvas| self.frame.draw(canvas, &page, &matrix, matte, &plan)
+        );
 
-            // draw newly added vector layers
-            canvas.scale((dpr, dpr))
-                .clip_rect(clip, None, Some(true));
-            page.playback_from(canvas, self.frame.depth(), Some(&matrix), Replay::Bitmap);
-        });
+        // only stop presenting synchronously after a frame reaches the screen (i.e., isn't skipped)
+        if matches!(outcome, RenderOutcome::Rendered(_)){ self.resizing = false }
 
-        // cache frame contents for use as background of next render pass
-        if let RenderOutcome::Rendered(image) = outcome{
-            self.frame.update(image, &page, matte, dpr, clip);
-            self.last_page_id = page.id;
-        }
+        self.frame.commit(outcome, &page, matte, &plan);
     }
 }
 

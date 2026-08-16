@@ -12,6 +12,10 @@ pub mod page;
 // (see gfx::page::RecordingSurface) and persistent snapshot bitmaps
 pub(crate) mod cache;
 
+// a window's last on-screen render, kept as a backdrop for the next one (owned not cached)
+#[cfg(feature = "window")]
+pub(crate) mod framebuffer;
+
 // rendering engine, CPU/GPU dispatch, and the gpu render thread
 pub(crate) mod engine;
 

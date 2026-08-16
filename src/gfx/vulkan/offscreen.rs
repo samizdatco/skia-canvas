@@ -200,7 +200,7 @@ impl VulkanContext{
             device,
             queue,
             msaa,
-            last_use: Instant::now() + VK_CONTEXT_LIFESPAN
+            last_use: Instant::now()
         })
     }
 
