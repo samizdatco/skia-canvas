@@ -28,7 +28,7 @@ RUN mkdir -p /opt/skia-static-libs && \
 # install gh
 ARG GH_VERSION=2.76.2
 ARG GH_URL=https://github.com/cli/cli/releases/download/v$GH_VERSION/gh_${GH_VERSION}_linux_$TARGETARCH.tar.gz
-RUN curl -sL $GH_URL | tar xz --strip-components=2 -C /usr/local/bin
+RUN curl -fSL --retry 5 --retry-delay 3 --connect-timeout 30 $GH_URL | tar xz --strip-components=2 -C /usr/local/bin
 
 WORKDIR /opt
 CMD ["bash"]
