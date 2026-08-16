@@ -1455,55 +1455,188 @@ describe("Context2D", ()=>{
       assert.deepEqual(pixel(21, 20), GREEN)
     })
 
-    test('drawCanvas()', async () => {
-      let srcCanvas = new Canvas(3, 3),
-          srcCtx = srcCanvas.getContext("2d");
-      srcCtx.fillStyle = 'green'
-      srcCtx.fillRect(0,0,3,3)
-      srcCtx.clearRect(1,1,1,1)
+    describe('drawCanvas()', () => {
+      test('with negative dimensions normalized', async () => {
+        let srcCanvas = new Canvas(3, 3),
+            srcCtx = srcCanvas.getContext("2d");
+        srcCtx.fillStyle = 'green'
+        srcCtx.fillRect(0,0,3,3)
+        srcCtx.clearRect(1,1,1,1)
 
-      ctx.drawCanvas(srcCanvas, 0,0)
-      assert.deepEqual(pixel(0, 0), GREEN)
-      assert.deepEqual(pixel(1, 1), CLEAR)
-      assert.deepEqual(pixel(2, 2), GREEN)
+        ctx.drawCanvas(srcCanvas, 0,0)
+        assert.deepEqual(pixel(0, 0), GREEN)
+        assert.deepEqual(pixel(1, 1), CLEAR)
+        assert.deepEqual(pixel(2, 2), GREEN)
 
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.drawCanvas(srcCanvas,-2,-2,6,6)
-      assert.deepEqual(pixel(0, 0), CLEAR)
-      assert.deepEqual(pixel(2, 0), GREEN)
-      assert.deepEqual(pixel(2, 2), GREEN)
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.drawCanvas(srcCanvas,-2,-2,6,6)
+        assert.deepEqual(pixel(0, 0), CLEAR)
+        assert.deepEqual(pixel(2, 0), GREEN)
+        assert.deepEqual(pixel(2, 2), GREEN)
 
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.save()
-      ctx.translate(WIDTH/2, HEIGHT/2)
-      ctx.rotate(.25*Math.PI)
-      ctx.drawCanvas(srcCanvas,-256,-256,512,512)
-      ctx.restore()
-      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), GREEN)
-      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), GREEN)
-      assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), GREEN)
-      assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), GREEN)
-      assert.deepEqual(pixel(WIDTH/2, HEIGHT/2), CLEAR)
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.save()
+        ctx.translate(WIDTH/2, HEIGHT/2)
+        ctx.rotate(.25*Math.PI)
+        ctx.drawCanvas(srcCanvas,-256,-256,512,512)
+        ctx.restore()
+        assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), GREEN)
+        assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), GREEN)
+        assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), GREEN)
+        assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), GREEN)
+        assert.deepEqual(pixel(WIDTH/2, HEIGHT/2), CLEAR)
 
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.drawCanvas(srcCanvas, 1,1,2,2, 0,0,2,2)
-      assert.deepEqual(pixel(0, 0), CLEAR)
-      assert.deepEqual(pixel(0, 1), GREEN)
-      assert.deepEqual(pixel(1, 0), GREEN)
-      assert.deepEqual(pixel(1, 1), GREEN)
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.drawCanvas(srcCanvas, 1,1,2,2, 0,0,2,2)
+        assert.deepEqual(pixel(0, 0), CLEAR)
+        assert.deepEqual(pixel(0, 1), GREEN)
+        assert.deepEqual(pixel(1, 0), GREEN)
+        assert.deepEqual(pixel(1, 1), GREEN)
 
-      // negative dest dims normalize to a sorted corner-pair (relocate, no mirror) [#283]
-      let asym = new Canvas(2, 2), asymCtx = asym.getContext('2d')
-      asymCtx.fillStyle = 'green'; asymCtx.fillRect(0, 0, 2, 2)
-      asymCtx.fillStyle = 'white'; asymCtx.fillRect(0, 0, 1, 1) // marker in the TOP-LEFT cell only
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.drawCanvas(asym, 12, 12, -2, -2)      // → the (10,10)-(12,12) rect
-      assert.deepEqual(pixel(10, 10), WHITE)    // top-left marker stays top-left
-      assert.deepEqual(pixel(11, 10), GREEN)
-      assert.deepEqual(pixel(13, 13), CLEAR)    // nothing in the positive direction
+        // negative dest dims normalize to a sorted corner-pair (relocate, no mirror) [#283]
+        let asym = new Canvas(2, 2), asymCtx = asym.getContext('2d')
+        asymCtx.fillStyle = 'green'; asymCtx.fillRect(0, 0, 2, 2)
+        asymCtx.fillStyle = 'white'; asymCtx.fillRect(0, 0, 1, 1) // marker in the TOP-LEFT cell only
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.drawCanvas(asym, 12, 12, -2, -2)      // → the (10,10)-(12,12) rect
+        assert.deepEqual(pixel(10, 10), WHITE)    // top-left marker stays top-left
+        assert.deepEqual(pixel(11, 10), GREEN)
+        assert.deepEqual(pixel(13, 13), CLEAR)    // nothing in the positive direction
 
-      let image = await loadAsset('checkers.png')
-      assert.doesNotThrow( () => ctx.drawCanvas(image, 0, 0) )
+        let image = await loadAsset('checkers.png')
+        assert.doesNotThrow( () => ctx.drawCanvas(image, 0, 0) )
+      })
+
+      test("with a self-compositing source", async () => {
+        // An embedded canvas has to look the same as that canvas rasterized and drawn as an image:
+        // every mode but `source-over` reads the destination inside the drawn object's bounds, so a
+        // source recorded with one has to be isolated or it blends against the *host* instead. All
+        // the geometry is axis-aligned on integer coords, so the two renderings are exactly equal.
+        const MODES = /** @type {const} */ ([
+          'source-over', 'source-in', 'source-out', 'source-atop', 'destination-over',
+          'destination-in', 'destination-out', 'destination-atop', 'lighter', 'copy', 'xor',
+          'multiply', 'screen', 'overlay', 'darken', 'lighten', 'color-dodge', 'difference'])
+
+        let backdrop = ctx2 => { // non-uniform & opaque: blending against it looks different
+          ctx2.fillStyle = 'green'; ctx2.fillRect(0, 0, 120, 120)
+          ctx2.fillStyle = 'yellow'; ctx2.fillRect(0, 0, 60, 120)
+        }
+
+        for (const mode of MODES){
+          let src = new Canvas(60, 60), srcCtx = src.getContext('2d')
+          srcCtx.fillStyle = 'red'; srcCtx.fillRect(0, 0, 40, 40)
+          srcCtx.globalCompositeOperation = mode
+          srcCtx.fillStyle = 'blue'; srcCtx.fillRect(20, 20, 40, 40)
+
+          let expected = new Canvas(120, 120), expectedCtx = expected.getContext('2d')
+          backdrop(expectedCtx)
+          expectedCtx.drawImage(await loadImage(src.toBufferSync('png')), 20, 20)
+
+          let actual = new Canvas(120, 120), actualCtx = actual.getContext('2d')
+          backdrop(actualCtx)
+          actualCtx.drawCanvas(src, 0, 0, 60, 60, 20, 20, 60, 60)
+
+          assert.deepEqual(
+            Array.from(actualCtx.getImageData(0, 0, 120, 120).data),
+            Array.from(expectedCtx.getImageData(0, 0, 120, 120).data),
+            `embedding a canvas that used '${mode}' should match drawImage of the same canvas`
+          )
+        }
+      })
+
+      test('with rect-preserving placements', async () => {
+        // Flips and 90°/180° rotations map rects to rects, so a rect-preservation test would wave
+        // them into the blit-a-raster fast path — where the raster, always built upright, would land
+        // with the mirroring/rotation stripped out. They have to replay as geometry instead. These
+        // placements keep pixels on the integer grid, so the drawImage oracle comparison stays exact.
+        const PLACEMENTS = {
+          'flip-x': ctx2 => { ctx2.translate(100, 20); ctx2.scale(-1, 1) },
+          'flip-y': ctx2 => { ctx2.translate(20, 100); ctx2.scale(1, -1) },
+          'rot90':  ctx2 => { ctx2.translate(100, 20); ctx2.rotate(Math.PI/2) },
+          'rot180': ctx2 => { ctx2.translate(100, 100); ctx2.rotate(Math.PI) },
+        }
+
+        let backdrop = ctx2 => {
+          ctx2.fillStyle = 'green'; ctx2.fillRect(0, 0, 160, 160)
+          ctx2.fillStyle = 'yellow'; ctx2.fillRect(0, 0, 80, 160)
+        }
+
+        for (const [name, place] of Object.entries(PLACEMENTS)){
+          let src = new Canvas(60, 60), srcCtx = src.getContext('2d')
+          srcCtx.fillStyle = 'red'; srcCtx.fillRect(0, 0, 40, 40)
+          srcCtx.globalCompositeOperation = 'multiply' // target-dependent: eligible for rasterizing
+          srcCtx.fillStyle = 'blue'; srcCtx.fillRect(20, 20, 40, 40)
+
+          let expected = new Canvas(160, 160), expectedCtx = expected.getContext('2d')
+          backdrop(expectedCtx)
+          expectedCtx.save(); place(expectedCtx)
+          expectedCtx.drawImage(await loadImage(src.toBufferSync('png')), 0, 0)
+          expectedCtx.restore()
+
+          let actual = new Canvas(160, 160), actualCtx = actual.getContext('2d')
+          backdrop(actualCtx)
+          actualCtx.save(); place(actualCtx)
+          actualCtx.drawCanvas(src, 0, 0)
+          actualCtx.restore()
+
+          assert.deepEqual(
+            Array.from(actualCtx.getImageData(0, 0, 160, 160).data),
+            Array.from(expectedCtx.getImageData(0, 0, 160, 160).data),
+            `embedding under a ${name} placement should match drawImage of the same canvas`
+          )
+        }
+      })
+
+      test('with non-axis-aligned placements', () => {
+        // Rotated and skewed placements can't resolve to an axis-aligned raster, so they replay the
+        // source's geometry inside a transparency layer with the placement's boundary applied to the
+        // isolated *result*. Clipping the source's ops individually instead attenuates its erasing
+        // composite by the boundary's partial coverage, leaving a fringe of un-erased ink that
+        // accumulates under repeated redraws — so check the erased region after 1 draw and 30.
+        let sprite = () => { // a red square erased to a circle by its own compositing
+          let c = new Canvas(64, 64), x = c.getContext('2d')
+          x.fillStyle = '#f00'; x.fillRect(0, 0, 64, 64)
+          x.globalCompositeOperation = 'destination-in'
+          x.beginPath(); x.arc(32, 32, 24, 0, Math.PI*2); x.fill()
+          return c
+        }
+
+        // maps (x, y) → (ax + cy + e, bx + dy + f), mirroring the ctx.transform() argument order
+        /** @type {Record<string, [number, number, number, number, number, number]>} */
+        const PLACEMENTS = ({
+          'rotate7':  [Math.cos(0.1222), Math.sin(0.1222), -Math.sin(0.1222), Math.cos(0.1222), 30, 20],
+          'rotate45': [Math.SQRT1_2, Math.SQRT1_2, -Math.SQRT1_2, Math.SQRT1_2, 70, 10],
+          'skew':     [1, 0, 0.3, 1, 20, 20],
+        })
+
+        for (const [name, m] of Object.entries(PLACEMENTS)){
+          for (const redraws of [1, 30]){
+            let host = new Canvas(140, 140), ctx2 = host.getContext('2d')
+            ctx2.fillStyle = '#00f'; ctx2.fillRect(0, 0, 140, 140)
+            for (let i = 0; i < redraws; i++){
+              ctx2.save(); ctx2.transform(...m); ctx2.drawCanvas(sprite(), 0, 0); ctx2.restore()
+            }
+
+            // every pixel that lands inside the sprite square but outside the circle (plus an AA
+            // halo) was erased by the sprite's own `destination-in`, so it must still be pure blue
+            let data = ctx2.getImageData(0, 0, 140, 140).data
+            let det = m[0]*m[3] - m[1]*m[2],
+                inv = [m[3]/det, -m[1]/det, -m[2]/det, m[0]/det,
+                      (m[2]*m[5] - m[3]*m[4])/det, (m[1]*m[4] - m[0]*m[5])/det]
+            let worst = 0
+            for (let py = 0; py < 140; py++) for (let px = 0; px < 140; px++){
+              let sx = inv[0]*(px+0.5) + inv[2]*(py+0.5) + inv[4],
+                  sy = inv[1]*(px+0.5) + inv[3]*(py+0.5) + inv[5]
+              if (sx < 1 || sy < 1 || sx > 63 || sy > 63) continue // outside the square (+AA margin)
+              if (Math.hypot(sx - 32, sy - 32) < 30) continue      // inside the circle + AA halo
+              let i = (py*140 + px) * 4
+              worst = Math.max(worst,
+                Math.abs(data[i]) + Math.abs(data[i+1]) + Math.abs(data[i+2] - 255) + Math.abs(data[i+3] - 255))
+            }
+            assert.equal(worst, 0, `the ${name} placement should leave no fringe after ${redraws} draw(s)`)
+          }
+        }
+      })
     })
 
     test('reset()', async () => {

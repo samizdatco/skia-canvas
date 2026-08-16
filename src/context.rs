@@ -27,7 +27,7 @@ use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
 use crate::image::ImageData;
 use crate::gfx::RenderingEngine;
-use crate::gfx::page::{PageRecorder, Page, ExportOptions};
+use crate::gfx::page::{PageRecorder, Page, Embed, ExportOptions};
 
 pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
 impl Finalize for Context2D {}
@@ -254,6 +254,17 @@ impl Context2D{
     });
   }
 
+  // like with_canvas, but for ops whose result depends on what is already on the target surface
+  // (e.g., a non-SrcOver composite, clear, or pixel blit) and requires an isolation group
+  pub fn with_dependent_canvas<F>(&self, f:F)
+    where F:FnOnce(&SkCanvas)
+  {
+    self.with_recorder(|mut recorder|{
+      recorder.mark_dependent();
+      recorder.append(f);
+    });
+  }
+
   pub fn with_matrix<F>(&mut self, f:F)
     where F:FnOnce(&mut Matrix) -> &Matrix
   {
@@ -276,10 +287,8 @@ impl Context2D{
       }
     };
 
-    match self.state.global_composite_operation{
-      BlendMode::SrcIn | BlendMode::SrcOut |
-      BlendMode::DstIn | BlendMode::DstOut |
-      BlendMode::DstATop | BlendMode::Src =>{
+    match self.is_region_blend(){
+      true =>{
         // for blend modes that affect regions of the canvas outside of the bounds of the object
         // being drawn, create an intermediate picture before drawing to the canvas
         let mut layer_paint = paint.clone();
@@ -297,7 +306,7 @@ impl Context2D{
         // transfer the picture contents to the canvas in a single operation, applying the blend
         // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
         if let Some(pict) = layer_recorder.finish_recording_as_picture(None){
-          self.with_canvas(|canvas| {
+          self.with_dependent_canvas(|canvas| {
             canvas.save();
             canvas.set_matrix(&Matrix::new_identity().into());
             let mut blend_paint = Paint::default();
@@ -309,16 +318,35 @@ impl Context2D{
         }
 
       },
-      _ => {
-        self.with_canvas(|canvas| {
+      false => {
+        let draw = |canvas:&SkCanvas|{
           // draw the dropshadow (if applicable)
           render_shadow(canvas, paint);
           // draw with the normal paint
           f(canvas, paint);
-        });
+        };
+        // even though the blend doesn't extend past the draw bounds, the object may still sample
+        // the backdrop (e.g., multiply, screen, etc.) making it target dependent
+        match self.is_target_dependent(){
+          true => self.with_dependent_canvas(draw),
+          false => self.with_canvas(draw),
+        }
       }
     };
 
+  }
+
+  // whether the blend mode reads/modifies the backdrop (rather than just compositing on top of it)
+  pub fn is_target_dependent(&self) -> bool{
+    self.state.global_composite_operation != BlendMode::SrcOver
+  }
+
+  // whether the blend mode affects the whole canvas (beyond the bounds of the drawn object)
+  pub fn is_region_blend(&self) -> bool{
+    matches!(self.state.global_composite_operation,
+      BlendMode::SrcIn | BlendMode::SrcOut |
+      BlendMode::DstIn | BlendMode::DstOut |
+      BlendMode::DstATop | BlendMode::Src)
   }
 
   pub fn map_points(&self, coords:&[f32]) -> Vec<Point>{
@@ -504,7 +532,7 @@ impl Context2D{
       }),
 
       // otherwise, paint over the specified region but preserve overdrawn vectors
-      false => self.with_canvas(|canvas| {
+      false => self.with_dependent_canvas(|canvas| {
         let mut paint = Paint::default();
         paint.set_anti_alias(true)
              .set_style(PaintStyle::Fill)
@@ -515,25 +543,80 @@ impl Context2D{
     }
   }
 
-  pub fn draw_picture(&mut self, picture:&Picture, src_rect:&Rect, dst_rect:&Rect){
-    let paint = self.paint_for_image();
+  // map the source's src_rect onto this canvas's dst_rect
+  fn fit_matrix(src_rect:&Rect, dst_rect:&Rect) -> Matrix{
     let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
     let mut matrix = Matrix::new_identity();
     matrix.pre_scale( (mag.x, mag.y), None )
       .pre_translate((dst_rect.x()/mag.x - src_rect.x(), dst_rect.y()/mag.y - src_rect.y()));
+    matrix
+  }
+
+  // detect whether a paint draws its content without modifying alpha, blend, effects
+  fn is_pass_through(paint:&Paint) -> bool{
+    matches!(
+      (paint.as_blend_mode(), paint.alpha(), paint.image_filter()),
+      (Some(BlendMode::SrcOver), 255, None)
+    )
+  }
+
+  pub fn draw_picture(&mut self, picture:&Picture, src_rect:&Rect, dst_rect:&Rect){
+    let paint = self.paint_for_image();
+    let matrix = Self::fit_matrix(src_rect, dst_rect);
 
     self.render_to_canvas(&paint, |canvas, paint| {
       // only use paint if we need it for alpha, blend, shadow, or effect since otherwise
       // the SVG exporter will omit the picture altogether
-      let paint = match (paint.as_blend_mode(), paint.alpha(), paint.image_filter()) {
-        (Some(BlendMode::SrcOver), 255, None) => None,
-        _ => Some(paint)
-      };
+      let paint = match Self::is_pass_through(paint){ true => None, false => Some(paint) };
       canvas.save();
       canvas.clip_rect(dst_rect, ClipOp::Intersect, true);
       canvas.draw_picture(&picture, Some(&matrix), paint);
       canvas.restore();
     });
+  }
+
+  // draw another canvas by embedding its Page reference so its isolation can be handled
+  // appropriately (depending on whether a PDF/SVG/bitmap is being generated)
+  pub fn draw_canvas(&mut self, page:&Page, src_rect:&Rect, dst_rect:&Rect){
+    let paint = self.paint_for_image();
+    let matrix = Self::fit_matrix(src_rect, dst_rect);
+
+    // an embed carries geometry but not an enclosing paint, so anything needing one falls back to
+    // a flattened picture with its isolation baked in (which svg drops, as it already did)
+    let embed = (page.dependent_ops || page.has_embeds) // needs embed (blits, clears, or blends)
+              && !self.has_shadow() && !self.is_region_blend() // doesn't have an enclosing paint
+              && Self::is_pass_through(&paint);
+
+    if !embed{
+      if let Some(pict) = page.to_picture(None){
+        self.draw_picture(&pict, src_rect, dst_rect);
+      }
+      return
+    }
+
+    // cache the src page and the rect+matrix info to position it within the destination canvas
+    let (bounds, clip) = self.embed_region(dst_rect);
+    let matrix = Matrix::concat(&self.state.matrix, &matrix);
+    let page = page.clone();
+    self.with_recorder(|mut rec| rec.push_embed(Embed{ page, bounds, clip, matrix }));
+  }
+
+  // the region an embed occupies in *this* page's coordinate space. the clip is `Some` only when
+  // the bounding rect alone can't describe it — i.e. when the CTM rotates or skews, or a clip is
+  // live — since `Embed::clip_to` falls back to the rect whenever it's `None`.
+  fn embed_region(&self, dst_rect:&Rect) -> (Rect, Option<Path>){
+    let bounds = self.state.matrix.map_rect(dst_rect).0;
+    let clip = match (self.state.matrix.rect_stays_rect(), &self.state.clip){
+      (true, None) => None,
+      (_, clip) => {
+        let quad = Path::rect(dst_rect, None).with_transform(&self.state.matrix);
+        match clip{
+          Some(clip) => quad.op(clip, PathOp::Intersect),
+          None => Some(quad),
+        }
+      }
+    };
+    (bounds, clip)
   }
 
   pub fn draw_image(&mut self, image:&Image, src_rect:&Rect, dst_rect:&Rect){
@@ -553,7 +636,7 @@ impl Context2D{
   }
 
   pub fn get_picture(&mut self) -> Option<Picture> {
-    self.recorder.borrow_mut().get_page().get_picture(None)
+    self.recorder.borrow_mut().get_page().to_picture(None)
   }
 
   pub fn write_pixels(&mut self, dst_buffer:&mut [u8], dst_info:&ImageInfo, crop:IRect, opts:ExportOptions, engine:RenderingEngine, read_frequently:bool) -> Result<(), String>{
@@ -561,17 +644,15 @@ impl Context2D{
   }
 
   pub fn blit_pixels(&mut self, image_data:ImageData, src_rect:&Rect, dst_rect:&Rect){
-    // works just like draw_image in terms of src/dst rects, but clears the dst_rect and then draws
+    // works just like draw_image in terms of src/dst rects, but replaces the dst_rect outright,
     // without clips, transforms, alpha, blend, or shadows
     let info = image_data.image_info();
     if let Some(bitmap) = images::raster_from_data(&info, image_data.buffer, info.min_row_bytes()) {
       self.push(); // cache matrix & clip in self.state
-      self.with_canvas(|canvas| {
-        let paint = Paint::default();
-        let mut eraser = Paint::default();
+      self.with_dependent_canvas(|canvas| {
+        let mut paint = Paint::default();
+        paint.set_blend_mode(BlendMode::Src); // replace the destination rather than compositing in
         canvas.restore_to_count(1).save(); // discard current matrix & clip and create clean stack
-        eraser.set_blend_mode(BlendMode::Clear);
-        canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &eraser);
         canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &paint);
       });
       self.pop(); // restore discarded matrix & clip

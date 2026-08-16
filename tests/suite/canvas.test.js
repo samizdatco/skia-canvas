@@ -420,16 +420,28 @@ describe("Canvas", ()=>{
     })
 
     test("matte", async () => {
-      ctx.fillStyle = 'red'
-      ctx.fillRect(100, 100, 100, 100)
-      assert.deepEqual(pixel(50, 50), CLEAR)
+      // a matte is a backdrop for the export, not content the canvas is allowed to erase. a
+      // region-affecting composite makes the page depend on its own prior pixels, and replaying
+      // it onto the matte let it treat the matte as those pixels and wipe it out — so both modes
+      // have to leave the same square over the same backdrop
+      for (const mode of ['source-over', 'destination-in']){
+        ctx.reset()
+        ctx.fillStyle = 'red'
+        if (mode == 'destination-in'){
+          ctx.fillRect(0, 0, WIDTH, HEIGHT) // fill everything, then erase back to just the square
+          ctx.globalCompositeOperation = mode
+        }
+        ctx.fillRect(100, 100, 100, 100)
+        assert.deepEqual(pixel(50, 50), CLEAR)
+        assert.deepEqual(pixel(150, 150), [255, 0, 0, 255])
 
-      let img = await loadImage(await canvas.toBuffer('png', {matte:'white'}))
-      let flat = new Canvas(WIDTH, HEIGHT),
-          ftx = flat.getContext('2d')
-      ftx.drawImage(img, 0, 0)
-      assert.deepEqual(Array.from(ftx.getImageData(50, 50, 1, 1).data), WHITE)
-      assert.deepEqual(Array.from(ftx.getImageData(150, 150, 1, 1).data), [255, 0, 0, 255])
+        let img = await loadImage(await canvas.toBuffer('png', {matte:'white'}))
+        let flat = new Canvas(WIDTH, HEIGHT),
+            ftx = flat.getContext('2d')
+        ftx.drawImage(img, 0, 0)
+        assert.deepEqual(Array.from(ftx.getImageData(50, 50, 1, 1).data), WHITE, `matte erased by ${mode}`)
+        assert.deepEqual(Array.from(ftx.getImageData(150, 150, 1, 1).data), [255, 0, 0, 255], `content lost with ${mode}`)
+      }
     })
 
     test("quality", async () => {

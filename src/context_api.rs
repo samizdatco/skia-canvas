@@ -486,7 +486,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let bounds_size = content.size();
     let (src, dst) = _layout_rects(&mut cx, bounds_size, &nums)?;
 
-    content.snap_rects_to_bounds(src, dst);
+    Content::snap_rects_to_bounds(content.size(), src, dst);
     let mut this = this.borrow_mut();
     this.draw_image(&img, &src, &dst);
   } else if let Content::Vector(pict, pict_size) = &content {
@@ -511,7 +511,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       }
     }
 
-    content.snap_rects_to_bounds(src, dst);
+    Content::snap_rects_to_bounds(content.size(), src, dst);
     let mut this = this.borrow_mut();
     this.draw_picture(&pict, &src, &dst);
   }
@@ -526,15 +526,16 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let arg_names = ["srcX", "srcY", "srcWidth", "srcHeight", "dstX", "dstY", "dstWidth", "dstHeight"];
   let nums = float_args_or_bail_at(&mut cx, 2, &arg_names[..argc-2])?;
 
-  let content = Content::from_context(&mut context.borrow_mut(), true);
-  if let Content::Vector(pict, size) = &content{
-    let (src, dst) = _layout_rects(&mut cx, *size, &nums)?;
-    let (src, dst) = content.snap_rects_to_bounds(src, dst);
-    this.borrow_mut().draw_picture(&pict, &src, &dst);
-    Ok(cx.undefined())
-  }else{
-    cx.throw_error("Canvas's PictureRecorder failed to generate an image")
+  let page = context.borrow_mut().get_page();
+  let size = page.bounds.size();
+  if size.is_empty(){
+    return cx.throw_error("Canvas's PictureRecorder failed to generate an image")
   }
+
+  let (src, dst) = _layout_rects(&mut cx, size, &nums)?;
+  let (src, dst) = Content::snap_rects_to_bounds(size, src, dst);
+  this.borrow_mut().draw_canvas(&page, &src, &dst);
+  Ok(cx.undefined())
 }
 
 pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsObject> {
