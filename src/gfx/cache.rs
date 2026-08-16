@@ -122,7 +122,7 @@ mod frame {
         }
 
         pub fn depth(&self) -> usize {
-            self.page.layers.len()
+            self.page.depth()
         }
 
         pub fn wants_snapshot(&self, page:&Page, matte:Color4f, dpr:f32, last_id:usize) -> bool{

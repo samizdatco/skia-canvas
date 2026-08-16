@@ -20,7 +20,7 @@ use winit::{
     event_loop::ActiveEventLoop,
 };
 
-use crate::gfx::page::Page;
+use crate::gfx::page::{Page, Replay};
 use crate::gfx::RenderOutcome;
 use crate::gfx::cache::Frame;
 use crate::bridge::to_color_space;
@@ -114,9 +114,7 @@ impl MetalRenderer{
             // draw newly added vector layers
             canvas.scale((dpr, dpr))
                 .clip_rect(clip, None, Some(true));
-            for pict in page.layers.iter().skip(self.frame.depth()){
-                canvas.draw_picture(pict, Some(&matrix), None);
-            }
+            page.playback_from(canvas, self.frame.depth(), Some(&matrix), Replay::Bitmap);
         });
 
         // cache frame contents for use as background of next render pass

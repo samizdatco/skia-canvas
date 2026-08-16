@@ -5,8 +5,9 @@ use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
   svg::{self, canvas::Flags},
-  image::BitDepth, images, pdf,
-  Canvas as SkCanvas, ClipOp, Color, Color4f, ColorSpace, ColorType, AlphaType, Document, Surface,
+  image::BitDepth, images, pdf, BlendMode,
+  canvas::SaveLayerRec,
+  Canvas as SkCanvas, ClipOp, Color, Color4f, ColorSpace, ColorType, AlphaType, Document, Paint, Surface,
   Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Rect, IRect, Size, ISize,
   SurfaceProps, SurfacePropsFlags, PixelGeometry, jpeg_encoder, png_encoder, webp_encoder
 };
@@ -20,23 +21,79 @@ use crate::gfx::RenderingEngine;
 use crate::gfx::cache::SurfaceCache;
 use crate::mem;
 
+// the page's content is a list of layers which are either normal drawing ops or 'embedded' content from a
+// drawCanvas() call which needs to be isolated so each backend (SVG/PDF/bitmap) can composite it appropriately
+#[derive(Debug, Clone)]
+pub enum Layer{
+  Ops(Picture), // local drawing ops (flattened into a saveLayer)
+  Embed(Box<Embed>), // another canvas, deferred until rendering
+}
+
+// an embedded canvas's Page reference along with its geometry in the destination page
+#[derive(Debug, Clone)]
+pub struct Embed{
+  pub page: Page,         // the source, snapshotted at the moment it was drawn
+  pub bounds: Rect,       // its frame-rect in the destination, with the draw-time CTM applied
+  pub clip: Option<Path>, // set only when the CTM rotates/skews or a clip is live — i.e. when
+                          // `bounds` alone can't describe the region (see `embed_region`)
+  pub matrix: Matrix,     // the CTM at draw-time (plus placement/scaling from the draw call's coords/dims)
+}
+
+impl Embed{
+  // transform `bounds` to the space the layers are being replayed into (e.g., a window `fit` transform
+  // or the accumulated matrix of a nested embed)
+  fn bounds_in(&self, matrix:Option<&Matrix>) -> Rect{
+    matrix.map(|m| m.map_rect(self.bounds).0).unwrap_or(self.bounds)
+  }
+
+  // narrow a canvas to the region (bounds + clip) this embed occupies
+  fn clip_to(&self, canvas:&SkCanvas, matrix:Option<&Matrix>){
+    match &self.clip{
+      Some(clip) => match matrix{
+        Some(matrix) => { canvas.clip_path(&clip.with_transform(matrix), ClipOp::Intersect, true); },
+        None => { canvas.clip_path(clip, ClipOp::Intersect, true); },
+      },
+      None => { canvas.clip_rect(self.bounds_in(matrix), ClipOp::Intersect, true); },
+    }
+  }
+
+  // open a transparency layer covering this embed's bounding box
+  fn begin_layer(&self, canvas:&SkCanvas, matrix:Option<&Matrix>, paint:&Paint){
+    canvas.save_layer(&SaveLayerRec::default().bounds(&self.bounds_in(matrix)).paint(paint));
+  }
+}
+
+// each export backend needs a different strategy for handling embeds & transparency groups
+#[derive(Clone, Copy)]
+pub enum Replay{
+  Bitmap,   // raster: replay embeds inside transparency layers
+  Vector,   // pdf: replay embeds inside transparency layers, keeping their content as geometry
+  Geometry, // svg: no transparency layers at all (Skia's SVG support lacks them)
+}
+
+impl Replay{
+  fn isolates(&self) -> bool{ !matches!(self, Replay::Geometry) }
+}
+
 //
 // Deferred canvas (records drawing commands for later replay on an output surface)
 //
 
 pub struct PageRecorder{
   current: Option<PictureRecorder>,
-  layers: Vec<Picture>,
+  layers: Vec<Layer>,
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
-  changed: bool,
   color_space: ColorSpace,
+  changed: bool, // whether the recorder contains new ops not yet written to a Layer
   disposed: bool, // flag that drawing ops should be ignored after PictureRecorder has been dropped
-  has_gpu_surface: bool, // flag that drops need to happen on render thread
+  has_gpu_surface: bool, // whether drops need to happen on render thread
   approx_ops: usize, // draw ops recorded into `current` since the last get_page() flush (see release())
   footprint: mem::v8::Footprint, // report the retained display-list size to V8's GC accounting
-  id: usize,
+  dependent_ops: bool, // contains (non-embed) layers that use a clear, blit, or non-SrcOver blend
+  has_embeds: bool, // contains embed layers (i.e., canvas content added via `drawCanvas`)
+  id: usize, // generation id (incremented when the canvas is fully cleared)
 }
 
 impl PageRecorder{
@@ -50,7 +107,45 @@ impl PageRecorder{
       has_gpu_surface:false,
       approx_ops:0,
       footprint:mem::v8::Footprint::default(),
+      dependent_ops:false,
+      has_embeds:false,
     }
+  }
+
+  // record that the page will need an isolation group if embedded in another canvas
+  pub fn mark_dependent(&mut self){
+    self.dependent_ops = true;
+  }
+
+  // finish current recording and append as a layer
+  pub fn flush(&mut self){
+    if !self.changed { return } // no-op if nothing new to add
+
+    // store layer as a drawable (so copies are deduplicated) wrapped in a picture (so it can be sent to other threads)
+    let layer = self.current.as_mut().and_then(|rec| rec.finish_recording_as_drawable());
+    if let Some(mut drawable) = layer{
+      let mut wrapper = PictureRecorder::new();
+      wrapper.begin_recording(self.bounds, true).draw_drawable(&mut drawable, None);
+      if let Some(pict) = wrapper.finish_recording_as_picture(None){
+        self.footprint.grow(pict.approximate_bytes_used()); // update v8's accounting
+        self.layers.push(Layer::Ops(pict));
+      }
+      self.approx_ops = 0;
+    }
+
+    if let Some(rec) = self.current.as_mut(){
+      rec.begin_recording(self.bounds, true);
+    }
+    self.changed = false; // recorder is clean
+    self.restore();
+  }
+
+  // append an embedded canvas by reference
+  pub fn push_embed(&mut self, embed:Embed){
+    if self.disposed { return }
+    self.flush();
+    self.has_embeds = true;
+    self.layers.push(Layer::Embed(Box::new(embed)));
   }
 
   pub fn append<F>(&mut self, f:F)
@@ -148,33 +243,15 @@ impl PageRecorder{
   }
 
   pub fn get_page(&mut self) -> Page{
-    if self.changed {
-      // store layer as a drawable (so copies are deduplicated) wrapped in a picture (so it can be sent to other threads)
-      let layer = self.current.as_mut().and_then(|rec| rec.finish_recording_as_drawable());
-      if let Some(mut drawable) = layer{
-        let mut wrapper = PictureRecorder::new();
-        wrapper.begin_recording(self.bounds, true).draw_drawable(&mut drawable, None);
-        if let Some(pict) = wrapper.finish_recording_as_picture(None){
-          // report just the new layer's size to V8 (layers are append-only until release, so this
-          // accumulates the whole retained display list without re-summing the list each get_page)
-          self.footprint.grow(pict.approximate_bytes_used());
-          self.layers.push(pict);
-        }
-        self.approx_ops = 0; // flushed content is now measurable via the layer picture itself
-      }
-
-      if let Some(rec) = self.current.as_mut(){
-        rec.begin_recording(self.bounds, true);
-      }
-      self.changed = false; // recorder is clean
-      self.restore();
-    }
+    self.flush();
 
     Page{
       layers: self.layers.clone(),
       bounds: self.bounds,
       id: self.id,
       color_space: self.color_space.clone(),
+      dependent_ops: self.dependent_ops,
+      has_embeds: self.has_embeds,
     }
   }
 
@@ -182,7 +259,7 @@ impl PageRecorder{
     let size = self.bounds.size().to_floor();
     self
       .get_page()
-      .get_picture(None)
+      .to_picture(None)
       .and_then(|pict| {
         // rasterize using wide-gamut F16 colors so it can be converted into whatever colorSpace
         // drawImage(canvas) is using
@@ -204,7 +281,9 @@ impl PageRecorder{
     const BASE: usize = 16 * 1024; // size of an empty recorder
     const APPROX_OP_BYTES: usize = 128; // based on a 2500-arc recording ≈ 300k
     let estimated_bytes: usize = BASE
-      + self.layers.iter().map(|pict| pict.approximate_bytes_used()).sum::<usize>()
+      + self.layers.iter().filter_map(|l| match l{
+          Layer::Ops(p) => Some(p.approximate_bytes_used()), _ => None
+        }).sum::<usize>()
       + self.approx_ops * APPROX_OP_BYTES;
 
     self.footprint.clear(); // credit the display-list charge back to V8
@@ -315,10 +394,8 @@ impl RecordingSurface{
       canvas.scale((self.density, self.density));
 
       // draw newly added layers
-      for pict in page.layers.iter().skip(self.depth){
-        pict.playback(canvas);
-      }
-      self.depth = page.layers.len();
+      page.playback_from(canvas, self.depth, None, Replay::Bitmap);
+      self.depth = page.depth();
     }
   }
 
@@ -343,8 +420,10 @@ impl RecordingSurface{
 pub struct Page{
   pub id: usize,
   pub bounds: Rect,
-  pub layers: Vec<Picture>,
-  pub color_space: ColorSpace, // inherited from the context that recorded this page
+  layers: Vec<Layer>,
+  pub color_space: ColorSpace, // inherited from the context that recorded the page
+  pub dependent_ops: bool, // contains ops that clear, blit, or use a non-SrcOver blend
+  pub has_embeds: bool, // contains other canvases embedded by reference
 }
 
 impl PartialEq for Page {
@@ -356,7 +435,8 @@ impl PartialEq for Page {
 
 impl Default for Page {
   fn default() -> Self {
-    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![], color_space: ColorSpace::new_srgb() }
+    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![],
+          color_space: ColorSpace::new_srgb(), dependent_ops:false, has_embeds:false }
   }
 }
 
@@ -369,12 +449,55 @@ impl Page{
     Size::new(self.bounds.width() * density, self.bounds.height() * density).to_floor()
   }
 
-  pub fn get_picture(&self, matte:Option<Color4f>) -> Option<Picture> {
-    let mut compositor = PictureRecorder::new();
-    let output = compositor.begin_recording(self.bounds, true);
-    matte.map(|c| output.clear(c));
-    self.layers.iter().for_each(|pict| pict.playback(output));
-    compositor.finish_recording_as_picture(None)
+  // draw all or a slice of the page's layers into a canvas, optionally adding a matrix transform to each.
+  // the `replay` mode selects how isolation groups are handled (for bitmaps vs PDF vs SVG)
+  pub fn playback_from(&self, canvas:&SkCanvas, first:usize, matrix:Option<&Matrix>, replay:Replay){
+    for layer in self.layers.iter().skip(first){
+      match layer{
+        Layer::Ops(pict) => { canvas.draw_picture(pict, matrix, None); },
+        Layer::Embed(embed) => {
+          let total = match matrix{ Some(m) => Matrix::concat(m, &embed.matrix), None => embed.matrix };
+
+          // clip before opening the layer, so the boundary encloses the *group* rather than each op
+          // inside it (otherwise an erasing op will leave an un-erased fringe along the boundary)
+          canvas.save();
+          embed.clip_to(canvas, matrix);
+          match replay.isolates(){
+            true => {
+              // use a non-null paint, so skia doesn't filter the transparency layer out as a no-op
+              embed.begin_layer(canvas, matrix, &Paint::default());
+              embed.page.playback_from(canvas, 0, Some(&total), replay);
+              canvas.restore();
+            }
+            false => embed.page.playback_from(canvas, 0, Some(&total), replay)
+          }
+          canvas.restore();
+        }
+      }
+    }
+  }
+
+  // flatten the page to a matted Picture with embeds handled appropriately for the `replay` destination
+  fn flatten(&self, matte:Option<Color4f>, replay:Replay) -> Option<Picture> {
+    let mut recorder = PictureRecorder::new();
+    let output = recorder.begin_recording(self.bounds, true);
+    if let Some(color) = matte{ output.clear(color); }
+
+    // create a transparency layer if the content needs it (so it doesn't modify the matte)
+    match replay.isolates() && self.dependent_ops{
+      true => {
+        output.save_layer(&SaveLayerRec::default().bounds(&self.bounds).paint(&Paint::default()));
+        self.playback_from(output, 0, None, replay);
+        output.restore();
+      }
+      false => self.playback_from(output, 0, None, replay)
+    }
+
+    recorder.finish_recording_as_picture(None)
+  }
+
+  pub fn to_picture(&self, matte:Option<Color4f>) -> Option<Picture> {
+    self.flatten(matte, Replay::Vector)
   }
 
   pub fn encoded_as(&self, options:ExportOptions, engine:RenderingEngine) -> Result<Vec<u8>, String> {
@@ -390,17 +513,13 @@ impl Page{
       "pdf" => {
         let mut pdf_bytes = Vec::new();
         let metadata = pdf_metadata(quality, density);
-        let mut document = pdf_document(&mut pdf_bytes, &metadata).begin_page(size, None);
-        let canvas = document.canvas();
-        let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
-        canvas.draw_picture(&picture, None, None);
-        document.end_page().close();
+        self.append_to(pdf_document(&mut pdf_bytes, &metadata), matte)?.close();
         Ok(pdf_bytes)
       }
 
       "svg" => {
         let canvas = svg::Canvas::new(Rect::from_size(size), options.svg_flags());
-        let picture = self.get_picture(matte).ok_or("Could not generate an image")?;
+        let picture = self.flatten(matte, Replay::Geometry).ok_or("Could not generate an image")?;
         canvas.draw_picture(&picture, None, None);
         Ok(canvas.end().as_bytes().to_vec())
       }
@@ -421,15 +540,14 @@ impl Page{
           let mut surface = engine.make_surface(&img_info, &opts, budgeted)?;
           let canvas = surface.canvas();
 
-          // fill the canvas if a matte was requested
-          if let Some(color) = opts.matte{
-            canvas.clear(color);
-          }
-
           // replay all recorded layers into the transient surface (freed at closure end)
           canvas.set_matrix(&Matrix::scale((opts.density, opts.density)).into());
-          for pict in page.layers.iter(){
-            pict.playback(canvas);
+          page.playback_from(canvas, 0, None, Replay::Bitmap);
+
+          // draw the matte underneath as a final pass so the page's content has a transparent
+          // background to work with and can't erase the matte with a region-affecting op
+          if let Some(color) = opts.matte{
+            surface.canvas().draw_color(color, BlendMode::DstOver);
           }
 
           // extract the results (potentially texture-backed)
@@ -565,7 +683,7 @@ impl Page{
     if !self.bounds.is_empty(){
       let mut doc = doc.begin_page(self.bounds.size(), None);
       let canvas = doc.canvas();
-      if let Some(picture) = self.get_picture(matte){
+      if let Some(picture) = self.to_picture(matte){
         canvas.draw_picture(&picture, None, None);
       }
       Ok(doc.end_page())
@@ -619,13 +737,15 @@ impl PageSequence{
       pad => pad as usize
     };
 
+    let engine = self.engine;
     self.pages
-      .par_iter()
+      .clone() // embeds' clip paths are not Sync so need a clone (just a refcount) to jump threads
+      .into_par_iter()
       .enumerate()
       .try_for_each(|(pp, page)|{
         let folio = format!("{:0width$}", pp+1, width=padding);
         let filename = pattern.replace("{}", folio.as_str());
-        page.write(&filename, options.clone(), self.engine)
+        page.write(&filename, options.clone(), engine)
       })
   }
 

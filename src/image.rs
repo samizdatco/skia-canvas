@@ -122,13 +122,12 @@ impl Content{
     }
   }
 
-  pub fn snap_rects_to_bounds(&self, mut src: Rect, mut dst: Rect) -> (Rect, Rect) {
+  pub fn snap_rects_to_bounds(size: Size, mut src: Rect, mut dst: Rect) -> (Rect, Rect) {
     // Handle 'overdraw' of the src image where the crop coordinates are outside of its bounds
     // Snap the src rect to its actual bounds and shift/pad the dst rect to account for the
     // whitespace included in the crop.
     let scale_x = dst.width() / src.width();
     let scale_y = dst.height() / src.height();
-    let size = self.size();
 
     if src.left < 0.0 {
       dst.left += -src.left * scale_x;

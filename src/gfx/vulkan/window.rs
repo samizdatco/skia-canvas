@@ -22,7 +22,7 @@ use winit::{
     event_loop::ActiveEventLoop,
     window::Window,
 };
-use crate::gfx::page::Page;
+use crate::gfx::page::{Page, Replay};
 use crate::gfx::RenderOutcome;
 use crate::gfx::cache::Frame;
 use super::{VK_FORMATS, to_sk_format, VulkanShared, make_direct_context};
@@ -141,9 +141,7 @@ impl VulkanRenderer {
             // draw newly added vector layers
             canvas.scale((dpr, dpr))
                 .clip_rect(clip, None, Some(true));
-            for pict in page.layers.iter().skip(self.frame.depth()){
-                canvas.draw_picture(pict, Some(&matrix), None);
-            }
+            page.playback_from(canvas, self.frame.depth(), Some(&matrix), Replay::Bitmap);
         });
 
         // cache frame contents for use as background of next render pass (a skipped frame leaves
