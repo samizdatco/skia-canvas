@@ -24,10 +24,10 @@ dev: $(NPM) $(LIB_SRC)
 	@touch $(LIB)
 
 test: $(LIB)
-	node --test --test-reporter ./tests/runner/full.js "tests/suite/*.test.js"
+	node tests/runner full
 
 debug: $(LIB)
-	node --test --test-reporter ./tests/runner/debug.js --watch "tests/suite/*.test.js"
+	node tests/runner debug
 
 visual: $(LIB)
 	@node --watch-path lib --watch-path tests/visual tests/visual
