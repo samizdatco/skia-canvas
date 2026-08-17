@@ -802,6 +802,71 @@ describe("Path2D", ()=>{
       assert.deepEqual(pixel(70, 70), CLEAR) // the hole survives…
       assert.deepEqual(pixel(25, 70), BLACK) // …and the ring around it is still filled
     })
+
+    test("contours", () => {
+      let pair = new Path2D()
+      pair.moveTo(0, 0)
+      pair.lineTo(100, 0)
+      pair.moveTo(0, 100)
+      pair.lineTo(100, 100)
+
+      let [a, b] = pair.contours
+      assert.equal(pair.contours.length, 2)
+      assert.matchesSubset(a.bounds, {left:0, right:100, top:0, bottom:0})
+      assert.matchesSubset(b.bounds, {left:0, right:100, top:100, bottom:100})
+
+      // each contour is measurable and drawable on its own
+      assert.equal(a.length + b.length, pair.length)
+      ctx.stroke(b)
+      assert.deepEqual(pixel(50, 100), BLACK)
+      assert.deepEqual(pixel(50, 2), CLEAR)
+
+      assert.equal(new Path2D("M0 0 L100 0").contours.length, 1)
+      assert.equal(new Path2D().contours.length, 0)
+
+      // verbs are replayed exactly: a closed contour keeps its `closePath`…
+      let rect = new Path2D()
+      rect.rect(10, 10, 100, 100)
+      assert.equal(rect.contours.length, 1)
+      assert.equal(rect.contours[0].d, rect.d)
+      assert.equal(rect.contours[0].length, rect.length)
+
+      // …a zero-length contour (a lone moveTo/closePath dot) is preserved, even though
+      // it contributes nothing to the measured length…
+      let dotted = new Path2D()
+      dotted.moveTo(0, 0)
+      dotted.lineTo(100, 0)
+      dotted.moveTo(200, 200)
+      dotted.closePath()
+      assert.equal(dotted.contours.length, 2)
+      assert.equal(dotted.contours[1].length, 0)
+      assert.equal(dotted.contours.reduce((sum, c) => sum + c.length, 0), dotted.length)
+
+      // …and curves round-trip verbatim (conic weights included), so the contours'
+      // path data concatenates back into the source's
+      let rings = new Path2D()
+      rings.arc(100, 100, 50, 0, TAU)
+      rings.moveTo(250, 100)
+      rings.arc(200, 100, 50, 0, TAU)
+      assert.equal(rings.contours.length, 2)
+      assert.equal(rings.contours.map(c => c.d).join(""), rings.d)
+      // the ruler accumulates in f64, so the sum invariant is exact even for curved contours
+      assert.equal(rings.contours.reduce((sum, c) => sum + c.length, 0), rings.length)
+
+      // splitting a boolean-op result and reassembling it renders identically: the hole lives in
+      // the contour *directions*, not in the `evenodd` tag skia leaves on path-op output (which a
+      // Path2D never carries into a fill anyway — every fill assigns its own rule)
+      let donut = new Path2D()
+      donut.rect(20, 20, 100, 100)
+      donut.rect(45, 45, 50, 50)
+      let hollow = donut.simplify('evenodd')
+      let rebuilt = new Path2D()
+      for (let contour of hollow.contours) rebuilt.addPath(contour)
+      scrub()
+      ctx.fill(rebuilt)
+      assert.deepEqual(pixel(70, 70), CLEAR) // still hollow…
+      assert.deepEqual(pixel(25, 70), BLACK) // …with the ring intact
+    })
   })
 
   describe("can apply path effect", () => {

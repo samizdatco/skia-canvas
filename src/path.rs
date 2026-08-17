@@ -636,7 +636,7 @@ pub fn edges(mut cx: FunctionContext) -> JsResult<JsArray> {
 
     if let Some(edge) = from_verb(verb){
       let cmd = cx.string(edge);
-      let segment = JsArray::new(&mut cx, 1 + points.len());
+      let segment = cx.empty_array();
       segment.set(&mut cx, 0, cmd)?;
 
       let at_point = if points.len()>1{ 1 }else{ 0 };
@@ -657,12 +657,55 @@ pub fn edges(mut cx: FunctionContext) -> JsResult<JsArray> {
     }
   }
 
-  let verbs = JsArray::new(&mut cx, edges.len());
+  let verbs = cx.empty_array();
   for (i, segment) in edges.iter().enumerate(){
     verbs.set(&mut cx, i as u32, *segment)?;
   }
 
   Ok(verbs)
+}
+
+// an array of Path2Ds, one per contour from this path
+pub fn contours(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let this = this.borrow();
+  let path = this.path();
+
+  let mut paths:Vec<Path2D> = vec![];
+  let mut builder:Option<PathBuilder> = None;
+  let mut weights = path::Iter::new(&path, false);
+
+  // replay the verbs, starting a new builder at each moveTo
+  for (verb, pts) in path::Iter::new(&path, false){
+    weights.next();
+
+    if verb == Verb::Move{
+      if let Some(mut done) = builder.take(){
+        paths.push(Path2D::from(done.detach()));
+      }
+      builder.get_or_insert_default().move_to(pts[0]);
+    }else{
+      let builder = builder.get_or_insert_default();
+      match verb{
+        Verb::Line => { builder.line_to(pts[1]); },
+        Verb::Quad => { builder.quad_to(pts[1], pts[2]); },
+        Verb::Conic => { builder.conic_to(pts[1], pts[2], weights.conic_weight().unwrap()); },
+        Verb::Cubic => { builder.cubic_to(pts[1], pts[2], pts[3]); },
+        Verb::Close => { builder.close(); },
+        _ => {}
+      }
+    }
+  }
+  if let Some(mut done) = builder.take(){
+    paths.push(Path2D::from(done.detach()));
+  }
+
+  let array = cx.empty_array();
+  for (i, path) in paths.into_iter().enumerate(){
+    let boxed = cx.boxed(RefCell::new(path));
+    array.set(&mut cx, i as u32, boxed)?;
+  }
+  Ok(array)
 }
 
 pub fn get_d(mut cx: FunctionContext) -> JsResult<JsString> {
