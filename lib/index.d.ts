@@ -902,7 +902,7 @@ interface Path2D extends CanvasPath {
 
   jitter(segmentLength: number, amount: number, seed?: number): Path2D
   offset(dx: number, dy: number): Path2D
-  points(step?: number): readonly [x: number, y: number][]
+  points(step?: number, mode?: "even" | "exact"): readonly [x: number, y: number][]
   positionAt(distance: number): {x: number, y: number} | null
   tangentAt(distance: number): number | null
   normalAt(distance: number): number | null
