@@ -54,6 +54,7 @@ Uninstalls any dynamically loaded fonts that had been added via `FontLibrary.use
 FontLibrary.use([...fontPaths])
 FontLibrary.use(familyName, [...fontPaths])
 FontLibrary.use({familyName:[...fontPaths], ...)
+FontLibrary.use(familyName, {path, namedInstance})
 ```
 
 The `FontLibrary.use()` method allows you to dynamically load local font files and use them with your canvases. It can read fonts in the OpenType (`.otf`), TrueType (`.ttf`), and web-font (`.woff` & `.woff2`) file formats.
@@ -97,6 +98,19 @@ The return value will be either a list or an object (matching the style in which
   width: 'normal',
   file: 'fonts/Oswald-SemiBold.ttf'
 }
+```
+
+#### with a named variable-font instance
+
+Pass a one-based `fvar` named-instance index to register that instance as a
+fixed face. Its variation coordinates remain locked even when a canvas font
+string requests a different weight.
+
+```js
+FontLibrary.use("Example Light", {
+  path: "fonts/Example-Variable.ttf",
+  namedInstance: 3,
+})
 ```
 
 #### with a list of ‘glob’ patterns

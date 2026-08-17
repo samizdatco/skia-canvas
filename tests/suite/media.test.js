@@ -364,6 +364,26 @@ describe("FontLibrary", ()=>{
     assert(!FontLibrary.has(alias))
   })
 
+  test("can register a locked named variable-font instance", ()=>{
+    const variable = 'tests/assets/Raleway/Raleway-VariableFont_wght.ttf'
+    const staticLight = 'tests/assets/Raleway/static/Raleway-Light.ttf'
+
+    const [instance] = FontLibrary.use('Named Light', {path:variable, namedInstance:3})
+    FontLibrary.use('Static Light', staticLight)
+    assert.equal(instance.weight, 300)
+    assert.deepEqual(FontLibrary.family('Named Light').weights, [300])
+
+    ctx.font = '400 40px "Static Light"'
+    const expected = ctx.measureText('Variable font instance').width
+    ctx.font = '300 40px "Named Light"'
+    const locked = ctx.measureText('Variable font instance').width
+    assert(Math.abs(locked - expected) < 0.05)
+    for (const weight of [400, 700]) {
+      ctx.font = `${weight} 40px "Named Light"`
+      assert.equal(ctx.measureText('Variable font instance').width, locked)
+    }
+  })
+
   test("can render woff2 fonts", ()=>{
     for (const ext of ['woff', 'woff2']){
       let woff = findFont("Monoton-Regular." + ext),
