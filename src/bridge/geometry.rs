@@ -141,13 +141,15 @@ pub fn path2d_arg<'a>(cx: &mut FunctionContext<'a>, idx: usize) -> NeonResult<Ha
   }
 }
 
-// decode a distance arg, keeping non-finite values (the JS layer pre-coerces with `+`, so the
-// standard float helpers' is_finite filter would conflate NaN with a missing arg)
-pub fn distance_arg(cx: &mut FunctionContext, idx: usize) -> f64 {
+// preserve non-finite args as NaN and only return None if the arg is absent or undefined
+pub fn opt_distance_arg(cx: &mut FunctionContext, idx: usize) -> Option<f64> {
   cx.argument_opt(idx)
     .and_then(|arg| arg.downcast::<JsNumber, _>(cx).ok())
     .map(|num| num.value(cx))
-    .unwrap_or(f64::NAN)
+}
+
+pub fn distance_arg(cx: &mut FunctionContext, idx: usize) -> f64 {
+  opt_distance_arg(cx, idx).unwrap_or(f64::NAN)
 }
 
 use skia_safe::{PathOp};

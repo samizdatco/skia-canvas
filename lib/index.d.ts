@@ -907,6 +907,7 @@ interface Path2D extends CanvasPath {
   normalAt(distance: number): number | null
   round(radius: number): Path2D
   simplify(rule?: "nonzero" | "evenodd"): Path2D
+  slice(from?: number, to?: number, inverted?: boolean): Path2D
   transform(transform: Matrix): Path2D;
   transform(a: number, b: number, c: number, d: number, e: number, f: number): Path2D;
   trim(start: number, end: number, inverted?: boolean): Path2D;
