@@ -1,15 +1,21 @@
 // Adapted from @voxpelli/node-test-pretty-reporter@1.1.2 (MIT) for `make test`
 
-'use strict'
-
-let MarkdownOrChalk, diff, cleanStack
+import chalk from 'chalk'
+import { diff } from 'jest-diff'
+import cleanStack from 'clean-stack'
 
 const slowIfAboveMs = 75
 const stackRegex = /(?:\n {4}at .*)+/
 const testRunnerStackRegex = /^ {4}at Test\.runInAsyncScope \(/m
 
-const paint = (format, style, str) => format.chalk ? format.chalk[style](str) : str
+const logSymbols = { success: chalk.green('✔'), info: chalk.blue('ℹ') }
+
 const pad = n => ' '.repeat(n)
+
+const indent = (text, level = 1) => {
+  const prefix = pad(level * 2)
+  return prefix + text.split('\n').join('\n' + prefix)
+}
 
 function errDiff (err) {
   const diffable = 'expected' in err && 'actual' in err && err.expected !== undefined
@@ -22,7 +28,7 @@ function causeChain (err) {
   return chain
 }
 
-function formatError (format, err) {
+function formatError (err) {
   const firstStackLine = (err.stack || '').split('\n')[0]
   const extracted = (err.stack || '').match(stackRegex) || []
   const pruned = extracted[0]?.slice(1).split(testRunnerStackRegex)[0] || ''
@@ -31,16 +37,16 @@ function formatError (format, err) {
   if (firstStackLine?.includes(message) && err.name !== 'AssertionError') message = firstStackLine
 
   const stack = cleanStack(pruned, { basePath: process.cwd() }).replaceAll(/^\s+/gm, '')
-  const parts = [paint(format, 'red', message), paint(format, 'gray', stack)]
+  const parts = [chalk.red(message), chalk.gray(stack)]
   const diffStr = errDiff(err)
   if (diffStr) parts.splice(1, 0, diffStr)
   return parts.join('\n\n')
 }
 
-function formatErrorAndCauses (format, err) {
+function formatErrorAndCauses (err) {
   if (err.code === 'ERR_TEST_FAILURE' && err.cause instanceof Error) err = err.cause
   return causeChain(err)
-    .map((e, i) => format.indent((i ? 'caused by:\n\n' : '') + formatError(format, e), i))
+    .map((e, i) => indent((i ? 'caused by:\n\n' : '') + formatError(e), i))
     .join('\n\n')
 }
 
@@ -52,12 +58,7 @@ function * printParentStack (parentStack, prefix = '', suffix = '') {
   yield suffix + '\n'
 }
 
-module.exports = async function * prettyReporter (source) {
-  ({ MarkdownOrChalk } = await import('markdown-or-chalk'))
-  ;({ diff } = await import('jest-diff'))
-  cleanStack = (await import('clean-stack')).default
-
-  const format = new MarkdownOrChalk(false)
+export default async function * prettyReporter (source) {
   const diagnostics = []
   const failures = []
   const parentStack = []
@@ -87,25 +88,25 @@ module.exports = async function * prettyReporter (source) {
 
       let label
       if (type === 'test:pass') {
-        label = paint(format, 'gray', `${format.logSymbols.success} ${data.name}`)
+        label = chalk.gray(`${logSymbols.success} ${data.name}`)
       } else {
         failures.push({ data, parentStack: [...parentStack] })
-        label = paint(format, 'red', `${failures.length}) ${data.name}`)
+        label = chalk.red(`${failures.length}) ${data.name}`)
       }
       yield pad((data.nesting + 1) * 2) + label
 
       if (data.details.duration_ms > slowIfAboveMs) {
-        yield ' ' + paint(format, 'red', format.italic(`(${Math.floor(data.details.duration_ms)}ms)`))
+        yield ' ' + chalk.red(chalk.italic(`(${Math.floor(data.details.duration_ms)}ms)`))
       }
       yield '\n'
     }
   }
 
-  const info = diagnostics.map(d => `${format.logSymbols.info} ${d.message}`).join('\n')
-  yield '\n' + paint(format, 'gray', info) + '\n\n'
+  const info = diagnostics.map(d => `${logSymbols.info} ${d.message}`).join('\n')
+  yield '\n' + chalk.gray(info) + '\n\n'
 
   for (const [i, { data, parentStack }] of failures.entries()) {
     yield * printParentStack(parentStack, `${i + 1}) `, ':')
-    yield '\n' + format.indent(formatErrorAndCauses(format, data.details.error), 3) + '\n\n'
+    yield '\n' + indent(formatErrorAndCauses(data.details.error), 3) + '\n\n'
   }
 }

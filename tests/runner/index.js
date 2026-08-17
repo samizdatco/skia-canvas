@@ -16,8 +16,8 @@ const suite = () => readdirSync(`${ROOT}/tests/suite`)
 
 const RECIPES = {
   test: () => ['--test', ...suite()], // npm test
-  full: () => ['--test', '--test-reporter', './tests/runner/full.js', ...suite()], // make test
-  debug: () => ['--test', '--test-reporter', './tests/runner/debug.js', '--watch', ...suite()], // make debug
+  full: () => ['--test', '--test-reporter', './tests/runner/full.mjs', ...suite()], // make test
+  debug: () => ['--test', '--test-reporter', './tests/runner/debug.mjs', '--watch', ...suite()], // make debug
 }
 
 const args = process.argv.slice(2)
