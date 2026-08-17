@@ -873,6 +873,7 @@ export type Path2DEdge = [verb: string, ...args: number[]]
 interface Path2D extends CanvasPath {
   readonly bounds: Path2DBounds
   readonly edges: readonly Path2DEdge[]
+  readonly length: number
   d: string
 
   /**
@@ -901,6 +902,9 @@ interface Path2D extends CanvasPath {
   jitter(segmentLength: number, amount: number, seed?: number): Path2D
   offset(dx: number, dy: number): Path2D
   points(step?: number): readonly [x: number, y: number][]
+  positionAt(distance: number): {x: number, y: number} | null
+  tangentAt(distance: number): number | null
+  normalAt(distance: number): number | null
   round(radius: number): Path2D
   simplify(rule?: "nonzero" | "evenodd"): Path2D
   transform(transform: Matrix): Path2D;

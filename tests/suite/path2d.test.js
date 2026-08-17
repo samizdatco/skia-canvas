@@ -650,6 +650,105 @@ describe("Path2D", ()=>{
 
   })
 
+  describe("can measure", () => {
+    test("length", () => {
+      let rect = new Path2D()
+      rect.rect(10, 10, 100, 100)
+      assert.equal(rect.length, 400)
+
+      let line = new Path2D()
+      line.moveTo(50, 50)
+      line.lineTo(150, 50)
+      assert.equal(line.length, 100)
+
+      // a second contour's length is added to the total
+      line.moveTo(0, 100)
+      line.lineTo(0, 200)
+      assert.equal(line.length, 200)
+
+      // curves are measured by chord-summing, so they land slightly under the analytic value
+      let circle = new Path2D()
+      circle.arc(100, 100, 50, 0, TAU)
+      assert.ok(Math.abs(circle.length - 100 * Math.PI) < 1)
+
+      assert.equal(new Path2D().length, 0)
+    })
+
+    test("positionAt", () => {
+      let line = new Path2D()
+      line.moveTo(0, 0)
+      line.lineTo(100, 0)
+      assert.deepEqual(line.positionAt(25), {x:25, y:0})
+
+      // out-of-range distances clamp to the path's endpoints
+      assert.deepEqual(line.positionAt(-5), line.positionAt(0))
+      assert.deepEqual(line.positionAt(1e6), {x:100, y:0})
+      assert.deepEqual(line.positionAt(-Infinity), {x:0, y:0})
+      assert.deepEqual(line.positionAt(Infinity), {x:100, y:0})
+
+      // …but NaN and unmeasurable paths are flagged with null
+      assert.equal(line.positionAt(NaN), null)
+      assert.equal(new Path2D().positionAt(50), null)
+    })
+
+    test("tangentAt", () => {
+      let angles = new Path2D()
+      angles.moveTo(0, 0)
+      angles.lineTo(100, 0)  // heading: 0
+      angles.moveTo(0, 0)
+      angles.lineTo(0, 100)  // heading: π/2
+
+      // exact, not near: an axis-aligned tangent is exact in skia's f32, so widening before the
+      // atan2 lands on the same double JS spells `Math.PI/2`
+      assert.equal(angles.tangentAt(50), 0)
+      assert.equal(angles.tangentAt(150), Math.PI/2)
+
+      // an exact contour boundary belongs to the start of the later contour…
+      assert.equal(angles.tangentAt(100), Math.PI/2)
+      // …and the total length to the end of the last one
+      assert.equal(angles.tangentAt(200), Math.PI/2)
+
+      assert.equal(angles.tangentAt(NaN), null)
+      assert.equal(new Path2D().tangentAt(0), null)
+    })
+
+    test("normalAt", () => {
+      let angles = new Path2D()
+      angles.moveTo(0, 0)
+      angles.lineTo(100, 0)  // heading: 0
+      angles.moveTo(0, 0)
+      angles.lineTo(0, 100)  // heading: π/2
+
+      // the normal points off the path's left-hand side. since y grows downward, that's a quarter
+      // turn counterclockwise *on screen*: heading east it points north, heading south it points east
+      assert.equal(angles.normalAt(50), -Math.PI/2)
+      assert.equal(angles.normalAt(150), 0)
+
+      // …and it wraps back into the (-π, π] range tangentAt reports rather than running past -π.
+      // the wrap is exact too: -π/2 - π/2 is exactly -π in doubles, and TAU - π is exactly π
+      let north = new Path2D()
+      north.moveTo(0, 100)
+      north.lineTo(0, 0)     // heading: -π/2
+      assert.equal(north.tangentAt(50), -Math.PI/2)
+      assert.equal(north.normalAt(50), Math.PI)
+
+      // it stays a *fixed* quarter-turn from the tangent the whole way along a curve, rather than
+      // swapping sides at the inflection point the way the curvature normal would
+      let curve = new Path2D()
+      curve.moveTo(0, 0)
+      curve.bezierCurveTo(50, -80, 150, 80, 200, 10)
+      for (let i = 0; i <= 10; i++){
+        let d = curve.length * i / 10,
+            t = curve.tangentAt(d),
+            n = curve.normalAt(d)
+        assert.nearEqual(Math.cos(t)*Math.sin(n) - Math.sin(t)*Math.cos(n), -1)
+      }
+
+      assert.equal(angles.normalAt(NaN), null)
+      assert.equal(new Path2D().normalAt(0), null)
+    })
+  })
+
   describe("can apply path effect", () => {
 
     test("jitter", () => {

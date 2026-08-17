@@ -2,11 +2,12 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(non_snake_case)]
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::f32::EPSILON;
+use std::f64::consts::{FRAC_PI_2, PI, TAU};
 use neon::prelude::*;
-use skia_safe::{Path, Point, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, PathOp, StrokeRec};
-use skia_safe::{PathEffect, trim_path_effect};
+use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, PathOp, StrokeRec};
+use skia_safe::{PathEffect, trim_path_effect, ContourMeasure, ContourMeasureIter};
 use skia_safe::path::{self, AddPathMode, Verb};
 
 use crate::bridge::*;
@@ -19,26 +20,33 @@ impl Finalize for Path2D {}
 pub struct Path2D{
   builder: PathBuilder,
   cache: RefCell<Option<Path>>, // lazy snapshot of the builder; invalidated on every append
-  footprint: RefCell<mem::v8::Footprint>, // retained geometry size reported to V8 (charged lazily in `path`)
+  measure: RefCell<Option<Measure>>, // lazy whole-path arc-length ruler; invalidated with the cache
+  footprint: RefCell<mem::v8::Footprint>, // retained geometry & measure size reported to V8
 }
 
 impl Default for Path2D {
   fn default() -> Self {
-    Self{ builder:PathBuilder::new(), cache:RefCell::new(None), footprint:RefCell::new(mem::v8::Footprint::default()) }
+    Self{
+      builder:PathBuilder::new(), cache:RefCell::new(None), measure:RefCell::new(None),
+      footprint:RefCell::new(mem::v8::Footprint::default())
+    }
   }
 }
 
 impl From<PathBuilder> for Path2D{
   fn from(builder: PathBuilder) -> Self {
     // leave the cache empty: the geometry is charged when `path()` first materializes it
-    Self{ builder, cache:RefCell::new(None), footprint:RefCell::new(mem::v8::Footprint::default()) }
+    Self{ builder, ..Self::default() }
   }
 }
 
 impl From<Path> for Path2D{
   fn from(path: Path) -> Self {
     let footprint = mem::v8::Footprint::new(path.approximate_bytes_used());
-    Self{ builder:PathBuilder::new_path(&path), cache:RefCell::new(Some(path)), footprint:RefCell::new(footprint) }
+    Self{
+      builder:PathBuilder::new_path(&path), cache:RefCell::new(Some(path)),
+      footprint:RefCell::new(footprint), ..Self::default()
+    }
   }
 }
 
@@ -62,7 +70,20 @@ impl Path2D{
   // invalidate the cache and return the builder (to allow for a new append)
   pub fn update(&mut self) -> &mut PathBuilder {
     self.cache.borrow_mut().take();
+    if let Some(measure) = self.measure.borrow_mut().take(){
+      self.footprint.borrow_mut().grow(-(measure.bytes as i64));
+    }
     &mut self.builder
+  }
+
+  // borrow the arc-length ruler (and lazily build it if necessary)
+  pub fn measure(&self) -> Ref<'_, Measure> {
+    if self.measure.borrow().is_none(){
+      let ruler = Measure::new(&self.path());
+      self.footprint.borrow_mut().grow(ruler.bytes as i64);
+      *self.measure.borrow_mut() = Some(ruler);
+    }
+    Ref::map(self.measure.borrow(), |measure| measure.as_ref().unwrap())
   }
 
   pub fn scoot(&mut self, x: f32, y: f32){
@@ -193,6 +214,73 @@ impl Pen for Path2D {
   }
   fn close(&mut self){ self.update().close(); }
 }
+
+// measure all the path's contours laid end-to-end (so a distance can locate any point on the path)
+pub struct Measure{
+  contours: Vec<ContourMeasure>,
+  offsets: Vec<f64>, // cumulative start distance of each contour
+  total: f64, // total length of the whole path (f64, so accumulation doesn't drift on huge paths)
+  bytes: usize, // estimated size of the segment tables
+}
+
+impl Measure{
+  fn new(path:&Path) -> Self {
+    let mut contours = vec![];
+    let mut offsets = vec![];
+    let mut total = 0.0;
+    // force_closed:false — don't invent a closing segment for open contours
+    // (zero-length contours are skipped by the iterator entirely)
+    for contour in ContourMeasureIter::new(path, false, None){
+      offsets.push(total);
+      total += contour.length() as f64;
+      contours.push(contour);
+    }
+    Self{contours, offsets, total, bytes:measure_size_estimate(path)}
+  }
+
+  // map a whole-path distance to a position + tangent
+  fn locate(&self, d:f64) -> Option<(Point, Vector)> {
+    if d.is_nan(){ return None } // bail on NaN
+    let d = d.clamp(0.0, self.total); // clamp out-of-bounds distances into range
+    let idx = self.offsets.partition_point(|&start| start <= d).saturating_sub(1);
+    let contour = self.contours.get(idx)?;
+    contour.pos_tan((d - self.offsets[idx]) as f32)
+  }
+
+  // the tangent at a given distance (tangent is f32s but converted to f64 for the atan2)
+  fn heading(&self, d:f64) -> Option<f64> {
+    self.locate(d).map(|(_, tangent)| (tangent.y as f64).atan2(tangent.x as f64))
+  }
+}
+
+// estimate the size of the measure table based on Skia's curve-subdivision behavior
+fn measure_size_estimate(path:&Path) -> usize {
+  const TOL:f32 = 0.5; // CHEAP_DIST_LIMIT / res_scale
+  let dev = |p:Point, q:Point| (p.x - q.x).abs().max((p.y - q.y).abs());
+  let lerp = |p:Point, q:Point, t:f32| Point::new(p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t);
+  let curve_segs = |deviation:f32| {
+    let levels = (deviation / TOL).max(1.0).log2() / 2.0; // log₄ of the deviation ratio
+    1usize << (levels.ceil().min(8.0) as u32) // kMaxRecursionDepth = 8 → ≤256 segments
+  };
+
+  let (mut segments, mut points) = (0usize, 0usize);
+  for (verb, pts) in path::Iter::new(path, false){
+    let (segs, n_pts) = match verb{
+      Verb::Move => (0, 1),
+      Verb::Line | Verb::Close => (1, 1), // close emits a line back to the contour's start
+      Verb::Quad => (curve_segs(0.5 * dev(pts[1], lerp(pts[0], pts[2], 0.5))), 2),
+      Verb::Conic => (curve_segs(0.5 * dev(pts[1], lerp(pts[0], pts[2], 0.5))), 3), // the weight rides in an extra point
+      Verb::Cubic => (curve_segs(
+        dev(pts[1], lerp(pts[0], pts[3], 1.0/3.0)).max(dev(pts[2], lerp(pts[0], pts[3], 2.0/3.0)))
+      ), 3),
+      _ => (0, 0),
+    };
+    segments += segs;
+    points += n_pts;
+  }
+  12 * segments + 8 * points // sizeof(Segment) and sizeof(SkPoint)
+}
+
 
 //
 // -- Javascript Methods --------------------------------------------------------------------------
@@ -419,6 +507,61 @@ pub fn contains(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = this.borrow();
 
   Ok(cx.boolean(this.path().contains((x,y))))
+}
+
+// total arc length of all the path's contours
+pub fn get_length(mut cx: FunctionContext) -> JsResult<JsNumber> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let this = this.borrow();
+
+  Ok(cx.number(this.measure().total))
+}
+
+// the point a given distance along the path (or null if the path has no length)
+pub fn position_at(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let distance = distance_arg(&mut cx, 1);
+  let this = this.borrow();
+
+  match this.measure().locate(distance){
+    Some((Point{x, y}, _)) => {
+      let js_object = cx.empty_object();
+      let x = cx.number(x);
+      let y = cx.number(y);
+      js_object.set(&mut cx, "x", x)?;
+      js_object.set(&mut cx, "y", y)?;
+      Ok(js_object.upcast())
+    }
+    None => Ok(cx.null().upcast())
+  }
+}
+
+// tangent direction (in radians) at given distance along the path (or null if the path has no length)
+pub fn tangent_at(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let distance = distance_arg(&mut cx, 1);
+  let this = this.borrow();
+
+  match this.measure().heading(distance){
+    Some(heading) => Ok(cx.number(heading).upcast()),
+    None => Ok(cx.null().upcast())
+  }
+}
+
+// convenience method returning tangent-π/2, normalized to lie in the (-π, π] range
+pub fn normal_at(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let distance = distance_arg(&mut cx, 1);
+  let this = this.borrow();
+
+  match this.measure().heading(distance){
+    Some(heading) => {
+      let normal = heading - FRAC_PI_2;
+      let normal = if normal <= -PI { normal + TAU } else { normal };
+      Ok(cx.number(normal).upcast())
+    }
+    None => Ok(cx.null().upcast())
+  }
 }
 
 fn from_verb(verb:Verb) -> Option<String>{
