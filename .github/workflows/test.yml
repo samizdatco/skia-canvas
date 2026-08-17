@@ -43,6 +43,10 @@ jobs:
     - name: Use Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
 
+    - name: Install fontconfig (Linux only)
+      if: ${{ startsWith(matrix.os, 'ubuntu') }}
+      run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
+
     - name: Build module
       run: make optimized
 
