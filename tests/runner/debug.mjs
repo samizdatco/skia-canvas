@@ -95,7 +95,9 @@ export default async function * debugReporter (source) {
       marks.get(data.file).push(type === 'test:pass' ? chalk.cyan('·') : chalk.red('X'))
       if (type === 'test:fail') { failures.push(data); failed.add(data.file) }
       yield render()
-    } else if (type === 'test:summary' && !data.file) {
+    } else if (type === 'test:diagnostic' && !data.file && data.message.startsWith('duration_ms')) {
+      // node only emits `test:summary` on v24+, so key the end of a run off the last of the
+      // whole-run diagnostics instead — it lands once per run (including each watch re-run)
       const report = renderFailures(failures)
       yield (report ? '\n' + report : '') + '\n'
       order.length = 0
