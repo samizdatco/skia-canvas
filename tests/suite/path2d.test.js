@@ -803,6 +803,72 @@ describe("Path2D", ()=>{
       assert.deepEqual(pixel(25, 70), BLACK) // …and the ring around it is still filled
     })
 
+    test("points", () => {
+      let line = new Path2D()
+      line.moveTo(0, 0)
+      line.lineTo(100, 0)
+
+      // skia's distance→position interpolation carries a little f32 dust, so compare rounded
+      let sampled = (path, step, mode) => path.points(step, mode).map(pt => pt.map(v => Math.round(v * 1000) / 1000))
+
+      // by default the spacing is fitted to each contour so a whole number of steps spans it and
+      // both endpoints are anchored — a step that already divides the length needs no adjusting…
+      assert.deepEqual(sampled(line, 25), [[0,0], [25,0], [50,0], [75,0], [100,0]])
+      // …but one that doesn't is nudged to the nearest spacing that does
+      assert.deepEqual(sampled(line, 30), [[0,0], [33.333,0], [66.667,0], [100,0]])
+      assert.equal(line.points().length, 101) // step defaults to 1
+
+      // dividing the length into n steps yields n+1 samples in either mode — including "exact",
+      // despite the last ulp of n·(length/n) rounding up past the length
+      let curve = new Path2D()
+      curve.moveTo(0, 0)
+      curve.bezierCurveTo(100, 100, 200, -100, 300, 0)
+      for (const path of [line, curve])
+        for (const n of [1, 2, 3, 5, 7, 11, 13, 997])
+          for (const mode of /** @type {const} */ (["even", "exact"]))
+            assert.equal(path.points(path.length / n, mode).length, n + 1)
+
+      // a contour shorter than the step still gets both of its endpoints (a single fitted step)
+      let dash = new Path2D("M0 0 L12 0")
+      assert.deepEqual(sampled(dash, 40), [[0,0], [12,0]])
+
+      // each contour is measured and fitted on its own, restarting the stepping at its start
+      let pair = new Path2D()
+      pair.moveTo(0, 0)
+      pair.lineTo(100, 0)
+      pair.moveTo(0, 100)
+      pair.lineTo(90, 100)
+      assert.deepEqual(sampled(pair, 45), [[0,0], [50,0], [100,0], [0,100], [45,100], [90,100]])
+
+      // a closed contour's final sample lands back on its first — it's dropped rather than
+      // doubling the first dot
+      let ring = new Path2D()
+      ring.rect(0, 0, 100, 100)
+      let evens = ring.points(45)
+      assert.equal(evens.length, 9) // round(400/45) fitted steps, seam sample elided
+      assert.notDeepEqual(evens.at(-1), evens[0])
+
+      // "exact" mode instead samples at literal multiples of the step from each contour's start,
+      // reaching the endpoint only when the length divides evenly
+      assert.deepEqual(sampled(line, 30, "exact"), [[0,0], [30,0], [60,0], [90,0]])
+      assert.deepEqual(sampled(pair, 40, "exact"), [[0,0], [40,0], [80,0], [0,100], [40,100], [80,100]])
+      // …it elides a coincident seam sample too, whenever the length *does* divide evenly —
+      // otherwise the two would sit atop each other, a step of zero
+      let exacts = ring.points(50, "exact") // 400/50 = 8 whole steps, so d=400 coincides with d=0
+      assert.equal(exacts.length, 8)
+      assert.notDeepEqual(exacts.at(-1), exacts[0])
+      // …but an open contour's endpoints are distinct, so both survive
+      assert.deepEqual(sampled(line, 50, "exact"), [[0,0], [50,0], [100,0]])
+      // …and a contour shorter than the step yields nothing but its starting point
+      assert.deepEqual(sampled(dash, 40, "exact"), [[0,0]])
+
+      // an empty path has no samples; a non-positive step or unknown mode is silently ignored
+      assert.deepEqual(new Path2D().points(10), [])
+      assert.equal(line.points(0), undefined)
+      // @ts-expect-error — deliberately invalid (validation test)
+      assert.equal(line.points(10, "wavy"), undefined)
+    })
+
     test("contours", () => {
       let pair = new Path2D()
       pair.moveTo(0, 0)

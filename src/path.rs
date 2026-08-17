@@ -609,6 +609,63 @@ pub fn slice(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   Ok(cx.boxed(RefCell::new(Path2D::from(builder.detach()))))
 }
 
+// return a sequence of x/y points along the path, either adjusted to fit the contour "even"-ly and
+// include both endpoints, or at "exact" multiples of `step`
+pub fn points(mut cx: FunctionContext) -> JsResult<JsArray> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let step = distance_arg(&mut cx, 1); // kept as f64 so the endpoint check below has sufficient precision
+  let even = match opt_string_arg(&mut cx, 2).as_deref(){
+    Some("even") | None => true,
+    Some("exact") => false,
+    Some(mode) => cx.throw_type_error(format!("⚠️Expected `mode` to be \"even\" or \"exact\" (got {:?})", mode))?
+  };
+  let this = this.borrow();
+
+  if !(step > 0.0){ // also catches NaN
+    cx.throw_type_error("⚠️Expected `step` to be a positive number")?
+  }
+
+  let samples = this.measure()
+    .contours.iter().flat_map(|contour| {
+      // restart the step-counter at each new contour (always including the initial point)
+      let len = contour.length() as f64;
+
+      let mut pts:Vec<Point> = if even{
+        // always include the final point in "even" mode and adjust in-between spacing
+        let n = (len / step).round().max(1.0);
+        let fitted = len / n;
+        (0..=n as usize).filter_map(|i| contour.pos_tan((i as f64 * fitted) as f32).map(|(pt, _)| pt)).collect()
+      }else{
+        // only include the final point in "exact" mode when it falls within the rounding tolerance
+        let tolerance = len * 1e-12;
+        (0..).map(|i| i as f64 * step)
+          .take_while(|d| *d <= len + tolerance)
+          .filter_map(|d| contour.pos_tan(d as f32).map(|(pt, _)| pt))
+          .collect()
+      };
+
+      // on a closed contour, don't emit the start/stop point twice
+      if pts.len() > 1{
+        let (first, last) = (pts[0], pts[pts.len() - 1]);
+        if almost_zero(first.x - last.x) && almost_zero(first.y - last.y){
+          pts.pop();
+        }
+      }
+      pts
+    }).collect::<Vec<Point>>();
+
+  let array = cx.empty_array();
+  for (i, Point{x, y}) in samples.into_iter().enumerate(){
+    let pair = cx.empty_array();
+    let x = cx.number(x);
+    let y = cx.number(y);
+    pair.set(&mut cx, 0, x)?;
+    pair.set(&mut cx, 1, y)?;
+    array.set(&mut cx, i as u32, pair)?;
+  }
+  Ok(array)
+}
+
 fn from_verb(verb:Verb) -> Option<String>{
   let cmd = match verb{
     Verb::Move => "moveTo",

@@ -70,6 +70,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_normalAt", path::normal_at)?;
   cx.export_function("Path2D_slice", path::slice)?;
   cx.export_function("Path2D_contours", path::contours)?;
+  cx.export_function("Path2D_points", path::points)?;
   cx.export_function("Path2D_bounds", path::bounds)?;
   cx.export_function("Path2D_contains", path::contains)?;
   cx.export_function("Path2D_edges", path::edges)?;
