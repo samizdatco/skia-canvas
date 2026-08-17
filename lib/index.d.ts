@@ -872,6 +872,7 @@ export type Path2DEdge = [verb: string, ...args: number[]]
  */
 interface Path2D extends CanvasPath {
   readonly bounds: Path2DBounds
+  readonly contours: readonly Path2D[]
   readonly edges: readonly Path2DEdge[]
   readonly length: number
   d: string
