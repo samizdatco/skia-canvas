@@ -112,11 +112,11 @@ impl Footprint {
         }
     }
 
-    // grow the tracked total by `bytes` (charging just the delta)
-    pub fn grow(&mut self, bytes: usize) {
+    // grow (or shrink) the tracked total by `bytes` delta
+    pub fn grow(&mut self, bytes: i64) {
         if bytes != 0 {
-            ACCOUNTING.charge(bytes as i64);
-            self.0 += bytes;
+            ACCOUNTING.charge(bytes);
+            self.0 = (self.0 as i64 + bytes).max(0) as usize;
         }
     }
 

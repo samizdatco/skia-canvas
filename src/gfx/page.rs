@@ -162,7 +162,7 @@ impl PageRecorder{
       let mut wrapper = PictureRecorder::new();
       wrapper.begin_recording(self.bounds, true).draw_drawable(&mut drawable, None);
       if let Some(pict) = wrapper.finish_recording_as_picture(None){
-        self.footprint.grow(pict.approximate_bytes_used()); // update v8's accounting
+        self.footprint.grow(pict.approximate_bytes_used() as i64); // update v8's accounting
         self.layers.push(Layer::Ops(pict));
       }
       self.approx_ops = 0;

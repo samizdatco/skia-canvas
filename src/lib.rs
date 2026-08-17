@@ -64,6 +64,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_jitter", path::jitter)?;
   cx.export_function("Path2D_offset", path::offset)?;
   cx.export_function("Path2D_transform", path::transform)?;
+  cx.export_function("Path2D_get_length", path::get_length)?;
+  cx.export_function("Path2D_positionAt", path::position_at)?;
+  cx.export_function("Path2D_tangentAt", path::tangent_at)?;
+  cx.export_function("Path2D_normalAt", path::normal_at)?;
   cx.export_function("Path2D_bounds", path::bounds)?;
   cx.export_function("Path2D_contains", path::contains)?;
   cx.export_function("Path2D_edges", path::edges)?;
