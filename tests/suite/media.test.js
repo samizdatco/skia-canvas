@@ -2,30 +2,50 @@
 
 "use strict"
 
+// urls.js reads the proxy env vars once, at load time, and would route requests bound for
+// the local test server through a proxy instead, so clear them before requiring the library
+for (const v of ['https_proxy', 'HTTPS_PROXY', 'http_proxy', 'HTTP_PROXY']) delete process.env[v]
+
 const path = require('path'),
       os = require('os'),
       fs = require('fs'),
-      nock = require('nock'),
+      http = require('http'),
       {assert} = require('../runner/assert'), 
-      {describe, test, beforeEach, afterEach} = require('node:test'),
+      {describe, test, before, after, beforeEach, afterEach} = require('node:test'),
       {pathToFileURL, fileURLToPath} = require('url'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../../lib')
 
-const scope = nock('http://_h_o_s_t_')
-  .persist()
-  .get(/.*/)
-  .reply((uri, requestBody) => {
-    try{
-      return [200, fs.readFileSync(process.cwd() + uri)]
-    }catch(e){
-      return [404, `Failed to load image from "${uri}" (HTTP error 404)`]
-    }
+// serve the repo's files over http so the url-loading tests have a real server to talk to
+const PORT = 41777,
+      HOST = `http://127.0.0.1:${PORT}`
 
-  })
+const server = http.createServer((req, res) => {
+  try{
+    const body = fs.readFileSync(process.cwd() + req.url) // read before writing the header,
+    res.writeHead(200)                                    // so a miss can still send a 404
+    res.end(body)
+  }catch(e){
+    res.writeHead(404)
+    res.end(`Failed to load image from "${req.url}" (HTTP error 404)`)
+  }
+})
+
+before(() => new Promise((resolve, reject) => {
+  server.once('error', (/** @type {NodeJS.ErrnoException} */ e) => reject(e.code == 'EADDRINUSE'
+    ? Error(`Port ${PORT} is in use; the media tests need it to serve image fixtures`)
+    : e
+  ))
+  server.listen(PORT, '127.0.0.1', () => resolve(undefined))
+}))
+
+after(() => new Promise(resolve => {
+  server.closeAllConnections() // keep-alive sockets would otherwise stall the close
+  server.close(resolve)
+}))
 
 describe("Image", () => {
   var PATH = 'tests/assets/pentagon.png',
-      URI = `http://_h_o_s_t_/${PATH}`,
+      URI = `${HOST}/${PATH}`,
       BUFFER = fs.readFileSync(PATH),
       DATA_URI = `data:image/png;base64,${BUFFER.toString('base64')}`,
       FILE_URL = pathToFileURL(PATH),
@@ -34,7 +54,7 @@ describe("Image", () => {
       FORMAT = 'tests/assets/image/format',
       PARSED = {complete:true, width:60, height:60},
       SVG_PATH = `${FORMAT}.svg`,
-      SVG_URI = `http://_h_o_s_t_/${SVG_PATH}`,
+      SVG_URI = `${HOST}/${SVG_PATH}`,
       SVG_BUFFER = fs.readFileSync(SVG_PATH),
       SVG_DATA_URI = `data:image/svg;base64,${SVG_BUFFER.toString('base64')}`,
       SVG_FILE_URL = pathToFileURL(SVG_PATH),
@@ -132,7 +152,7 @@ describe("Image", () => {
       img = await loadImage(pathToFileURL(SVG_PATH))
       assert.matchesSubset(img, PARSED)
 
-      await assert.rejects(loadImage("http://_h_o_s_t_/nonesuch"), /HTTP error 404/)
+      await assert.rejects(loadImage(`${HOST}/nonesuch`), /HTTP error 404/)
     })
   })
 
@@ -347,7 +367,7 @@ describe("Image", () => {
         assert.equal(this, img)
         done()
       }
-      img.src = 'http://_h_o_s_t_/tests/assets/globe.jpg'
+      img.src = `${HOST}/tests/assets/globe.jpg`
     })
 
     test(".onerror callback", (t, done) => {
@@ -355,7 +375,7 @@ describe("Image", () => {
         assert.match(err.message, /HTTP error 404/)
         done()
       }
-      img.src = 'http://_h_o_s_t_/nonesuch'
+      img.src = `${HOST}/nonesuch`
     })
 
     test(".decode promise", async () => {
@@ -366,7 +386,7 @@ describe("Image", () => {
       assert.equal(decoded, img)
 
       // can load new data into existing Image
-      img.src = 'http://_h_o_s_t_/tests/assets/image/format.png'
+      img.src = `${HOST}/tests/assets/image/format.png`
       decoded = await img.decode()
       assert.equal(decoded, img)
 

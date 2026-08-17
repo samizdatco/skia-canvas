@@ -3,7 +3,7 @@
 "use strict"
 
 const fs = require('fs'),
-      tmp = require('tmp'),
+      os = require('os'),
       path = require('path'),
       {assert} = require('../runner/assert'),
       {describe, test, beforeEach, afterEach} = require('node:test'),
@@ -68,7 +68,7 @@ describe("Canvas", ()=>{
   })
 
   describe("handles bad arguments for", ()=>{
-    beforeEach(() => TMP = tmp.dirSync().name )
+    beforeEach(() => TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'skia-canvas-')) )
     afterEach(() => fs.rmSync(TMP, {recursive:true}) )
 
     test("initial dimensions", () => {
@@ -159,7 +159,7 @@ describe("Canvas", ()=>{
 
   describe("can create | async", ()=>{
     beforeEach(() => {
-      TMP = tmp.dirSync().name
+      TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'skia-canvas-'))
 
       ctx.fillStyle = 'red'
       ctx.arc(100, 100, 25, 0, Math.PI/2)
@@ -305,7 +305,7 @@ describe("Canvas", ()=>{
       // each file in a sequence is written in its own page's color space, so pages that
       // disagree don't have to be reconciled down to a single value for the batch
       let seq = async (...spaces) => {
-        let dir = tmp.dirSync().name,
+        let dir = fs.mkdtempSync(path.join(os.tmpdir(), 'skia-canvas-')),
             canvas = new Canvas(4, 4)
         for (const colorSpace of spaces){
           let ctx = canvas.pages.length ? canvas.newPage({colorSpace}) : canvas.getContext('2d', {colorSpace})
@@ -525,7 +525,7 @@ describe("Canvas", ()=>{
 
   describe("can create | sync", ()=>{
     beforeEach(() => {
-      TMP = tmp.dirSync().name
+      TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'skia-canvas-'))
 
       ctx.fillStyle = 'red'
       ctx.arc(100, 100, 25, 0, Math.PI/2)
