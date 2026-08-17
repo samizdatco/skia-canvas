@@ -14,10 +14,14 @@ const suite = () => readdirSync(`${ROOT}/tests/suite`)
   .sort()
   .map(file => `tests/suite/${file}`)
 
+// the first test to touch the native layer otherwise absorbs the font-collection & GPU setup
+// surfacing as a spurious "slow test"
+const warmup = () => ['--require', `${ROOT}/tests/runner/warmup.js`]
+
 const RECIPES = {
-  test: () => ['--test', ...suite()], // npm test
-  full: () => ['--test', '--test-reporter', './tests/runner/full.mjs', ...suite()], // make test
-  debug: () => ['--test', '--test-reporter', './tests/runner/debug.mjs', '--watch', ...suite()], // make debug
+  test: () => ['--test', ...suite()],                                                                         // npm test
+  full: () => ['--test', ...warmup(), '--test-reporter', './tests/runner/full.mjs', ...suite()],              // make test
+  debug: () => ['--test', ...warmup(), '--test-reporter', './tests/runner/debug.mjs', '--watch', ...suite()], // make debug
 }
 
 const args = process.argv.slice(2)

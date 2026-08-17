@@ -1,16 +1,25 @@
 // Adapted from @voxpelli/node-test-pretty-reporter@1.1.2 (MIT) for `make test`
 
+import { basename } from 'node:path'
 import chalk from 'chalk'
 import { diff } from 'jest-diff'
 import cleanStack from 'clean-stack'
 
 const slowIfAboveMs = 75
+const slowRunMs = 2000       // whole-run duration turns magenta above this…
+const sluggishRunMs = 5000   // …and red above this
 const stackRegex = /(?:\n {4}at .*)+/
 const testRunnerStackRegex = /^ {4}at Test\.runInAsyncScope \(/m
 
-const logSymbols = { success: chalk.green('✔'), info: chalk.blue('ℹ') }
+// node reports skipped & todo tests as passing, so they need to be told apart by icon
+const icons = { pass: chalk.green('√'), skip: chalk.yellow('○'), todo: chalk.magenta('✎') }
 
 const pad = n => ' '.repeat(n)
+
+// a count in black-on-bright + bold, then its label in bright-white-on-normal + italic
+const block = (count, label, color) =>
+  chalk.black[`bg${color}Bright`].bold(` ${count} `) +
+  chalk.whiteBright[`bg${color}`].italic(` ${label} `)
 
 const indent = (text, level = 1) => {
   const prefix = pad(level * 2)
@@ -53,7 +62,8 @@ function formatErrorAndCauses (err) {
 function * printParentStack (parentStack, prefix = '', suffix = '') {
   for (const [i, test] of parentStack.entries()) {
     if (i) yield '\n'
-    yield pad((test.nesting + 1) * 2 + (i ? prefix.length : 0)) + (i ? '' : prefix) + test.name
+    const name = test.nesting === 0 ? chalk.bold(test.name) : test.name
+    yield pad((test.nesting + 1) * 2 + (i ? prefix.length : 0)) + (i ? '' : prefix) + name
   }
   yield suffix + '\n'
 }
@@ -62,7 +72,14 @@ export default async function * prettyReporter (source) {
   const diagnostics = []
   const failures = []
   const parentStack = []
+  const output = new Map()   // file -> [{stream, message}], replayed at the end
   let stack = []
+
+  const collect = (file, stream, message) => {
+    const key = file || '(unknown)'
+    if (!output.has(key)) output.set(key, [])
+    output.get(key).push({ stream, message })
+  }
 
   for await (const { data, type } of source) {
     if (type === 'test:start') {
@@ -71,10 +88,10 @@ export default async function * prettyReporter (source) {
       parentStack.push(data)
     } else if (type === 'test:diagnostic') {
       diagnostics.push(data)
-    } else if (type === 'test:stdout') {
-      process.stdout.write(data.message)
-    } else if (type === 'test:stderr') {
-      process.stderr.write(data.message)
+    } else if (type === 'test:stdout' || type === 'test:stderr') {
+      // these arrive unbuffered, ahead of the results they belong to, and carry no test
+      // identity — only a file. so stash them and replay grouped by file once the run ends
+      collect(data.file, type === 'test:stderr' ? 'err' : 'out', data.message)
     } else if (type === 'test:pass' || type === 'test:fail') {
       if (stack.length === 0) continue
 
@@ -88,7 +105,8 @@ export default async function * prettyReporter (source) {
 
       let label
       if (type === 'test:pass') {
-        label = chalk.gray(`${logSymbols.success} ${data.name}`)
+        const icon = data.todo ? icons.todo : data.skip ? icons.skip : icons.pass
+        label = chalk.gray(`${icon} ${data.name}`)
       } else {
         failures.push({ data, parentStack: [...parentStack] })
         label = chalk.red(`${failures.length}) ${data.name}`)
@@ -102,11 +120,32 @@ export default async function * prettyReporter (source) {
     }
   }
 
-  const info = diagnostics.map(d => `${logSymbols.info} ${d.message}`).join('\n')
-  yield '\n' + chalk.gray(info) + '\n\n'
-
   for (const [i, { data, parentStack }] of failures.entries()) {
     yield * printParentStack(parentStack, `${i + 1}) `, ':')
     yield '\n' + indent(formatErrorAndCauses(data.details.error), 3) + '\n\n'
   }
+
+  for (const [file, lines] of output) {
+    yield '\n' + indent(chalk.bold(basename(file)), 1) + '\n'
+    for (const { stream, message } of lines) {
+      yield indent((stream === 'err' ? chalk.yellow : chalk.dim)(message.trimEnd()), 2) + '\n'
+    }
+  }
+
+  // node only emits `test:summary` (with its ready-made counts) on v24+, so tally up the
+  // end-of-run diagnostics instead — those are identical all the way back to v18
+  const { pass, fail, skipped, todo, duration_ms } =
+    Object.fromEntries(diagnostics.map(d => d.message.split(' ')))
+
+  const ms = Number(duration_ms)
+  const [count, unit] = ms >= 1000 ? [(ms / 1000).toFixed(1), 's'] : [Math.round(ms), 'ms']
+  const hue = ms >= sluggishRunMs ? 'red' : ms >= slowRunMs ? 'magenta' : 'white'
+  const elapsed = chalk[`${hue}Bright`](count) + chalk[hue].italic(unit)
+
+  const tally = [[pass, 'passed', 'Blue'], [fail, 'failed', 'Red'],
+                 [skipped, 'skipped', 'Magenta'], [todo, 'todo', 'Cyan']]
+    .filter(([count]) => Number(count) > 0)
+    .map(([count, label, color]) => block(count, label, color))
+
+  yield '\n' + [...tally, elapsed].join(' ') + '\n\n'
 }

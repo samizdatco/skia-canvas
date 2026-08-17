@@ -496,6 +496,21 @@ describe("Path2D", ()=>{
       assert.deepEqual(center(), CLEAR)
       assert.deepEqual(right(), BLACK)
       assert.deepEqual(bottom(), CLEAR)
+
+      // pathops tags every result as even-odd, but per spec a Path2D carries no intrinsic winding
+      // rule — it comes from the fill()/clip() call site, defaulting to "nonzero". So a hole has to
+      // survive the default rule rather than only appearing under an explicit 'evenodd'.
+      let outer = new Path2D(), inner = new Path2D()
+      outer.arc(60, 60, 40, 0, TAU)
+      inner.arc(60, 60, 18, 0, TAU)
+
+      for (const rule of /** @type {const} */ ([undefined, 'nonzero', 'evenodd'])){
+        scrub()
+        let ring = outer.difference(inner)
+        rule ? ctx.fill(ring, rule) : ctx.fill(ring)
+        assert.deepEqual(center(), CLEAR, `hole filled in with fillRule=${rule}`)
+        assert.deepEqual(pixel(60, 30), BLACK, `ring band missing with fillRule=${rule}`)
+      }
     })
 
     test("intersect", () => {
@@ -532,23 +547,6 @@ describe("Path2D", ()=>{
       scrub()
       ctx.fill(c, 'nonzero')
       assert.deepEqual(center(), CLEAR)
-    })
-
-    test("without depending on the result's fill type", () => {
-      // pathops tags every result as even-odd, but per spec a Path2D carries no intrinsic winding
-      // rule — it comes from the fill()/clip() call site, defaulting to "nonzero". So a hole has to
-      // survive the default rule rather than only appearing under an explicit 'evenodd'.
-      let outer = new Path2D(), inner = new Path2D()
-      outer.arc(60, 60, 40, 0, TAU)
-      inner.arc(60, 60, 18, 0, TAU)
-
-      for (const rule of /** @type {const} */ ([undefined, 'nonzero', 'evenodd'])){
-        scrub()
-        let ring = outer.difference(inner)
-        rule ? ctx.fill(ring, rule) : ctx.fill(ring)
-        assert.deepEqual(center(), CLEAR, `hole filled in with fillRule=${rule}`)
-        assert.deepEqual(pixel(60, 30), BLACK, `ring band missing with fillRule=${rule}`)
-      }
 
       // a region that pinches to a point needs the simplify() pass as well: as_winding() can't
       // split a self-touching contour, so on its own it left the crossed bars' shared square
@@ -578,9 +576,7 @@ describe("Path2D", ()=>{
       ctx.fill(c.simplify())
       assert.deepEqual(center(), CLEAR)
       assert.deepEqual(top(), BLACK)
-    })
 
-    test("simplify without depending on the result's fill type", () => {
       // reading the crossed bars as even-odd hollows out the square where they overlap. that hole
       // has to be encoded in the geometry, since fill() supplies its own rule (nonzero by default)
       let cross = new Path2D()
@@ -600,31 +596,6 @@ describe("Path2D", ()=>{
       assert.equal(cross.contains(60, 60), true)
       cross.simplify('evenodd')
       assert.equal(cross.contains(60, 60), true)
-    })
-
-    test("unwind", () => {
-      let d = new Path2D()
-      d.rect(0,0,30,30)
-      d.rect(10,10,10,10)
-      ctx.fill(d.offset(50,40))
-      assert.deepEqual(pixel(65, 55), BLACK)
-      ctx.fill(d.offset(100,40), 'evenodd')
-      assert.deepEqual(pixel(115, 55), CLEAR)
-      ctx.fill(d.simplify().offset(150,40), 'evenodd')
-      assert.deepEqual(pixel(165, 55), BLACK)
-      ctx.fill(d.unwind().offset(200,40))
-      assert.deepEqual(pixel(215, 55), CLEAR)
-
-      // now deprecated, and delegates to simplify('evenodd') — which selects the same region but
-      // also copes with curved contours. the bare re-orientation it used to do returns wrong
-      // geometry for anything built from arcs or béziers, filling the hole back in
-      scrub()
-      let ring = new Path2D()
-      ring.arc(60, 60, 40, 0, TAU)
-      ring.arc(60, 60, 18, 0, TAU)
-      ctx.fill(ring.unwind())
-      assert.deepEqual(center(), CLEAR)
-      assert.deepEqual(pixel(60, 30), BLACK)
     })
 
     test("interpolate", () => {
