@@ -564,6 +564,51 @@ pub fn normal_at(mut cx: FunctionContext) -> JsResult<JsValue> {
   }
 }
 
+// create a new Path2D spanning between two locations along the path (or its complement)
+pub fn slice(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
+  let this = cx.argument::<BoxedPath2D>(0)?;
+  let from = opt_distance_arg(&mut cx, 1);
+  let to = opt_distance_arg(&mut cx, 2);
+  let inverted = bool_arg_or(&mut cx, 3, false);
+  let this = this.borrow();
+  let measure = this.measure();
+
+  // use Array.slice conventions: omitted args span the whole path, NaN coerces to
+  // zero, negatives count back from the end, and everything clamps to [0, length]
+  let normalize = |d:Option<f64>, default:f64| match d{
+    None => default,
+    Some(d) => {
+      let d = if d.is_nan(){ 0.0 }else{ d };
+      let d = if d < 0.0{ d + measure.total }else{ d };
+      d.clamp(0.0, measure.total)
+    }
+  };
+
+  // the requested stretch(es): empty if from>=to, flipped if inverted==true
+  let from = normalize(from, 0.0);
+  let to = normalize(to, measure.total);
+  let ranges:Vec<(f64, f64)> = match (inverted, from <= to){
+    (false, true) => vec![(from, to)],
+    (false, false) => vec![],
+    (true, true) => vec![(0.0, from), (to, measure.total)],
+    (true, false) => vec![(0.0, measure.total)],
+  };
+
+  // emit each contour in the range (preserving the moveTo gaps between them)
+  let mut builder = PathBuilder::new();
+  for (contour, &offset) in measure.contours.iter().zip(measure.offsets.iter()){
+    for &(start, stop) in ranges.iter(){
+      let begin = (start.max(offset) - offset) as f32;
+      let end = (stop.min(offset + contour.length() as f64) - offset) as f32;
+      if end > begin{
+        let _ = contour.get_segment(begin, end, &mut builder, true);
+      }
+    }
+  }
+
+  Ok(cx.boxed(RefCell::new(Path2D::from(builder.detach()))))
+}
+
 fn from_verb(verb:Verb) -> Option<String>{
   let cmd = match verb{
     Verb::Move => "moveTo",

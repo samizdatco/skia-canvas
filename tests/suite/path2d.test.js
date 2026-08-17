@@ -747,6 +747,61 @@ describe("Path2D", ()=>{
       assert.equal(angles.normalAt(NaN), null)
       assert.equal(new Path2D().normalAt(0), null)
     })
+
+    test("slice", () => {
+      let moveTos = path => path.edges.filter(([verb]) => verb == "moveTo").length
+
+      let line = new Path2D()
+      line.moveTo(0, 0)
+      line.lineTo(100, 0)
+
+      // Array.prototype.slice argument conventions
+      assert.matchesSubset(line.slice(25, 75).bounds, {left:25, right:75})
+      assert.matchesSubset(line.slice(-20).bounds, {left:80, right:100})
+      assert.matchesSubset(line.slice(10, -10).bounds, {left:10, right:90})
+      assert.equal(line.slice(75, 25).edges.length, 0)
+
+      // …including NaN coercing to zero
+      assert.equal(line.slice(0, NaN).edges.length, 0)
+      assert.matchesSubset(line.slice(NaN).bounds, {left:0, right:100})
+
+      // a no-arg slice is an exact copy (preserving closePath, which the measure unrolls)
+      let rect = new Path2D()
+      rect.rect(10, 10, 100, 100)
+      assert.equal(rect.slice().d, rect.d)
+      assert.ok(rect.d.endsWith("Z"))
+      assert.ok(!rect.slice(0, rect.length).d.endsWith("Z"))
+
+      // inverted covers the complement of the stretch…
+      let ends = line.slice(25, 75, true)
+      assert.equal(moveTos(ends), 2)
+      assert.equal(ends.length, 50)
+      // …and the complement of an empty stretch is the whole path
+      assert.equal(line.slice(75, 25, true).length, 100)
+
+      // gaps between contours are preserved as gaps
+      let pair = new Path2D()
+      pair.moveTo(0, 0)
+      pair.lineTo(100, 0)
+      pair.moveTo(0, 100)
+      pair.lineTo(100, 100)
+      let middle = pair.slice(50, 150)
+      assert.equal(moveTos(middle), 2)
+      assert.equal(middle.length, 100)
+
+      // a path from the boolean ops carries skia's `evenodd` tag, but its hole lives in the
+      // contour *directions* — so the slice renders the same without inheriting that tag. (a
+      // Path2D has no winding rule of its own; every fill, stroke, and clip assigns one.)
+      let donut = new Path2D()
+      donut.rect(20, 20, 100, 100)
+      donut.rect(45, 45, 50, 50)
+      let hollow = donut.simplify('evenodd')
+      let sliced = hollow.slice(0, hollow.length)
+      scrub()
+      ctx.fill(sliced)
+      assert.deepEqual(pixel(70, 70), CLEAR) // the hole survives…
+      assert.deepEqual(pixel(25, 70), BLACK) // …and the ring around it is still filled
+    })
   })
 
   describe("can apply path effect", () => {
