@@ -913,15 +913,23 @@ export interface Font {
   file: string
 }
 
+export interface NamedFontInstance {
+  path: string
+  /** One-based index in the font's fvar named-instance array. */
+  namedInstance: number
+}
+
+export type FontSource = string | NamedFontInstance
+
 interface FontLibrary {
   families: readonly string[]
   family(name: string): FontFamily | undefined
   has(familyName: string): boolean
 
-  use(familyName: string, fontPaths?: string | readonly string[]): Font[]
-  use(fontPaths: readonly string[]): Font[]
+  use(familyName: string, fontPaths?: FontSource | readonly FontSource[]): Font[]
+  use(fontPaths: readonly FontSource[]): Font[]
   use(
-    families: Record<string, readonly string[] | string>
+    families: Record<string, readonly FontSource[] | FontSource>
   ): Record<string, Font[]>
 
   reset(): void

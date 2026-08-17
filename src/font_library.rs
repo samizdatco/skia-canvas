@@ -46,6 +46,7 @@ pub struct FontLibrary{
     mgr: FontMgr,
     collection: Option<FontCollection>,
     fonts: Vec<(Typeface, Option<String>)>,
+    locked_fonts: Vec<Typeface>,
     generics_cache: Vec<(Typeface, Option<String>)>,
     collection_cache: HashMap<CollectionKey, FontCollection>,
     collection_hinted: bool,
@@ -71,7 +72,7 @@ impl FontLibrary{
         }
 
         RefCell::new(FontLibrary{
-          mgr:FontMgr::default(), fonts:vec![], collection:None, collection_cache:HashMap::new(), collection_hinted:false, generics_cache:vec![]
+          mgr:FontMgr::default(), fonts:vec![], locked_fonts:vec![], collection:None, collection_cache:HashMap::new(), collection_hinted:false, generics_cache:vec![]
         })
       });
 
@@ -212,7 +213,9 @@ impl FontLibrary{
       weights.push(*style.weight());
       if let Some(font) = var_fc.find_typefaces(&[&family], style).first(){
         // for variable fonts, report all the 100× sizes they support within their wght range
-        weights.append(&mut typeface_wght_range(font));
+        if !self.locked_fonts.iter().any(|locked| Typeface::equal(font, locked)) {
+          weights.append(&mut typeface_wght_range(font));
+        }
       }
     });
 
@@ -227,7 +230,7 @@ impl FontLibrary{
     (weights, widths, styles)
   }
 
-  fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
+  fn add_typeface(&mut self, font:Typeface, alias:Option<String>, locked:bool){
     // replace any previously added font with the same metadata/alias
     if let Some(idx) = self.fonts.iter().position(|(old_font, old_alias)|
       match alias.is_some(){
@@ -235,10 +238,16 @@ impl FontLibrary{
         false => old_font.family_name() == font.family_name()
       } && old_font.font_style() == font.font_style()
     ){
-      self.fonts.remove(idx);
+      let (old_font, _) = self.fonts.remove(idx);
+      if !self.fonts.iter().any(|(font, _)| Typeface::equal(&old_font, font)) {
+        self.locked_fonts.retain(|locked| !Typeface::equal(&old_font, locked));
+      }
     }
 
     // add the new typeface/alias and recreate the FontCollection to include it
+    if locked {
+      self.locked_fonts.push(font.clone());
+    }
     self.fonts.push((font, alias));
     self.collection = None;
     self.collection_cache.drain();
@@ -281,7 +290,10 @@ impl FontLibrary{
 
     // if any of the matched typefaces is a variable font, create an instance that
     // matches the current weight settings and add it to a dynamic font mgr
-    if matches.iter().any(|font| font.variation_design_parameters().is_some()){
+    if matches.iter().any(|font|
+      font.variation_design_parameters().is_some() &&
+      !self.locked_fonts.iter().any(|locked| Typeface::equal(font, locked))
+    ){
       // memoize the generation of FontCollections for instanced variable fonts
       let key = CollectionKey::new(style);
       if let Some(collection) = self.collection_cache.get(&key){
@@ -293,6 +305,9 @@ impl FontLibrary{
       let mut dynamic = TypefaceFontProvider::new();
 
       for font in matches.into_iter(){
+        if self.locked_fonts.iter().any(|locked| Typeface::equal(&font, locked)) {
+          continue
+        }
         font.variation_design_parameters()
           .and_then(|params|{
             // find the weight axis
@@ -381,9 +396,17 @@ pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
   let alias = opt_string_arg(&mut cx, 1);
   let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
+  let indices = cx.argument::<JsArray>(3)?.to_vec(&mut cx)?;
+  let indices = floats_in(&mut cx, &indices).into_iter()
+    .map(|index| index as usize)
+    .collect::<Vec<usize>>();
+  if filenames.len() != indices.len() {
+    return cx.throw_error("Expected one collection index per font file")
+  }
   let results = JsArray::new(&mut cx, filenames.len());
 
   for (i, filename) in strings_in(&mut cx, &filenames).iter().enumerate(){
+    let collection_index = indices[i];
     let path = Path::new(&filename);
     let typeface = match fs::read(path){
       Err(why) => {
@@ -413,7 +436,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
         }.unwrap_or(bytes);
 
         FontLibrary::with_shared(|lib|
-          lib.mgr.new_from_data(&bytes, None)
+          lib.mgr.new_from_data(&bytes, Some(collection_index))
         )
       }
     };
@@ -426,7 +449,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
 
         // register the typeface
         FontLibrary::with_shared(|lib|
-          lib.add_typeface(font, alias.clone())
+          lib.add_typeface(font, alias.clone(), collection_index & 0xffff0000 != 0)
         );
       },
       None => {
@@ -441,6 +464,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   FontLibrary::with_shared(|lib|{
     lib.fonts.clear();
+    lib.locked_fonts.clear();
     lib.collection = None;
     lib.collection_cache.drain();
   });
