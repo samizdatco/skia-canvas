@@ -153,12 +153,11 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
     .map(|num| num.floor() as usize);
   let color_type = opt_string_for_key(cx, &opts, "colorType")
     .map(|mode| to_color_type(&mode)).unwrap_or(ColorType::RGBA8888);
-  let color_space = opt_string_for_key(cx, &opts, "colorSpace").map(|name| to_color_space(&name));
   let text_contrast = float_for_key(cx, &opts, "textContrast")?;
   let text_gamma = float_for_key(cx, &opts, "textGamma")?;
   let outline = bool_for_key(cx, &opts, "outline")?;
 
   Ok(ExportOptions{
-    format, quality, density, outline, matte, msaa, color_type, color_space, jpeg_downsample, text_contrast, text_gamma
+    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma
   })
 }
