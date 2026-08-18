@@ -7,7 +7,7 @@ use skia_safe::textlayout::{TextDirection};
 use skia_safe::PaintStyle::{Fill, Stroke};
 
 use super::{Context2D, BoxedContext2D, Dye};
-use crate::gfx::page::ExportOptions;
+use crate::gfx::page::{ExportOptions, Page};
 use crate::canvas::BoxedCanvas;
 use crate::path::Path2D;
 use crate::image::{BoxedImage, Content};
@@ -489,8 +489,8 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let mut this = this.borrow_mut();
     this.draw_image(&img, &src, &dst);
   } else if let Content::Vector(pict, pict_size) = &content {
-    let image = source.downcast::<BoxedImage, _>(&mut cx).unwrap();
-    let fit_to_canvas = image.borrow().autosized;
+    let fit_to_canvas = source.downcast::<BoxedImage, _>(&mut cx)
+      .map(|image| image.borrow().autosized).unwrap_or(false);
     let (mut src, mut dst) = _layout_rects(&mut cx, *pict_size, &nums)?;
 
     // for SVG images with no intrinsic size, use the canvas size as a default scale
@@ -511,8 +511,10 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     }
 
     Content::snap_rects_to_bounds(content.size(), src, dst);
-    let mut this = this.borrow_mut();
-    this.draw_picture(&pict, &src, &dst);
+
+    // wrap the picture in a single-layer Page so repeated draws can use the raster cache
+    let page = Page::from_picture(pict, *pict_size);
+    this.borrow_mut().draw_canvas(&page, &src, &dst);
   }
 
   Ok(cx.undefined())

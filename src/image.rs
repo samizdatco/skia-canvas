@@ -10,6 +10,8 @@ use skia_safe::{
 use crate::bridge::*;
 use crate::context::Context2D;
 use crate::font_library::FontLibrary;
+use crate::gfx::cache::Cache;
+use crate::gfx::page::Page;
 use crate::mem;
 
 pub type BoxedImage = JsBox<RefCell<Image>>;
@@ -72,10 +74,19 @@ impl Content{
       .unwrap_or_default()
   }
 
-  // drop the current content safely (on the render-)
+  // drop the current content safely/immediately
   pub fn release(&mut self){
     let content = std::mem::take(self);
+
+    if let Content::Vector(pict, _) = &content{
+      // clear any cached rasters keyed to the Picture id
+      let id = Page::picture_id(pict);
+      Cache::shared().evict(id);
+      crate::gfx::render_soon(move |cache| cache.evict(id));
+    }
+
     if let Content::Bitmap(img) = &content{
+      // drop gpu-backed bitmaps on the render_thread
       if img.is_texture_backed(){
         crate::gfx::render_soon(move |_| drop(content));
       }
