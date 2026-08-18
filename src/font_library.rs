@@ -225,7 +225,13 @@ impl FontLibrary{
 
     // add the new typeface/alias and recreate the FontCollection to include it
     self.fonts.push((font, alias));
+    self.invalidate();
+  }
+
+  fn invalidate(&mut self){
+    // the font collection and metrics cache always need to be invalidated in tandem
     self.collection = None;
+    METRICS_CACHE.with_borrow_mut(|cache| *cache = MetricsCache::default());
   }
 
   pub fn update_style(&mut self, orig_style:&TextStyle, spec: &FontSpec) -> Option<TextStyle>{
@@ -270,6 +276,52 @@ impl Default for RenderAttrs{
   fn default() -> Self{
     Self{hinting:FontHinting::None, edging:Edging::AntiAlias, subpixel:true, synthesize:true}
   }
+}
+
+//
+// Text metrics cache (saves repeated multi-line measurement and serialization)
+//
+
+const METRICS_CAP: usize = 2048;
+
+pub type MetricsKey = (u64, String, Option<u32>); // (state hash, text, maxWidth bits)
+
+#[derive(Default)]
+struct MetricsCache{
+  hot: HashMap<MetricsKey, String>,
+  cold: HashMap<MetricsKey, String>,
+}
+
+impl MetricsCache{
+  fn get(&mut self, key:&MetricsKey) -> Option<String>{
+    if let Some(json) = self.hot.get(key){ return Some(json.clone()) }
+    let json = self.cold.remove(key)?;
+    self.put(key.clone(), json.clone()); // a cold hit is re-promoted into the current generation
+    Some(json)
+  }
+
+  fn put(&mut self, key:MetricsKey, json:String){
+    if self.hot.len() >= METRICS_CAP{
+      self.cold = std::mem::take(&mut self.hot); // demote; the old cold generation drops here
+    }
+    self.hot.insert(key, json);
+  }
+}
+
+thread_local!(
+  static METRICS_CACHE: RefCell<MetricsCache> = RefCell::default();
+);
+
+// look up a measurement, or compute-and-store it. the borrow is *not* held across `compute`
+// (house rule: never hold a store while doing real work — and here re-entry is a certainty, since
+// `compute` typesets, which borrows the library)
+pub fn cached_metrics(key:MetricsKey, compute:impl FnOnce() -> String) -> String{
+  if let Some(json) = METRICS_CACHE.with_borrow_mut(|cache| cache.get(&key)){
+    return json
+  }
+  let json = compute();
+  METRICS_CACHE.with_borrow_mut(|cache| cache.put(key, json.clone()));
+  json
 }
 
 
@@ -378,7 +430,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   FontLibrary::with_shared(|lib|{
     lib.fonts.clear();
-    lib.collection = None;
+    lib.invalidate();
   });
 
   Ok(cx.undefined())

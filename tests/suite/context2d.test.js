@@ -1288,60 +1288,6 @@ describe("Context2D", ()=>{
       assert(data.some(a => a))
     })
 
-    test("measureText()", () => {
-      ctx.font = "20px Arial, DejaVu Sans"
-
-      let ø = ctx.measureText('').width,
-          _ = ctx.measureText(' ').width,
-          __ = ctx.measureText('  ').width,
-          foo = ctx.measureText('foo').width,
-          foobar = ctx.measureText('foobar').width,
-          __foo = ctx.measureText('  foo').width,
-          __foo__ = ctx.measureText('  foo  ').width
-      assert(ø < _)
-      assert(_ < __)
-      assert(foo < foobar)
-      assert(__foo > foo)
-      assert(__foo__ > __foo)
-
-      // start from the default, alphabetic baseline
-      let msg = "Lordran gypsum",
-          metrics = ctx.measureText(msg)
-
-      // + means up, - means down when it comes to baselines; these also confirm the implicit
-      // default font (no ctx.font set) reports non-alphabetic baselines
-      assert.equal(metrics.alphabeticBaseline, 0)
-      assert(metrics.hangingBaseline > 0)
-      assert(metrics.ideographicBaseline < 0)
-
-      // for ascenders + means up, for descenders + means down
-      assert(metrics.actualBoundingBoxAscent > 0)
-      assert(metrics.actualBoundingBoxDescent > 0)
-      assert(metrics.actualBoundingBoxAscent > metrics.actualBoundingBoxDescent)
-
-      // make sure the polarity has flipped for 'top' baseline
-      ctx.textBaseline = "top"
-      metrics = ctx.measureText("Lordran gypsum")
-      assert(metrics.alphabeticBaseline < 0)
-      assert(metrics.hangingBaseline < 0)
-      assert(metrics.actualBoundingBoxAscent < 0)
-      assert(metrics.actualBoundingBoxDescent > 0)
-
-      // width calculations should be the same (modulo rounding) for any alignment
-      let [lft, cnt, rgt] = /** @type {const} */ (['left', 'center', 'right']).map(align => {
-        ctx.textAlign = align
-        return ctx.measureText(msg).width
-      })
-      assert.nearEqual(lft, cnt)
-      assert.nearEqual(cnt, rgt)
-
-      // make sure string indices account for trailing whitespace and non-8-bit characters
-      let text = ' 石 ',
-          {startIndex, endIndex} = ctx.measureText(text).lines[0]
-      assert.equal(text.substring(startIndex, endIndex), text)
-    })
-
-
     test("createProjection()", () => {
       /** @type {[number,number, number,number, number,number, number,number]} */
       let quad = [
@@ -1376,6 +1322,129 @@ describe("Context2D", ()=>{
       assert.deepEqual(pixel(x - 75, y), WHITE)
       assert.deepEqual(pixel(x - 200, y), BLACK)
       assert.deepEqual(pixel(0, y), CLEAR)
+    })
+
+    test('reset()', async () => {
+      ctx.fillStyle = 'green'
+      ctx.scale(2, 2)
+      ctx.translate(0, -HEIGHT/4)
+
+      ctx.fillRect(WIDTH/4, HEIGHT/4, WIDTH/8, HEIGHT/8)
+      assert.deepEqual(pixel(WIDTH * .5 + 1, 0), GREEN)
+      assert.deepEqual(pixel(WIDTH * .75 - 1, 0), GREEN)
+
+      ctx.beginPath()
+      ctx.rect(WIDTH/4, HEIGHT/2, 100, 100)
+      ctx.reset()
+      ctx.fill()
+      assert.deepEqual(pixel(WIDTH/2 + 1, HEIGHT/2 + 1), CLEAR)
+      assert.deepEqual(pixel(WIDTH * .5 + 1, 0), CLEAR)
+      assert.deepEqual(pixel(WIDTH * .75 - 1, 0), CLEAR)
+
+      ctx.globalAlpha = 0.4
+      ctx.reset()
+      ctx.fillRect(WIDTH/2, HEIGHT/2, 3, 3)
+      assert.deepEqual(pixel(WIDTH/2 + 1, HEIGHT/2 + 1), BLACK)
+    })
+
+    describe("measureText()", () => {
+      test("provides line metrics", () => {
+        ctx.font = "20px Arial, DejaVu Sans"
+
+        let ø = ctx.measureText('').width,
+            _ = ctx.measureText(' ').width,
+            __ = ctx.measureText('  ').width,
+            foo = ctx.measureText('foo').width,
+            foobar = ctx.measureText('foobar').width,
+            __foo = ctx.measureText('  foo').width,
+            __foo__ = ctx.measureText('  foo  ').width
+        assert(ø < _)
+        assert(_ < __)
+        assert(foo < foobar)
+        assert(__foo > foo)
+        assert(__foo__ > __foo)
+
+        // start from the default, alphabetic baseline
+        let msg = "Lordran gypsum",
+            metrics = ctx.measureText(msg)
+
+        // + means up, - means down when it comes to baselines; these also confirm the implicit
+        // default font (no ctx.font set) reports non-alphabetic baselines
+        assert.equal(metrics.alphabeticBaseline, 0)
+        assert(metrics.hangingBaseline > 0)
+        assert(metrics.ideographicBaseline < 0)
+
+        // for ascenders + means up, for descenders + means down
+        assert(metrics.actualBoundingBoxAscent > 0)
+        assert(metrics.actualBoundingBoxDescent > 0)
+        assert(metrics.actualBoundingBoxAscent > metrics.actualBoundingBoxDescent)
+
+        // make sure the polarity has flipped for 'top' baseline
+        ctx.textBaseline = "top"
+        metrics = ctx.measureText("Lordran gypsum")
+        assert(metrics.alphabeticBaseline < 0)
+        assert(metrics.hangingBaseline < 0)
+        assert(metrics.actualBoundingBoxAscent < 0)
+        assert(metrics.actualBoundingBoxDescent > 0)
+
+        // width calculations should be the same (modulo rounding) for any alignment
+        let [lft, cnt, rgt] = /** @type {const} */ (['left', 'center', 'right']).map(align => {
+          ctx.textAlign = align
+          return ctx.measureText(msg).width
+        })
+        assert.nearEqual(lft, cnt)
+        assert.nearEqual(cnt, rgt)
+
+        // make sure string indices account for trailing whitespace and non-8-bit characters
+        let text = ' 石 ',
+            {startIndex, endIndex} = ctx.measureText(text).lines[0]
+        assert.equal(text.substring(startIndex, endIndex), text)
+      })
+
+
+      // measurements are cached as serialized strings keyed on a hash of the typography state, with
+      // the memo dropped outright whenever the font set changes, so these pin the two ways it could
+      // go wrong: serving a stale entry after a state change, and serving a pre-`use()` fallback
+      // measurement after the named family has actually been loaded
+      test("repeated measurements are identical", () => {
+        ctx.font = '16px sans-serif'
+        let first = ctx.measureText('repeat me')
+        ctx.fillText('unrelated drawing', 10, 100)
+        let again = ctx.measureText('repeat me')
+        assert.deepEqual({...again}, {...first})
+      })
+
+      test("state changes re-measure", () => {
+        ctx.font = '16px sans-serif'
+        let m16 = ctx.measureText('measure me').width
+        ctx.font = '32px sans-serif'
+        let m32 = ctx.measureText('measure me').width
+        assert.nearEqual(m32, m16 * 2) // same face at double size: stale cache would return m16
+
+        ctx.letterSpacing = '4px'
+        assert.ok(ctx.measureText('measure me').width > m32, 'letterSpacing should re-measure')
+        ctx.letterSpacing = '0px'
+
+        // a save/restore round-trip returns to a previously-measured state; the value-keyed cache
+        // must hit it again with the *original* result (an epoch/counter scheme would miss here)
+        ctx.save()
+        ctx.font = '16px sans-serif'
+        assert.nearEqual(ctx.measureText('measure me').width, m16)
+        ctx.restore()
+        assert.nearEqual(ctx.measureText('measure me').width, m32)
+      })
+
+      test("font loading re-measures", () => {
+        ctx.font = '32px MemoFace' // not yet registered: measures with the fallback face
+        let fallback = ctx.measureText('Wavy Text').width
+
+        FontLibrary.use("MemoFace", [`tests/assets/fonts/Monoton-Regular.woff`])
+        let loaded = ctx.measureText('Wavy Text').width
+
+        // Monoton's display letterforms are far wider than any sans fallback, so an unchanged
+        // width means the pre-load measurement was served from the cache
+        assert.ok(Math.abs(loaded - fallback) > 1, `expected re-measure after use() (${fallback} vs ${loaded})`)
+      })
     })
 
     describe('drawImage()', () => {
@@ -1723,29 +1792,6 @@ describe("Context2D", ()=>{
       })
     })
 
-    test('reset()', async () => {
-      ctx.fillStyle = 'green'
-      ctx.scale(2, 2)
-      ctx.translate(0, -HEIGHT/4)
-
-      ctx.fillRect(WIDTH/4, HEIGHT/4, WIDTH/8, HEIGHT/8)
-      assert.deepEqual(pixel(WIDTH * .5 + 1, 0), GREEN)
-      assert.deepEqual(pixel(WIDTH * .75 - 1, 0), GREEN)
-
-      ctx.beginPath()
-      ctx.rect(WIDTH/4, HEIGHT/2, 100, 100)
-      ctx.reset()
-      ctx.fill()
-      assert.deepEqual(pixel(WIDTH/2 + 1, HEIGHT/2 + 1), CLEAR)
-      assert.deepEqual(pixel(WIDTH * .5 + 1, 0), CLEAR)
-      assert.deepEqual(pixel(WIDTH * .75 - 1, 0), CLEAR)
-
-      ctx.globalAlpha = 0.4
-      ctx.reset()
-      ctx.fillRect(WIDTH/2, HEIGHT/2, 3, 3)
-      assert.deepEqual(pixel(WIDTH/2 + 1, HEIGHT/2 + 1), BLACK)
-    })
-
     describe("transform()", ()=>{
       const a=0.1, b=0, c=0, d=0.3, e=0, f=0
 
@@ -1917,7 +1963,6 @@ describe("Context2D", ()=>{
         assert.deepEqual(Array.from(viaCanvas.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
       })
     })
-
   })
 
   describe("parses", () => {
