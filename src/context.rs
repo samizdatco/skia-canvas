@@ -17,7 +17,7 @@ use skia_safe::{
 pub mod api;
 
 use crate::bridge::*;
-use crate::font_library::FontLibrary;
+use crate::font_library::{FontLibrary, MetricsKey, cached_metrics};
 use crate::path::Path2D;
 use crate::drawlist::{Pen, Plotter};
 use crate::typography::{Typesetter, Baseline, DecorationStyle};
@@ -139,6 +139,7 @@ impl Default for State {
 }
 
 impl State{
+  // styling config for use by Typesetter
   pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, bool) {
     let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
     if char_style.typeface().is_none() { // if still using the implicit default font, resolve it now
@@ -189,6 +190,27 @@ impl State{
     char_style.set_subpixel(subpixel);
 
     ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap )
+  }
+
+  // font settings that cached measureText responses depend on
+  pub fn metrics_key(&self, text:&str, width:Option<f32>) -> MetricsKey{
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (
+      &self.font,
+      &self.font_variant,
+      *self.font_width,
+      self.letter_spacing.to_string(),
+      self.word_spacing.to_string(),
+      self.text_baseline as u8,
+      self.graf_style.text_align() as i32,
+      self.graf_style.text_direction() as i32,
+      self.text_wrap,
+      self.line_height.map(f32::to_bits),
+      (self.font_hinting, self.font_smoothing, self.font_synthesis),
+    ).hash(&mut h);
+
+    (h.finish(), text.to_string(), width.map(f32::to_bits))
   }
 
   fn dye(&self, style:PaintStyle) -> &Dye{
@@ -713,8 +735,11 @@ impl Context2D{
     }
   }
 
-  pub fn measure_text(&mut self, text: &str, width:Option<f32>) -> serde_json::Value{
-    Typesetter::new(&self.state, text, width).metrics()
+  pub fn measure_text(&self, text: &str, width:Option<f32>) -> String{
+    // memoized text metrics (invalidated if the font state changes)
+    cached_metrics(self.state.metrics_key(text, width), ||
+      Typesetter::new(&self.state, text, width).metrics().to_string()
+    )
   }
 
   pub fn outline_text(&self, text:&str, width:Option<f32>) -> Path{
