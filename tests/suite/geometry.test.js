@@ -112,6 +112,38 @@ describe("DOMPoint", ()=>{
     let p = new DOMPoint(3, 4).matrixTransform(new DOMMatrix().translate(10, 10))
     assert.deepEqual([p.x, p.y], [13, 14])
   })
+
+  test("accepts a matrix init dict, not just a DOMMatrix", () => {
+    // matrixTransform() takes a DOMMatrixInit, so a bare {a…f} has to be normalized first: it
+    // carries no `is2D` to branch on and no m11…m44 to fall back to
+    let p = new DOMPoint(3, 4)
+    assert.deepEqual(Object.values(p.matrixTransform({a:1, b:0, c:0, d:1, e:10, f:5})), [13, 9, 0, 1])
+    assert.deepEqual(Object.values(p.matrixTransform({a:1, d:1, e:10})), [13, 4, 0, 1])
+    assert.deepEqual(Object.values(p.matrixTransform()), [3, 4, 0, 1])
+
+    // a 4×4 dict lands in the same place as the live matrix it came from, in 2D and in 3D
+    let flat = new DOMMatrix().translate(10, 5)
+    assert.deepEqual(p.matrixTransform(flat.toJSON()), p.matrixTransform(flat))
+    let deep = new DOMMatrix().translate(10, 5, 7)
+    assert.deepEqual(
+      new DOMPoint(3, 4, 2).matrixTransform(deep.toJSON()),
+      new DOMPoint(3, 4, 2).matrixTransform(deep)
+    )
+  })
+
+  test("fills in omitted members when used as an init dict", () => {
+    // transformPoint() takes a DOMPointInit, so anything with an x/y is fair game — z and w
+    // default rather than being read off the object raw (which made every term NaN)
+    let m = new DOMMatrix().translate(10, 5)
+    assert.deepEqual(Object.values(m.transformPoint({x:25, y:0})), [35, 5, 0, 1])
+    assert.deepEqual(Object.values(m.transformPoint({x:25})), [35, 5, 0, 1])
+    assert.deepEqual(Object.values(m.transformPoint(new DOMPoint(25, 0))), [35, 5, 0, 1])
+
+    // an omitted point is the origin, and an explicit z survives
+    assert.deepEqual(Object.values(m.transformPoint()), [10, 5, 0, 1])
+    assert.deepEqual(Object.values(m.transformPoint({x:25, y:0, z:2})), [35, 5, 2, 1])
+    assert.deepEqual(Object.values(DOMPoint.fromPoint()), [0, 0, 0, 1])
+  })
 })
 
 describe("DOMRect", ()=>{
