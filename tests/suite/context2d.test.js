@@ -1525,6 +1525,36 @@ describe("Context2D", ()=>{
         assert.deepEqual(pixel(21, 20), GREEN)
       })
 
+      test('draws vectors', async () => {
+        // an SVG Image's picture is wrapped in a synthetic Page and drawn as an embed, so repeated
+        // draws share one cached device-scale raster. these pin the properties that must survive
+        // the cache: repeated draws are identical, distinct images stay distinct, and upscales stay
+        // analytically crisp (scale-then-rasterize — the whole point of a vector source)
+        const svg = (fill) => 'data:image/svg+xml;base64,' + Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="${fill}"/></svg>`
+        ).toString('base64')
+        let green = await loadImage(svg('green')),
+            black = await loadImage(svg('black'))
+
+        ctx.drawImage(green, 0, 0)
+        ctx.drawImage(green, 20, 0)   // second draw: served from the cached raster
+        ctx.drawImage(black, 40, 0)   // distinct image: its own cache identity
+        assert.deepEqual(pixel(4, 4), GREEN)
+        assert.deepEqual(pixel(24, 4), GREEN)
+        assert.deepEqual(pixel(44, 4), BLACK)
+
+        // a cached upscale must stay crisp: the raster is built at the *placed* scale, so a
+        // mid-shape sample sits at full ink rather than on an interpolated ramp
+        let circle = await loadImage('data:image/svg+xml;base64,' + Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="1" height="2" fill="black"/><rect x="1" width="1" height="2" fill="white"/></svg>`
+        ).toString('base64'))
+        ctx.clearRect(0, 0, WIDTH, HEIGHT)
+        ctx.drawImage(circle, 0, 100, 64, 64)
+        ctx.drawImage(circle, 100, 100, 64, 64) // cache hit at the same scale
+        assert.deepEqual(pixel(24, 132), BLACK)  // inside the black half: unblended…
+        assert.deepEqual(pixel(124, 132), BLACK) // …on the cached copy too
+      })
+
       test('draws canvases', () => {
         const swatch = (color, size=8) => {
           let c = new Canvas(size, size), x = c.getContext('2d')

@@ -139,6 +139,7 @@ pub struct PageRecorder{
 
 impl PageRecorder{
   pub fn new(bounds:Rect, color_space:ColorSpace) -> Self {
+    // recorder ids climb from 1 while `Page::picture_id`s descend from usize::MAX
     static COUNTER:AtomicUsize = AtomicUsize::new(1);
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
 
@@ -403,6 +404,21 @@ impl Default for Page {
 }
 
 impl Page{
+  // derive a page.id for (vector) Images that have been wrapped in a Page
+  pub fn picture_id(pict:&Picture) -> usize{
+    usize::MAX - pict.unique_id() as usize // reuse Skia's monotonic unique IDs
+  }
+
+  // wrap a Picture in a single-layer Page so it can be cached just like canvas-based vector sources
+  pub fn from_picture(pict:&Picture, size:Size) -> Self{
+    Self{
+      id: Self::picture_id(pict),
+      bounds: Rect::from_size(size),
+      layers: vec![Layer::Ops(pict.clone())],
+      ..Default::default() // srgb, epoch 0, no dependent ops, no embeds
+    }
+  }
+
   pub fn depth(&self) -> usize{
     self.layers.len()
   }
