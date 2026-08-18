@@ -429,10 +429,9 @@ impl Page{
         Layer::Embed(embed) => {
           let total = match matrix{ Some(m) => Matrix::concat(m, &embed.matrix), None => embed.matrix };
 
-          // prefer rasterization as a cheaper transparency layer equivalent, but only where there's no cost:
-          // i.e., when the target is also a bitmap and the position is pixel grid-aligned
+          // use resolve() to pre-rasterize where possible (raster destination, unflipped, axis-aligned)
           let resolved = match replay{
-            Replay::Raster(cache) if embed.page.dependent_ops => Self::resolve(cache, canvas, embed, &total),
+            Replay::Raster(cache) => Self::resolve(cache, canvas, embed, &total),
             _ => None,
           };
 
@@ -457,7 +456,8 @@ impl Page{
                 _ => None
               };
 
-              match replay.isolates() || remap_gamut.is_some(){
+              // only use an isolation layer when the source requires it or there's a gamut remap
+              match (replay.isolates() && embed.page.dependent_ops) || remap_gamut.is_some(){
                 true => {
                   // use a non-null paint, so skia doesn't filter the transparency layer out as a no-op
                   embed.begin_layer(canvas, matrix, &Paint::default(), remap_gamut.as_ref());

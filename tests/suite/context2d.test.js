@@ -1609,6 +1609,31 @@ describe("Context2D", ()=>{
 
 
     describe('drawCanvas()', () => {
+      test('with cached embedding', () => {
+        // an upright placement of *any* source (not just one with target-dependent ops) now records
+        // a Layer::Embed so `resolve` can rasterize it once and blit thereafter. the cached raster
+        // is keyed on the source's PageStamp, so drawing into the source between draws must show up
+        // in the next draw rather than re-blitting the stale raster
+        let src = new Canvas(8, 8), srcCtx = src.getContext('2d')
+        srcCtx.fillStyle = 'green'
+        srcCtx.fillRect(0, 0, 8, 8)
+
+        ctx.drawCanvas(src, 0, 0)
+        ctx.drawCanvas(src, 20, 0) // same stamp: served from the cached raster
+        assert.deepEqual(pixel(4, 4), GREEN)
+        assert.deepEqual(pixel(24, 4), GREEN)
+
+        // partial fill on purpose: a full-canvas fill is an erase idiom that mints a new page id,
+        // which would mask a stale raster keyed on id alone
+        srcCtx.fillStyle = 'black'
+        srcCtx.fillRect(0, 0, 4, 4)
+        ctx.drawCanvas(src, 40, 0)
+
+        assert.deepEqual(pixel(41, 1), BLACK) // the deeper stamp shows the added content…
+        assert.deepEqual(pixel(46, 6), GREEN) // …atop the unchanged remainder
+        assert.deepEqual(pixel(24, 4), GREEN) // …without disturbing the earlier draws
+      })
+
       test('with negative dimensions normalized', async () => {
         let srcCanvas = new Canvas(3, 3),
             srcCtx = srcCanvas.getContext("2d");
