@@ -549,11 +549,11 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsObject> {
   let read_frequently = bool_arg_or(&mut cx, 7, false);
   let canvas = &mut parent.borrow_mut();
 
-  let color_space = color_space.unwrap_or_else(|| this.borrow().color_space());
-  let opts = ExportOptions{matte, density, msaa, color_type, color_space:Some(color_space.clone()), ..canvas.export_options()};
+  let opts = ExportOptions{matte, density, msaa, color_type, ..canvas.export_options()};
   let crop = normalized_rect(x*density, y*density, w*density, h*density).round();
   let engine = canvas.engine();
 
+  let color_space = color_space.unwrap_or_else(|| this.borrow().color_space()); // default to source's space if undefined
   let dst_info = ImageInfo::new((crop.width(), crop.height()), opts.color_type, AlphaType::Unpremul, color_space);
   let mut buffer = cx.buffer(dst_info.compute_min_byte_size())?;
   let dst = buffer.as_mut_slice(&mut cx);

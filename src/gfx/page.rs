@@ -597,7 +597,7 @@ impl Page{
 
         enum Rendered{ Encodable(SkImage), Raw(Vec<u8>) }
         let rendered = engine.render(move |cache| {
-          let color_space = page.color_space.clone(); // colorSpace currently can't be overridden for exports
+          let color_space = page.color_space.clone(); // an export always renders in its page's space
           let img_info = ImageInfo::new_n32_premul(page.scaled_dimensions(opts.density), Some(color_space.clone()));
           let cached = may_snapshot(page.depth()); // shallow pages re-render cheaply; don't spend a slot
           let mut surface = engine.make_surface(&img_info, &opts, !cached)?;
@@ -886,7 +886,6 @@ pub struct ExportOptions{
   pub matte: Option<Color4f>,
   pub msaa: Option<usize>,
   pub color_type: ColorType,
-  pub color_space: Option<ColorSpace>, // when unset, the Page being rendered supplies its own
   pub jpeg_downsample: bool,
   pub text_contrast: f32,
   pub text_gamma: f32,
@@ -897,7 +896,7 @@ impl Default for ExportOptions{
     Self{
       format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
       jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
-      color_type:ColorType::RGBA8888, color_space:None, outline:true,
+      color_type:ColorType::RGBA8888, outline:true,
     }
   }
 }
