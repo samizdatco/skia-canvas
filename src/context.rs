@@ -601,30 +601,34 @@ impl Context2D{
   // draw another canvas by embedding its Page reference so its isolation can be handled
   // appropriately (depending on whether a PDF/SVG/bitmap is being generated)
   pub fn draw_canvas(&mut self, page:&Page, src_rect:&Rect, dst_rect:&Rect){
-    let paint = self.paint_for_image();
-    let matrix = Self::fit_matrix(src_rect, dst_rect);
+    // does the source blit, clear, or use a non-SrcOver blend?
+    let isolate = page.dependent_ops || page.has_embeds;
 
-    // if the source canvas is sRGB and dest is display-p3 use an Embed since it will handle color clamping
+    // do the source colors need to be clamped to sRGB (b/c the dest is display-p3)?
     let remap_gamut = page.color_space != self.color_space() && page.color_space.is_srgb();
 
-    // an embed carries geometry but not an enclosing paint, so anything needing one falls back to
-    // a flattened picture with its isolation baked in (which svg drops, as it already did)
-    let embed = (page.dependent_ops || page.has_embeds || remap_gamut) // needs embed (blits, clears, blends, gamut)
-              && !self.has_shadow() && !self.is_region_blend() // doesn't have an enclosing paint
-              && Self::is_pass_through(&paint);
+    // is the placement axis-aligned and unflipped/skewed?
+    let matrix = Matrix::concat(&self.state.matrix, &Self::fit_matrix(src_rect, dst_rect));
+    let cacheable = matrix.skew_x() == 0.0 && matrix.skew_y() == 0.0 && !matrix.has_perspective()
+                 && matrix.scale_x() > 0.0 && matrix.scale_y() > 0.0
+                 && matrix.scale_x().is_finite() && matrix.scale_y().is_finite();
 
-    if !embed{
+    // embed if any of those conditions are met, but only if drawing doesn't depend on effects an Embed can't provide
+    let embed = (isolate || remap_gamut || cacheable)
+              && !self.has_shadow() && !self.is_region_blend() // doesn't require an enclosing paint
+              && Self::is_pass_through(&self.paint_for_image()); // no alpha, effects, or dependent blend
+
+    if embed{
+      // record the source page and its position + clip for placement on the destination
+      let (bounds, clip) = self.embed_region(dst_rect);
+      let page = page.clone();
+      self.with_recorder(|mut rec| rec.push_embed(Embed{ page, bounds, clip, matrix }));
+    }else{
+      // otherwise flatten to a Picture + transparency layer (which svg drops) and draw it immediately
       if let Some(pict) = page.to_picture(None){
         self.draw_picture(&pict, src_rect, dst_rect);
       }
-      return
     }
-
-    // cache the src page and the rect+matrix info to position it within the destination canvas
-    let (bounds, clip) = self.embed_region(dst_rect);
-    let matrix = Matrix::concat(&self.state.matrix, &matrix);
-    let page = page.clone();
-    self.with_recorder(|mut rec| rec.push_embed(Embed{ page, bounds, clip, matrix }));
   }
 
   // the region an embed occupies in *this* page's coordinate space. the clip is `Some` only when
