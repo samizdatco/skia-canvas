@@ -1378,82 +1378,166 @@ describe("Context2D", ()=>{
       assert.deepEqual(pixel(0, y), CLEAR)
     })
 
-    test('drawImage()', async () => {
-      let image = await loadAsset('checkers.png')
-      ctx.imageSmoothingEnabled = false
+    describe('drawImage()', () => {
+      test('draws bitmaps', async () => {
+        let image = await loadAsset('checkers.png')
+        ctx.imageSmoothingEnabled = false
 
-      ctx.drawImage(image, 0,0)
-      assert.deepEqual(pixel(0, 0), BLACK)
-      assert.deepEqual(pixel(1, 0), WHITE)
-      assert.deepEqual(pixel(0, 1), WHITE)
-      assert.deepEqual(pixel(1, 1), BLACK)
+        ctx.drawImage(image, 0,0)
+        assert.deepEqual(pixel(0, 0), BLACK)
+        assert.deepEqual(pixel(1, 0), WHITE)
+        assert.deepEqual(pixel(0, 1), WHITE)
+        assert.deepEqual(pixel(1, 1), BLACK)
 
-      ctx.drawImage(image,-256,-256,512,512)
-      assert.deepEqual(pixel(0, 0), BLACK)
-      assert.deepEqual(pixel(149, 149), BLACK)
+        ctx.drawImage(image,-256,-256,512,512)
+        assert.deepEqual(pixel(0, 0), BLACK)
+        assert.deepEqual(pixel(149, 149), BLACK)
 
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.save()
-      ctx.translate(WIDTH/2, HEIGHT/2)
-      ctx.rotate(.25*Math.PI)
-      ctx.drawImage(image,-256,-256,512,512)
-      ctx.restore()
-      assert.deepEqual(pixel(0, 0), CLEAR)
-      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), BLACK)
-      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), BLACK)
-      assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), WHITE)
-      assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), WHITE)
-      assert.deepEqual(pixel(WIDTH-1, HEIGHT-1), CLEAR)
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.save()
+        ctx.translate(WIDTH/2, HEIGHT/2)
+        ctx.rotate(.25*Math.PI)
+        ctx.drawImage(image,-256,-256,512,512)
+        ctx.restore()
+        assert.deepEqual(pixel(0, 0), CLEAR)
+        assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), BLACK)
+        assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), BLACK)
+        assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), WHITE)
+        assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), WHITE)
+        assert.deepEqual(pixel(WIDTH-1, HEIGHT-1), CLEAR)
 
-      let srcCanvas = new Canvas(3, 3),
-          srcCtx = srcCanvas.getContext("2d");
-      srcCtx.fillStyle = 'green'
-      srcCtx.fillRect(0,0,3,3)
-      srcCtx.clearRect(1,1,1,1)
+        let srcCanvas = new Canvas(3, 3),
+            srcCtx = srcCanvas.getContext("2d");
+        srcCtx.fillStyle = 'green'
+        srcCtx.fillRect(0,0,3,3)
+        srcCtx.clearRect(1,1,1,1)
 
-      ctx.drawImage(srcCanvas, 0,0)
-      assert.deepEqual(pixel(0, 0), GREEN)
-      assert.deepEqual(pixel(1, 1), CLEAR)
-      assert.deepEqual(pixel(2, 2), GREEN)
+        ctx.drawImage(srcCanvas, 0,0)
+        assert.deepEqual(pixel(0, 0), GREEN)
+        assert.deepEqual(pixel(1, 1), CLEAR)
+        assert.deepEqual(pixel(2, 2), GREEN)
 
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.drawImage(srcCanvas,-2,-2,6,6)
-      assert.deepEqual(pixel(0, 0), CLEAR)
-      assert.deepEqual(pixel(2, 0), GREEN)
-      assert.deepEqual(pixel(2, 2), GREEN)
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.drawImage(srcCanvas,-2,-2,6,6)
+        assert.deepEqual(pixel(0, 0), CLEAR)
+        assert.deepEqual(pixel(2, 0), GREEN)
+        assert.deepEqual(pixel(2, 2), GREEN)
 
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.save()
-      ctx.translate(WIDTH/2, HEIGHT/2)
-      ctx.rotate(.25*Math.PI)
-      ctx.drawImage(srcCanvas,-256,-256,512,512)
-      ctx.restore()
-      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), GREEN)
-      assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), GREEN)
-      assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), GREEN)
-      assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), GREEN)
-      assert.deepEqual(pixel(WIDTH/2, HEIGHT/2), CLEAR)
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.save()
+        ctx.translate(WIDTH/2, HEIGHT/2)
+        ctx.rotate(.25*Math.PI)
+        ctx.drawImage(srcCanvas,-256,-256,512,512)
+        ctx.restore()
+        assert.deepEqual(pixel(WIDTH/2, HEIGHT*.25), GREEN)
+        assert.deepEqual(pixel(WIDTH/2, HEIGHT*.75), GREEN)
+        assert.deepEqual(pixel(WIDTH*.25, HEIGHT/2), GREEN)
+        assert.deepEqual(pixel(WIDTH*.75, HEIGHT/2), GREEN)
+        assert.deepEqual(pixel(WIDTH/2, HEIGHT/2), CLEAR)
 
-      // negative dest / source dimensions: the rect normalizes to a sorted corner-pair
-      // (relocate), and content is never mirrored — verified to match browsers. [#283/#283b]
-      let asym = new Canvas(2, 2), asymCtx = asym.getContext('2d')
-      asymCtx.fillStyle = 'green'; asymCtx.fillRect(0, 0, 2, 2)
-      asymCtx.fillStyle = 'white'; asymCtx.fillRect(0, 0, 1, 1) // marker in the TOP-LEFT cell only
+        // negative dest / source dimensions: the rect normalizes to a sorted corner-pair
+        // (relocate), and content is never mirrored — verified to match browsers. [#283/#283b]
+        let asym = new Canvas(2, 2), asymCtx = asym.getContext('2d')
+        asymCtx.fillStyle = 'green'; asymCtx.fillRect(0, 0, 2, 2)
+        asymCtx.fillStyle = 'white'; asymCtx.fillRect(0, 0, 1, 1) // marker in the TOP-LEFT cell only
 
-      // negative dest w/h: dest (12,12)+(-2,-2) normalizes to the (10,10)-(12,12) rect
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.drawImage(asym, 12, 12, -2, -2)
-      assert.deepEqual(pixel(10, 10), WHITE)  // top-left marker stays top-left (no mirror)
-      assert.deepEqual(pixel(11, 10), GREEN)
-      assert.deepEqual(pixel(10, 11), GREEN)
-      assert.deepEqual(pixel(13, 13), CLEAR)  // nothing painted in the positive direction
+        // negative dest w/h: dest (12,12)+(-2,-2) normalizes to the (10,10)-(12,12) rect
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.drawImage(asym, 12, 12, -2, -2)
+        assert.deepEqual(pixel(10, 10), WHITE)  // top-left marker stays top-left (no mirror)
+        assert.deepEqual(pixel(11, 10), GREEN)
+        assert.deepEqual(pixel(10, 11), GREEN)
+        assert.deepEqual(pixel(13, 13), CLEAR)  // nothing painted in the positive direction
 
-      // negative source w/h (9-arg): src (2,2)+(-2,-2) normalizes to the full (0,0,2,2)
-      ctx.clearRect(0,0,WIDTH,HEIGHT)
-      ctx.drawImage(asym, 2, 2, -2, -2, 20, 20, 2, 2)
-      assert.deepEqual(pixel(20, 20), WHITE)  // marker preserved → source sampled, not mirrored
-      assert.deepEqual(pixel(21, 20), GREEN)
+        // negative source w/h (9-arg): src (2,2)+(-2,-2) normalizes to the full (0,0,2,2)
+        ctx.clearRect(0,0,WIDTH,HEIGHT)
+        ctx.drawImage(asym, 2, 2, -2, -2, 20, 20, 2, 2)
+        assert.deepEqual(pixel(20, 20), WHITE)  // marker preserved → source sampled, not mirrored
+        assert.deepEqual(pixel(21, 20), GREEN)
+      })
+
+      test('draws canvases', () => {
+        const swatch = (color, size=8) => {
+          let c = new Canvas(size, size), x = c.getContext('2d')
+          x.fillStyle = color
+          x.fillRect(0, 0, size, size)
+          return c
+        }
+
+        // A canvas source is snapshotted to an intermediate raster memoized on the recording's
+        // PageStamp, so drawing into the source between two draws has to invalidate it. The two
+        // cases below are the only routes by which that memo can go stale — both grow the layer
+        // count while leaving the page id alone. Mutating the source via an erase idiom (assigning
+        // .width, clearing the whole canvas) is deliberately *not* covered: those replace the
+        // recorder outright, so the memo is reset structurally and no keying mistake is reachable.
+        // Verified by mutation testing — a memo hard-wired to always hit still passes every
+        // erase-idiom variant of these.
+        {
+          let src = swatch('green'),
+              srcCtx = src.getContext('2d')
+
+          ctx.drawImage(src, 0, 0)
+          assert.deepEqual(pixel(4, 4), GREEN)
+
+          // deliberately a *partial* fill: covering the whole source would be an erase idiom, which
+          // mints a fresh page id and would let an invalidation keyed on id alone still pass. Only a
+          // partial draw leaves the id intact and moves the layer count on its own.
+          srcCtx.fillStyle = 'black'
+          srcCtx.fillRect(0, 0, 4, 4)
+          ctx.drawImage(src, 100, 0)
+
+          assert.deepEqual(pixel(102, 2), BLACK) // the second draw shows the added content…
+          assert.deepEqual(pixel(106, 6), GREEN) // …over the part of the source that didn't change
+          assert.deepEqual(pixel(4, 4), GREEN)   // …and doesn't disturb the first draw
+        }
+
+        // drawCanvas() appends its layer through push_embed, whose own flush() no-ops when nothing
+        // has been drawn since — which is exactly the state a preceding drawImage leaves the source
+        // in. So this grows the layer count by a route that never trips the `changed` flag.
+        ctx.clearRect(0, 0, WIDTH, HEIGHT)
+        {
+          let inner = new Canvas(8, 8), innerCtx = inner.getContext('2d')
+          innerCtx.fillStyle = 'red'
+          innerCtx.fillRect(0, 0, 8, 8)
+          innerCtx.globalCompositeOperation = 'destination-in' // makes the source need isolating
+          innerCtx.fillRect(0, 0, 8, 8)
+
+          let src = swatch('green', 16)
+          ctx.drawImage(src, 0, 0)
+          assert.deepEqual(pixel(4, 4), GREEN)
+
+          src.getContext('2d').drawCanvas(inner, 8, 8)
+          ctx.drawImage(src, 100, 0)
+
+          assert.deepEqual(pixel(112, 12), [255, 0, 0, 255]) // the embedded canvas is visible…
+          assert.deepEqual(pixel(102, 2), GREEN)             // …over the rest of the source
+        }
+
+        // drawImage rasterizes the source at its intrinsic size and then scales that bitmap, so
+        // upscaling interpolates between texel centers. drawCanvas scales the geometry first, so
+        // the same edge stays hard. The two are expected to differ, and memoizing the intermediate
+        // raster must not change which one you get.
+        ctx.clearRect(0, 0, WIDTH, HEIGHT)
+        {
+          let src = new Canvas(2, 2), srcCtx = src.getContext('2d')
+          srcCtx.fillStyle = 'black'; srcCtx.fillRect(0, 0, 1, 2)
+          srcCtx.fillStyle = 'white'; srcCtx.fillRect(1, 0, 1, 2)
+
+          // upscaled 32x, the black→white edge sits at x=32 and the texel centers land at x=16 & 48
+          ctx.imageSmoothingEnabled = true
+          ctx.drawImage(src, 0, 0, 64, 64)
+          let viaImage = pixel(24, 32)[0] // a quarter of the way up the interpolated ramp
+
+          ctx.clearRect(0, 0, WIDTH, HEIGHT)
+          ctx.drawCanvas(src, 0, 0, 64, 64)
+          let viaCanvas = pixel(24, 32)[0] // still inside the black rect, so unblended
+
+          assert.equal(viaCanvas, 0)
+          assert.ok(viaImage > 16, `drawImage should interpolate the upscale (got ${viaImage})`)
+        }
+      })
     })
+
 
     describe('drawCanvas()', () => {
       test('with negative dimensions normalized', async () => {
