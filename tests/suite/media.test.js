@@ -20,6 +20,12 @@ const PORT = 41777,
       HOST = `http://127.0.0.1:${PORT}`
 
 const server = http.createServer((req, res) => {
+  if (req.url == '/stall') return              // accept the connection, then never respond
+  if (req.url == '/stall-mid-body'){           // send headers and some bytes, then stop
+    res.writeHead(200)
+    return void res.write('partial')
+  }
+
   try{
     const body = fs.readFileSync(process.cwd() + req.url) // read before writing the header,
     res.writeHead(200)                                    // so a miss can still send a 404
@@ -153,6 +159,25 @@ describe("Image", () => {
       assert.matchesSubset(img, PARSED)
 
       await assert.rejects(loadImage(`${HOST}/nonesuch`), /HTTP error 404/)
+    })
+
+    test("request timeouts", async () => {
+      // socket-inactivity timeout, before and after the response starts
+      await assert.rejects(loadImage(`${HOST}/stall`, {timeout:100}), /Timed out/)
+      await assert.rejects(loadImage(`${HOST}/stall-mid-body`, {timeout:100}), /Timed out/)
+
+      // a deadline covers the whole request, including a response already in flight
+      await assert.rejects(loadImage(`${HOST}/stall`, {signal:AbortSignal.timeout(100)}), /Timed out/)
+      await assert.rejects(loadImage(`${HOST}/stall-mid-body`, {signal:AbortSignal.timeout(100)}), /Timed out/)
+
+      // an explicit abort is not a timeout and keeps its own error
+      let ac = new AbortController(),
+          req = loadImage(`${HOST}/stall`, {signal:ac.signal})
+      ac.abort()
+      await assert.rejects(req, /aborted/)
+
+      // neither option disturbs a request that finishes in time
+      assert.matchesSubset(await loadImage(URI, {timeout:5000}), LOADED)
     })
   })
 
