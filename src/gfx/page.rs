@@ -125,6 +125,7 @@ pub struct PageRecorder{
   eviction: PostedEviction, // whether cached rasters need to be dropped on the render thread
   approx_ops: usize, // draw ops recorded into `current` since the last get_page() flush (see release())
   footprint: mem::v8::Footprint, // report the retained display-list size to V8's GC accounting
+  last_image: Option<(PageStamp, SkImage)>, // the most recent get_image() result, reused while the stamp holds
   dependent_ops: bool, // contains (non-embed) layers that use a clear, blit, or non-SrcOver blend
   has_embeds: bool, // contains embed layers (i.e., canvas content added via `drawCanvas`)
   id: usize, // generation id (incremented when the canvas is fully cleared)
@@ -142,6 +143,7 @@ impl PageRecorder{
       eviction:PostedEviction::default(),
       approx_ops:0,
       footprint:mem::v8::Footprint::default(),
+      last_image:None,
       dependent_ops:false,
       has_embeds:false,
     }
@@ -298,8 +300,16 @@ impl PageRecorder{
   }
 
   pub fn get_image(&mut self) -> Option<SkImage>{
+    self.flush(); // move any uncommitted drawing ops to a layer
+
+    // reuse the last image unless the canvas has been drawn into or resized since it was made
+    let stamp = PageStamp{ id:self.id, epoch:self.epoch, depth:self.layers.len() };
+    if let Some((cached, image)) = &self.last_image{
+      if *cached == stamp{ return Some(image.clone()) }
+    }
+
     let size = self.bounds.size().to_floor();
-    self
+    let image = self
       .get_page()
       .to_picture(None)
       .and_then(|pict| {
@@ -308,7 +318,10 @@ impl PageRecorder{
         images::deferred_from_picture(
           pict, size, None, None, BitDepth::F16, Some(ColorSpace::new_srgb()), None
         )
-      })
+      })?;
+
+    self.last_image = Some((stamp, image.clone()));
+    Some(image)
   }
 }
 
@@ -330,6 +343,7 @@ impl PageRecorder{
 
     self.footprint.clear(); // credit the display-list charge back to V8
     self.current = None;
+    self.last_image = None; // drop before the layers (since it references them)
     self.layers.clear();
 
     let id = self.id;
