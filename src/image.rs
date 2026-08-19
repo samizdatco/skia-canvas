@@ -37,8 +37,8 @@ impl Drop for Image{
 }
 
 pub enum Content{
-  Bitmap(SkImage),
-  Vector(Picture, Size),
+  Bitmap(SkImage), // embeds its own intrinsic size and colorspace
+  Vector(Picture, Size, ColorSpace), // needs to record them separately
   Loading,
   Broken,
 }
@@ -53,18 +53,22 @@ impl Clone for Content{
   fn clone(&self) -> Self {
       match self{
         Content::Bitmap(img) => Content::Bitmap(img.clone()),
-        Content::Vector(pict, size) => Content::Vector(pict.clone(), size.clone()),
+        Content::Vector(pict, size, space) => Content::Vector(pict.clone(), size.clone(), space.clone()),
         _ => Content::default()
       }
   }
 }
 
 impl Content{
-  pub fn from_context(ctx:&mut Context2D, use_vector:bool) -> Self{
-    match use_vector{
-      true => ctx.get_picture().map(|p| Content::Vector(p, ctx.bounds.size())),
-      false => ctx.get_image().map(|i| Content::Bitmap(i)),
-    }.unwrap_or_default()
+  // snapshot the context as a bitmap, already clamped to its own gamut
+  pub fn raster_from_context(ctx:&mut Context2D) -> Self{
+    ctx.get_image().map(|i| Content::Bitmap(i)).unwrap_or_default()
+  }
+
+  // flatten the context into a Picture, tagged with the gamut its colors were authored in
+  pub fn vector_from_context(ctx:&mut Context2D) -> Self{
+    let (size, space) = (ctx.bounds.size(), ctx.color_space());
+    ctx.get_picture().map(|p| Content::Vector(p, size, space)).unwrap_or_default()
   }
 
   pub fn from_image_data(image_data:ImageData) -> Self{
@@ -78,7 +82,7 @@ impl Content{
   pub fn release(&mut self){
     let content = std::mem::take(self);
 
-    if let Content::Vector(pict, _) = &content{
+    if let Content::Vector(pict, ..) = &content{
       // clear any cached rasters keyed to the Picture id
       let id = Page::picture_id(pict);
       Cache::shared().evict(id);
@@ -102,7 +106,7 @@ impl Content{
   pub fn size(&self) -> Size {
     match &self {
       Content::Bitmap(img) => img.dimensions().into(),
-      Content::Vector(_, size) => *size,
+      Content::Vector(_, size, _) => *size,
       _ => Size::new_empty()
     }
   }
@@ -114,7 +118,7 @@ impl Content{
       Content::Bitmap(img) if img.is_lazy_generated() =>
         img.encoded_data().map(|data| data.size()).unwrap_or(0),
       Content::Bitmap(img) => img.image_info().compute_min_byte_size(),
-      Content::Vector(pict, _) => pict.approximate_bytes_used(),
+      Content::Vector(pict, ..) => pict.approximate_bytes_used(),
       _ => 0,
     }
   }
@@ -400,7 +404,8 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
     dom.set_container_size(bounds.size());
     dom.render(compositor.begin_recording(bounds, true));
     match compositor.finish_recording_as_picture(None){
-      Some(picture) => Content::Vector(picture, size),
+      // skia's SVG parser only emits 8-bit sRGB (as of m150), so hardcode sRGB until that changes
+      Some(picture) => Content::Vector(picture, size, ColorSpace::new_srgb()),
       None => Content::Broken
     }
   }else{

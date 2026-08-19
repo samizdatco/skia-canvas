@@ -1997,26 +1997,44 @@ describe("Context2D", ()=>{
         assert.deepEqual(Array.from(f.getImageData(5, 3, 1, 1).data), [255, 0, 0, 255])
       })
 
-      test('drawImage(canvas)', () => {
+      test('drawImage(canvas)', async () => {
         // a source canvas holding an out-of-sRGB-gamut fill…
         let srcCanvas = new Canvas(4, 4),
             src = srcCanvas.getContext('2d')
         src.fillStyle = 'color(display-p3 1 0 0)'
         src.fillRect(0, 0, 4, 4)
 
-        // …survives being composited onto a display-p3 canvas via drawImage(). The source is
-        // snapshotted to an intermediate raster first (unlike drawCanvas's vector path), so
-        // this only holds because that intermediate is F16 extended-sRGB rather than 8-bit —
-        // an 8-bit intermediate would clip the P3 red down to sRGB red ([234, 51, 35] in p3).
+        // …is clamped to that canvas's own gamut when drawImage() snapshots it, since drawImage()
+        // takes the source *as a bitmap*. The intermediate raster is built in the source page's
+        // space at 8 bits — the same surface a readback or an export rasterizes into — so all three
+        // ways of asking what the source holds agree. An extended-range (F16) intermediate would
+        // instead carry the p3 red into whatever space drawImage() is compositing into, leaving one
+        // canvas reporting two different reds depending on which door you used.
         let viaImage = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
         viaImage.drawImage(srcCanvas, 0, 0)
-        assert.deepEqual(Array.from(viaImage.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+        assert.deepEqual(Array.from(viaImage.getImageData(0, 0, 1, 1).data), [234, 51, 35, 255])
 
-        // drawCanvas() does not: the source renders into its own colorspace on the way in, so the
-        // fill is clamped to the gamut the source page declared for itself (see 'drawCanvas()')
+        // …which is what the source reports for itself, and what round-tripping it through its own
+        // PNG export and back yields
+        assert.deepEqual(Array.from(src.getImageData(0, 0, 1, 1, {colorSpace:'display-p3'}).data), [234, 51, 35, 255])
+        let viaPNG = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+        viaPNG.drawImage(await loadImage(srcCanvas.toBufferSync('png')), 0, 0)
+        assert.deepEqual(Array.from(viaPNG.getImageData(0, 0, 1, 1).data), [234, 51, 35, 255])
+
+        // drawCanvas() agrees, by a different route: rather than snapshotting the source it
+        // renders it into its own colorspace on the way in (see 'drawCanvas()')
         let viaCanvas = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
         viaCanvas.drawCanvas(srcCanvas, 0, 0)
         assert.deepEqual(Array.from(viaCanvas.getImageData(0, 0, 1, 1).data), [234, 51, 35, 255])
+
+        // …and so does using the source as a pattern. this one is not a snapshot at all: the tile
+        // stays a Picture (so it re-rasterizes at whatever scale it's drawn) and skia rasterizes
+        // that tile in the *destination's* space, which would alias the p3 red straight through.
+        // declaring the source's gamut as the shader's working space is what converts it instead.
+        let viaPattern = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+        viaPattern.fillStyle = viaPattern.createPattern(srcCanvas, 'repeat')
+        viaPattern.fillRect(0, 0, 4, 4)
+        assert.deepEqual(Array.from(viaPattern.getImageData(0, 0, 1, 1).data), [234, 51, 35, 255])
       })
 
       test('drawCanvas()', () => {

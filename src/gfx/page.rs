@@ -320,10 +320,10 @@ impl PageRecorder{
       .get_page()
       .to_picture(None)
       .and_then(|pict| {
-        // rasterize using *extended-range* sRGB (via F16 colors) so it can later be converted into
-        // whatever colorSpace drawImage(canvas) is using
+        // rasterize the canvas's contents clamped to its native gamut (in case it's an sRGB context
+        // that is being drawn to a display-p3 one)
         images::deferred_from_picture(
-          pict, size, None, None, BitDepth::F16, Some(ColorSpace::new_srgb()), None
+          pict, size, None, None, BitDepth::U8, Some(self.color_space.clone()), None
         )
       })?;
 
@@ -406,17 +406,16 @@ impl Default for Page {
 
 impl Page{
   // derive a page.id for (vector) Images that have been wrapped in a Page
-  pub fn picture_id(pict:&Picture) -> usize{
-    usize::MAX - pict.unique_id() as usize // reuse Skia's monotonic unique IDs
-  }
+  pub fn picture_id(pict:&Picture) -> usize{ usize::MAX - pict.unique_id() as usize }
 
-  // wrap a Picture in a single-layer Page so it can be cached just like canvas-based vector sources
-  pub fn from_picture(pict:&Picture, size:Size) -> Self{
+  // wrap a Picture in a single-layer Page so it can be cached just like canvas-based vector sources.
+  pub fn from_picture(pict:&Picture, size:Size, color_space:ColorSpace) -> Self{
     Self{
       id: Self::picture_id(pict),
       bounds: Rect::from_size(size),
       layers: vec![Layer::Ops(pict.clone())],
-      ..Default::default() // srgb, epoch 0, no dependent ops, no page refs
+      color_space,
+      ..Default::default() // epoch 0, no dependent ops, no page refs
     }
   }
 

@@ -20,7 +20,7 @@ pub struct Stamp{
   footprint: mem::v8::Footprint,
   dims:Size,
   repeat:(TileMode, TileMode),
-  matrix:Matrix
+  matrix:Matrix,
 }
 
 impl Stamp{
@@ -50,9 +50,10 @@ impl CanvasPattern{
         image.to_shader(stamp.repeat, image_filter.sampling(), None).map(|shader|
           shader.with_local_matrix(&stamp.matrix)
         ),
-      Content::Vector(pict, ..) => {
+      Content::Vector(pict, _, space) => {
         let tile_rect = Rect::from_size(stamp.dims);
         let shader = pict.to_shader(stamp.repeat, FilterMode::Linear, None, Some(&tile_rect));
+        let shader = shader.with_working_color_space(space.clone(), None); // rasterize in the source color space
         Some(shader.with_local_matrix(&stamp.matrix))
       },
       _ => None
@@ -120,9 +121,7 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let mut ctx = src.borrow_mut();
   let dims = ctx.bounds.size();
   let matrix = Matrix::new_identity();
-  let content = ctx.get_picture()
-    .map(|picture| Content::Vector(picture, dims))
-    .unwrap_or_default();
+  let content = Content::vector_from_context(&mut ctx);
 
   let stamp = Stamp::new(content, dims, repeat, matrix);
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
