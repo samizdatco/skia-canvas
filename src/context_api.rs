@@ -473,7 +473,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     if let Ok(img) = source.downcast::<BoxedImage, _>(&mut cx){
       img.borrow().content.clone()
     }else if let Ok(ctx) = source.downcast::<BoxedContext2D, _>(&mut cx){
-      Content::from_context(&mut ctx.borrow_mut(), false)
+      Content::raster_from_context(&mut ctx.borrow_mut())
     }else if let Ok(image_data) = image_data_arg(&mut cx, 1){
       Content::from_image_data(image_data)
     }else{
@@ -488,7 +488,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     Content::snap_rects_to_bounds(content.size(), src, dst);
     let mut this = this.borrow_mut();
     this.draw_image(&img, &src, &dst);
-  } else if let Content::Vector(pict, pict_size) = &content {
+  } else if let Content::Vector(pict, pict_size, space) = &content {
     let fit_to_canvas = source.downcast::<BoxedImage, _>(&mut cx)
       .map(|image| image.borrow().autosized).unwrap_or(false);
     let (mut src, mut dst) = _layout_rects(&mut cx, *pict_size, &nums)?;
@@ -513,7 +513,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     Content::snap_rects_to_bounds(content.size(), src, dst);
 
     // wrap the picture in a single-layer Page so repeated draws can use the raster cache
-    let page = Page::from_picture(pict, *pict_size);
+    let page = Page::from_picture(pict, *pict_size, space.clone());
     this.borrow_mut().draw_page(&page, &src, &dst);
   }
 
