@@ -1957,10 +1957,71 @@ describe("Context2D", ()=>{
         viaImage.drawImage(srcCanvas, 0, 0)
         assert.deepEqual(Array.from(viaImage.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
 
-        // the vector drawCanvas() path (no intermediate raster) preserves it too
+        // drawCanvas() does not: the source renders into its own colorspace on the way in, so the
+        // fill is clamped to the gamut the source page declared for itself (see 'drawCanvas()')
         let viaCanvas = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
         viaCanvas.drawCanvas(srcCanvas, 0, 0)
-        assert.deepEqual(Array.from(viaCanvas.getImageData(0, 0, 1, 1).data), [255, 0, 0, 255])
+        assert.deepEqual(Array.from(viaCanvas.getImageData(0, 0, 1, 1).data), [234, 51, 35, 255])
+      })
+
+      test('drawCanvas()', () => {
+        // a page's colorSpace bounds its content, so an embed lands in the destination clamped to
+        // the *source's* gamut — the same pixels getImageData and its own png report. the clamp is
+        // a property of the page, not of any one kind of content, so it can't be sidestepped by
+        // routing the out-of-gamut color in as something other than a paint
+        const CLAMPED = [234, 51, 35, 255] // p3 red, reduced to the sRGB gamut the source declared
+
+        let p3red = new Canvas(4, 4)
+        p3red.getContext('2d', {colorSpace:'display-p3'}).fillStyle = 'color(display-p3 1 0 0)'
+        p3red.getContext('2d').fillRect(0, 0, 4, 4)
+
+        let routes = {
+          paint: src => { src.fillStyle = 'color(display-p3 1 0 0)'; src.fillRect(0, 0, 4, 4) },
+          embed: src => src.drawCanvas(p3red, 0, 0),
+          pixels: src => {
+            let data = src.createImageData(4, 4, {colorSpace:'display-p3'})
+            for (let i=0; i<data.data.length; i+=4){ data.data[i] = 255; data.data[i+3] = 255 }
+            src.putImageData(data, 0, 0)
+          },
+        }
+
+        for (const [name, draw] of Object.entries(routes)){
+          let srcCanvas = new Canvas(4, 4)
+          draw(srcCanvas.getContext('2d')) // an sRGB source, however the color got into it
+          let dst = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+          dst.drawCanvas(srcCanvas, 0, 0)
+          assert.deepEqual(Array.from(dst.getImageData(1, 1, 1, 1).data), CLAMPED, name)
+        }
+
+        // the clamp can't depend on which replay path the embed takes, or cache state and placement
+        // angle would be visible in the output. a `dependent_ops` source resolves to a cached
+        // raster; a plain one and a rotated one replay their geometry instead
+        let srcCanvas = new Canvas(4, 4),
+            src = srcCanvas.getContext('2d')
+        src.fillStyle = 'color(display-p3 1 0 0)'
+        src.fillRect(0, 0, 4, 4)
+
+        let dependent = new Canvas(4, 4), dep = dependent.getContext('2d')
+        dep.drawCanvas(srcCanvas, 0, 0)
+        dep.globalCompositeOperation = 'destination-in'
+        dep.fillRect(0, 0, 4, 4) // full coverage: erases nothing, but marks the page dependent
+
+        for (const source of [srcCanvas, dependent]){
+          let upright = new Canvas(4, 4).getContext('2d', {colorSpace:'display-p3'})
+          upright.drawCanvas(source, 0, 0)
+          assert.deepEqual(Array.from(upright.getImageData(1, 1, 1, 1).data), CLAMPED)
+
+          let turned = new Canvas(8, 8).getContext('2d', {colorSpace:'display-p3'})
+          turned.translate(4, 0)
+          turned.rotate(Math.PI / 4) // never resolves to a raster, so it always replays
+          turned.drawCanvas(source, 0, 0)
+          assert.deepEqual(Array.from(turned.getImageData(4, 2, 1, 1).data), CLAMPED)
+        }
+
+        // …and a destination no wider than the source needs no mapping at all
+        let srgb = new Canvas(4, 4).getContext('2d')
+        srgb.drawCanvas(srcCanvas, 0, 0)
+        assert.deepEqual(Array.from(srgb.getImageData(1, 1, 1, 1).data), [255, 0, 0, 255])
       })
     })
   })

@@ -59,9 +59,14 @@ impl Embed{
     }
   }
 
-  // open a transparency layer covering this embed's bounding box
-  fn begin_layer(&self, canvas:&SkCanvas, matrix:Option<&Matrix>, paint:&Paint){
-    canvas.save_layer(&SaveLayerRec::default().bounds(&self.bounds_in(matrix)).paint(paint));
+  // open a transparency layer covering this embed's bounding box (the layer equivalent to `resolve()`)
+  fn begin_layer(&self, canvas:&SkCanvas, matrix:Option<&Matrix>, paint:&Paint, space:Option<&ColorSpace>){
+    let bounds = self.bounds_in(matrix);
+    let rec = SaveLayerRec::default().bounds(&bounds).paint(paint);
+    canvas.save_layer(&match space{
+      Some(space) => rec.color_space(space),
+      None => rec, // default to destination's color space if not overridden
+    });
   }
 }
 
@@ -444,14 +449,23 @@ impl Page{
               canvas.draw_image_with_sampling_options(&image, at, sampling, None);
               canvas.restore();
             }
-            None => match replay.isolates(){
-              true => {
-                // use a non-null paint, so skia doesn't filter the transparency layer out as a no-op
-                embed.begin_layer(canvas, matrix, &Paint::default());
-                embed.page.playback_from(canvas, 0, Some(&total), replay);
-                canvas.restore();
+            None => {
+              // when drawing an sRGB canvas into display-p3, keep its colors clamped in sRGB
+              let remap_gamut = match canvas.image_info().color_space(){
+                Some(dst) if dst != embed.page.color_space && embed.page.color_space.is_srgb() =>
+                  Some(embed.page.color_space.clone()),
+                _ => None
+              };
+
+              match replay.isolates() || remap_gamut.is_some(){
+                true => {
+                  // use a non-null paint, so skia doesn't filter the transparency layer out as a no-op
+                  embed.begin_layer(canvas, matrix, &Paint::default(), remap_gamut.as_ref());
+                  embed.page.playback_from(canvas, 0, Some(&total), replay);
+                  canvas.restore();
+                }
+                false => embed.page.playback_from(canvas, 0, Some(&total), replay)
               }
-              false => embed.page.playback_from(canvas, 0, Some(&total), replay)
             }
           }
           canvas.restore();

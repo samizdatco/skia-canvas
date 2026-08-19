@@ -604,9 +604,12 @@ impl Context2D{
     let paint = self.paint_for_image();
     let matrix = Self::fit_matrix(src_rect, dst_rect);
 
+    // if the source canvas is sRGB and dest is display-p3 use an Embed since it will handle color clamping
+    let remap_gamut = page.color_space != self.color_space() && page.color_space.is_srgb();
+
     // an embed carries geometry but not an enclosing paint, so anything needing one falls back to
     // a flattened picture with its isolation baked in (which svg drops, as it already did)
-    let embed = (page.dependent_ops || page.has_embeds) // needs embed (blits, clears, or blends)
+    let embed = (page.dependent_ops || page.has_embeds || remap_gamut) // needs embed (blits, clears, blends, gamut)
               && !self.has_shadow() && !self.is_region_blend() // doesn't have an enclosing paint
               && Self::is_pass_through(&paint);
 
