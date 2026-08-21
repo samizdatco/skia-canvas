@@ -1528,8 +1528,9 @@ describe("Context2D", ()=>{
       test('draws vectors', async () => {
         // an SVG Image's picture is wrapped in a synthetic Page and drawn as an embed, so repeated
         // draws share one cached device-scale raster. these pin the properties that must survive
-        // the cache: repeated draws are identical, distinct images stay distinct, and upscales stay
-        // analytically crisp (scale-then-rasterize — the whole point of a vector source)
+        // the cache: repeated draws are identical, distinct images stay distinct, upscales stay
+        // analytically crisp (scale-then-rasterize — the whole point of a vector source), and an
+        // overdrawn source rect gets cropped the same way no matter what the CTM is doing
         const svg = (fill) => 'data:image/svg+xml;base64,' + Buffer.from(
           `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="${fill}"/></svg>`
         ).toString('base64')
@@ -1553,6 +1554,125 @@ describe("Context2D", ()=>{
         ctx.drawImage(circle, 100, 100, 64, 64) // cache hit at the same scale
         assert.deepEqual(pixel(24, 132), BLACK)  // inside the black half: unblended…
         assert.deepEqual(pixel(124, 132), BLACK) // …on the cached copy too
+
+        // a source rect spilling past the image on all four sides has to land in the same place
+        // whether the caller pre-trims it or not. drawing by reference means an untrimmed dst_rect
+        // widens the region recorded for the placement — invisible while the CTM is axis-aligned,
+        // but it moves the result once there's a rotation, scale, or skew
+        let checks = await loadImage('data:image/svg+xml;base64,' + Buffer.from(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">` +
+          Array.from({length: 100}, (_, i) => {
+            let x = i % 10, y = (i / 10) | 0
+            return `<rect x="${x}" y="${y}" width="1" height="1" fill="${(x + y) % 2 ? '#0a0' : '#fff'}"/>`
+          }).join('') + `</svg>`
+        ).toString('base64'))
+
+        // src (-3.5,-3.5)…(13.5,13.5) → dst (0,0)…(34,34) trims to src (0,0)…(10,10) → dst (7,7)…(27,27)
+        /** @param {[number,number,number,number,number,number,number,number]} coords */
+        const placed = (coords, warp) => {
+          let c = new Canvas(40, 40), x = c.getContext('2d')
+          warp(x)
+          x.drawImage(checks, ...coords)
+          return c.toBufferSync('png')
+        }
+
+        for (let warp of [
+          x => { x.translate(20, 20); x.rotate(0.3); x.translate(-20, -20) },
+          x => x.scale(1.7, 1.7),
+          x => x.transform(1, 0.2, 0.3, 1, 0, 0),
+        ]){
+          assert.deepEqual(
+            placed([-3.5, -3.5, 17, 17, 0, 0, 34, 34], warp), // overdraws all four sides
+            placed([0, 0, 10, 10, 7, 7, 20, 20], warp)        // the same draw, pre-trimmed
+          )
+        }
+      })
+
+      test('skips draws with empty rects', async () => {
+        // a crop that misses the source entirely, or that has no area, has to leave the canvas
+        // untouched: clipping it can't hand back an inverted rect, and the src→dst scale can't
+        // divide by a zero-width crop and reach the draw with NaN edges
+        let raster = new Canvas(8, 8), rasterCtx = raster.getContext('2d')
+        rasterCtx.fillStyle = 'green'
+        rasterCtx.fillRect(0, 0, 8, 8)
+
+        let bitmap = await loadImage(await raster.toBuffer('png')),
+            vector = await loadImage('data:image/svg+xml;base64,' + Buffer.from(
+              `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="green"/></svg>`
+            ).toString('base64'))
+
+        const nothings = {
+          'entirely right of the source': [20, 0, 8, 8, 0, 0, 16, 16],
+          'entirely left':                [-30, 0, 8, 8, 0, 0, 16, 16],
+          'entirely below':               [0, 20, 8, 8, 0, 0, 16, 16],
+          'entirely above':               [0, -30, 8, 8, 0, 0, 16, 16],
+          'zero-width crop':              [0, 0, 0, 8, 0, 0, 16, 16],
+          'zero-height crop':             [0, 0, 8, 0, 0, 0, 16, 16],
+        }
+
+        // each route that trims a crop: drawImage()'s bitmap and vector arms, plus drawCanvas()
+        const routes = {
+          bitmap:     (x, coords) => x.drawImage(bitmap, ...coords),
+          vector:     (x, coords) => x.drawImage(vector, ...coords),
+          drawCanvas: (x, coords) => x.drawCanvas(raster, ...coords),
+        }
+
+        for (let [route, draw] of Object.entries(routes)){
+          for (let [label, coords] of Object.entries(nothings)){
+            let x = new Canvas(16, 16).getContext('2d')
+            draw(x, coords)
+            assert.ok(
+              x.getImageData(0, 0, 16, 16).data.every(v => v === 0),
+              `${route}: a crop ${label} painted something`
+            )
+          }
+
+          // the same route with an in-bounds crop still paints, so the checks above aren't vacuous
+          let x = new Canvas(16, 16).getContext('2d')
+          draw(x, [0, 0, 8, 8, 0, 0, 16, 16])
+          assert.deepEqual(Array.from(x.getImageData(8, 8, 1, 1).data), GREEN)
+        }
+
+        // …and skipping has to be a true no-op, not a draw of an empty region. the compositing
+        // modes that clear outside the source would otherwise erase the whole canvas — which is
+        // what a zero-size crop used to do on the bitmap path. per spec, "if one of the sw or sh
+        // arguments is zero, then return. Nothing is painted."
+        for (let [route, draw] of Object.entries(routes)){
+          for (let gco of /** @type {const} */ (['copy', 'destination-in', 'source-in', 'destination-atop', 'source-out'])){
+            for (let [label, coords] of Object.entries(nothings)){
+              let x = new Canvas(16, 16).getContext('2d')
+              x.fillStyle = 'green'
+              x.fillRect(0, 0, 16, 16)
+              x.globalCompositeOperation = gco
+              draw(x, coords)
+              assert.deepEqual(
+                Array.from(x.getImageData(8, 8, 1, 1).data), GREEN,
+                `${route}: a crop ${label} under "${gco}" disturbed the canvas`
+              )
+            }
+          }
+        }
+
+        // nor can a skipped draw leave traces in a vector export: an off-image crop used to embed
+        // the whole (never-rendered) source as base64 in a <defs> block, along with a clip and a
+        // <use> placing it off-canvas — bloating every export for a draw that paints nothing
+        const exported = (draw) => {
+          let c = new Canvas(24, 24), x = c.getContext('2d')
+          x.fillStyle = 'green'
+          x.fillRect(2, 2, 8, 8)
+          draw(x)
+          return c.toBufferSync('svg').toString().replace(/(cl|img)_\d+/g, '$1_N')
+        }
+
+        let baseline = exported(() => {})
+        for (let [route, draw] of Object.entries(routes)){
+          for (let [label, coords] of Object.entries(nothings)){
+            assert.equal(
+              exported(x => draw(x, coords)), baseline,
+              `${route}: a crop ${label} left traces in the SVG export`
+            )
+          }
+        }
       })
 
       test('draws canvases', () => {
