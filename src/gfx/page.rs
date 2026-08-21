@@ -23,32 +23,32 @@ use crate::gfx::RenderingEngine;
 use crate::gfx::cache::{may_snapshot, Cache};
 use crate::mem;
 
-// the page's content is a list of layers which are either normal drawing ops or 'embedded' content from a
-// drawCanvas() call which needs to be isolated so each backend (SVG/PDF/bitmap) can composite it appropriately
+// the page's content is a list of layers which are either normal drawing ops or another page referenced by
+// a drawCanvas()/drawImage() call, deferred so each backend (SVG/PDF/bitmap) can composite it appropriately
 #[derive(Debug, Clone)]
 pub enum Layer{
   Ops(Picture), // local drawing ops (flattened into a saveLayer)
-  Embed(Box<Embed>), // another canvas, deferred until rendering
+  Page(Box<PageRef>), // another page, deferred until rendering
 }
 
-// an embedded canvas's Page reference along with its geometry in the destination page
+// a reference to another page, along with the geometry placing it in the destination
 #[derive(Debug, Clone)]
-pub struct Embed{
+pub struct PageRef{
   pub page: Page,         // the source, snapshotted at the moment it was drawn
   pub bounds: Rect,       // its frame-rect in the destination, with the draw-time CTM applied
   pub clip: Option<Path>, // set only when the CTM rotates/skews or a clip is live — i.e. when
-                          // `bounds` alone can't describe the region (see `embed_region`)
+                          // `bounds` alone can't describe the region (see `page_region`)
   pub matrix: Matrix,     // the CTM at draw-time (plus placement/scaling from the draw call's coords/dims)
 }
 
-impl Embed{
+impl PageRef{
   // transform `bounds` to the space the layers are being replayed into (e.g., a window `fit` transform
-  // or the accumulated matrix of a nested embed)
+  // or the accumulated matrix of a nested page)
   fn bounds_in(&self, matrix:Option<&Matrix>) -> Rect{
     matrix.map(|m| m.map_rect(self.bounds).0).unwrap_or(self.bounds)
   }
 
-  // narrow a canvas to the region (bounds + clip) this embed occupies
+  // narrow a canvas to the region (bounds + clip) this reference occupies
   fn clip_to(&self, canvas:&SkCanvas, matrix:Option<&Matrix>){
     match &self.clip{
       Some(clip) => match matrix{
@@ -59,7 +59,7 @@ impl Embed{
     }
   }
 
-  // open a transparency layer covering this embed's bounding box (the layer equivalent to `resolve()`)
+  // open a transparency layer covering this reference's bounding box (the layer equivalent to `resolve()`)
   fn begin_layer(&self, canvas:&SkCanvas, matrix:Option<&Matrix>, paint:&Paint, space:Option<&ColorSpace>){
     let bounds = self.bounds_in(matrix);
     let rec = SaveLayerRec::default().bounds(&bounds).paint(paint);
@@ -70,11 +70,11 @@ impl Embed{
   }
 }
 
-// each export backend needs a different strategy for handling embeds & transparency groups
+// each export backend needs a different strategy for handling page refs & transparency groups
 #[derive(Clone, Copy)]
 pub enum Replay<'a>{
-  Raster(Cache<'a>), // bitmap: resolve embeds to cached rasters where applicable (see `resolve`)
-  Vector,            // pdf: replay embeds inside transparency layers, keeping their content as geometry
+  Raster(Cache<'a>), // bitmap: resolve page refs to cached rasters where applicable (see `resolve`)
+  Vector,            // pdf: replay page refs inside transparency layers, keeping their content as geometry
   Geometry,          // svg: no transparency layers at all (Skia's SVG support lacks them)
 }
 
@@ -82,17 +82,18 @@ impl Replay<'_>{
   fn isolates(&self) -> bool{ !matches!(self, Replay::Geometry) }
 }
 
-// identifier for what a rasterized slice of a page's layers contains
+// which version of a page's content a raster holds: its identity, bounds revision, & layer count.
+// ordered rather than merely comparable — see `extends`
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
-pub struct PageStamp{
+pub struct PageVersion{
   pub id: usize,    // the source page.id (reset whenever canvas content is fully cleared)
   pub epoch: u32,   // incremented when a non-destructive (window fit) resize occurs
   pub depth: usize, // number of layers incorporated into this raster
 }
 
-impl PageStamp{
-  // whether the raster with this stamp can be the baseline for appending additional drawing
-  pub fn extends(&self, now:&PageStamp) -> bool{
+impl PageVersion{
+  // whether the raster with this version can be the baseline for appending additional drawing
+  pub fn extends(&self, now:&PageVersion) -> bool{
     self.id == now.id && self.epoch == now.epoch && self.depth <= now.depth
   }
 }
@@ -130,9 +131,9 @@ pub struct PageRecorder{
   eviction: PostedEviction, // whether cached rasters need to be dropped on the render thread
   approx_ops: usize, // draw ops recorded into `current` since the last get_page() flush (see release())
   footprint: mem::v8::Footprint, // report the retained display-list size to V8's GC accounting
-  last_image: Option<(PageStamp, SkImage)>, // the most recent get_image() result, reused while the stamp holds
-  dependent_ops: bool, // contains (non-embed) layers that use a clear, blit, or non-SrcOver blend
-  has_embeds: bool, // contains embed layers (i.e., canvas content added via `drawCanvas`)
+  last_image: Option<(PageVersion, SkImage)>, // the most recent get_image() result, reused while the version holds
+  dependent_ops: bool, // contains (non-reference) layers that use a clear, blit, or non-SrcOver blend
+  has_pages: bool, // contains page-reference layers (added via `drawCanvas`/`drawImage`)
   id: usize, // generation id (incremented when the canvas is fully cleared)
   epoch: u32, // bounds id (incremented by a non-destructive window-fit resize)
 }
@@ -151,11 +152,11 @@ impl PageRecorder{
       footprint:mem::v8::Footprint::default(),
       last_image:None,
       dependent_ops:false,
-      has_embeds:false,
+      has_pages:false,
     }
   }
 
-  // record that the page will need an isolation group if embedded in another canvas
+  // record that the page will need an isolation group if referenced by another page
   pub fn mark_dependent(&mut self){
     self.dependent_ops = true;
   }
@@ -183,12 +184,12 @@ impl PageRecorder{
     self.restore();
   }
 
-  // append an embedded canvas by reference
-  pub fn push_embed(&mut self, embed:Embed){
+  // append another page by reference
+  pub fn push_page(&mut self, page_ref:PageRef){
     if self.disposed { return }
     self.flush();
-    self.has_embeds = true;
-    self.layers.push(Layer::Embed(Box::new(embed)));
+    self.has_pages = true;
+    self.layers.push(Layer::Page(Box::new(page_ref)));
   }
 
   pub fn append<F>(&mut self, f:F)
@@ -300,7 +301,7 @@ impl PageRecorder{
       epoch: self.epoch,
       color_space: self.color_space.clone(),
       dependent_ops: self.dependent_ops,
-      has_embeds: self.has_embeds,
+      has_pages: self.has_pages,
       eviction: self.eviction.clone(),
     }
   }
@@ -309,9 +310,9 @@ impl PageRecorder{
     self.flush(); // move any uncommitted drawing ops to a layer
 
     // reuse the last image unless the canvas has been drawn into or resized since it was made
-    let stamp = PageStamp{ id:self.id, epoch:self.epoch, depth:self.layers.len() };
+    let version = PageVersion{ id:self.id, epoch:self.epoch, depth:self.layers.len() };
     if let Some((cached, image)) = &self.last_image{
-      if *cached == stamp{ return Some(image.clone()) }
+      if *cached == version{ return Some(image.clone()) }
     }
 
     let size = self.bounds.size().to_floor();
@@ -326,7 +327,7 @@ impl PageRecorder{
         )
       })?;
 
-    self.last_image = Some((stamp, image.clone()));
+    self.last_image = Some((version, image.clone()));
     Some(image)
   }
 }
@@ -385,20 +386,20 @@ pub struct Page{
   epoch: u32, // bounds revision under this id
   pub color_space: ColorSpace, // inherited from the context that recorded the page
   pub dependent_ops: bool, // contains ops that clear, blit, or use a non-SrcOver blend
-  pub has_embeds: bool, // contains other canvases embedded by reference
+  pub has_pages: bool, // contains other pages included by reference
   eviction: PostedEviction, // whether any of the page's cached rasters are textures on the render_thread
 }
 
 impl PartialEq for Page {
   fn eq(&self, other: &Self) -> bool {
-    self.stamp() == other.stamp()
+    self.version() == other.version()
   }
 }
 
 impl Default for Page {
   fn default() -> Self {
     Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![], epoch:0,
-          color_space: ColorSpace::new_srgb(), dependent_ops:false, has_embeds:false,
+          color_space: ColorSpace::new_srgb(), dependent_ops:false, has_pages:false,
           eviction: PostedEviction::default() }
   }
 }
@@ -415,7 +416,7 @@ impl Page{
       id: Self::picture_id(pict),
       bounds: Rect::from_size(size),
       layers: vec![Layer::Ops(pict.clone())],
-      ..Default::default() // srgb, epoch 0, no dependent ops, no embeds
+      ..Default::default() // srgb, epoch 0, no dependent ops, no page refs
     }
   }
 
@@ -423,8 +424,8 @@ impl Page{
     self.layers.len()
   }
 
-  pub fn stamp(&self) -> PageStamp{
-    PageStamp{ id: self.id, epoch: self.epoch, depth: self.layers.len() }
+  pub fn version(&self) -> PageVersion{
+    PageVersion{ id: self.id, epoch: self.epoch, depth: self.layers.len() }
   }
 
   // flag that this page created texture-backed rasters that must be dropped on the render_thread
@@ -442,19 +443,19 @@ impl Page{
     for layer in self.layers.iter().skip(first){
       match layer{
         Layer::Ops(pict) => { canvas.draw_picture(pict, matrix, None); },
-        Layer::Embed(embed) => {
-          let total = match matrix{ Some(m) => Matrix::concat(m, &embed.matrix), None => embed.matrix };
+        Layer::Page(page_ref) => {
+          let total = match matrix{ Some(m) => Matrix::concat(m, &page_ref.matrix), None => page_ref.matrix };
 
           // use resolve() to pre-rasterize where possible (raster destination, unflipped, axis-aligned)
           let resolved = match replay{
-            Replay::Raster(cache) => Self::resolve(cache, canvas, embed, &total),
+            Replay::Raster(cache) => Self::resolve(cache, canvas, page_ref, &total),
             _ => None,
           };
 
           // clip before opening the layer, so the boundary encloses the *group* rather than each op
           // inside it (otherwise an erasing op will leave an un-erased fringe along the boundary)
           canvas.save();
-          embed.clip_to(canvas, matrix);
+          page_ref.clip_to(canvas, matrix);
           match resolved{
             Some((image, at)) => {
               // blit without applying the CTM; the raster is already at device scale
@@ -467,20 +468,20 @@ impl Page{
             None => {
               // when drawing an sRGB canvas into display-p3, keep its colors clamped in sRGB
               let remap_gamut = match canvas.image_info().color_space(){
-                Some(dst) if dst != embed.page.color_space && embed.page.color_space.is_srgb() =>
-                  Some(embed.page.color_space.clone()),
+                Some(dst) if dst != page_ref.page.color_space && page_ref.page.color_space.is_srgb() =>
+                  Some(page_ref.page.color_space.clone()),
                 _ => None
               };
 
               // only use an isolation layer when the source requires it or there's a gamut remap
-              match (replay.isolates() && embed.page.dependent_ops) || remap_gamut.is_some(){
+              match (replay.isolates() && page_ref.page.dependent_ops) || remap_gamut.is_some(){
                 true => {
                   // use a non-null paint, so skia doesn't filter the transparency layer out as a no-op
-                  embed.begin_layer(canvas, matrix, &Paint::default(), remap_gamut.as_ref());
-                  embed.page.playback_from(canvas, 0, Some(&total), replay);
+                  page_ref.begin_layer(canvas, matrix, &Paint::default(), remap_gamut.as_ref());
+                  page_ref.page.playback_from(canvas, 0, Some(&total), replay);
                   canvas.restore();
                 }
-                false => embed.page.playback_from(canvas, 0, Some(&total), replay)
+                false => page_ref.page.playback_from(canvas, 0, Some(&total), replay)
               }
             }
           }
@@ -490,10 +491,9 @@ impl Page{
     }
   }
 
-  // rasterize (and cache) an embedded canvas at its final scale and sub-pixel position
-  fn resolve(cache:Cache, canvas:&SkCanvas, embed:&Embed, total:&Matrix) -> Option<(SkImage, Point)>{
-    // confirm that the canvas is actually a raster surface
-    if canvas.image_info().color_type() == ColorType::Unknown{ return None }
+  // rasterize (and cache) a referenced page at its final scale and sub-pixel position
+  fn resolve(cache:Cache, canvas:&SkCanvas, page_ref:&PageRef, total:&Matrix) -> Option<(SkImage, Point)>{
+    if canvas.image_info().color_type() == ColorType::Unknown{ return None } // confirm destination is actually a raster
 
     // a raster can only be useful for blitting if the placement is axis-aligned and un-flipped
     let device = Matrix::concat(&canvas.local_to_device_as_3x3(), total);
@@ -502,27 +502,27 @@ impl Page{
     if !(sx.is_finite() && sy.is_finite() && sx > 0.0 && sy > 0.0){ return None }
 
     // split the position into a whole-pixel origin and sub-pixel phases (quantized to 16ths)
-    let placed = device.map_rect(embed.page.bounds).0;
+    let placed = device.map_rect(page_ref.page.bounds).0;
     let origin = Point::new(placed.left.floor(), placed.top.floor());
     let bucket = |v:f32| ((v * 16.0).round() as u64) & 0xff;
     let (px, py) = (bucket(placed.left - origin.x), bucket(placed.top - origin.y));
     let phase = Point::new(px as f32 / 16.0, py as f32 / 16.0);
 
-    let size = embed.page.bounds.size();
+    let size = page_ref.page.bounds.size();
     let (w, h) = ((size.width * sx + phase.x).ceil(), (size.height * sy + phase.y).ceil());
     if !(w >= 1.0 && h >= 1.0 && w <= 8192.0 && h <= 8192.0){ return None }
 
-    // Pack the scale and sub-pixel phase into the cache's placement key, in disjoint bit fields so
+    // pack the scale and sub-pixel phase into the cache's placement key, in disjoint bit fields so
     // the two can't alias: 5 bits per phase axis (`bucket` above caps each at 16) and 27 per scale,
-    // quantized to 1/64 — which saturates well past any scale the 8192² cap just above admits.
+    // quantized to 1/64 — which saturates well past any scale the 8192² cap admits
     let q = |v:f32| ((v * 64.0).round() as u64).min((1 << 27) - 1);
     let key = (px << 59) | (py << 54) | (q(sx) << 27) | q(sy);
     let cost = (w as u64) * (h as u64) * 4;
     let dims = ISize::new(w as i32, h as i32);
     // the callback runs only when there is no usable raster yet; a reusable one comes back without it, and
-    // so does a full cache — which lands here as `None` and sends the caller off to replay geometry
-    let image = cache.embed(&embed.page, key, dims, cost, |base|{
-      let info = ImageInfo::new_n32_premul(dims, Some(embed.page.color_space.clone()));
+    // so does a full cache (landing here as `None` and sending the caller off to replay geometry)
+    let image = cache.page_raster(&page_ref.page, key, dims, cost, |base|{
+      let info = ImageInfo::new_n32_premul(dims, Some(page_ref.page.color_space.clone()));
       let mut surface = canvas.new_surface(&info, None)?; // inherit the canvas's device
       {
         let target = surface.canvas();
@@ -533,7 +533,7 @@ impl Page{
         };
         target.translate((phase.x, phase.y));
         target.scale((sx, sy));
-        embed.page.playback_from(target, first, None, Replay::Raster(cache));
+        page_ref.page.playback_from(target, first, None, Replay::Raster(cache));
       }
       Some(surface.image_snapshot())
     })?;
@@ -541,7 +541,7 @@ impl Page{
     Some((image, origin))
   }
 
-  // flatten the page to a matted Picture with embeds handled appropriately for the `replay` destination
+  // flatten the page to a matted Picture with page refs handled appropriately for the `replay` destination
   fn flatten(&self, matte:Option<Color4f>, replay:Replay) -> Option<Picture> {
     let mut recorder = PictureRecorder::new();
     let output = recorder.begin_recording(self.bounds, true);
@@ -610,7 +610,7 @@ impl Page{
             false => (0, false),
             true => cache.export(&page, &opts, &color_space, |snap, config|{
               let first = match snap.accepts(&page, config){
-                true => { canvas.draw_image(snap.image.as_ref().unwrap(), (0,0), None); snap.stamp.depth }
+                true => { canvas.draw_image(snap.image.as_ref().unwrap(), (0,0), None); snap.version.depth }
                 false => 0
               };
               (first, snap.recur())
@@ -826,7 +826,7 @@ impl PageSequence{
 
     let engine = self.engine;
     self.pages
-      .clone() // embeds' clip paths are not Sync so need a clone (just a refcount) to jump threads
+      .clone() // page refs' clip paths are not Sync so need a clone (just a refcount) to jump threads
       .into_par_iter()
       .enumerate()
       .try_for_each(|(pp, page)|{

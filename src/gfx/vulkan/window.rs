@@ -30,7 +30,7 @@ use super::{VK_FORMATS, to_sk_format, VulkanShared, make_direct_context};
 pub struct VulkanRenderer{
     window: Arc<Window>,
     frame: Frame, // framebuffer content from the last render (in case the next draws atop it)
-    store: DeviceStore, // rasters of embedded canvases drawn to this context
+    store: DeviceStore, // rasters of pages drawn to this context
     backend: VulkanBackend, // <- MUST be last for proper drop ordering (after Frame and any other derived resources)
 }
 
@@ -124,7 +124,7 @@ impl VulkanRenderer {
     }
 
     pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color4f){
-        let cache = Cache::Device(&self.store); // all the embed rasters for *this* window's context
+        let cache = Cache::Device(&self.store); // all the page rasters for *this* window's context
         let dpr = self.window.scale_factor() as f32;
         let plan = self.frame.begin(&page, &matrix, matte, dpr);
 

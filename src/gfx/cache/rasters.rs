@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use skia_safe::{ISize, Image as SkImage};
-use crate::gfx::page::{Page, PageStamp};
+use crate::gfx::page::{Page, PageVersion};
 
 use super::{RasterConfig, Residency};
 use super::budget::{charge, credit, discard_one, retain, worst_in, Entry, Rank};
@@ -74,37 +74,37 @@ impl Exports{
 
 
 //
-// Embeds: one rasterized canvas per (page, placement, epoch, layer-depth)
+// Pages: one raster per (page, placement, epoch, layer-depth)
 //
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
-pub struct EmbedKey{
-  pub(super) page: usize,    // the embedded page's id
-  pub(super) placement: u64, // quantized scale + sub-pixel phase (see `page::embed_key`)
+pub struct PageKey{
+  pub(super) page: usize,    // the referenced page's id
+  pub(super) placement: u64, // quantized scale + sub-pixel phase (see `Page::resolve`)
   pub(super) epoch: u32,     // the page's bounds revision
   pub(super) depth: usize,   // how many of the page's layers the raster incorporates
 }
 
-impl EmbedKey{
+impl PageKey{
   pub fn new(page:usize, placement:u64, epoch:u32, depth:usize) -> Self{
     Self{ page, placement, epoch, depth }
   }
 }
 
-pub struct Embeds{
-  pub(super) map: HashMap<EmbedKey, Entry<SkImage>>,
+pub struct Pages{
+  pub(super) map: HashMap<PageKey, Entry<SkImage>>,
   residency: Residency,
 }
 
-impl Embeds{
+impl Pages{
   pub fn new(residency:Residency) -> Self{
     Self{ map: HashMap::new(), residency }
   }
 
   // Read a raster and mark it used. The size check catches the one way an entry can match by key
-  // but not by pixels: `embed_key` quantizes the scale into 1/64 buckets while `resolve` sizes
+  // but not by pixels: the placement key quantizes the scale into 1/64 buckets while `resolve` sizes
   // from the raw scale, so the two can disagree by a pixel in width or height.
-  pub fn read(&mut self, key:EmbedKey, size:ISize) -> Option<SkImage>{
+  pub fn read(&mut self, key:PageKey, size:ISize) -> Option<SkImage>{
     let entry = self.map.get_mut(&key)?;
     if entry.value.dimensions() != size{ return None }
     entry.touch();
@@ -113,8 +113,8 @@ impl Embeds{
 
   // the deepest raster for this page+placement that covers only an *earlier* slice of its layers,
   // so the remaining ones can be drawn on top of it
-  pub fn read_base(&mut self, stamp:PageStamp, placement:u64, size:ISize) -> Option<(SkImage, usize)>{
-    let PageStamp{ id, epoch, depth } = stamp;
+  pub fn read_base(&mut self, version:PageVersion, placement:u64, size:ISize) -> Option<(SkImage, usize)>{
+    let PageVersion{ id, epoch, depth } = version;
     let base = self.map.keys()
       .filter(|key| key.page == id && key.placement == placement
                     && key.epoch == epoch && key.depth < depth)
@@ -123,9 +123,9 @@ impl Embeds{
     self.read(base, size).map(|image| (image, base.depth))
   }
 
-  pub fn put(&mut self, stamp:PageStamp, placement:u64, image:SkImage, bytes:u64){
+  pub fn put(&mut self, version:PageVersion, placement:u64, image:SkImage, bytes:u64){
     if !self.residency.admits(Some(&image)){ return } // decline rather than retain a texture
-    let PageStamp{ id, epoch, depth } = stamp;
+    let PageVersion{ id, epoch, depth } = version;
 
     // drop any raster of the same page and placement that this one supersedes
     retain(&mut self.map, self.residency.frees_heap(), |key, _|
@@ -134,7 +134,7 @@ impl Embeds{
 
     let entry = Entry::new(image, bytes, 0, false);
     charge(&entry);
-    if let Some(old) = self.map.insert(EmbedKey{ page:id, placement, epoch, depth }, entry){
+    if let Some(old) = self.map.insert(PageKey{ page:id, placement, epoch, depth }, entry){
       // the retain above spares an entry at this exact slot, which a re-store then displaces
       discard_one(old, self.residency.frees_heap())
     }
@@ -148,11 +148,11 @@ impl Embeds{
     retain(&mut self.map, self.residency.frees_heap(), |_, entry| !entry.expired(now))
   }
 
-  pub fn worst(&self) -> Option<(EmbedKey, Rank)>{
+  pub fn worst(&self) -> Option<(PageKey, Rank)>{
     worst_in(&self.map)
   }
 
-  pub fn discard(&mut self, key:EmbedKey){
+  pub fn discard(&mut self, key:PageKey){
     retain(&mut self.map, self.residency.frees_heap(), |k, _| *k != key)
   }
 
@@ -187,7 +187,7 @@ pub fn may_snapshot(depth:usize) -> bool{
 #[derive(Default)]
 pub struct Snapshot{
   pub image: Option<SkImage>,  // the raster (may be texture-backed)
-  pub stamp: PageStamp,        // the page state (id, bounds epoch, layer count) captured by `image`
+  pub version: PageVersion,    // the page state (id, bounds epoch, layer count) captured by `image`
   config: RasterConfig,        // the raster settings `image` was rendered with
   pub(super) bytes: u64,       // the size
   seen: bool,                  // has this (page, config) exported before?
@@ -199,7 +199,7 @@ impl Snapshot{
   pub fn accepts(&self, page:&Page, config:&RasterConfig) -> bool{
     self.image.is_some() &&
     self.config == *config &&
-    self.stamp.extends(&page.stamp())
+    self.version.extends(&page.version())
   }
 
   // caching exports is gated by a store-on-second-export rule
@@ -212,7 +212,7 @@ impl Snapshot{
   // replace the raster this slot holds
   pub fn store(&mut self, image:Option<SkImage>, page:&Page, config:&RasterConfig, bytes:u64){
     self.image = image;
-    self.stamp = page.stamp();
+    self.version = page.version();
     self.config = config.clone();
     self.bytes = bytes;
     self.replaced = true; // flag for Cache::export that the borrower wrote rather than read

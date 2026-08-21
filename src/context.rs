@@ -27,7 +27,7 @@ use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
 use crate::texture::{CanvasTexture, BoxedCanvasTexture};
 use crate::image::ImageData;
 use crate::gfx::RenderingEngine;
-use crate::gfx::page::{PageRecorder, Page, Embed, ExportOptions};
+use crate::gfx::page::{PageRecorder, Page, PageRef, ExportOptions};
 
 pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
 impl Finalize for Context2D {}
@@ -598,11 +598,11 @@ impl Context2D{
     });
   }
 
-  // draw another canvas by embedding its Page reference so its isolation can be handled
+  // draw another page by reference, so its isolation can be handled
   // appropriately (depending on whether a PDF/SVG/bitmap is being generated)
-  pub fn draw_canvas(&mut self, page:&Page, src_rect:&Rect, dst_rect:&Rect){
+  pub fn draw_page(&mut self, page:&Page, src_rect:&Rect, dst_rect:&Rect){
     // does the source blit, clear, or use a non-SrcOver blend?
-    let isolate = page.dependent_ops || page.has_embeds;
+    let isolate = page.dependent_ops || page.has_pages;
 
     // do the source colors need to be clamped to sRGB (b/c the dest is display-p3)?
     let remap_gamut = page.color_space != self.color_space() && page.color_space.is_srgb();
@@ -613,16 +613,16 @@ impl Context2D{
                  && matrix.scale_x() > 0.0 && matrix.scale_y() > 0.0
                  && matrix.scale_x().is_finite() && matrix.scale_y().is_finite();
 
-    // embed if any of those conditions are met, but only if drawing doesn't depend on effects an Embed can't provide
-    let embed = (isolate || remap_gamut || cacheable)
-              && !self.has_shadow() && !self.is_region_blend() // doesn't require an enclosing paint
-              && Self::is_pass_through(&self.paint_for_image()); // no alpha, effects, or dependent blend
+    // render by page reference if any of those hold, but only if drawing doesn't need effects a PageRef can't provide
+    let by_reference = (isolate || remap_gamut || cacheable)
+                     && !self.has_shadow() && !self.is_region_blend() // doesn't require an enclosing paint
+                     && Self::is_pass_through(&self.paint_for_image()); // no alpha, effects, or dependent blend
 
-    if embed{
+    if by_reference{
       // record the source page and its position + clip for placement on the destination
-      let (bounds, clip) = self.embed_region(dst_rect);
+      let (bounds, clip) = self.page_region(dst_rect);
       let page = page.clone();
-      self.with_recorder(|mut rec| rec.push_embed(Embed{ page, bounds, clip, matrix }));
+      self.with_recorder(|mut rec| rec.push_page(PageRef{ page, bounds, clip, matrix }));
     }else{
       // otherwise flatten to a Picture + transparency layer (which svg drops) and draw it immediately
       if let Some(pict) = page.to_picture(None){
@@ -631,10 +631,10 @@ impl Context2D{
     }
   }
 
-  // the region an embed occupies in *this* page's coordinate space. the clip is `Some` only when
-  // the bounding rect alone can't describe it — i.e. when the CTM rotates or skews, or a clip is
-  // live — since `Embed::clip_to` falls back to the rect whenever it's `None`.
-  fn embed_region(&self, dst_rect:&Rect) -> (Rect, Option<Path>){
+  // the region a page reference occupies in *this* page's coordinate space. the clip is `Some` only when
+  // the bounding rect alone can't describe it (i.e. when the CTM rotates or skews, or a clip is live).
+  // `PageRef::clip_to` just uses the rect whenever the clip is `None`.
+  fn page_region(&self, dst_rect:&Rect) -> (Rect, Option<Path>){
     let bounds = self.state.matrix.map_rect(dst_rect).0;
     let clip = match (self.state.matrix.rect_stays_rect(), &self.state.clip){
       (true, None) => None,

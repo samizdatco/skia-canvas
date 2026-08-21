@@ -58,7 +58,7 @@ pub fn above(ceiling:u64) -> bool{
 //
 
 pub struct Entry<V>{
-  pub value: V,           // a raster of some sort (surface, export, or embed)
+  pub value: V,           // a raster of some sort (surface, export, or page)
   pub last_read: Instant, // time of last access (idle entries are evicted first in sweeps)
   pub pinned: bool,       // exclude from sweeps if willReadFrequently is set (surfaces only)
   pub reads: u32,         // read-count since it was stored

@@ -8,7 +8,7 @@ mod metal;
 mod vulkan;
 pub mod page;
 
-// budgeted storage for readback surfaces, export snapshots, and embedded-canvas rasters
+// budgeted storage for readback surfaces, export snapshots, and referenced-page rasters
 pub(crate) mod cache;
 
 // a window's last on-screen render, kept as a backdrop for the next one (owned not cached)

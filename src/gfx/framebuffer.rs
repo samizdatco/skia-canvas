@@ -2,7 +2,7 @@ use skia_safe::{Rect, Matrix, Color4f, Paint, BlendMode, Image as SkImage,
                 Canvas as SkCanvas, canvas::SrcRectConstraint};
 use crate::gfx::RenderOutcome;
 use crate::gfx::cache::Cache;
-use crate::gfx::page::{Page, PageStamp, Replay};
+use crate::gfx::page::{Page, PageVersion, Replay};
 
 // settings decided up front before drawing the frame
 pub struct FramePlan{
@@ -26,7 +26,7 @@ enum FrameState{
 pub struct Frame {
     image: Option<SkImage>,
     content: Rect, // the region occupied by the canvas (in device pixels)
-    stamp: PageStamp, // the page state (id, bounds epoch, layer count) captured by the snapshot
+    version: PageVersion, // the page state (id, bounds epoch, layer count) captured by the snapshot
     matte: Color4f, // the window background color
     dpr: f32, // current monitor's density
     state: FrameState, // whether the window needs redisplay (and why)
@@ -35,7 +35,7 @@ pub struct Frame {
 
 impl Default for Frame{
     fn default() -> Self {
-        Self{image:None, content:Rect::new_empty(), stamp:PageStamp::default(), dpr:0.0, matte:Color4f::new(0.0, 0.0, 0.0, 0.0), state:FrameState::Clean, last_page_id:0}
+        Self{image:None, content:Rect::new_empty(), version:PageVersion::default(), dpr:0.0, matte:Color4f::new(0.0, 0.0, 0.0, 0.0), state:FrameState::Clean, last_page_id:0}
     }
 }
 
@@ -63,7 +63,7 @@ impl Frame{
         // replay just the layers that are newer than the snapshot
         canvas.scale((plan.dpr, plan.dpr))
               .clip_rect(plan.clip, None, Some(true));
-        page.playback_from(canvas, self.stamp.depth, Some(matrix), Replay::Raster(cache));
+        page.playback_from(canvas, self.version.depth, Some(matrix), Replay::Raster(cache));
     }
 
     pub fn commit(&mut self, outcome:RenderOutcome, page:&Page, matte:Color4f, plan:&FramePlan){
@@ -77,14 +77,14 @@ impl Frame{
         }else if let Some(image) = image{
             // replace the snapshot if new drawing has been layered on top
             let (content, _) = Matrix::scale((plan.dpr, plan.dpr)).map_rect(plan.clip);
-            *self = Self{image:Some(image), stamp:page.stamp(), matte, dpr:plan.dpr, content,
+            *self = Self{image:Some(image), version:page.version(), matte, dpr:plan.dpr, content,
                          state:FrameState::Clean, last_page_id:page.id};
         }
     }
 
     fn is_current(&self, page:&Page, matte:Color4f, dpr:f32) -> bool{
         // whether the bitmap is still valid for the page about to be drawn
-        self.stamp.extends(&page.stamp()) && self.matte == matte && self.dpr == dpr
+        self.version.extends(&page.version()) && self.matte == matte && self.dpr == dpr
     }
 
     fn wants_snapshot(&self, page:&Page, matte:Color4f, dpr:f32) -> bool{
@@ -100,7 +100,7 @@ impl Frame{
 
         match cache_is_current{
             // re-snapshot when new layers extend the cached content
-            true => page.depth() > self.stamp.depth,
+            true => page.depth() > self.version.depth,
             // otherwise snapshot only for pages that persist across frames (an id that churns
             // frame-to-frame means full-page redraws that invalidate before reuse)
             false => page.id == self.last_page_id

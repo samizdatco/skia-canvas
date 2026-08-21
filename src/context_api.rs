@@ -514,7 +514,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
     // wrap the picture in a single-layer Page so repeated draws can use the raster cache
     let page = Page::from_picture(pict, *pict_size);
-    this.borrow_mut().draw_canvas(&page, &src, &dst);
+    this.borrow_mut().draw_page(&page, &src, &dst);
   }
 
   Ok(cx.undefined())
@@ -535,7 +535,7 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
   let (src, dst) = _layout_rects(&mut cx, size, &nums)?;
   let (src, dst) = Content::snap_rects_to_bounds(size, src, dst);
-  this.borrow_mut().draw_canvas(&page, &src, &dst);
+  this.borrow_mut().draw_page(&page, &src, &dst);
   Ok(cx.undefined())
 }
 
