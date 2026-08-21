@@ -74,21 +74,13 @@ impl Exports{
 
 
 //
-// Pages: one raster per (page, placement, epoch, layer-depth)
+// Pages: one raster per (page version, placement)
 //
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct PageKey{
-  pub(super) page: usize,    // the referenced page's id
-  pub(super) placement: u64, // quantized scale + sub-pixel phase (see `Page::resolve`)
-  pub(super) epoch: u32,     // the page's bounds revision
-  pub(super) depth: usize,   // how many of the page's layers the raster incorporates
-}
-
-impl PageKey{
-  pub fn new(page:usize, placement:u64, epoch:u32, depth:usize) -> Self{
-    Self{ page, placement, epoch, depth }
-  }
+  pub(super) version: PageVersion, // page id, bounds revision, and how many layers it incorporates
+  pub(super) placement: u64,       // quantized scale + sub-pixel phase (see `Page::resolve`)
 }
 
 pub struct Pages{
@@ -101,40 +93,38 @@ impl Pages{
     Self{ map: HashMap::new(), residency }
   }
 
-  // Read a raster and mark it used. The size check catches the one way an entry can match by key
-  // but not by pixels: the placement key quantizes the scale into 1/64 buckets while `resolve` sizes
-  // from the raw scale, so the two can disagree by a pixel in width or height.
+  // read a raster and update its access count
   pub fn read(&mut self, key:PageKey, size:ISize) -> Option<SkImage>{
-    let entry = self.map.get_mut(&key)?;
-    if entry.value.dimensions() != size{ return None }
-    entry.touch();
+    let entry = self.map.get_mut(&key)?; // compare based on quantized scale (1/64 buckets)
+    if entry.value.dimensions() != size{ return None } // double-check the true size matches
+    entry.touch(); // mark it used (to prioritize it in future sweeps)
     Some(entry.value.clone())
   }
 
   // the deepest raster for this page+placement that covers only an *earlier* slice of its layers,
   // so the remaining ones can be drawn on top of it
   pub fn read_base(&mut self, version:PageVersion, placement:u64, size:ISize) -> Option<(SkImage, usize)>{
-    let PageVersion{ id, epoch, depth } = version;
+    // `extends` tests whether it can be built upon & depth makes sure it's an ancestor
     let base = self.map.keys()
-      .filter(|key| key.page == id && key.placement == placement
-                    && key.epoch == epoch && key.depth < depth)
-      .max_by_key(|key| key.depth)
+      .filter(|key| key.placement == placement
+                    && key.version.extends(&version) && key.version.depth < version.depth)
+      .max_by_key(|key| key.version.depth)
       .copied()?;
-    self.read(base, size).map(|image| (image, base.depth))
+    self.read(base, size).map(|image| (image, base.version.depth))
   }
 
   pub fn put(&mut self, version:PageVersion, placement:u64, image:SkImage, bytes:u64){
     if !self.residency.admits(Some(&image)){ return } // decline rather than retain a texture
-    let PageVersion{ id, epoch, depth } = version;
 
     // drop any raster of the same page and placement that this one supersedes
     retain(&mut self.map, self.residency.frees_heap(), |key, _|
-      !(key.page == id && key.placement == placement && (key.epoch != epoch || key.depth < depth))
+      !(key.version.id == version.id && key.placement == placement
+        && (key.version.epoch != version.epoch || key.version.depth < version.depth))
     );
 
     let entry = Entry::new(image, bytes, 0, false);
     charge(&entry);
-    if let Some(old) = self.map.insert(PageKey{ page:id, placement, epoch, depth }, entry){
+    if let Some(old) = self.map.insert(PageKey{ version, placement }, entry){
       // the retain above spares an entry at this exact slot, which a re-store then displaces
       discard_one(old, self.residency.frees_heap())
     }
@@ -157,7 +147,7 @@ impl Pages{
   }
 
   pub fn evict(&mut self, page:usize){
-    retain(&mut self.map, self.residency.frees_heap(), |key, _| key.page != page)
+    retain(&mut self.map, self.residency.frees_heap(), |key, _| key.version.id != page)
   }
 
   pub fn clear(&mut self){
