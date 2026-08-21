@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use skia_safe::{Color, IRect, ImageInfo, Surface};
-use crate::gfx::page::{Page, PageStamp, ExportOptions, Replay};
+use crate::gfx::page::{Page, PageVersion, ExportOptions, Replay};
 use crate::gfx::RenderingEngine;
 use crate::mem;
 
@@ -16,14 +16,14 @@ use super::budget::{charge, credit, worst_in, Entry, Rank};
 
 pub struct ReadbackSurface{
   surface: Option<Surface>,
-  stamp: PageStamp, // identify the page layers already included in the surface's raster
+  version: PageVersion, // identify the page layers already included in the surface's raster
   gpu: Option<bool>,
   config: RasterConfig,
 }
 
 impl Default for ReadbackSurface{
   fn default() -> Self {
-    Self{surface:None, stamp:PageStamp::default(), gpu:None, config:RasterConfig::default()}
+    Self{surface:None, version:PageVersion::default(), gpu:None, config:RasterConfig::default()}
   }
 }
 
@@ -46,13 +46,13 @@ impl ReadbackSurface{
     // check whether the existing surface raster is still valid as a base for new layering
     let reconfigure = self.config != config;
     let recreate = self.is_surface_stale(&page, &opts, &engine);
-    let restart = reconfigure || recreate || !self.stamp.extends(&page.stamp());
+    let restart = reconfigure || recreate || !self.version.extends(&page.version());
 
     // start from scratch if invalidated
     if restart{
       self.gpu = Some(matches!(engine, RenderingEngine::GPU));
       self.config = config;
-      self.stamp = PageStamp{ depth:0, ..page.stamp() };
+      self.version = PageVersion{ depth:0, ..page.version() };
 
       // only allocate a new surface if the dimensions (size * density) have changed or engine switched
       if recreate{
@@ -68,14 +68,14 @@ impl ReadbackSurface{
 
       // fill a fresh/recreated surface with the matte; a persistent surface keeps its prior contents
       // and just replays the layers added since the last update
-      if self.stamp.depth==0 {
+      if self.version.depth==0 {
         canvas.clear(self.config.matte.unwrap_or(Color::TRANSPARENT.into()));
       }
 
       // draw newly added layers
       canvas.scale((self.config.density, self.config.density));
-      page.playback_from(canvas, self.stamp.depth, None, Replay::Raster(cache));
-      self.stamp = page.stamp();
+      page.playback_from(canvas, self.version.depth, None, Replay::Raster(cache));
+      self.version = page.version();
     }
   }
 

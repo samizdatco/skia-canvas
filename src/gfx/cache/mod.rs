@@ -12,7 +12,7 @@ mod readback;
 mod tests;
 
 use budget::{above, ceiling, over_budget};
-use rasters::{EmbedKey, Embeds, ExportKey, Exports};
+use rasters::{PageKey, Pages, ExportKey, Exports};
 
 pub use rasters::{may_snapshot, Snapshot};
 pub use readback::ReadbackSurface;
@@ -88,34 +88,34 @@ impl Residency{
 
 
 //
-// Store: the export and embed rasters for a particular residency
+// Store: the export and page rasters for a particular residency
 //
 
 struct Store{
   exports: Exports,
-  embeds: Embeds,
+  pages: Pages,
   residency: Residency,
 }
 
 impl Store{
   fn new(residency:Residency) -> Self{
-    Self{ exports: Exports::new(residency), embeds: Embeds::new(residency), residency }
+    Self{ exports: Exports::new(residency), pages: Pages::new(residency), residency }
   }
 
   // drop every raster derived from a particular page recording
   fn evict(&mut self, page:usize){
     self.exports.evict(page);
-    self.embeds.evict(page);
+    self.pages.evict(page);
   }
 
   fn clear(&mut self){
     self.exports.clear();
-    self.embeds.clear();
+    self.pages.clear();
   }
 
   // whether anything here is holding real memory (a zero-byte export marker is not)
   fn holds_live_rasters(&self) -> bool{
-    self.exports.holds_live_rasters() || self.embeds.holds_live_rasters()
+    self.exports.holds_live_rasters() || self.pages.holds_live_rasters()
   }
 
   // evict entries to try to get to the budget target
@@ -128,22 +128,22 @@ impl Store{
     // expire anything staler than TTL
     let now = Instant::now();
     self.exports.expire(now);
-    self.embeds.expire(now);
+    self.pages.expire(now);
     readback::expire(now);
 
     // while over budget, keep dropping the worst-ranked entry that's reachable from this residency
     while above(ceiling){
-      enum Slot{ Export(ExportKey), Embed(EmbedKey), Readback(usize) }
+      enum Slot{ Export(ExportKey), Page(PageKey), Readback(usize) }
 
       let candidates = [
         self.exports.worst().map(|(key, rank)| (rank, Slot::Export(key))),
-        self.embeds.worst().map(|(key, rank)| (rank, Slot::Embed(key))),
+        self.pages.worst().map(|(key, rank)| (rank, Slot::Page(key))),
         readback::worst().map(|(page, rank)| (rank, Slot::Readback(page))),
       ];
 
       match candidates.into_iter().flatten().min_by_key(|(rank, _)| *rank){
         Some((_, Slot::Export(key))) => self.exports.discard(key),
-        Some((_, Slot::Embed(key))) => self.embeds.discard(key),
+        Some((_, Slot::Page(key))) => self.pages.discard(key),
         Some((_, Slot::Readback(page))) => readback::discard(page),
         None => break, // nothing reachable from here is evictable
       }
@@ -251,13 +251,13 @@ impl Cache<'_>{
   }
 
   // access/update the rasterized canvas for this page at a particular size, placement, and layer depth
-  pub fn embed(&self, page:&Page, placement:u64, dims:ISize, cost:u64,
+  pub fn page_raster(&self, page:&Page, placement:u64, dims:ISize, cost:u64,
                f:impl FnOnce(Option<(&SkImage, usize)>) -> Option<SkImage>) -> Option<SkImage>{
-    let stamp = page.stamp();
+    let version = page.version();
 
     // if there's an exact match covering every layer, we're done
-    let exact = EmbedKey::new(stamp.id, placement, stamp.epoch, stamp.depth);
-    if let Some(image) = self.with(|store| store.embeds.read(exact, dims)){
+    let exact = PageKey::new(version.id, placement, version.epoch, version.depth);
+    if let Some(image) = self.with(|store| store.pages.read(exact, dims)){
       return Some(image)
     }
 
@@ -265,14 +265,14 @@ impl Cache<'_>{
     // then look for an incomplete match with an earlier slice of layers to draw on top of
     let base = self.with(|store|{
       store.sweep();
-      (!over_budget(cost)).then(|| store.embeds.read_base(stamp, placement, dims))
+      (!over_budget(cost)).then(|| store.pages.read_base(version, placement, dims))
     })?;
 
     // pass the base to the callback so it can fill in the more recent layers (bail if it doesn't)
     let image = f(base.as_ref().map(|(image, covered)| (image, *covered)))?;
 
     // add the updated raster to the cache (and plan its disposal) before returning it
-    self.with(|store| store.embeds.put(stamp, placement, image.clone(), cost));
+    self.with(|store| store.pages.put(version, placement, image.clone(), cost));
     if self.needs_posted_eviction(){ page.evict_on_render_thread() }
     Some(image)
   }
