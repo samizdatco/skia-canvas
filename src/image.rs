@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{
   Image as SkImage, ImageInfo, ISize, ColorType, ColorSpace, AlphaType, Data, Size,
-  FontMgr, Picture, PictureRecorder, Rect, image::images,
+  FontMgr, Matrix, Picture, PictureRecorder, Rect, image::images, matrix::ScaleToFit,
   svg::{self, Length, LengthUnit},
 };
 use crate::bridge::*;
@@ -137,34 +137,17 @@ impl Content{
     }
   }
 
-  pub fn snap_rects_to_bounds(size: Size, mut src: Rect, mut dst: Rect) -> (Rect, Rect) {
-    // Handle 'overdraw' of the src image where the crop coordinates are outside of its bounds
-    // Snap the src rect to its actual bounds and shift/pad the dst rect to account for the
-    // whitespace included in the crop.
-    let scale_x = dst.width() / src.width();
-    let scale_y = dst.height() / src.height();
+  // shrink the src crop to just its overlap with the actual bounds and adjust dst to match
+  // (or return None if there's nothing to be drawn)
+  pub fn drawable_rects(size: Size, src: Rect, dst: Rect) -> Option<(Rect, Rect)> {
+    // calculate the scale-factor and position shift from the src crop to dst rect (or None if src is empty)
+    let placement = Matrix::rect_2_rect(src, dst, ScaleToFit::Fill)?;
 
-    if src.left < 0.0 {
-      dst.left += -src.left * scale_x;
-      src.left = 0.0;
-    }
-
-    if src.top < 0.0 {
-      dst.top += -src.top * scale_y;
-      src.top = 0.0;
-    }
-
-    if src.right > size.width{
-      dst.right -= (src.right - size.width) * scale_x;
-      src.right = size.width;
-    }
-
-    if src.bottom > size.height{
-      dst.bottom -= (src.bottom - size.height) * scale_y;
-      src.bottom = size.height;
-    }
-
-    (src, dst)
+    // find the actual overlap (if any) between the src crop rect and the bounds
+    let mut crop = src;
+    crop.intersect(Rect::from_size(size)).then(||
+      (crop, placement.map_rect(crop).0) // return the clipped src and scaled/shifted dst rect
+    )
   }
 }
 

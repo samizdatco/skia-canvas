@@ -486,9 +486,9 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let bounds_size = content.size();
     let (src, dst) = _layout_rects(&mut cx, bounds_size, &nums)?;
 
-    Content::snap_rects_to_bounds(content.size(), src, dst);
-    let mut this = this.borrow_mut();
-    this.draw_image(&img, &src, &dst);
+    if let Some((src, dst)) = Content::drawable_rects(content.size(), src, dst){
+      this.borrow_mut().draw_image(&img, &src, &dst);
+    }
   } else if let Content::Vector(pict, pict_size, space) = &content {
     let fit_to_canvas = source.downcast::<BoxedImage, _>(&mut cx)
       .map(|image| image.borrow().autosized).unwrap_or(false);
@@ -511,11 +511,11 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
       }
     }
 
-    Content::snap_rects_to_bounds(content.size(), src, dst);
-
-    // wrap the picture in a single-layer Page so repeated draws can use the raster cache
-    let page = Page::from_picture(pict, *pict_size, space.clone());
-    this.borrow_mut().draw_page(&page, &src, &dst);
+    if let Some((src, dst)) = Content::drawable_rects(content.size(), src, dst){
+      // wrap the picture in a single-layer Page so repeated draws can use the raster cache
+      let page = Page::from_picture(pict, *pict_size, space.clone());
+      this.borrow_mut().draw_page(&page, &src, &dst);
+    }
   }
 
   Ok(cx.undefined())
@@ -535,8 +535,9 @@ pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   }
 
   let (src, dst) = _layout_rects(&mut cx, size, &nums)?;
-  let (src, dst) = Content::snap_rects_to_bounds(size, src, dst);
-  this.borrow_mut().draw_page(&page, &src, &dst);
+  if let Some((src, dst)) = Content::drawable_rects(size, src, dst){
+    this.borrow_mut().draw_page(&page, &src, &dst);
+  }
   Ok(cx.undefined())
 }
 
