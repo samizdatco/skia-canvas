@@ -39,16 +39,21 @@ fn put_export(store:&mut Store, page:usize, bytes:u64, age_ms:u64, reads:u32){
   store.exports.map.insert((page, 0), entry);
 }
 
+// a single-layer, unplaced raster of `page` — the shape these cases key everything on
+fn page_key(page:usize) -> PageKey{
+  PageKey{ version: PageVersion{ id:page, epoch:0, depth:1 }, placement:0 }
+}
+
 fn put_page(store:&mut Store, page:usize, bytes:u64, age_ms:u64, reads:u32){
   let mut entry = Entry::new(image(), bytes, reads, false);
   entry.last_read = Instant::now() - Duration::from_millis(age_ms);
   charge(&entry);
-  store.pages.map.insert(PageKey{ page, placement:0, epoch:0, depth:1 }, entry);
+  store.pages.map.insert(page_key(page), entry);
 }
 
 fn has_export(store:&Store, page:usize) -> bool{ store.exports.map.contains_key(&(page, 0)) }
 fn has_page(store:&Store, page:usize) -> bool{
-  store.pages.map.contains_key(&PageKey{ page, placement:0, epoch:0, depth:1 })
+  store.pages.map.contains_key(&page_key(page))
 }
 fn count(store:&Store) -> usize{ store.exports.map.len() + store.pages.map.len() }
 
@@ -190,7 +195,7 @@ fn the_shared_store_is_process_wide_and_device_stores_are_not(){
   // which reports a reuse and a fresh build as the same `Option`, and would insert on the miss.
   // Seeding goes straight to the store for the same reason: what is being tested is which store
   // an entry landed in, not the admission path that put it there.
-  let key = PageKey::new(version.id, 0, version.epoch, version.depth);
+  let key = PageKey{ version, placement:0 };
   let holds = |cache:Cache| cache.with(|store| store.pages.read(key, dims).is_some());
   let seed = |cache:Cache| cache.with(|store| store.pages.put(version, 0, image(), MB));
 

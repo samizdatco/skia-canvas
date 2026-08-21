@@ -256,7 +256,7 @@ impl Cache<'_>{
     let version = page.version();
 
     // if there's an exact match covering every layer, we're done
-    let exact = PageKey::new(version.id, placement, version.epoch, version.depth);
+    let exact = PageKey{ version, placement };
     if let Some(image) = self.with(|store| store.pages.read(exact, dims)){
       return Some(image)
     }
