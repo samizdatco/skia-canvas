@@ -445,16 +445,17 @@ pub fn set_miterLimit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 //
 
 fn _layout_rects(cx: &mut FunctionContext, intrinsic:Size, nums:&[f32]) -> NeonResult<(Rect, Rect)> {
-  let (src, dst) = match nums.len() {
-    2 => ( normalized_rect(0.0, 0.0, intrinsic.width, intrinsic.height),
-           normalized_rect(nums[0], nums[1], intrinsic.width, intrinsic.height) ),
-    4 => ( normalized_rect(0.0, 0.0, intrinsic.width, intrinsic.height),
-           normalized_rect(nums[0], nums[1], nums[2], nums[3]) ),
-    8 => ( normalized_rect(nums[0], nums[1], nums[2], nums[3]),
-           normalized_rect(nums[4], nums[5], nums[6], nums[7]) ),
+  // negative widths/heights are legal here: they relocate the origin rather than mirroring the content
+  let [src, dst] = match nums.len() {
+    2 => [ [0.0, 0.0, intrinsic.width, intrinsic.height],
+           [nums[0], nums[1], intrinsic.width, intrinsic.height] ],
+    4 => [ [0.0, 0.0, intrinsic.width, intrinsic.height],
+           [nums[0], nums[1], nums[2], nums[3]] ],
+    8 => [ [nums[0], nums[1], nums[2], nums[3]],
+           [nums[4], nums[5], nums[6], nums[7]] ],
     9.. => cx.throw_type_error(format!("⚠️Expected 2, 4, or 8 coordinates (got {})", nums.len()))?,
     _ => cx.throw_type_error(format!("not enough arguments: Expected 2, 4, or 8 coordinates (got {})", nums.len()))?
-  };
+  }.map(|[x, y, w, h]| Rect::from_xywh(x, y, w, h).sorted());
 
   match intrinsic.is_empty(){
     true => cx.throw_range_error(format!("Dimensions must be non-zero (got {}×{})", intrinsic.width, intrinsic.height)),
@@ -550,7 +551,7 @@ pub fn getImageData(mut cx: FunctionContext) -> JsResult<JsObject> {
   let canvas = &mut parent.borrow_mut();
 
   let opts = ExportOptions{matte, density, msaa, color_type, ..canvas.export_options()};
-  let crop = normalized_rect(x*density, y*density, w*density, h*density).round();
+  let crop = Rect::from_xywh(x*density, y*density, w*density, h*density).sorted().round();
   let engine = canvas.engine();
 
   let color_space = color_space.unwrap_or_else(|| this.borrow().color_space()); // default to source's space if undefined
@@ -584,7 +585,7 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   };
   let (src, dst) = match dirty.as_slice(){
     [dx, dy, dw, dh] => {
-      let src = normalized_rect(*dx, *dy, *dw, *dh);
+      let src = Rect::from_xywh(*dx, *dy, *dw, *dh).sorted();
       (src, src.with_offset((x, y)))
     },
     _ => (

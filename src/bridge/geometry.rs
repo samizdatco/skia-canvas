@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Matrix, Point, Rect};
+use skia_safe::{Path, Matrix, Point};
 
 use super::{arg_num, floats_in};
 
@@ -29,12 +29,6 @@ pub fn to_radians(degrees: f32) -> f32{
 //   let max = max as f32;
 //   if val < min { min } else if val > max { max } else { val }
 // }
-
-// build a canvas spec-conforming Rect by normalizing negative width/height dimensions
-// into a sorted (left ≤ right, top ≤ bottom) rectangle
-pub fn normalized_rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
-  Rect::from_ltrb(x.min(x + w), y.min(y + h), x.max(x + w), y.max(y + h))
-}
 
 //
 // Matrices
