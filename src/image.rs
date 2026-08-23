@@ -359,8 +359,13 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
     // Next, try interpreting the data as an encoded bitmap
     Content::Bitmap(image)
   }else if pdf::is_pdf(&data){
-    // Next, look for the PDF magic number and record the first page as a Picture
-    match pdf::read_page(&data, 1){
+    // Next, look for the PDF magic number and record the requested page as a Picture
+    let page_num = match opt_float_arg(&mut cx, 3){
+      None => Some(1),
+      Some(num) if num >= 1.0 && num.fract() == 0.0 => Some(num as usize),
+      Some(_) => None
+    };
+    match page_num.and_then(|num| pdf::read_page(&data, num)){
       Some((picture, size)) => Content::Vector(picture, size, ColorSpace::new_srgb()), // hayro only supports sRGB
       None => Content::Broken
     }
