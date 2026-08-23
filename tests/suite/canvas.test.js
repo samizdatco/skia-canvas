@@ -7,7 +7,7 @@ const fs = require('fs'),
       path = require('path'),
       {assert} = require('../runner/assert'),
       {describe, test, beforeEach, afterEach} = require('node:test'),
-      {Canvas, Image, FontLibrary, loadImage} = require('../../lib');
+      {Canvas, Image, FontLibrary, loadImage, loadCanvas} = require('../../lib');
 
 const BLACK = [0,0,0,255],
       WHITE = [255,255,255,255],
@@ -64,6 +64,21 @@ describe("Canvas", ()=>{
       assert.equal(canvas.height, 456)
       assert.equal(ctx.fillStyle, '#000000')
       assert.deepEqual(pixel(0,0), CLEAR)
+    })
+
+    test('ctx width & height (r/o)', () => {
+      // each page keeps the size it was created at, so only the newest matches the canvas
+      assert.deepEqual([ctx.width, ctx.height], [WIDTH, HEIGHT])
+
+      let second = canvas.newPage(300, 200)
+      assert.deepEqual([second.width, second.height], [300, 200])
+      assert.deepEqual([canvas.width, canvas.height], [300, 200])
+      assert.deepEqual([ctx.width, ctx.height], [WIDTH, HEIGHT]) // the first page is unchanged
+
+      // and they track a resize of the page that's current
+      canvas.width = 42
+      assert.deepEqual([second.width, second.height], [42, 200])
+      assert.deepEqual([ctx.width, ctx.height], [WIDTH, HEIGHT])
     })
   })
 
@@ -724,4 +739,102 @@ describe("Canvas", ()=>{
     })
   })
 
+  describe("loadCanvas()", () => {
+    var PNG_PATH = 'tests/assets/pentagon.png',
+        SVG_PATH = 'tests/assets/image/format.svg',
+        firstPixel = ctx => Array.from(ctx.getImageData(0, 0, 1, 1).data)
+  
+    // a 3-page document: red, a deliberately blank middle page, then blue on a wider final page
+    const makePdf = async () => {
+      let canvas = new Canvas(100, 100),
+          ctx = canvas.getContext('2d')
+      ctx.fillStyle = '#f00'
+      ctx.fillRect(0, 0, 300, 300)
+      canvas.newPage(120, 90) // left empty
+      ctx = canvas.newPage(200, 100)
+      ctx.fillStyle = '#00f'
+      ctx.fillRect(0, 0, 300, 300)
+      return canvas.toBuffer('pdf')
+    }
+  
+    test("reads multipage PDFs", async () => {
+      let doc = await loadCanvas(await makePdf())
+  
+      // one canvas page per document page, each at its own size…
+      assert.equal(doc.pages.length, 3)
+      assert.deepEqual(doc.pages.map(p => [p.width, p.height]), [[100, 100], [120, 90], [200, 100]])
+  
+      // …with the canvas itself sized to the last page, as after any newPage()
+      assert.deepEqual([doc.width, doc.height], [200, 100])
+  
+      assert.deepEqual(firstPixel(doc.pages[0]), [255, 0, 0, 255])
+      assert.deepEqual(firstPixel(doc.pages[1]), [0, 0, 0, 0]) // the blank page survives the load
+      assert.deepEqual(firstPixel(doc.pages[2]), [0, 0, 255, 255])
+    })
+  
+    test("can re-export multipage docs", async () => {
+      // the pages hold real geometry, so the document can make a round trip
+      let doc = await loadCanvas(await makePdf()),
+          again = await loadCanvas(await doc.toBuffer('pdf'))
+  
+      assert.equal(again.pages.length, 3)
+      assert.deepEqual(again.pages.map(p => [p.width, p.height]), [[100, 100], [120, 90], [200, 100]])
+      assert.deepEqual(firstPixel(again.pages[2]), [0, 0, 255, 255])
+    })
+  
+    test("reads single-page sources", async () => {
+      // a bitmap is sized to its pixel dimensions and pre-drawn
+      let bitmap = await loadCanvas(PNG_PATH)
+      assert.equal(bitmap.pages.length, 1)
+      assert.deepEqual([bitmap.width, bitmap.height], [125, 125])
+  
+      // as is an SVG with an intrinsic size
+      let vector = await loadCanvas(SVG_PATH)
+      assert.equal(vector.pages.length, 1)
+      assert.deepEqual([vector.width, vector.height], [60, 60])
+  
+      // and a one-page PDF is just a document that happens to be short
+      let solo = new Canvas(50, 60)
+      solo.getContext('2d').fillStyle = '#0f0'
+      solo.getContext('2d').fillRect(0, 0, 99, 99)
+      let short = await loadCanvas(await solo.toBuffer('pdf'))
+      assert.equal(short.pages.length, 1)
+      assert.deepEqual([short.width, short.height], [50, 60])
+      assert.deepEqual(firstPixel(short.getContext('2d')), [0, 255, 0, 255])
+    })
+  
+    test("uses the viewBox for sizeless SVGs", async () => {
+      let svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250"></svg>')
+      assert.deepEqual((c => [c.width, c.height])(await loadCanvas(svg)), [400, 250])
+  
+      // …while loadImage() keeps reporting Chrome's 150px-tall default for the same file
+      assert.matchesSubset(await loadImage(svg), {width:240, height:150})
+  
+      // with no viewBox to go on, both fall back to that default
+      let bare = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+      assert.deepEqual((c => [c.width, c.height])(await loadCanvas(bare)), [150, 150])
+    })
+  
+    test("parses canvas & context options", async () => {
+      let doc = await loadCanvas(PNG_PATH, {colorSpace:'display-p3', gpu:false, textGamma:1.8})
+      assert.equal(doc.getContext('2d').getContextAttributes().colorSpace, 'display-p3')
+      assert.equal(doc.gpu, false)
+      assert.equal(doc.engine.textGamma, 1.8)
+  
+      // every page of a document inherits the settings, not just the first
+      let pdf = await loadCanvas(await makePdf(), {colorSpace:'display-p3'})
+      for (let page of pdf.pages){
+        assert.equal(page.getContextAttributes().colorSpace, 'display-p3')
+      }
+  
+      // an unusable colorSpace is silently ignored rather than thrown (outside of strict mode)
+      // @ts-expect-error — deliberately passing an unknown color space
+      let fallback = await loadCanvas(PNG_PATH, {colorSpace:'nonsense'})
+      assert.equal(fallback.getContext('2d').getContextAttributes().colorSpace, 'srgb')
+    })
+  
+    test("rejects undecodable data", async () => {
+      await assert.rejects(loadCanvas(Buffer.from('not an image')), /Could not decode/)
+    })
+  })
 })

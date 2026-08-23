@@ -119,6 +119,24 @@ export function loadImageData(src: string | Buffer | URL, width: number, height?
 export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & ImageRequestOptions): Promise<ImageData>
 export function loadImageData(src: Sharp): Promise<ImageData>
 
+/** Options for `loadCanvas`: http request settings plus the canvas & context settings that can
+ *  only be chosen at creation time */
+export type CanvasLoadOptions = ImageRequestOptions & CanvasRenderingContext2DSettings & {
+  /** Amount of contrast to add when rasterizing text (0–1, defaults to 0) */
+  textContrast?: number
+  /** Exponent for text anti-aliasing's gamma correction (0–4, defaults to 1.4) */
+  textGamma?: number
+  /** Whether to render using the GPU (defaults to true) */
+  gpu?: boolean
+}
+
+/** Load an image or document into a new Canvas, sized to match its contents.
+ *
+ * A multi-page PDF becomes one canvas page per document page, each at that page's own size.
+ * Every other format becomes a single page with the image already drawn into it. To draw from
+ * a source rather than onto it — or to pull a single page out of a PDF — use `loadImage` instead. */
+export function loadCanvas(src: string | URL | Sharp | Buffer, options?: CanvasLoadOptions): Promise<Canvas>
+
 export type ColorSpace = "srgb" | "display-p3"
 export type ColorType = "Alpha8" | "Gray8" | "R8UNorm" | // 1 byte/px
   "A16Float" | "A16UNorm" | "ARGB4444" | "R8G8UNorm" | "RGB565" | // 2 bytes/px
@@ -830,6 +848,12 @@ interface CanvasTransform {
 export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/canvas) */
   readonly canvas: Canvas
+  /** This page's width. Pages keep the size they were created at, so this only matches
+   *  `canvas.width` for the most recently added page. */
+  readonly width: number
+  /** This page's height. Pages keep the size they were created at, so this only matches
+   *  `canvas.height` for the most recently added page. */
+  readonly height: number
   fontVariant: FontVariantSetting
   fontHinting: boolean
   fontSmoothing: boolean

@@ -2,7 +2,10 @@
 // PDF parsing: convert a Hayro content stream into Skia ops recorded into a Picture
 //
 use std::sync::Arc;
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{
   AlphaType, BlendMode as SkBlendMode, Canvas as SkCanvas, Color4f, ColorSpace, ColorType, Data,
   FilterMode, Font as SkFont, FontHinting, FontMgr, ImageInfo, Matrix, Paint as SkPaint, PaintCap,
@@ -14,16 +17,18 @@ use skia_safe::{
 use kurbo::{Affine, BezPath, Cap, Join, PathEl, Shape};
 use smallvec::smallvec;
 use hayro_interpret::{
-  BlendMode, CacheKey, ClipPath, Context, Device, FillRule, GlyphDrawMode, Image, ImageData,
+  BlendMode, CacheKey, ClipPath, Device, FillRule, GlyphDrawMode, Image, ImageData,
   InterpreterCache, InterpreterSettings, LumaData, MaskType, Paint, PathDrawMode, SoftMask,
   StrokeProps, interpret_page,
+  Context as PdfContext,
   color::AlphaColor,
   font::{Glyph, OutlineGlyph},
-  hayro_syntax::Pdf,
+  hayro_syntax::{Pdf, page::Page as PdfPage},
   pattern::{Pattern, ShadingPattern, TilingPattern},
   shading::{ShadingFunction, ShadingType},
   util::TransformExt,
 };
+use crate::context::BoxedContext2D;
 
 // the header may at any newline in the opening bytes of the file (so check the first 1kb)
 pub fn is_pdf(data:&[u8]) -> bool{
@@ -39,26 +44,42 @@ impl AsRef<[u8]> for PdfBytes{
   fn as_ref(&self) -> &[u8]{ self.0.as_bytes() }
 }
 
-// convert the specified (1-based index) page into a Picture (return None if the data or index are invalid)
-pub fn read_page(data:&Data, page_nr:usize) -> Option<(Picture, Size)>{
-  // catch hayro's malformed-input panics and return None instead
-  std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| read_page_impl(data, page_nr))).ok().flatten()
+// catch hayro's malformed-input panics and return None instead
+fn undecodable_on_panic<T>(f:impl FnOnce() -> Option<T>) -> Option<T>{
+  std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).ok().flatten()
 }
 
-fn read_page_impl(data:&Data, page_nr:usize) -> Option<(Picture, Size)>{
-  let pdf = Pdf::new(Arc::new(PdfBytes(data.clone()))).ok()?;
-  let page = pdf.pages().get(page_nr.checked_sub(1)?)?;
+// convert the specified (1-based index) page into a Picture (return None if the data or index are invalid)
+pub fn read_page(data:&Data, page_num:usize) -> Option<(Picture, Size)>{
+  undecodable_on_panic(||{
+    let pdf = Pdf::new(Arc::new(PdfBytes(data.clone()))).ok()?;
+    let page = pdf.pages().get(page_num.checked_sub(1)?)?;
+    render_page(page, &InterpreterCache::new(), &Rc::default())
+  })
+}
+
+// interpret all the document's pages, sharing the interpreter and embedded font caches
+pub fn read_document(data:&Data) -> Option<Vec<(Picture, Size)>>{
+  undecodable_on_panic(||{
+    let pdf = Pdf::new(Arc::new(PdfBytes(data.clone()))).ok()?;
+    let (cache, fonts) = (InterpreterCache::new(), Rc::default());
+    pdf.pages().iter()
+      .map(|page| render_page(page, &cache, &fonts))
+      .collect::<Option<Vec<_>>>()
+  })
+}
+
+fn render_page<'a>(page:&PdfPage<'a>, cache:&InterpreterCache<'a>, fonts:&Rc<FontCache>) -> Option<(Picture, Size)>{
   let (width, height) = page.render_dimensions();
   let size = Size::new(width, height);
 
   let mut recorder = PictureRecorder::new();
   let canvas = recorder.begin_recording(SkRect::from_size(size), true);
-  let mut device = PictureDevice::new(canvas);
-  let cache = InterpreterCache::new();
-  let mut context = Context::new(
+  let mut device = PictureDevice::new(canvas, fonts.clone());
+  let mut context = PdfContext::new(
     page.initial_transform(true).to_kurbo(), // pdf user space (y-up) → top-left-origin device space
     kurbo::Rect::new(0.0, 0.0, width as f64, height as f64),
-    &cache,
+    cache,
     page.xref(),
     InterpreterSettings::default(),
   );
@@ -78,16 +99,14 @@ struct PictureDevice<'a, 'c>{
   mask: Option<SoftMask<'a>>,             // soft mask applied around each individual draw
   blend: BlendMode,                       // blend mode carried on each draw's paint
   group_masks: Vec<Option<SoftMask<'a>>>, // mask stack to restore when transparency groups pop
-  fonts: HashMap<u128, Option<Typeface>>, // embedded fonts by font_cache_key (None = unparseable)
-  verified: HashMap<(u128, u32), bool>,   // per-glyph outline agreement, by font_cache_key & glyph id
+  fonts: Rc<FontCache>,                   // parsed fonts, shared with the rest of the document
   run: Option<GlyphRun<'a>>,              // glyphs accumulated for the pending text run
 }
 
 impl<'a, 'c> PictureDevice<'a, 'c>{
-  fn new(canvas:&'c SkCanvas) -> Self{
+  fn new(canvas:&'c SkCanvas, fonts:Rc<FontCache>) -> Self{
     PictureDevice{
-      canvas, mask:None, blend:BlendMode::Normal, group_masks:vec![],
-      fonts:HashMap::new(), verified:HashMap::new(), run:None
+      canvas, mask:None, blend:BlendMode::Normal, group_masks:vec![], fonts, run:None
     }
   }
 }
@@ -253,13 +272,13 @@ impl<'a> PictureDevice<'a, '_>{
   // map a glyph's embedded font to a skia Typeface (and memoize the lookup)
   fn font_for(&mut self, glyph:&OutlineGlyph) -> Option<Typeface>{
     let font_key = glyph.font_cache_key();
-    let typeface = self.fonts.entry(font_key).or_insert_with(||
+    let typeface = self.fonts.faces.borrow_mut().entry(font_key).or_insert_with(||
       glyph.font_data()
         .and_then(|font| FONT_MGR.with(|mgr| mgr.new_from_data((*font.data).as_ref(), None)))
     ).clone()?;
 
     // verification needs to be per-glyph since any one glyph may be a fallback font
-    let verified = *self.verified.entry((font_key, glyph.glyph_id().to_u32()))
+    let verified = *self.fonts.verified.borrow_mut().entry((font_key, glyph.glyph_id().to_u32()))
       .or_insert_with(|| matches_outline(&typeface, glyph));
     verified.then_some(typeface)
   }
@@ -377,7 +396,7 @@ impl<'a> PictureDevice<'a, '_>{
     // record the replayable tile stamp (which hayro has already clipped to its bbox)
     let mut cell_recorder = PictureRecorder::new();
     let cell_canvas = cell_recorder.begin_recording(skia_rect(tile.bbox), true);
-    let mut cell_device = PictureDevice::new(cell_canvas);
+    let mut cell_device = PictureDevice::new(cell_canvas, self.fonts.clone());
     tile.interpret(&mut cell_device, Affine::IDENTITY, is_stroke);
     cell_device.flush_glyphs();
     drop(cell_device);
@@ -489,6 +508,13 @@ impl<'a> PictureDevice<'a, '_>{
 
 // share one FontMgr per thread to amortize its expensive (~30ms) setup time
 thread_local!(static FONT_MGR: FontMgr = FontMgr::new());
+
+// per-document font cache
+#[derive(Default)]
+struct FontCache{
+  faces: RefCell<HashMap<u128, Option<Typeface>>>, // embedded fonts by font_cache_key (None = unparseable)
+  verified: RefCell<HashMap<(u128, u32), bool>>,   // per-glyph outline agreement, by font_cache_key & glyph id
+}
 
 // set of glyphs sharing a font, size, paint, and text-space transform (to be converted to a TextBlob)
 struct GlyphRun<'a>{
@@ -923,4 +949,49 @@ fn blend_mode(mode:BlendMode) -> SkBlendMode{
     BlendMode::Color => SkBlendMode::Color,
     BlendMode::Luminosity => SkBlendMode::Luminosity,
   }
+}
+
+
+//
+// -- Javascript Methods --------------------------------------------------------------------------
+//
+
+pub struct DocumentPage{ picture: Picture }
+pub type BoxedDocumentPage = JsBox<DocumentPage>;
+impl Finalize for DocumentPage {}
+
+pub fn open(mut cx: FunctionContext) -> JsResult<JsValue> {
+  let buffer = cx.argument::<JsBuffer>(0)?;
+
+  // check for the %PDF magic number so the caller can distinguish between not-a-pdf and broken-pdf
+  if is_pdf(buffer.as_slice(&cx)){
+    let data = Data::new_copy(buffer.as_slice(&cx));
+    match read_document(&data){
+      Some(pages) => {
+        // return the Picture + dimensions for each decoded page
+        let array = JsArray::new(&mut cx, pages.len());
+        for (i, (picture, size)) in pages.into_iter().enumerate(){
+          let entry = cx.empty_object();
+          let width = cx.number(size.width);
+          let height = cx.number(size.height);
+          let page = cx.boxed(DocumentPage{ picture });
+          entry.set(&mut cx, "page", page)?;
+          entry.set(&mut cx, "width", width)?;
+          entry.set(&mut cx, "height", height)?;
+          array.set(&mut cx, i as u32, entry)?;
+        }
+        Ok(array.upcast())
+      }
+      None => return Ok(cx.boolean(false).upcast()) // false = broken PDF
+    }
+  }else{
+    return Ok(cx.undefined().upcast()) // undefined = not a pdf
+  }
+}
+
+pub fn impose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let page = cx.argument::<BoxedDocumentPage>(0)?;
+  let context = cx.argument::<BoxedContext2D>(1)?;
+  context.borrow().with_canvas(|canvas|{ canvas.draw_picture(&page.picture, None, None); });
+  Ok(cx.undefined())
 }
