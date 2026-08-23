@@ -8,6 +8,7 @@ use skia_safe::{
   svg::{self, Length, LengthUnit},
 };
 use crate::bridge::*;
+use crate::pdf;
 use crate::context::Context2D;
 use crate::font_library::FontLibrary;
 use crate::gfx::cache::Cache;
@@ -345,6 +346,9 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
   let buffer = cx.argument::<JsBuffer>(1)?;
   let data = Data::new_copy(buffer.as_slice(&cx));
 
+  // since the Image may have already been loaded and then had its `src` reset, clear the svg sizing flag
+  this.autosized = false;
+
   let new_content = if let Some(raw_info) = opt_image_info_arg(&mut cx, 2)?{
     // First, check for an optional dims argument and interpret the buffer as raw rgba if present
     match images::raster_from_data(&raw_info, data, raw_info.min_row_bytes()){
@@ -354,6 +358,12 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
   }else if let Some(image) = images::deferred_from_encoded_data(&data, None){
     // Next, try interpreting the data as an encoded bitmap
     Content::Bitmap(image)
+  }else if pdf::is_pdf(&data){
+    // Next, look for the PDF magic number and record the first page as a Picture
+    match pdf::read_page(&data, 1){
+      Some((picture, size)) => Content::Vector(picture, size, ColorSpace::new_srgb()), // hayro only supports sRGB
+      None => Content::Broken
+    }
   }else if let Ok(mut dom) = svg::Dom::try_from(StyledSvg::from_data(&data)){
     // Finally, try parsing as SVG (resolving any <style> CSS first, since Skia's SVG DOM ignores it)
     let root = dom.root();

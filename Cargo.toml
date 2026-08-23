@@ -30,6 +30,9 @@ once_cell = "1.13"
 little_exif = "0.6.8"
 dashmap = "6.1.0"
 process_path = "0.1.4"
+hayro-interpret = "0.7"
+kurbo = "0.13"
+smallvec = "1"
 roxmltree = "0.20"
 simplecss = { path = "vendor/simplecss" }
 serde = { version = "1.0", features = ["derive"] }
