@@ -106,8 +106,14 @@ export type ImageRequestOptions = import("https").RequestOptions & {
   body?: string | Buffer
 }
 
-export function loadImage(src: string | URL, options?: ImageRequestOptions): Promise<Image>
-export function loadImage(src: Sharp | Buffer): Promise<Image>
+/** Options for `loadImage`: http request settings plus source-format extras */
+export type ImageLoadOptions = ImageRequestOptions & {
+  /** For PDF sources: the 1-based page number to load (defaults to the first page). Ignored for other formats. */
+  page?: number
+}
+
+export function loadImage(src: string | URL, options?: ImageLoadOptions): Promise<Image>
+export function loadImage(src: Sharp | Buffer, options?: ImageLoadOptions): Promise<Image>
 
 export function loadImageData(src: string | Buffer | URL, width: number, height?:number): Promise<ImageData>
 export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & ImageRequestOptions): Promise<ImageData>

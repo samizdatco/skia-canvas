@@ -163,6 +163,10 @@ describe("Image", () => {
       img = await loadImage(pathToFileURL(SVG_PATH))
       assert.matchesSubset(img, PARSED)
 
+      // like the raw-pixel descriptor, page is meaningless for other formats rather than an error
+      assert.matchesSubset(await loadImage(PATH, {page:5}), LOADED)
+      assert.matchesSubset(await loadImage(SVG_PATH, {page:5}), PARSED)
+
       await assert.rejects(loadImage(`${HOST}/nonesuch`), /HTTP error 404/)
     })
 
@@ -423,6 +427,45 @@ describe("Image", () => {
       }
       img.src = PDF_URI
       assert(!img.complete)
+    })
+
+    test("selected pages", async () => {
+      // a 3-page document: red, green, then blue on a wider final page
+      let doc = new Canvas(100, 100),
+          colors = ['#f00', '#0f0', '#00f'],
+          page = doc.getContext('2d')
+      for (let i = 0; i < colors.length; i++){
+        if (i) page = doc.newPage(i == 2 ? 200 : 100, 100)
+        page.fillStyle = colors[i]
+        page.fillRect(0, 0, 300, 100)
+      }
+      let pdf = await doc.toBuffer('pdf')
+
+      const firstPixel = loaded => {
+        let ctx = new Canvas(loaded.width, loaded.height).getContext('2d')
+        ctx.drawImage(loaded, 0, 0)
+        return Array.from(ctx.getImageData(0, 0, 1, 1).data)
+      }
+
+      // 1-based, defaulting to the first page
+      assert.deepEqual(firstPixel(await loadImage(pdf)), [255, 0, 0, 255])
+      assert.deepEqual(firstPixel(await loadImage(pdf, {page:1})), [255, 0, 0, 255])
+      assert.deepEqual(firstPixel(await loadImage(pdf, {page:2})), [0, 255, 0, 255])
+      assert.deepEqual(firstPixel(await loadImage(pdf, {page:3})), [0, 0, 255, 255])
+
+      // each page reports its own intrinsic size
+      assert.matchesSubset(await loadImage(pdf, {page:2}), {width:100, height:100})
+      assert.matchesSubset(await loadImage(pdf, {page:3}), {width:200, height:100})
+
+      // out-of-range pages reject rather than clamping…
+      await assert.rejects(loadImage(pdf, {page:4}), /Could not decode/)
+      await assert.rejects(loadImage(pdf, {page:0}), /Could not decode/)
+
+      // …as do fractional and non-numeric values
+      await assert.rejects(loadImage(pdf, {page:1.5}), /Could not decode/)
+      await assert.rejects(loadImage(pdf, {page:NaN}), /Could not decode/)
+      // @ts-expect-error — deliberately passing a non-numeric page
+      await assert.rejects(loadImage(pdf, {page:'nope'}), /Could not decode/)
     })
 
     test("a reused vector Image", async () => {
