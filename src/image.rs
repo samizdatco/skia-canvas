@@ -345,6 +345,7 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
   let mut this = this.borrow_mut();
   let buffer = cx.argument::<JsBuffer>(1)?;
   let data = Data::new_copy(buffer.as_slice(&cx));
+  let fit_view_box = opt_bool_arg(&mut cx, 4).unwrap_or(false); // use viewBox for SVGs without width/height
 
   // since the Image may have already been loaded and then had its `src` reset, clear the svg sizing flag
   this.autosized = false;
@@ -374,24 +375,30 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
     let root = dom.root();
 
     let mut size = root.intrinsic_size();
+
+    // handle files without explicit width/height dimensions
     if size.is_empty(){
-      // flag that image lacks an intrinsic size so it will be drawn to match the canvas size
-      // if dimensions aren't provided in the drawImage() call
       this.autosized = true;
 
       // If width or height attributes aren't defined on the root `<svg>` element, they will be reported as "100%".
       // If only one is defined, use it for both dimensions, and if both are missing use the aspect ratio to scale the
-      // width vs a fixed height of 150 (i.e., Chrome's behavior)
+      // width vs a fixed height of 150 (mimicking Chrome's behavior)
       let Length{ value:width, unit:w_unit } = root.width();
       let Length{ value:height, unit:h_unit } = root.height();
-      size = match ((width, w_unit), (height, h_unit)){
-        // NB: only unitless numeric lengths are currently being handled; values in em, cm, in, etc. are ignored,
-        // but perhaps they should be converted to px?
-        ((100.0, LengthUnit::Percentage), (height, LengthUnit::Number)) => (*height, *height).into(),
-        ((width, LengthUnit::Number),     (100.0,  LengthUnit::Percentage)) => (*width, *width).into(),
-        _ => {
-          let aspect = root.view_box().map(|vb| vb.width()/vb.height()).unwrap_or(1.0);
-          (150.0 * aspect, 150.0).into()
+
+      size = match root.view_box().filter(|_| fit_view_box){
+        Some(view_box) => {
+          // `loadCanvas` prefers the viewBox dimensions since there isn't an opportunity to resize on draw
+          this.autosized = false; 
+          (view_box.width(), view_box.height()).into()
+        }
+        None => match ((width, w_unit), (height, h_unit)){
+          ((100.0, LengthUnit::Percentage), (height, LengthUnit::Number)) => (*height, *height).into(),
+          ((width, LengthUnit::Number),     (100.0,  LengthUnit::Percentage)) => (*width, *width).into(),
+          _ => {
+            let aspect = root.view_box().map(|vb| vb.width()/vb.height()).unwrap_or(1.0);
+            (150.0 * aspect, 150.0).into()
+          }
         }
       };
     };

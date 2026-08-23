@@ -13,7 +13,7 @@ const path = require('path'),
       {assert} = require('../runner/assert'),
       {describe, test, before, after, beforeEach, afterEach} = require('node:test'),
       {pathToFileURL, fileURLToPath} = require('url'),
-      {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData} = require('../../lib')
+      {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData, loadCanvas} = require('../../lib')
 
 // serve the repo's files over http so the url-loading tests have a real server to talk to
 const PORT = 41777,

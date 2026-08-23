@@ -50,6 +50,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Image_get_complete", image::get_complete)?;
   cx.export_function("Image_pixels", image::pixels)?;
 
+  // -- PDF ---------------------------------------------------------------------------------------
+
+  cx.export_function("PDF_open", pdf::open)?;
+  cx.export_function("PDF_impose", pdf::impose)?;
+
   // -- Path2D ------------------------------------------------------------------------------------
 
   cx.export_function("Path2D_new", path::new)?;
