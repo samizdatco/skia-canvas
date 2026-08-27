@@ -11,7 +11,7 @@ use skia_safe::{
   textlayout::{ParagraphStyle, TextStyle, StrutStyle},
   canvas::SrcRectConstraint::Strict,
   path_utils::fill_path_with_paint,
-  font_style::{FontStyle, Width, Weight, Slant},
+  font_style::{FontStyle, Width},
 };
 
 #[path = "context_api.rs"]
@@ -94,22 +94,12 @@ impl Default for State {
       .set_style(PaintStyle::Fill);
 
     let graf_style = ParagraphStyle::new();
-    let font_spec = FontSpec{
-      families: vec!["sans-serif".to_string()],
-      size: 10.0,
-      line_height: None,
-      weight: Weight::NORMAL,
-      width: Width::NORMAL,
-      slant: Slant::Upright,
-      features: vec![],
-      variant: "normal".to_string(),
-      canonical: "10px sans-serif".to_string(),
-    };
-    let char_style = {
-      let mut style = TextStyle::new();
-      style.set_font_size(font_spec.size);
-      FontLibrary::with_shared(|lib| lib.update_style(&style, &font_spec)).unwrap_or(style)
-    };
+    let font_spec = FontSpec::default();
+    let mut char_style = TextStyle::new();
+    char_style
+      .set_font_size(font_spec.size)
+      .set_font_families(&font_spec.families)
+      .set_font_style(font_spec.style());
     let FontSpec{ canonical: font, variant: font_variant, width: font_width, .. } = font_spec;
 
     State {
@@ -155,6 +145,10 @@ impl Default for State {
 impl State{
   pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, Baseline, bool) {
     let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
+    if char_style.typeface().is_none() { // if still using the implicit default font, resolve it now
+      char_style = FontLibrary::with_shared(|lib| lib.update_style(&char_style, &FontSpec::default()))
+        .unwrap_or(char_style);
+    }
     char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
     char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));
     char_style.set_baseline_shift(self.text_baseline.get_offset(&char_style));
