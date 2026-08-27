@@ -294,6 +294,22 @@ impl FontSpec{
   }
 }
 
+impl Default for FontSpec{
+  fn default() -> Self{
+    FontSpec{
+      families: vec!["sans-serif".to_string()],
+      size: 10.0,
+      line_height: None,
+      weight: Weight::NORMAL,
+      width: Width::NORMAL,
+      slant: Slant::Upright,
+      features: vec![],
+      variant: "normal".to_string(),
+      canonical: "10px sans-serif".to_string(),
+    }
+  }
+}
+
 pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontSpec>> {
   let arg = cx.argument::<JsValue>(idx)?;
   if arg.is_a::<JsNull, _>(cx){ return Ok(None) }
