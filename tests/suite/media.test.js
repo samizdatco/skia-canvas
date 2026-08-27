@@ -385,6 +385,89 @@ describe("Image", () => {
     })
   })
 
+  describe("can draw autosized SVGs", () => {
+    test("with crop coordinates", async () => {
+      // a viewBox without width/height gives the SVG a ratio but no size, so it draws at its
+      // 'concrete object size': the largest box with that ratio fitting the canvas. The crop rect
+      // of the 9-argument form is relative to that same scaled-to-fit size — not to the canvas,
+      // and not to the 300×150 default the Image reports. Browsers resolve both against the
+      // canvas the same way (verified in Chrome).
+      let quadrants = Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 150">` +
+        `<rect x="0" y="0" width="150" height="75" fill="#f00"/>` +
+        `<rect x="150" y="0" width="150" height="75" fill="#0f0"/>` +
+        `<rect x="0" y="75" width="150" height="75" fill="#00f"/>` +
+        `<rect x="150" y="75" width="150" height="75" fill="#ff0"/></svg>`
+      )
+      let img = await loadImage(quadrants)
+      assert.deepEqual([img.width, img.height], [300, 150])
+
+      // sample the four quadrants of a 640×480 destination
+      const quads = ctx => [[160, 120], [480, 120], [160, 360], [480, 360]]
+        .map(([x, y]) => Array.from(ctx.getImageData(x, y, 1, 1).data).slice(0, 3).join())
+
+      // the fitted size on a 640×480 canvas is 640×320, so that's the crop covering the whole image
+      let all = new Canvas(640, 480).getContext('2d')
+      all.drawImage(img, 0, 0, 640, 320, 0, 0, 640, 480)
+      assert.deepEqual(quads(all), ['255,0,0', '0,255,0', '0,0,255', '255,255,0'])
+
+      // and a quadrant is addressed in that same space (the top-left quarter of 640×320)
+      let corner = new Canvas(640, 480).getContext('2d')
+      corner.drawImage(img, 0, 0, 320, 160, 0, 0, 640, 480)
+      assert.deepEqual(quads(corner), Array(4).fill('255,0,0'))
+
+      // the 2-argument form draws at that fitted size, so the crop space and the drawn size agree
+      let plain = new Canvas(640, 480).getContext('2d')
+      plain.drawImage(img, 0, 0)
+      assert.equal(plain.getImageData(639, 319, 1, 1).data[3], 255) // bottom-right of the fit box
+      assert.equal(plain.getImageData(0, 321, 1, 1).data[3], 0)     // just below it
+    })
+
+    test("without an intrinsic ratio", async () => {
+      // with no viewBox there's no ratio to preserve, so CSS's default sizing algorithm falls all the
+      // way back to the 300×150 default object size. That box becomes the picture's bounds — clipping
+      // any artwork outside it — and from there autosizing proceeds exactly as it does with a
+      // viewBox: the box scales to fit the canvas and the crop coordinates follow it.
+      //
+      // Browsers diverge here. With no ratio their concrete object size is the canvas itself, and
+      // with no viewBox that resize crops the artwork instead of scaling it, so Chrome paints these
+      // at their literal user units. What follows pins our behavior, not the browser's.
+      const svg = attrs => Buffer.from(
+        `<svg xmlns="http://www.w3.org/2000/svg"${attrs}>` +
+        `<rect x="0" y="0" width="150" height="75" fill="#f00"/>` +
+        `<rect x="150" y="0" width="150" height="75" fill="#0f0"/>` +
+        `<rect x="0" y="75" width="150" height="75" fill="#00f"/>` +
+        `<rect x="150" y="75" width="150" height="75" fill="#ff0"/></svg>`
+      )
+
+      // no dimensions at all → the full 300×150 default, a 2:1 box that fits 640×480 at 640×320
+      let sizeless = await loadImage(svg(''))
+      assert.deepEqual([sizeless.width, sizeless.height], [300, 150])
+
+      let fitted = new Canvas(640, 480).getContext('2d')
+      fitted.drawImage(sizeless, 0, 0)
+      assert.equal(fitted.getImageData(639, 319, 1, 1).data[3], 255) // bottom-right of the fit box
+      assert.equal(fitted.getImageData(0, 321, 1, 1).data[3], 0)     // just below it
+
+      // and the crop space is that same fitted box, just as when a viewBox supplies the ratio
+      let cropped = new Canvas(640, 480).getContext('2d')
+      cropped.drawImage(sizeless, 0, 0, 640, 320, 0, 0, 640, 480)
+      assert.deepEqual([[160, 120], [480, 120], [160, 360], [480, 360]]
+        .map(([x, y]) => Array.from(cropped.getImageData(x, y, 1, 1).data).slice(0, 3).join()),
+        ['255,0,0', '0,255,0', '0,0,255', '255,255,0'])
+
+      // one axis on its own takes the default for the other and the box clips the rest: 200×150 is
+      // 4:3, so it fills a 640×480 canvas edge to edge instead of leaving the 2:1 letterbox above
+      let wide = await loadImage(svg(' width="200"'))
+      assert.deepEqual([wide.width, wide.height], [200, 150])
+
+      let filled = new Canvas(640, 480).getContext('2d')
+      filled.drawImage(wide, 0, 0)
+      assert.equal(filled.getImageData(639, 479, 1, 1).data[3], 255) // bottom-right corner
+      assert.equal(filled.getImageData(0, 479, 1, 1).data[3], 255)   // bottom-left corner
+    })
+  })
+
   describe("can initialize PDFs from", () => {
     test("buffer", () => {
       assert.matchesSubset(img, FRESH)
@@ -476,7 +559,7 @@ describe("Image", () => {
         `<svg xmlns="http://www.w3.org/2000/svg"><rect width="30" height="30" fill="#f00"/></svg>`
       )
       let reused = new Image(sizeless)
-      assert.equal(reused.width, 150) // no width/height/viewBox: 150px square, per Chrome
+      assert.equal(reused.width, 300) // no width/height/viewBox → 300×150, per Chrome/CSS default sizing
       reused.src = PDF_BUFFER
       assert.matchesSubset(reused, PARSED)
 
