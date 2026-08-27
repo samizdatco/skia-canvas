@@ -1165,6 +1165,8 @@ describe("Image", () => {
   })
 })
 
+const HAS_FLOAT16 = typeof Float16Array !== 'undefined' // Float16Array is a Node 23+ global
+
 describe("ImageData", () => {
   var FORMAT = 'tests/assets/image/format.raw',
       RGBA = {width:60, height:60, colorType:'rgba'},
@@ -1177,6 +1179,38 @@ describe("ImageData", () => {
       assert.matchesSubset(imgData, RGBA)
 
       assert.throws(() => new ImageData(buffer, 60, 59), /ImageData dimensions must match buffer length/)
+    })
+
+    test("Float16Array", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
+      let [width, height] = [8, 8]
+  
+      // a bare Float16Array defaults to the RGBAF16 colorType (symmetric with u8 → 'rgba')
+      let f16 = new Float16Array(width * height * 4).fill(0.5)
+      let bmp = new ImageData(f16, width, height)
+      assert.equal(bmp.colorType, 'RGBAF16')
+      assert.equal(bmp.bytesPerPixel, 8)
+      assert.ok(bmp.data instanceof Float16Array)
+      assert.equal(bmp.data, f16) // kept byte-for-byte, not clamp-coerced
+      assert.equal(bmp.data.length, width * height * 4)
+  
+      // an explicit half-float colorType is honored; RGBAF16Norm shares the RGBAF16 layout
+      let norm = new ImageData(f16, width, height, {colorType:'RGBAF16Norm'})
+      assert.equal(norm.colorType, 'RGBAF16Norm')
+      assert.ok(norm.data instanceof Float16Array)
+  
+      // length validation is byteLength-based, so wrong dims still throw for an f16 buffer
+      assert.throws(() => new ImageData(f16, width+1, height))
+  
+      // a Float16Array declared with a non-float colorType is a contradiction → throw
+      assert.throws(() => new ImageData(f16, width, height, {colorType:'rgba'}), /half-float colorType/)
+  
+      // allocation-only with a half-float colorType yields a Float16Array
+      let alloc = new ImageData(width, height, {colorType:'RGBAF16'})
+      assert.ok(alloc.data instanceof Float16Array)
+      assert.equal(alloc.data.length, width * height * 4)
+  
+      // toSharp() refuses half-float buffers rather than letting sharp misread them
+      assert.throws(() => bmp.toSharp(), /half-float/)
     })
 
     test("loadImageData call", async () => {
@@ -1202,6 +1236,25 @@ describe("ImageData", () => {
     // outside of SKIA_CANVAS_STRICT mode, unsupported spaces quietly fall back to srgb
     // @ts-expect-error — 'rec2020' is deliberately not a valid ColorSpace
     assert.equal(new ImageData(8, 8, {colorSpace:'rec2020'}).colorSpace, 'srgb')
+  })
+
+  test("round-trips half-float pixels", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
+    let [width, height] = [4, 4],
+        canvas = new Canvas(width, height),
+        ctx = canvas.getContext("2d")
+    let white = new Float16Array(width * height * 4).fill(1.0)
+    ctx.putImageData(new ImageData(white, width, height), 0, 0)
+
+    // getImageData with a half-float colorType returns a Float16Array reading back the float values
+    let f16 = ctx.getImageData(0, 0, width, height, {colorType:'RGBAF16'})
+    assert.ok(f16.data instanceof Float16Array)
+    assert.equal(f16.colorType, 'RGBAF16')
+    assert.deepEqual(Array.from(f16.data.slice(0, 4)), [1, 1, 1, 1])
+
+    // the default 8-bit read-back still works and sees the same white pixels
+    let u8 = ctx.getImageData(0, 0, width, height)
+    assert.ok(u8.data instanceof Uint8ClampedArray)
+    assert.deepEqual(Array.from(u8.data.slice(0, 4)), [255, 255, 255, 255])
   })
 })
 

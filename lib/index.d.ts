@@ -168,17 +168,19 @@ interface ImageDataExportSettings {
 }
 
 
+export type ImageDataArray = Uint8ClampedArray | Float16Array
+
 export class ImageData {
   prototype: ImageData
   constructor(sw: number, sh: number, settings?: ImageDataSettings)
-  constructor(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
+  constructor(data: ImageDataArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
   constructor(image: Image, settings?: ImageDataSettings)
   constructor(imageData: ImageData)
 
   readonly colorSpace: ColorSpace
   readonly colorType: ColorType
   readonly bytesPerPixel: number
-  readonly data: Uint8ClampedArray
+  readonly data: ImageDataArray
   readonly height: number
   readonly width: number
   toSharp(): Sharp
