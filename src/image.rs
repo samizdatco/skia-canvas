@@ -380,24 +380,30 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
     if size.is_empty(){
       this.autosized = true;
 
-      // If width or height attributes aren't defined on the root `<svg>` element, they will be reported as "100%".
-      // If only one is defined, use it for both dimensions, and if both are missing use the aspect ratio to scale the
-      // width vs a fixed height of 150 (mimicking Chrome's behavior)
       let Length{ value:width, unit:w_unit } = root.width();
       let Length{ value:height, unit:h_unit } = root.height();
 
       size = match root.view_box().filter(|_| fit_view_box){
         Some(view_box) => {
           // `loadCanvas` prefers the viewBox dimensions since there isn't an opportunity to resize on draw
-          this.autosized = false; 
+          this.autosized = false;
           (view_box.width(), view_box.height()).into()
         }
-        None => match ((width, w_unit), (height, h_unit)){
-          ((100.0, LengthUnit::Percentage), (height, LengthUnit::Number)) => (*height, *height).into(),
-          ((width, LengthUnit::Number),     (100.0,  LengthUnit::Percentage)) => (*width, *width).into(),
-          _ => {
-            let aspect = root.view_box().map(|vb| vb.width()/vb.height()).unwrap_or(1.0);
-            (150.0 * aspect, 150.0).into()
+        None => {
+          // follow the CSS default sizing algorithm with a default object size of 300×150 
+          let axis = |value:&f32, unit:&LengthUnit| matches!(unit, LengthUnit::Number).then_some(*value);
+          let (w, h) = (axis(width, w_unit), axis(height, h_unit));
+          let ratio = root.view_box().map(|vb| vb.width() / vb.height());
+          match ((w, h), ratio){
+            // one concrete axis plus a ratio fully determines an intrinsic size
+            ((Some(w), None), Some(r)) => { this.autosized = false; (w, w / r).into() }
+            ((None, Some(h)), Some(r)) => { this.autosized = false; (h * r, h).into() }
+            // otherwise at least one axis falls back to the default object size, so `autosized`
+            // stays set and the draw/pattern calls scale the whole box to fit the canvas
+            ((Some(w), None), None)    => (w, 150.0).into(),
+            ((None, Some(h)), None)    => (300.0, h).into(),
+            ((None, None),    Some(r)) => if r > 2.0 { (300.0, 300.0 / r) } else { (150.0 * r, 150.0) }.into(),
+            _                          => (300.0, 150.0).into(),
           }
         }
       };

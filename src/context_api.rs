@@ -497,15 +497,15 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     // for SVG images with no intrinsic size, use the canvas size as a default scale
     if fit_to_canvas && nums.len() != 4 {
       let canvas_size = this.borrow().bounds.size();
-      let canvas_min = canvas_size.width.min(canvas_size.height);
-      let pict_min = pict_size.width.min(pict_size.height);
 
       if nums.len() == 2 {
-        // if the user doesn't specify a size, proportionally scale to fit within canvas
-        let factor = canvas_min / pict_min;
+        // with no explicit size, scale the picture to fit within the canvas
+        let factor = (canvas_size.width / pict_size.width)
+          .min(canvas_size.height / pict_size.height);
         dst = Rect::from_point_and_size((dst.x(), dst.y()), dst.size() * factor);
       } else if nums.len() == 8 {
         // if clipping out part of the source, map the crop coordinates as if the image is canvas-sized
+        let canvas_min = canvas_size.width.min(canvas_size.height);
         let factor = (pict_size.width / canvas_min, pict_size.height / canvas_min);
         (src, _) = Matrix::scale(factor).map_rect(src);
       }

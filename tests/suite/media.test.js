@@ -476,7 +476,7 @@ describe("Image", () => {
         `<svg xmlns="http://www.w3.org/2000/svg"><rect width="30" height="30" fill="#f00"/></svg>`
       )
       let reused = new Image(sizeless)
-      assert.equal(reused.width, 150) // no width/height/viewBox: 150px square, per Chrome
+      assert.equal(reused.width, 300) // no width/height/viewBox → 300×150, per Chrome/CSS default sizing
       reused.src = PDF_BUFFER
       assert.matchesSubset(reused, PARSED)
 

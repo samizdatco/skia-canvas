@@ -86,11 +86,10 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let mut matrix = Matrix::new_identity();
 
   if src.autosized && !dims.is_empty() {
-    // If this flag is set (for SVG images with no intrinsic size) then we need to scale the image to
-    // the canvas' smallest dimension. This preserves compatibility with how Chromium browsers behave.
-    let min_size = f32::min(canvas_width, canvas_height);
-    let factor = (min_size / dims.width, min_size / dims.height);
-    matrix.set_scale(factor, None);
+    // If this flag is set (for SVG images with no intrinsic size) then scale the tile to fit within
+    // the canvas, matching how Chromium sizes pattern tiles.
+    let factor = f32::min(canvas_width / dims.width, canvas_height / dims.height);
+    matrix.set_scale((factor, factor), None);
   }
 
   let stamp = Stamp::new(content, dims, repeat, matrix);

@@ -810,9 +810,9 @@ describe("Canvas", ()=>{
       // …while loadImage() keeps reporting Chrome's 150px-tall default for the same file
       assert.matchesSubset(await loadImage(svg), {width:240, height:150})
   
-      // with no viewBox to go on, both fall back to that default
+      // with no viewBox to go on, both fall back to that default (Chrome's 300×150 default object size)
       let bare = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
-      assert.deepEqual((c => [c.width, c.height])(await loadCanvas(bare)), [150, 150])
+      assert.deepEqual((c => [c.width, c.height])(await loadCanvas(bare)), [300, 150])
     })
   
     test("parses canvas & context options", async () => {
