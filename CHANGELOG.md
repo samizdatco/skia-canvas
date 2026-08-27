@@ -1,6 +1,173 @@
 # Changelog
 
-<!--## 🥚 ⟩ [Unreleased]-->
+## 🥚 ⟩ [Unreleased]
+
+### New Features
+
+#### Rendering
+- **Canvas** and **Image** objects now support the `using` keyword (or [`.dispose()`][dispose] and [`.release()`][release] methods) to synchronously release memory after use rather than waiting for GC
+- [`getContext()`][getContext] and [`newPage()`][newPage] now accept a `willReadFrequently` hint that [`getImageData()`][mdn_getImageData] will be called repeatedly (so the bitmap can be retained for the lifetime of the context). The current value can be read back through [`getContextAttributes()`][getContextAttributes].
+
+#### GUI
+- [**Window**][window] objects now support [**PointerEvent**][pointerevent] event [types][pointerevent_types] and provide [`requestAnimationFrame()`][raf] and [`cancelAnimationFrame()`][caf] methods for scheduling updates synced to display refresh
+- Rendering now always uses the *current* monitor's pixel density, so dragging a window between screens with different scale factors should stay sharp
+
+#### Wide-gamut Color
+- The canvas's color space can now be selected via `getContext('2d', {colorSpace})` and set to either `"srgb"` (the default) or `"display-p3"`. The setting will be inherited by any subsequent pages but can be overridden by passing a `colorSpace` option to [`newPage()`][newPage].
+- The [`getImageData()`][mdn_getImageData] function also takes a `colorSpace` option, selecting how the raw pixels it returns will be clamped (by default it uses the context's color space setting). Likewise, the [**ImageData**][ImageData] constructor and [`createImageData()`][mdn_createImageData] now also take an optional `colorSpace` arg.
+- Bitmap exports will use the context's color space and embed a matching ICC profile, PDFs will do the same for *images* drawn onto the canvas but not path drawing, and SVGs have no wide-gamut support.
+- Color strings can now use full [CSS Color 4][css_color4] syntax everywhere a color is accepted (`fillStyle`, `strokeStyle`, `shadowColor`, gradient stops, [`matte`][matte], and `drop-shadow()` filters). This includes support for `oklch()`, `oklab()`, `lab()`, `lch()`, and `color(display-p3 …)`, but relative color syntax like `rgb(from …)` is not currently supported.
+- [**CanvasGradient**][CanvasGradient] objects now have [`colorInterpolationMethod`][colorInterpolationMethod], [`hueInterpolationMethod`][hueInterpolationMethod], and [`premultipliedAlpha`][premultipliedAlpha] properties controlling how colors are blended between stops
+- Windows on macOS now use Display P3. Vulkan windows remain sRGB (no tested driver advertised P3 support), though this may change in the future
+
+#### Typography
+- Text in PDF exports is now selectable and searchable (thanks to @Mythie's PR #295 for the proof of concept)
+- The new [`fontSmoothing`][fontSmoothing] property can be set to `false` to render un-antialiased text that is aligned to the pixel grid. By default, fonts use greyscale AA and are sub-pixel positioned
+- The [`fontSynthesis`][fontSynthesis] property allows you to control whether a fake bold and oblique should be generated when a font family lacks a real one. Note that this now defaults to **true**, matching browser behavior but breaking from previous Skia Canvas defaults
+- The [`letterSpacing`][letterSpacing] and [`wordSpacing`][wordSpacing] properties now accept `em` and `rem` units. `em` is relative to the current font size and `rem` uses a 16px root size
+
+#### Imagery
+- SVG images now apply CSS rules contained in `<style>` elements and support most CSS selectors (#276). Custom properties have only basic support: `var()` references resolve against `:root` and inline `style` declarations only and chained definitions (`--foo: var(--bar)`) are not currently handled.
+- **Image** objects can now load **PDF** documents (via [`loadImage()`][loadImage()], [new Image()][image_constructor], or the [`src`][Image.src] setter) and render them as resolution-independent vectors.
+  - Single pages can be loaded via [`loadImage()`][loadImage()] which now accepts a 1-based `page` number option, so you can draw PDFs to other Canvases.
+  - Whole documents can be loaded via [`loadCanvas()`][loadCanvas], which adds each PDF page as a content-sized entry in the Canvas's `pages` attribute allowing you to draw annotations onto them. 
+- [**ImageData**][ImageData] now supports `Float16Array` (on Node 23+) for half-float pixel formats and [`getImageData()`][mdn_getImageData] will return one when a float-based `colorType` is requested (#271).
+
+#### Paths
+- **Path2D** objects can now be measured by arc length: the [`length`][p2d_length] property reports the total length of all contours, and [`positionAt()`][p2d_positionAt], [`tangentAt()`][p2d_tangentAt], and [`normalAt()`][p2d_normalAt] return the location (as `{x, y}`) and tangent/normal angles (in radians) at the requested distance along the path.
+- The new [`contours`][p2d_contours] accessor splits a path into an array of single-contour **Path2D** objects
+- The new [`slice()`][p2d_slice] method returns a **Path2D** that runs between the specified start- and stop-distances along the original path, along with an optional flag to invert the selected region.
+
+### Performance Optimizations
+
+#### Drawing throughput
+- Vector drawing operations are now queued on the JS side in a binary "drawlist" and sent to Rust in batches rather than making one bridged call per verb. In addition, paths are now constructed lazily via Skia's `PathBuilder`, leading to substantially faster rendering on verb-heavy workloads
+- [`measureText()`][measureText()] results are now memoized, so repeatedly measuring the same strings no longer requires a full layout pass on each call.
+
+#### GPU rendering & exports
+- All GPU work (offscreen exports as well as windows) now shares a dedicated render thread instead of giving every worker thread its own GPU context. This removes an unnecessary GPU<->CPU roundtrip and duplicated per-thread resource caches, making exports meaningfully faster and lowering peak memory
+- By default, GPU antialiasing now uses shader-based AA (rather than the previous default of 4× MSAA). It benchmarks faster and produces crisper text and thin strokes, more closely matching CPU-rendered output
+- Text drawn with a shadow is now rasterized once into a `Picture` and blurred as a unit. Previously, each run of multiple lines, fallback fonts, or decorations triggered redundant blur passes.
+- PNG encoding is now faster due to disabling adaptive row filters and can be further tuned by lowering the `quality` argument to scale zlib compression effort
+- [`getImageData()`][mdn_getImageData] now writes directly into the returned buffer instead of allocating an intermediate copy.
+
+#### Memory & resource consumption
+- Native and GPU memory held by live **Canvas** and **Image** references are now reported to V8, so garbage collection has an accurate picture of memory pressure (instead of viewing these objects as effectively 'free'). As a result, memory growth in canvas-creating loops is now bounded (fixes #284), though you'll still get an even smaller footprint with explicit disposal via `using` / `.dispose()` especially within **synchronous** allocation loops
+- Adding a missing autorelease pool in the Metal exporter removed a native-buffer memory leak on macOS, and all platforms now have a background process that reclaims GPU memory on idle
+- GPU resources are now evicted based on actual last-use time rather than on a fixed interval regardless of activity.
+- On Linux/glibc, a background thread now calls `malloc_trim` to return freed heap pages to the OS after an idle period (tunable via the [`SKIA_CANVAS_TRIM`][skia_canvas_trim] environment variable)
+
+#### Frame pacing
+- On-screen animations now run at a stable frame rate locked to the display's refresh by syncing to a hardware vblank (using CVDisplayLink on macOS, DwmFlush on Windows, DRM vblank on X11, and redraw callbacks on Wayland). In addition, non-animated windows (i.e., no `frame` or `draw` listener) will consume near-zero CPU as they are only redrawn in response to UI events.
+- Pointer and mouse input is now coalesced to one sample per display refresh, so windows no longer redraw on every raw input event (most relevant to X11 and Wayland which report mouse events at whatever speed the mouse samples at; potentially hundreds of Hz)
+
+#### Render caching
+- Drawing a canvas or vector **Image** onto a canvas now reuses a cached raster of the source rather than re-rendering on every call (stored at destination scale so it's still as crisp as the vector replay would be). The cached rasters are released when the source object is garbage collected (or `dispose()` is called on it).
+- Repeatedly exporting a canvas (with accumulated/layered drawing in between) now uses a cached snapshot so only the newly added drawing layers need to be rendered each time.
+- The cached rasters share a single 128 MB budget which can be overridden by setting the `SKIA_CANVAS_CACHE` environment variable to a number of MBs.
+
+### Misc. Improvements
+- The postinstall script for downloading precompiled native binaries has been replaced by platform-specific `optionalDependencies` in the `@skia-canvas/*` namespace. Installs now work with `--ignore-scripts` enabled (#275) and behind firewalls that only mirror the npm registry (#287). As a fallback, the binaries can still be downloaded from the GitHub release via an explicit `npm run build` or `npm run download`.
+- Each **Context** now exposes read-only `width` & `height` properties describing its own size (useful for multi-page canvases, where the Canvas's dimensions only correspond to the *final* page).
+- The [`points()`][p2d_points] method now takes a sampling `mode` argument: the default `"even"` fits the step to each contour so both endpoints are present, while the new `"exact"` mode samples at precise multiples of the requested step.
+- [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] now take a `timeout` [request option][request_opts], rejecting the Promise if the request stalls. See also: the [`AbortSignal.timeout()`][mdn_abortTimeout] `signal` option.
+- Upgraded Skia to [milestone 150](https://github.com/rust-skia/rust-skia/releases/tag/0.99.0) (via `skia-safe` 0.99.0)
+- Updated `winit` to 0.30.13 and dropped the `string-split-by` runtime dependency.
+
+### Bugfixes
+
+#### Canvas
+- The **Canvas** constructor no longer ignores the `{gpu:false}` option
+- The **App** singleton now initializes lazily, no longer keeping the node event loop alive and causing spurious "open handle" warnings in test runners (#286)
+- The [`canvas.engine`][canvas_engine] property now reports the thread-count on CPU- as well as GPU-backed canvases
+
+#### Text
+- Variable font instancing now uses Skia's font-argument path, fixing missing or blank glyphs, weights that drifted from glyph to glyph within a single string, and the weight axis being ignored entirely on Linux (#272, #280, #294)
+- `textDecoration` is now drawn behind the text (unless it's `line-through`) and underlines now leave gaps for descenders
+- Text is now positioned with subpixel precision rather than having its baseline snapped to the pixel grid
+- [`measureText()`][measureText()] now reports browser-like `width` and `actualBoundingBox*` values when [`letterSpacing`][letterSpacing] is non-zero: `width` includes a trailing letter-space and `actualBoundingBoxLeft`/`Right` now use the ink bounds
+- Fixed [`textBaseline`][textBaseline] being applied incorrectly when drawing with the default font
+- Improved parsing of CSS-derived properties:
+  - [`filter`][filter] now ignores the entire assignment if any component is invalid (rather than filtering them out and keeping just the valid components)
+  - [`textDecoration`][textDecoration] handles multi-word values (e.g., color functions), newlines, and repeated delimiters
+  - a `normal` keyword in a [`font`][ctx_font] shorthand declaration no longer clobbers a preceding `italic` (#278)
+  - [`fontVariant`][fontVariant] parsing has been corrected
+
+#### GPU
+- Fixed window flickering at the canvas's edges when sizing to [`fit`][window_fit] (#285)
+- A GPU disappearing (after a device reset or an eGPU being unplugged) is now recoverable
+- Vulkan device-selection and CPU-fallback:
+  - verifies candidate GPUs can actually build a working context before selection
+  - uses the device's preferred `api_version`, fixing crashes on some Intel drivers (#274)
+  - falls back to CPU when no usable Vulkan device is available (#289)
+  - shuts down GPU cleanly on exit (preventing a crash on some Intel GPUs)
+
+#### Paths
+- Fixed [`clip()`][mdn_clip] and [`putImageData()`][mdn_putImageData] corrupting saved graphics state through a missing internal `save()`, which could break later `restore()` calls (#273)
+- [`clip()`][mdn_clip], [`fill()`][mdn_fill], and [`isPointInPath()`][isPointInPath()] now treat an `undefined` fill-rule argument as the default (`"nonzero"`) rather than throwing (#282)
+- The **Path2D** boolean operators ([`union()`][bool-ops], [`difference()`][bool-ops], [`intersect()`][bool-ops], [`xor()`][bool-ops], [`complement()`][bool-ops], and [`simplify()`][p2d_simplify]) now return paths that can be drawn with the default `nonzero` winding rule
+- Now that [`simplify()`][p2d_simplify] correctly honors the fill rule passed to it, [`unwind()`][p2d_unwind] has been deprecated (since it's now equivalent to calling `simplify("even-odd")`)
+
+#### Imagery
+- [`drawImage()`][mdn_drawImage], [`getImageData()`][mdn_getImageData], [`putImageData()`][mdn_putImageData] and **DOMRect** now handle rectangles with negative widths or heights as the spec dictates (#283), and their coordinates are now truncated toward zero rather than floored (matching browser behavior).
+- [`drawImage()`][mdn_drawImage] and [`drawCanvas()`][drawcanvas] now clip the source rectangle to the image's actual bounds and skip the draw entirely when the crop doesn't overlap it. Previously a zero-overlap crop with a composite mode like `copy` or `destination-in` could erase the whole canvas.
+- A failed **Image** load without an `error` handler no longer terminates the process.
+- SVG exports no longer double-draw bitmaps added to the canvas via `putImageData`.
+
+#### Compositing
+- Drawing one canvas onto another (via [`drawImage()`][mdn_drawImage] or [`drawCanvas()`][drawcanvas]) now isolates the source's compositing from the destination. Previously, if the drawn canvas used a non-`source-over` blend mode, called `clearRect()`, or blitted an ImageData it would blend against (or erase) the destination canvas's content.
+- The `matte` is now composited *underneath* the finished page rather than painted first, preventing a canvas that uses region-affecting composite operations from erasing it.
+
+#### Geometry
+- [`DOMPoint`][DOMPoint]'s [`matrixTransform()`][matrixTransform()] and [`DOMMatrix`][DOMMatrix]'s [`transformPoint()`][transformPoint()] now accept a plain init dictionary and fill in omitted members according to the spec. Previously, omitting values would lead to unexpected `NaN`s.
+
+### Breaking Changes
+- The minimum supported Node version is now **18**.
+- [`App.eventLoop`][app_eventLoop] modes have been deprecated. The GUI event loop now always runs in harmony with Node's, allowing timeouts and intervals to fire even while animating
+- The [`fontSynthesis`][fontSynthesis] context property now defaults to `true`, matching browser behavior. Requesting a weight or slant that the selected font family doesn't provide now generates a synthetic bold or oblique. Set it to `false` to fall back to the nearest available real face instead
+- GPU antialiasing now defaults to shader-based AA instead of 4x MSAA. Edges (in particular of thin strokes) now look crisper and closer to CPU-rendered output. Pass a sample count (e.g., `msaa:4`) to `toBuffer()`, `getImageData()`, etc. to restore the old default
+- Drawing or sampling an image that failed to load now throws instead of silently doing nothing
+- [`unwind()`][p2d_unwind] has been deprecated in favor of [`simplify('evenodd')`][p2d_simplify], which selects the same region; it will be removed in a future release
+- Boolean-op and [`simplify()`][p2d_simplify] results now render differently when filled with the default `"nonzero"` rule. Results containing holes (e.g., via `xor` or `difference`) previously filled in solid without an explicit `evenodd`
+- SVG **Image**s lacking an explicit `width` and `height` now use the CSS default sizing algorithm (a 300×150 default object size) to establish a default intrinsic size. An SVG with only one concrete dimension plus a `viewBox` ratio now resolves to a fully-determined intrinsic size. This changes both the reported `width`/`height` of such images and how they scale when drawn without explicit size arguments (including when used as fill/stroke-pattern tiles).
+
+[pointerevent]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent
+[pointerevent_types]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent#pointer_event_types
+[raf]: /docs/api/window.md#requestanimationframe
+[caf]: /docs/api/window.md#cancelanimationframe
+[dispose]: /docs/api/canvas.md#dispose
+[release]: /docs/api/canvas.md#release
+[getContext]: /docs/api/canvas.md#getcontext
+[newPage]: /docs/api/canvas.md#newpage
+[getContextAttributes]: /docs/api/context.md#getcontextattributes
+[css_color4]: https://developer.mozilla.org/en-US/docs/Web/CSS/color_value
+[CanvasGradient]: /docs/api/canvas-gradient.md
+[colorInterpolationMethod]: /docs/api/canvas-gradient.md#colorinterpolationmethod
+[hueInterpolationMethod]: /docs/api/canvas-gradient.md#hueinterpolationmethod
+[premultipliedAlpha]: /docs/api/canvas-gradient.md#premultipliedalpha
+[fontSmoothing]: /docs/api/context.md#fontsmoothing
+[fontSynthesis]: /docs/api/context.md#fontsynthesis
+[fontVariant]: /docs/api/context.md#fontvariant
+[textDecoration]: /docs/api/context.md#textdecoration
+[textBaseline]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/textBaseline
+[mdn_fill]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fill
+[canvas_engine]: /docs/api/canvas.md#engine
+[skia_canvas_trim]: /docs/getting-started.md#environment-variables
+[bool-ops]: /docs/api/path2d.md#complement-difference-intersect-union-and-xor
+[p2d_simplify]: /docs/api/path2d.md#simplify
+[p2d_points]: /docs/api/path2d.md#points
+[p2d_length]: /docs/api/path2d.md#length
+[p2d_positionAt]: /docs/api/path2d.md#positionat
+[p2d_tangentAt]: /docs/api/path2d.md#tangentat
+[p2d_normalAt]: /docs/api/path2d.md#normalat
+[p2d_slice]: /docs/api/path2d.md#slice
+[p2d_contours]: /docs/api/path2d.md#contours
+[loadCanvas]: /docs/api/canvas.md#loadcanvas
+[DOMPoint]: https://developer.mozilla.org/en-US/docs/Web/API/DOMPoint
+[matrixTransform()]: https://developer.mozilla.org/en-US/docs/Web/API/DOMPointReadOnly/matrixTransform
+[transformPoint()]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrixReadOnly/transformPoint
+[window_fit]: /docs/api/window.md#fit
+[mdn_abortTimeout]: https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static
 
 ## 📦 ⟩ [v3.0.8] ⟩ Sep 25, 2025
 
@@ -449,7 +616,7 @@
 ## 📦 ⟩ [v0.9.24] ⟩ Aug 18, 2021
 
 ### New Features
-- **Path2D** objects now have a read/write [`d`][p2d_d] property with an [SVG representation](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d#path_commands) of the path’s contours and an [`unwind()`][p2d_undwind] method for converting from even-odd to non-zero winding rules
+- **Path2D** objects now have a read/write [`d`][p2d_d] property with an [SVG representation](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d#path_commands) of the path’s contours and an [`unwind()`][p2d_unwind] method for converting from even-odd to non-zero winding rules
 - The [`createTexture()`][createTexture()] context method returns **CanvasTexture** objects which can be assigned to `fillStyle` or `strokeStyle`
 - Textures draw either a parallel-lines pattern or one derived from the provided **Path2D** object and positioning parameters
 - The marker used when `setLineDash` is active can now be customized by assigning a **Path2D** to the context’s [`lineDashMarker`][lineDashMarker] property (default dashing can be restored by assigning `null`)
