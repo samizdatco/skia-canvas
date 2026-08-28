@@ -45,13 +45,6 @@ interface DOMPointReadOnly {
   toJSON(): any;
 }
 
-declare var DOMPointReadOnly: {
-  prototype: DOMPointReadOnly;
-  new(x?: number, y?: number, z?: number, w?: number): DOMPointReadOnly;
-  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMPointReadOnly/fromPoint_static) */
-  fromPoint(other?: DOMPointInit): DOMPointReadOnly;
-};
-
 
 /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRect) */
 interface DOMRect extends DOMRectReadOnly {
@@ -81,11 +74,6 @@ interface DOMRectList {
   [index: number]: DOMRect;
 }
 
-declare var DOMRectList: {
-  prototype: DOMRectList;
-  new(): DOMRectList;
-};
-
 /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRectReadOnly) */
 interface DOMRectReadOnly {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRectReadOnly/bottom) */
@@ -107,30 +95,53 @@ interface DOMRectReadOnly {
   toJSON(): any;
 }
 
-declare var DOMRectReadOnly: {
-  prototype: DOMRectReadOnly;
-  new(x?: number, y?: number, width?: number, height?: number): DOMRectReadOnly;
-  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRectReadOnly/fromRect_static) */
-  fromRect(other?: DOMRectInit): DOMRectReadOnly;
-};
-
 
 //
 // Images
 //
 
-export function loadImage(src: string | URL, options?: RequestInit): Promise<Image>
-export function loadImage(src: Sharp | Buffer): Promise<Image>
+/** Options passed to Node's `http`/`https` request when fetching images from remote URLs */
+export type ImageRequestOptions = import("https").RequestOptions & {
+  /** Optional request body (sent via `request.write()`) */
+  body?: string | Buffer
+}
+
+/** Options for `loadImage`: http request settings plus source-format extras */
+export type ImageLoadOptions = ImageRequestOptions & {
+  /** For PDF sources: the 1-based page number to load (defaults to the first page). Ignored for other formats. */
+  page?: number
+}
+
+export function loadImage(src: string | URL, options?: ImageLoadOptions): Promise<Image>
+export function loadImage(src: Sharp | Buffer, options?: ImageLoadOptions): Promise<Image>
 
 export function loadImageData(src: string | Buffer | URL, width: number, height?:number): Promise<ImageData>
-export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
+export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & ImageRequestOptions): Promise<ImageData>
 export function loadImageData(src: Sharp): Promise<ImageData>
 
-export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
+/** Options for `loadCanvas`: http request settings plus the canvas & context settings that can
+ *  only be chosen at creation time */
+export type CanvasLoadOptions = ImageRequestOptions & CanvasRenderingContext2DSettings & {
+  /** Amount of contrast to add when rasterizing text (0–1, defaults to 0) */
+  textContrast?: number
+  /** Exponent for text anti-aliasing's gamma correction (0–4, defaults to 1.4) */
+  textGamma?: number
+  /** Whether to render using the GPU (defaults to true) */
+  gpu?: boolean
+}
+
+/** Load an image or document into a new Canvas, sized to match its contents.
+ *
+ * A multi-page PDF becomes one canvas page per document page, each at that page's own size.
+ * Every other format becomes a single page with the image already drawn into it. To draw from
+ * a source rather than onto it — or to pull a single page out of a PDF — use `loadImage` instead. */
+export function loadCanvas(src: string | URL | Sharp | Buffer, options?: CanvasLoadOptions): Promise<Canvas>
+
+export type ColorSpace = "srgb" | "display-p3"
 export type ColorType = "Alpha8" | "Gray8" | "R8UNorm" | // 1 byte/px
   "A16Float" | "A16UNorm" | "ARGB4444" | "R8G8UNorm" | "RGB565" | // 2 bytes/px
   "rgb"|"RGB888x" | "rgba"|"RGBA8888" | "bgra"|"BGRA8888" | "BGR101010x" | "BGRA1010102" | // 4 bytes/px
-  "R16G16Float" | "R16G16UNorm" | "RGB101010x" | "RGBA1010102" | "RGBA8888" |  "SRGBA8888" | // 4 bytes/px
+  "R16G16Float" | "R16G16UNorm" | "RGB101010x" | "RGBA1010102" | "SRGBA8888" | // 4 bytes/px
   "R16G16B16A16UNorm" | "RGBAF16" | "RGBAF16Norm" | // 8 bytes/px
   "RGBAF32" // 16 bytes/px
 
@@ -141,7 +152,7 @@ interface ImageDataSettings {
 
 interface ImageDataExportSettings {
   /** Background color to draw beneath transparent parts of the canvas */
-  matte?: string
+  matte?: CSSColor
 
   /** Number of pixels per grid ‘point’ (defaults to 1) */
   density?: number
@@ -149,7 +160,7 @@ interface ImageDataExportSettings {
   /** Number of samples used for antialising each pixel */
   msaa?: number | boolean
 
-  /** Color space (must be "srgb") */
+  /** Color space to convert pixels into (defaults to "srgb") */
   colorSpace?: ColorSpace
 
   /** Color type to use when exporting in "raw" format */
@@ -157,16 +168,19 @@ interface ImageDataExportSettings {
 }
 
 
+export type ImageDataArray = Uint8ClampedArray | Float16Array
+
 export class ImageData {
   prototype: ImageData
   constructor(sw: number, sh: number, settings?: ImageDataSettings)
-  constructor(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
+  constructor(data: ImageDataArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
   constructor(image: Image, settings?: ImageDataSettings)
   constructor(imageData: ImageData)
 
   readonly colorSpace: ColorSpace
   readonly colorType: ColorType
-  readonly data: Uint8ClampedArray
+  readonly bytesPerPixel: number
+  readonly data: ImageDataArray
   readonly height: number
   readonly width: number
   toSharp(): Sharp
@@ -180,8 +194,15 @@ export class Image extends EventEmitter{
   get height(): number
   onload: ((this: Image, image: Image) => any) | null;
   onerror: ((this: Image, error: Error) => any) | null;
-  complete: boolean
+  readonly complete: boolean
   decode(): Promise<Image>
+
+  /** Release native state synchronously rather than waiting for the GC's deferred finalizers. Abandons an in-flight load, rejecting any pending `decode()`. The image may no longer be used after disposal. Can also be triggered via `using`. */
+  dispose(): void
+  [Symbol.dispose](): void
+  /** Dispose of the image then yield until the next event loop tick so other deferred finalizers can run. Can also be triggered via `await using`. */
+  release(): Promise<void>
+  [Symbol.asyncDispose](): Promise<void>
 }
 
 //
@@ -224,6 +245,9 @@ interface DOMMatrix {
   m31: number, m32: number, m33: number, m34: number,
   m41: number, m42: number, m43: number, m44: number,
 
+  readonly is2D: boolean
+  readonly isIdentity: boolean
+
   flipX(): DOMMatrix
   flipY(): DOMMatrix
   inverse(): DOMMatrix
@@ -255,7 +279,7 @@ interface DOMMatrix {
   translate(tx?: number, ty?: number, tz?: number): DOMMatrix
   translateSelf(tx?: number, ty?: number, tz?: number): DOMMatrix
 
-  setMatrixValue(transformList: string): DOMMatrix
+  setMatrixValue(transformList: TransformString): DOMMatrix
   transformPoint(point?: DOMPointInit): DOMPoint
 
   toFloat32Array(): Float32Array
@@ -265,8 +289,16 @@ interface DOMMatrix {
   clone(): DOMMatrix
 }
 
+type TransformFunction =
+  | "matrix()" | "matrix3d()"
+  | "translate()" | "translateX()" | "translateY()" | "translateZ()" | "translate3d()"
+  | "scale()" | "scaleX()" | "scaleY()" | "scaleZ()" | "scale3d()"
+  | "rotate()" | "rotateX()" | "rotateY()" | "rotateZ()" | "rotate3d()"
+  | "skew()" | "skewX()" | "skewY()"
+type TransformString = TransformFunction | "none" | (string & {})
+
 type FixedLenArray<T, L extends number> = T[] & { length: L };
-type Matrix = string | DOMMatrix | { a: number, b: number, c: number, d: number, e: number, f: number } | FixedLenArray<number, 6> | FixedLenArray<number, 16>
+type Matrix = TransformString | DOMMatrix | { a: number, b: number, c: number, d: number, e: number, f: number } | FixedLenArray<number, 6> | FixedLenArray<number, 16>
 
 declare var DOMMatrix: {
   prototype: DOMMatrix
@@ -280,7 +312,9 @@ declare var DOMMatrix: {
 // Canvas
 //
 
-export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "raw" | "pdf" | "svg";
+export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "raw" | "pdf" | "svg" |
+                           "image/png" | "image/jpeg" | "image/webp" | "application/pdf" | "image/svg+xml" |
+                           "application/octet-stream";
 export type FontOptions = "outline" | "device-independent"
 
 export interface RenderOptions {
@@ -288,7 +322,7 @@ export interface RenderOptions {
   page?: number
 
   /** Background color to draw beneath transparent parts of the canvas */
-  matte?: string
+  matte?: CSSColor
 
   /** Number of pixels per grid ‘point’ (defaults to 1) */
   density?: number
@@ -317,12 +351,22 @@ export interface SaveOptions extends ExportOptions {
 }
 
 export interface EngineDetails {
+  /** Whether the active renderer is CPU- or GPU-backed */
   renderer: "CPU" | "GPU"
-  api: "Vulkan" | "Metal"
+  /** Backend API in use (null when compiled without GPU support) */
+  api: "Vulkan" | "Metal" | null
+  /** Details about the graphics hardware that was initialized */
   device: string
+  /** The device driver useed by the active graphics adapter */
   driver?: string
+  /** Size of the thread pool used for async rendering (set via the SKIA_CANVAS_THREADS env var; defaults to CPU core count) */
   threads: number
-  error?: string
+  /** Error thrown when attempting to initialize the GPU */
+  error?: string | null
+  /** Amount of additional contrast added when rendering text (see TextOptions) */
+  textContrast: number
+  /** Gamma value used for blending the edges of letterforms (see TextOptions) */
+  textGamma: number
 }
 
 export interface TextOptions{
@@ -333,9 +377,20 @@ export interface TextOptions{
   textGamma?: number
 }
 
+export interface CanvasBackend{
+  /** Whether to prefer a GPU-backed renderer (defaults to true) */
+  gpu?: boolean
+}
+
+export interface CanvasRenderingContext2DSettings {
+  /** Color space used when rasterizing the canvas for exports & getImageData (defaults to "srgb") */
+  colorSpace?: ColorSpace
+  /** Hint that the canvas will be read back frequently via getImageData (defaults to false) */
+  willReadFrequently?: boolean
+}
+
 /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas) */
 export class Canvas {
-  static contexts: WeakMap<Canvas, readonly CanvasRenderingContext2D[]>
   /**
    * Gets or sets the height of a canvas element on a document.
    *
@@ -350,46 +405,63 @@ export class Canvas {
   width: number;
 
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#creating-new-canvas-objects) */
-  constructor(width?: number, height?: number, options?: TextOptions)
+  constructor(width?: number, height?: number, options?: TextOptions & CanvasBackend)
 
   /**
    * Returns an object that provides methods and properties for drawing and manipulating images and graphics on a canvas element in a document. A context object includes information about colors, line widths, fonts, and other graphic parameters that can be drawn on a canvas.
    * @param type The type of canvas to create. Skia Canvas only supports a 2-D context using canvas.getContext("2d")
+   * @param settings Context attributes (only honored by the first getContext call for a given canvas — use newPage() to set them on subsequent pages)
    *
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/getContext)
    */
-  getContext(type?: "2d"): CanvasRenderingContext2D
-  newPage(width?: number, height?: number): CanvasRenderingContext2D
+  getContext(type: "2d", settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
+  getContext(type?: string, settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D | null
+
+  /**
+   * Adds a new page to the canvas, optionally resizing it and/or overriding the context
+   * attributes inherited from the canvas's first page.
+   *
+   * [Skia Canvas Docs](https://skia-canvas.org/api/canvas#newpage)
+   */
+  newPage(settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
+  newPage(width?: number, height?: number, settings?: CanvasRenderingContext2DSettings): CanvasRenderingContext2D
   readonly pages: CanvasRenderingContext2D[]
 
   get gpu(): boolean
   set gpu(enabled: boolean)
   readonly engine: EngineDetails
 
+  /** Release native state synchronously rather than waiting for the GC's deferred finalizers. The canvas may no longer be used after disposal. Can also be triggered via `using`. */
+  dispose(): void
+  [Symbol.dispose](): void
+  /** Dispose of the canvas then yield until the next event loop tick so other deferred finalizers can run. Can also be triggered via `await using`. */
+  release(): Promise<void>
+  [Symbol.asyncDispose](): Promise<void>
+
   /** @deprecated Use {@link Canvas.toFile()} instead */
-  saveAs(filename: string, options?: SaveOptions): Promise<void>
+  saveAs(filename: string | URL, options?: SaveOptions): Promise<void>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tofile): toFile() */
-  toFile(filename: string, options?: SaveOptions): Promise<void>
+  toFile(filename: string | URL, options?: SaveOptions): Promise<void>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
-  toBuffer(format: ExportFormat, options?: ExportOptions): Promise<Buffer>
+  toBuffer(format?: ExportFormat, options?: ExportOptions): Promise<Buffer>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tourl) */
-  toURL(format: ExportFormat, options?: ExportOptions): Promise<string>
+  toURL(format?: ExportFormat, options?: ExportOptions): Promise<string>
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
   toSharp(options?: RenderOptions): Sharp
 
   /** @deprecated Use {@link Canvas.toFileSync()} instead */
-  saveAsSync(filename: string, options?: SaveOptions): void
+  saveAsSync(filename: string | URL, options?: SaveOptions): void
+  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tofile): toFile() */
+  toFileSync(filename: string | URL, options?: SaveOptions): void
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
-  toBufferSync(format: ExportFormat, options?: ExportOptions): Buffer
+  toBufferSync(format?: ExportFormat, options?: ExportOptions): Buffer
   /** @deprecated {@link Canvas.toDataURL()} is now synchronous; use it instead */
-  toDataURLSync(format: ExportFormat, options?: ExportOptions): string
+  toDataURLSync(format?: ExportFormat, options?: ExportOptions): string
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tourl) */
-  toURLSync(format: ExportFormat, options?: ExportOptions): string
-  /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
-  toSharpSync(options?: RenderOptions): Sharp
+  toURLSync(format?: ExportFormat, options?: ExportOptions): string
 
   /** [MDN Reference](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL) */
-  toDataURL(format: ExportFormat, quality?: number): string
+  toDataURL(format?: ExportFormat, quality?: number): string
 
   get raw(): Promise<Buffer>
   get pdf(): Promise<Buffer>
@@ -413,11 +485,31 @@ export class CanvasPattern{
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
 }
 
+/** How a {@link CanvasPattern} tiles its image.  */
+export type PatternRepeat = "repeat" | "repeat-x" | "repeat-y" | "no-repeat"
+
+// Non-polar interpolation spaces (interpolated by rectangular/cartesian coordinates)
+export type RectangularColorSpace = "srgb" | "srgb-linear" | "display-p3" | "a98-rgb" | "prophoto-rgb" | "rec2020" | "lab" | "oklab"
+// Cylindrical spaces with a hue angle (the only ones `hueInterpolationMethod` affects)
+export type PolarColorSpace = "hsl" | "hwb" | "lch" | "oklch"
+export type ColorInterpolationMethod = RectangularColorSpace | PolarColorSpace
+export type HueInterpolationMethod = "shorter" | "longer" | "increasing" | "decreasing"
+
+//
+// Colors
+//
+
+type ColorFunction =
+  | "rgb()" | "rgba()" | "hsl()" | "hsla()" | "hwb()"
+  | "lab()" | "lch()" | "oklab()" | "oklch()" | "color()"
+export type CSSColor = ColorFunction | "#" | (string & {})
+
 /**
  * An opaque object describing a gradient. It is returned by the methods CanvasRenderingContext2D.createLinearGradient() or CanvasRenderingContext2D.createRadialGradient().
  *
  * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient)
  */
+
 interface CanvasGradient {
   /**
    * Adds a color stop with the given color to the gradient at the given offset. 0.0 is the offset at one end of the gradient, 1.0 is the offset at the other end.
@@ -426,7 +518,13 @@ interface CanvasGradient {
    *
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient/addColorStop)
    */
-  addColorStop(offset: number, color: string): void;
+  addColorStop(offset: number, color: CSSColor): void;
+  /** Color space in which the gradient's colors are interpolated (default `"srgb"`). */
+  colorInterpolationMethod: ColorInterpolationMethod;
+  /** Hue-interpolation direction for polar spaces — hsl/hwb/lch/oklch (default `"shorter"`). */
+  hueInterpolationMethod: HueInterpolationMethod;
+  /** Whether colors are interpolated with premultiplied alpha (default `false`). */
+  premultipliedAlpha: boolean;
 }
 
 declare var CanvasGradient: {
@@ -443,7 +541,7 @@ export class CanvasTexture {}
 //
 
 type CanvasDrawable = Canvas | Image | ImageData;
-type CanvasPatternSource = Canvas | Image;
+type CanvasPatternSource = Canvas | Image | ImageData;
 type CanvasDirection = "inherit" | "ltr" | "rtl";
 type CanvasFillRule = "evenodd" | "nonzero";
 type CanvasFontStretch = "condensed" | "expanded" | "extra-condensed" | "extra-expanded" | "normal" | "semi-condensed" | "semi-expanded" | "ultra-condensed" | "ultra-expanded";
@@ -458,16 +556,31 @@ type CanvasLineJoin = "bevel" | "miter" | "round";
 type Offset = [x: number, y: number] | number
 type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:number, x4:number, y4:number] |
                   [left:number, top:number, right:number, bottom:number] | [width:number, height:number]
-type GlobalCompositeOperation = "color" | "color-burn" | "color-dodge" | "copy" | "darken" | "destination-atop" | "destination-in" | "destination-out" | "destination-over" | "difference" | "exclusion" | "hard-light" | "hue" | "lighten" | "lighter" | "luminosity" | "multiply" | "overlay" | "saturation" | "screen" | "soft-light" | "source-atop" | "source-in" | "source-out" | "source-over" | "xor";
+type GlobalCompositeOperation = "clear" | "color" | "color-burn" | "color-dodge" | "copy" | "darken" | "destination" | "destination-atop" | "destination-in" | "destination-out" | "destination-over" | "difference" | "exclusion" | "hard-light" | "hue" | "lighten" | "lighter" | "luminosity" | "multiply" | "overlay" | "saturation" | "screen" | "soft-light" | "source-atop" | "source-in" | "source-out" | "source-over" | "xor";
 type ImageSmoothingQuality = "high" | "low" | "medium";
 
-type FontVariantSetting = "normal" |
+type FontVariantKeyword = "normal" |
 /* alternates */ "historical-forms" |
 /* caps */ "small-caps" | "all-small-caps" | "petite-caps" | "all-petite-caps" | "unicase" | "titling-caps" |
 /* numeric */ "lining-nums" | "oldstyle-nums" | "proportional-nums" | "tabular-nums" | "diagonal-fractions" | "stacked-fractions" | "ordinal" | "slashed-zero" |
 /* ligatures */ "common-ligatures" | "no-common-ligatures" | "discretionary-ligatures" | "no-discretionary-ligatures" | "historical-ligatures" | "no-historical-ligatures" | "contextual" | "no-contextual" |
 /* east-asian */ "jis78" | "jis83" | "jis90" | "jis04" | "simplified" | "traditional" | "full-width" | "proportional-width" | "ruby" |
 /* position */ "super" | "sub";
+
+type FontVariantAlternate =
+  | `stylistic(${number})` | `styleset(${number})` | `swash(${number})`
+  | `character-variant(${number})` | `ornaments(${number})` | `annotation(${number})`;
+type FontVariantSetting = FontVariantKeyword | FontVariantAlternate | (string & {});
+
+// A `text-decoration` shorthand value: a line keyword optionally combined with a style keyword,
+// a thickness (a LengthString), and a color — e.g. "underline", "line-through wavy", or
+// "underline 2px dodgerblue". The finite keywords below surface in completions; the (string & {})
+// escape hatch lets full combos and computed strings through (validated by the runtime, not TS).
+type TextDecorationKeyword =
+  /* line */ "none" | "underline" | "overline" | "line-through" |
+  /* style */ "solid" | "double" | "dotted" | "dashed" | "wavy" |
+  /* thickness source */ "auto" | "from-font";
+type TextDecorationSetting = TextDecorationKeyword | (string & {});
 
 
 export interface CreateTextureOptions {
@@ -481,7 +594,7 @@ export interface CreateTextureOptions {
   cap?: CanvasLineCap
 
   /** The color to use for stroking/filling the path */
-  color?: string
+  color?: CSSColor
 
   /** The orientation of the pattern grid in radians */
   angle?: number
@@ -504,9 +617,9 @@ interface CanvasDrawImage {
   drawImage(image: CanvasDrawable, dx: number, dy: number): void;
   drawImage(image: CanvasDrawable, dx: number, dy: number, dw: number, dh: number): void;
   drawImage(image: CanvasDrawable, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
-  drawCanvas(image: Canvas, dx: number, dy: number): void;
-  drawCanvas(image: Canvas, dx: number, dy: number, dw: number, dh: number): void;
-  drawCanvas(image: Canvas, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+  drawCanvas(image: CanvasDrawable, dx: number, dy: number): void;
+  drawCanvas(image: CanvasDrawable, dx: number, dy: number, dw: number, dh: number): void;
+  drawCanvas(image: CanvasDrawable, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
 }
 
 interface CanvasDrawPath {
@@ -531,15 +644,15 @@ interface CanvasDrawPath {
 
 interface CanvasFillStrokeStyles {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fillStyle) */
-  fillStyle: string | CanvasGradient | CanvasPattern | CanvasTexture;
+  fillStyle: CSSColor | CanvasGradient | CanvasPattern | CanvasTexture;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/strokeStyle) */
-  strokeStyle: string | CanvasGradient | CanvasPattern | CanvasTexture;
+  strokeStyle: CSSColor | CanvasGradient | CanvasPattern | CanvasTexture;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createConicGradient) */
   createConicGradient(startAngle: number, x: number, y: number): CanvasGradient;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createLinearGradient) */
   createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradient;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createPattern) */
-  createPattern(image: CanvasPatternSource, repetition: string | null): CanvasPattern | null;
+  createPattern(image: CanvasPatternSource, repetition: PatternRepeat | "" | null): CanvasPattern | null;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createRadialGradient) */
   createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
 
@@ -547,9 +660,18 @@ interface CanvasFillStrokeStyles {
   createTexture(spacing: Offset, options?: CreateTextureOptions): CanvasTexture
 }
 
+type FilterFunction =
+  | "blur()" | "brightness()" | "contrast()" | "drop-shadow()" | "grayscale()"
+  | "hue-rotate()" | "invert()" | "opacity()" | "saturate()" | "sepia()"
+
 interface CanvasFilters {
-  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/filter) */
-  filter: string;
+  /**
+   * A CSS `filter` string — one or more of the {@link FilterFunction} primitives (`blur()`,
+   * `drop-shadow()`, `hue-rotate()`, …) or `"none"`.
+   *
+   * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/filter)
+   */
+  filter: FilterFunction | "none" | (string & {});
 }
 
 interface CanvasImageData {
@@ -627,7 +749,7 @@ interface CanvasShadowStyles {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/shadowBlur) */
   shadowBlur: number;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/shadowColor) */
-  shadowColor: string;
+  shadowColor: CSSColor;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/shadowOffsetX) */
   shadowOffsetX: number;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/shadowOffsetY) */
@@ -659,17 +781,31 @@ interface CanvasText {
 interface CanvasTextDrawingStyles {
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/direction) */
     direction: CanvasDirection;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/font) */
+    /**
+     * A CSS `font` shorthand string, e.g. `"italic bold 24px/1.5 Palatino, serif"`.
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/font)
+     */
     font: string;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontStretch) */
     fontStretch: CanvasFontStretch;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/letterSpacing) */
+    /**
+     * A CSS length, e.g. `"2px"` or `"0.1em"`. Accepts `px`, `pt`, `pc`, `in`, `cm`, `mm`, `q`,
+     * `em`, and `rem` (`em`/`rem` resolve against the current font size); other units are ignored.
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/letterSpacing)
+     */
     letterSpacing: string;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textAlign) */
     textAlign: CanvasTextAlign;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textBaseline) */
     textBaseline: CanvasTextBaseline;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/wordSpacing) */
+    /**
+     * A CSS length, e.g. `"4px"` or `"0.25em"`. Accepts `px`, `pt`, `pc`, `in`, `cm`, `mm`, `q`,
+     * `em`, and `rem` (`em`/`rem` resolve against the current font size); other units are ignored.
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/wordSpacing)
+     */
     wordSpacing: string;
 
     // UNIMPLEMENTED
@@ -714,10 +850,18 @@ interface CanvasTransform {
 export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/canvas) */
   readonly canvas: Canvas
+  /** This page's width. Pages keep the size they were created at, so this only matches
+   *  `canvas.width` for the most recently added page. */
+  readonly width: number
+  /** This page's height. Pages keep the size they were created at, so this only matches
+   *  `canvas.height` for the most recently added page. */
+  readonly height: number
   fontVariant: FontVariantSetting
   fontHinting: boolean
+  fontSmoothing: boolean
+  fontSynthesis: boolean
   textWrap: boolean
-  textDecoration: string
+  textDecoration: TextDecorationSetting
   lineDashMarker: Path2D | null
   lineDashFit: "move" | "turn" | "follow"
 
@@ -726,12 +870,17 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   set currentTransform(matrix: Matrix)
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
-  // getContextAttributes(): CanvasRenderingContext2DSettings;
+  getContextAttributes(): {alpha: boolean, colorSpace: ColorSpace, desynchronized: boolean, willReadFrequently: boolean}
 
   // add optional maxWidth to work in conjunction with textWrap
   measureText(text: string, maxWidth?: number): TextMetrics
-  outlineText(text: string, maxWidth?: number): Path2D
+  outlineText(text: string, maxWidth?: number): Path2D | null
 }
+
+declare var CanvasRenderingContext2D: {
+  prototype: CanvasRenderingContext2D;
+  new(): CanvasRenderingContext2D;
+};
 
 //
 // Bézier Paths
@@ -755,7 +904,9 @@ export type Path2DEdge = [verb: string, ...args: number[]]
  */
 interface Path2D extends CanvasPath {
   readonly bounds: Path2DBounds
+  readonly contours: readonly Path2D[]
   readonly edges: readonly Path2DEdge[]
+  readonly length: number
   d: string
 
   /**
@@ -783,9 +934,13 @@ interface Path2D extends CanvasPath {
 
   jitter(segmentLength: number, amount: number, seed?: number): Path2D
   offset(dx: number, dy: number): Path2D
-  points(step?: number): readonly [x: number, y: number][]
+  points(step?: number, mode?: "even" | "exact"): readonly [x: number, y: number][]
+  positionAt(distance: number): {x: number, y: number} | null
+  tangentAt(distance: number): number | null
+  normalAt(distance: number): number | null
   round(radius: number): Path2D
   simplify(rule?: "nonzero" | "evenodd"): Path2D
+  slice(from?: number, to?: number, inverted?: boolean): Path2D
   transform(transform: Matrix): Path2D;
   transform(a: number, b: number, c: number, d: number, e: number, f: number): Path2D;
   trim(start: number, end: number, inverted?: boolean): Path2D;
@@ -937,7 +1092,7 @@ import { EventEmitter } from "stream";
 export type EventLoopMode = "node" | "native"
 export type TextInputType = "insertText" | "deleteContentBackward" | "deleteContentForward" | "insertLineBreak" | "insertCompositionText"
 export type FitStyle = "none" | "contain-x" | "contain-y" | "contain" | "cover" | "fill" | "scale-down" | "resize"
-export type CursorStyle = "default" | "crosshair" | "hand" | "arrow" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
+export type CursorStyle = "default" | "crosshair" | "pointer" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
                           "cell" | "vertical-text" | "alias" | "copy" | "no-drop" | "grab" | "grabbing" | "all-scroll" | "zoom-in" | "zoom-out" |
                           "e-resize" | "n-resize" | "ne-resize" | "nw-resize" | "s-resize" | "se-resize" | "sw-resize" | "w-resize" | "ew-resize" |
                           "ns-resize" | "nesw-resize" | "nwse-resize" | "col-resize" | "row-resize" | "none"
@@ -950,7 +1105,7 @@ export type WindowOptions = {
   height?: number
   fit?: FitStyle
   page?: number
-  background?: string
+  background?: CSSColor
   fullscreen?: boolean
   borderless?: boolean
   resizable?: boolean
@@ -981,18 +1136,65 @@ type KeyboardEventProps = {
   altKey: boolean
   metaKey: boolean
   shiftKey: boolean
+  /** Suppress the default keybindings (window-close, fullscreen-toggle, etc.) */
+  preventDefault(): void
+}
+
+type PointerEventProps = {
+  pointerId: number
+  pointerType: "mouse" | "touch"
+  isPrimary: boolean
+  pressure: number
+  tangentialPressure: number
+  width: number
+  height: number
+  tiltX: number
+  tiltY: number
+  twist: number
+  button: number
+  buttons: number
+  x: number
+  y: number
+  pageX: number
+  pageY: number
+  ctrlKey: boolean
+  altKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+}
+
+type CoalescedPointerEventProps = PointerEventProps & {
+  getCoalescedEvents(): PointerEventProps[]
+}
+
+type CompositionEventProps = {
+  data: string
+  locale: string | undefined
 }
 
 type WindowEvents = {
   mousedown: MouseEventProps
   mouseup: MouseEventProps
   mousemove: MouseEventProps
+  mouseenter: MouseEventProps
+  mouseleave: MouseEventProps
+  pointerdown: CoalescedPointerEventProps
+  pointerup: CoalescedPointerEventProps
+  pointermove: CoalescedPointerEventProps
+  pointerover: PointerEventProps
+  pointerenter: PointerEventProps
+  pointerout: PointerEventProps
+  pointerleave: PointerEventProps
+  pointercancel: PointerEventProps
   keydown: KeyboardEventProps
   keyup: KeyboardEventProps
   input: {
     data: string
     inputType: TextInputType
   };
+  compositionstart: CompositionEventProps
+  compositionupdate: CompositionEventProps
+  compositionend: CompositionEventProps
   wheel: { deltaX: number; deltaY: number }
   fullscreen: { enabled: boolean }
   move: { left: number; top: number }
@@ -1016,6 +1218,7 @@ export class Window extends EventEmitter<{
   constructor(width: number, height: number, options?: WindowOptions)
   constructor(options?: WindowOptions)
 
+  readonly id: number
   readonly ctx: CanvasRenderingContext2D
   canvas: Canvas
   visible: boolean
@@ -1030,11 +1233,14 @@ export class Window extends EventEmitter<{
   width: number
   height: number
   page: number
-  background: string
+  background: CSSColor
   readonly closed: boolean
 
   open(): void
   close(): void
+
+  requestAnimationFrame(callback: (frame: number) => void): number
+  cancelAnimationFrame(id: number): void
 }
 
 export interface App extends EventEmitter<{
@@ -1042,7 +1248,10 @@ export interface App extends EventEmitter<{
 }>{
   readonly windows: Window[]
   readonly running: boolean
-  eventLoop: EventLoopMode
+  /** @deprecated Event loop modes have been removed: the node event loop is now always available */
+  get eventLoop(): undefined
+  /** @deprecated Event loop modes have been removed: the node event loop is now always available */
+  set eventLoop(mode: EventLoopMode)
   fps: number
 
   launch(): Promise<undefined>

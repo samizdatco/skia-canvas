@@ -1,15 +1,16 @@
-use std::{str::FromStr, sync::Arc, time::{Instant, Duration}};
-use skia_safe::{Matrix, Color, SurfaceProps, SurfacePropsFlags, PixelGeometry};
+use std::{str::FromStr, sync::Arc};
+use skia_safe::{Matrix, Color4f, SurfaceProps, SurfacePropsFlags, PixelGeometry};
 use serde::{Serialize, Deserialize};
 use winit::{
     dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize},
+    monitor::MonitorHandle,
     window::{CursorIcon, Fullscreen, Window as WinitWindow, WindowId},
     event_loop::ActiveEventLoop,
 };
 
-use crate::utils::css_to_color;
-use crate::gpu::Renderer;
-use crate::context::page::Page;
+use crate::bridge::css_to_color4f;
+use crate::gfx::Renderer;
+use crate::gfx::page::Page;
 use super::event::Sieve;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -39,53 +40,41 @@ pub enum Fit{
   None, ContainX, ContainY, Contain, Cover, Fill, ScaleDown, Resize
 }
 
-#[non_exhaustive]
-#[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case", remote = "CursorIcon" )]
-pub enum Cursor {
-    Alias, AllScroll, Cell, ColResize, ContextMenu, Copy, Crosshair, Default, EResize,
-    EwResize, Grab, Grabbing, Help, Move, NeResize, NeswResize, NoDrop, NotAllowed,
-    NResize, NsResize, NwResize, NwseResize, Pointer, Progress, RowResize, SeResize,
-    SResize, SwResize, Text, VerticalText, Wait, WResize, ZoomIn, ZoomOut,
-}
-
-// timeout for triggering a full vector re-render after the last resize event
-static RESIZE_CLEANUP_INTERVAL:Duration = Duration::from_millis(100);
-
 pub struct Window {
     pub handle: Arc<WinitWindow>,
     pub spec: WindowSpec,
     pub sieve: Sieve,
+    pub monitor: Option<MonitorHandle>, // the display the window was on as of the last update_monitor
     renderer: Renderer,
-    background: Color,
+    background: Color4f,
     page: Page,
     suspended: bool,
-    resized_at: Option<Instant>,
+    present_pending: bool, // request_redraw() was called by this window but RedrawRequest has not yet arrived
 }
 
 impl Window {
     pub fn new(event_loop:&ActiveEventLoop, mut spec:WindowSpec, page:&Page) -> Self {
         let size:LogicalSize<i32> = LogicalSize::new(spec.width as i32, spec.height as i32);
-        let background = match css_to_color(&spec.background){
+        let background = match css_to_color4f(&spec.background){
             Some(color) => color,
             None => {
                 spec.background = "rgba(16,16,16,0.85)".to_string();
-                css_to_color(&spec.background).unwrap()
+                css_to_color4f(&spec.background).unwrap()
             }
         };
 
         let window_attributes = WinitWindow::default_attributes()
             .with_fullscreen(if spec.fullscreen{ Some(Fullscreen::Borderless(None)) }else{ None })
             .with_inner_size(size)
-            .with_transparent(background.a() < 255)
+            .with_transparent(background.a < 1.0)
             .with_title(spec.title.clone())
             .with_visible(false)
             .with_resizable(spec.resizable)
             .with_decorations(!spec.borderless);
 
         let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let renderer = Renderer::for_window(&event_loop, handle.clone());
-        let sieve = Sieve::new(handle.scale_factor());
+        let renderer = Renderer::for_window(&event_loop, handle.clone(), background.a < 1.0);
+        let sieve = Sieve::new();
 
         let cursor_icon = CursorIcon::from_str(&spec.cursor).ok();
         handle.set_cursor(cursor_icon.unwrap_or_default());
@@ -95,15 +84,24 @@ impl Window {
             handle.set_outer_position(LogicalPosition::new(left, top));
         }
 
-        Self{ spec, handle, sieve, renderer, page:page.clone(), suspended:false, resized_at:None, background}
+        let monitor = handle.current_monitor();
+        Self{ spec, handle, sieve, monitor, renderer, page:page.clone(), suspended:false, background, present_pending:false }
     }
 
     pub fn id(&self) -> WindowId {
         self.handle.id()
     }
 
+    // re-query which display the window is on; called from the event arms that can signal a
+    // monitor change (Moved, Resized, ScaleFactorChanged). a None result (transiently possible
+    // mid-move) leaves the previous value in place rather than clearing it
+    pub fn update_monitor(&mut self){
+        if let Some(monitor) = self.handle.current_monitor(){
+            self.monitor = Some(monitor);
+        }
+    }
+
     pub fn resize(&mut self, size: PhysicalSize<u32>){
-        self.resized_at = Some(Instant::now());
         self.renderer.resize(size);
         self.reposition_ime(size);
         self.update_fit();
@@ -188,18 +186,28 @@ impl Window {
         )
     }
 
+    pub fn set_page(&mut self, page:Page){
+        if self.page != page{
+            self.handle.request_redraw(); // queue up the event that will trigger redraw() below
+            self.present_pending = true; // gate the next roundtrip until this frame presents
+        }
+        self.page = page;
+    }
+
+    pub fn is_present_pending(&self) -> bool{
+        // true after request_redraw() and before winit delivers the RequestRedraw that triggers redraw().
+        // if *any* window is still pending, the event loop will defer the next roundtrip
+        self.present_pending
+    }
+
     pub fn redraw(&mut self){
+        // called in response to RedrawRequest being delivered, so pending is complete (even for occluded windows)
+        self.present_pending = false;
         if !self.suspended{
             self.renderer.draw(self.page.clone(), self.fitting_matrix(), self.suface_props(), self.background);
         }
     }
 
-    pub fn set_page(&mut self, page:Page){
-        if self.page != page{
-            self.handle.request_redraw();
-        }
-        self.page = page;
-    }
 
     pub fn set_visible(&mut self, flag:bool){
         self.handle.set_visible(flag);
@@ -227,7 +235,7 @@ impl Window {
         self.spec.fit = mode;
     }
 
-    pub fn set_background(&mut self, color:Color){
+    pub fn set_background(&mut self, color:Color4f){
         if self.background != color{
             self.background = color;
             self.handle.request_redraw();
@@ -261,20 +269,13 @@ impl Window {
         self.resize(size);
     }
 
-    pub fn redraw_if_resized(&mut self){
-        if let Some(resize) = self.resized_at{
-            if resize.elapsed() > RESIZE_CLEANUP_INTERVAL{
-                self.resized_at = None;
-                self.handle.request_redraw();
-            }
-        }
-    }
-
     pub fn set_redrawing_suspended(&mut self, suspended:bool){
         self.suspended = suspended;
-        if !suspended{
+        if suspended{
+            // a hidden window won't get a RedrawRequested to complete its pending redraw, so just drop the guard
+            self.present_pending = false;
+        }else{
             self.handle.request_redraw();
         }
     }
 }
-

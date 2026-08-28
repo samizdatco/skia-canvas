@@ -3,11 +3,13 @@ use serde::Serialize;
 use serde_json::json;
 use winit::{
   dpi::{LogicalPosition, LogicalSize, PhysicalPosition},
-  event::{ElementState, KeyEvent, Ime, Modifiers, MouseButton, MouseScrollDelta, WindowEvent},
+  event::{ElementState, KeyEvent, Ime, Modifiers, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent},
   keyboard::{ModifiersState, KeyCode, KeyLocation, NamedKey, PhysicalKey::Code, Key::{Character, Named}},
 };
 
-use crate::context::page::Page;
+use std::collections::HashMap;
+use std::time::Instant;
+use crate::gfx::page::Page;
 use super::window::WindowSpec;
 
 #[derive(Debug, Clone)]
@@ -15,6 +17,7 @@ pub enum AppEvent{
   Open(WindowSpec, Page),
   Close(u32),
   FrameRate(u64),
+  Tick{ at: Instant },
   Quit,
 }
 
@@ -27,6 +30,7 @@ pub enum UiEvent{
   Keyboard{event:String, key:String, code:KeyCode, location:u32, modifiers:ModifierKeys, repeat:bool},
   Composition{event:String, data:String},
   Mouse{event:String, button:Option<u16>, buttons:u16, point:LogicalPosition::<f32>, page_point:LogicalPosition::<f32>, modifiers:ModifierKeys},
+  Touch{event:String, pointer_id:i32, is_primary:bool, point:LogicalPosition::<f32>, page_point:LogicalPosition::<f32>, modifiers:ModifierKeys},
   Input(Option<String>, String),
   Focus(bool),
   Resize(LogicalSize<u32>),
@@ -55,27 +59,31 @@ impl From<ModifiersState> for ModifierKeys{
 
 #[derive(Debug)]
 pub struct Sieve{
-  dpr: f64,
   queue: Vec<UiEvent>,
   key_modifiers: ModifierKeys,
   mouse_point: PhysicalPosition::<f64>,
   mouse_button: Option<u16>,
   mouse_buttons: u16,
   mouse_transform: Matrix,
+  touch_ids: HashMap<u64, i32>, // active touches: winit finger id -> pointerId
+  primary_touch: Option<u64>,   // finger id of the primary pointer (first one down)
+  next_touch_id: i32,           // pointerId allocator (mouse owns 1; touches start at 2)
   compose_begun: bool,
   compose_ongoing: bool,
 }
 
 impl Sieve{
-  pub fn new(dpr:f64) -> Self {
+  pub fn new() -> Self {
     Sieve{
-      dpr,
       queue: vec![],
       key_modifiers: Modifiers::default().state().into(),
       mouse_point: PhysicalPosition::default(),
       mouse_button: None,
       mouse_buttons: 0,
       mouse_transform: Matrix::new_identity(),
+      touch_ids: HashMap::new(),
+      primary_touch: None,
+      next_touch_id: 2,
       compose_begun: false,
       compose_ongoing: false,
     }
@@ -89,35 +97,66 @@ impl Sieve{
     self.queue.push(UiEvent::Fullscreen(is_full));
   }
 
-  fn add_mouse_event(&mut self, event:&str){
+  fn add_mouse_event(&mut self, event:&str, dpr:f64){
     // helper to attach positions & keyboard modifiers for each type of mouse event
-    let raw_position = LogicalPosition::<f32>::from_physical(self.mouse_point, self.dpr);
+    let raw_position = LogicalPosition::<f32>::from_physical(self.mouse_point, dpr);
     let canvas_point = self.mouse_transform.map_point((raw_position.x, raw_position.y));
     let canvas_position = LogicalPosition::<f32>::new(canvas_point.x, canvas_point.y);
 
-    self.queue.push(UiEvent::Mouse{
+    let ui = UiEvent::Mouse{
       event: event.to_string(),
       point: canvas_position,
       page_point: raw_position,
       button: self.mouse_button,
       buttons: self.mouse_buttons,
       modifiers: self.key_modifiers,
-    })
+    };
+
+    // collapse runs of consecutive mousemoves (since the last vblank) to only keep the last one
+    if event == "mousemove" && self.in_mousemove() {
+      self.queue.pop();
+    }
+    self.queue.push(ui);
   }
 
-  pub fn capture(&mut self, event:&WindowEvent){
+  fn add_touch_event(&mut self, event:&str, pointer_id:i32, is_primary:bool, location:PhysicalPosition<f64>, dpr:f64){
+    // helper for adding a per-finger touch point (incorporating dpr and canvas transform)
+    let raw_position = LogicalPosition::<f32>::from_physical(location, dpr);
+    let canvas_point = self.mouse_transform.map_point((raw_position.x, raw_position.y));
+    let canvas_position = LogicalPosition::<f32>::new(canvas_point.x, canvas_point.y);
+
+    // collapse a run of consecutive moves from the same finger to only keep the last one
+    if event == "touchmove" && self.in_touchmove(pointer_id) {
+      self.queue.pop();
+    }
+    self.queue.push(UiEvent::Touch{
+      event: event.to_string(),
+      pointer_id, is_primary,
+      point: canvas_position,
+      page_point: raw_position,
+      modifiers: self.key_modifiers,
+    });
+  }
+
+  pub fn capture(&mut self, event:&WindowEvent, dpr:f64){
     match event{
       WindowEvent::Moved(physical_pt) => {
-        let LogicalPosition{x, y} = physical_pt.to_logical(self.dpr);
+        let LogicalPosition{x, y} = physical_pt.to_logical(dpr);
         self.queue.push(UiEvent::Move{left:x, top:y});
       }
 
       WindowEvent::Resized(physical_size) => {
-        let logical_size = LogicalSize::from_physical(*physical_size, self.dpr);
+        let logical_size = LogicalSize::from_physical(*physical_size, dpr);
         self.queue.push(UiEvent::Resize(logical_size));
       }
 
       WindowEvent::Focused(in_focus) => {
+        // losing focus while a button is held should cancel the ongoing drag
+        if !*in_focus && self.mouse_buttons != 0 {
+          self.mouse_button = None;
+          self.mouse_buttons = 0;
+          self.add_mouse_event("pointercancel", dpr);
+        }
         self.queue.push(UiEvent::Focus(*in_focus));
       }
 
@@ -126,24 +165,24 @@ impl Sieve{
       }
 
       WindowEvent::CursorEntered{..} => {
-        self.add_mouse_event("mouseenter");
+        self.add_mouse_event("mouseenter", dpr);
       }
 
       WindowEvent::CursorLeft{..} => {
-        self.add_mouse_event("mouseleave");
+        self.add_mouse_event("mouseleave", dpr);
       }
 
       WindowEvent::CursorMoved{position, ..} => {
         if *position != self.mouse_point{
           self.mouse_point = *position;
-          self.add_mouse_event("mousemove");
+          self.add_mouse_event("mousemove", dpr);
         }
       }
 
       WindowEvent::MouseWheel{delta, ..} => {
         let LogicalPosition{x, y} = match delta {
           MouseScrollDelta::PixelDelta(physical_pt) => {
-            LogicalPosition::from_physical(*physical_pt, self.dpr)
+            LogicalPosition::from_physical(*physical_pt, dpr)
           },
           MouseScrollDelta::LineDelta(h, v) => {
             LogicalPosition{x:*h, y:*v}
@@ -166,13 +205,41 @@ impl Sieve{
         match state {
           ElementState::Pressed => {
             self.mouse_buttons |= button_bits;
-            self.add_mouse_event("mousedown");
+            self.add_mouse_event("mousedown", dpr);
           },
           ElementState::Released => {
             self.mouse_buttons &= !button_bits;
-            self.add_mouse_event("mouseup");
+            self.add_mouse_event("mouseup", dpr);
             self.mouse_button = None;
           },
+        }
+      }
+
+      WindowEvent::Touch(touch) => {
+        match touch.phase {
+          TouchPhase::Started => {
+            let is_primary = self.touch_ids.is_empty();
+            let pointer_id = self.next_touch_id;
+            self.next_touch_id += 1;
+            self.touch_ids.insert(touch.id, pointer_id);
+            if is_primary { self.primary_touch = Some(touch.id); }
+            self.add_touch_event("touchstart", pointer_id, is_primary, touch.location, dpr);
+          }
+          TouchPhase::Moved => {
+            if let Some(&pointer_id) = self.touch_ids.get(&touch.id) {
+              let is_primary = self.primary_touch == Some(touch.id);
+              self.add_touch_event("touchmove", pointer_id, is_primary, touch.location, dpr);
+            }
+          }
+          TouchPhase::Ended | TouchPhase::Cancelled => {
+            if let Some(pointer_id) = self.touch_ids.remove(&touch.id) {
+              let is_primary = self.primary_touch == Some(touch.id);
+              if is_primary { self.primary_touch = None; }
+              if self.touch_ids.is_empty() { self.next_touch_id = 2; } // reset allocator once all fingers lift
+              let event = if matches!(touch.phase, TouchPhase::Ended) { "touchend" } else { "touchcancel" };
+              self.add_touch_event(event, pointer_id, is_primary, touch.location, dpr);
+            }
+          }
         }
       }
 
@@ -291,5 +358,12 @@ impl Sieve{
   pub fn is_empty(&self) -> bool {
     self.queue.is_empty()
   }
-}
 
+  fn in_mousemove(&self) -> bool {
+    matches!(self.queue.last(), Some(UiEvent::Mouse{ event, .. }) if event == "mousemove")
+  }
+
+  fn in_touchmove(&self, pointer_id:i32) -> bool {
+    matches!(self.queue.last(), Some(UiEvent::Touch{ event, pointer_id:id, .. }) if event == "touchmove" && *id == pointer_id)
+  }
+}

@@ -3,9 +3,9 @@ use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::SurfaceProps;
 use serde_json::json;
-use crate::utils::*;
-use crate::context::page::{ExportOptions, pages_arg};
-use crate::gpu;
+use crate::bridge::*;
+use crate::gfx::page::{ExportOptions, pages_arg};
+use crate::gfx;
 
 pub type BoxedCanvas = JsBox<RefCell<Canvas>>;
 impl Finalize for Canvas {}
@@ -16,7 +16,7 @@ pub struct Canvas{
   pub text_contrast: f64,
   pub text_gamma: f64,
   pub gpu_disabled: bool,
-  engine: Option<gpu::RenderingEngine>,
+  engine: Option<gfx::RenderingEngine>,
 }
 
 impl Canvas{
@@ -24,10 +24,11 @@ impl Canvas{
     Canvas{width:300.0, height:150.0, text_contrast, text_gamma, gpu_disabled, engine:None}
   }
 
-  pub fn engine(&mut self) -> gpu::RenderingEngine{
-    self.engine.get_or_insert_with(||
-      gpu::RenderingEngine::default()
-    ).clone()
+  pub fn engine(&mut self) -> gfx::RenderingEngine{
+    self.engine.get_or_insert_with(|| match self.gpu_disabled{
+      true => gfx::RenderingEngine::CPU,
+      false => gfx::RenderingEngine::default(),
+    }).clone()
   }
 
   pub fn export_options(&self) -> ExportOptions{
@@ -40,6 +41,7 @@ impl Canvas{
 //
 
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
+  crate::gfx::cache::Cache::shared().sweep(); // opportunistic cache sweep
   let opts = cx.argument::<JsObject>(1)?;
   let text_contrast = opt_double_for_key(&mut cx, &opts, "textContrast").unwrap_or(0.0);
   let (min_c, max_c) = (SurfaceProps::MIN_CONTRAST_INCLUSIVE as _, SurfaceProps::MAX_CONTRAST_INCLUSIVE as _);
@@ -63,6 +65,12 @@ pub fn get_width(mut cx: FunctionContext) -> JsResult<JsNumber> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let width = this.borrow().width;
   Ok(cx.number(width as f64))
+}
+
+pub fn dispose(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvas>(0)?;
+  this.borrow_mut().engine = None; // drop the (potentially GPU-backed) rendering context
+  Ok(cx.undefined())
 }
 
 pub fn get_height(mut cx: FunctionContext) -> JsResult<JsNumber> {
@@ -102,7 +110,7 @@ pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   if let Some(engine_name) = opt_string_arg(&mut cx, 1){
     if let Some(new_engine) = to_engine(&engine_name){
       if new_engine.selectable() {
-        this.borrow_mut().gpu_disabled = matches!(new_engine, gpu::RenderingEngine::CPU);
+        this.borrow_mut().gpu_disabled = matches!(new_engine, gfx::RenderingEngine::CPU);
         this.borrow_mut().engine = Some(new_engine)
       }
     }
@@ -124,10 +132,7 @@ pub fn get_engine_status(mut cx: FunctionContext) -> JsResult<JsString> {
 pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let options = export_options_arg(&mut cx, 2)?;
-  let mut pages = pages_arg(&mut cx, 1, &options, &this)?;
-
-  // ensure cached bitmaps are sendable to other thread
-  pages.materialize(&this.borrow_mut().engine(), &options);
+  let pages = pages_arg(&mut cx, 1, &this)?;
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
@@ -153,7 +158,7 @@ pub fn toBuffer(mut cx: FunctionContext) -> JsResult<JsPromise> {
 pub fn toBufferSync(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedCanvas>(0)?;
   let options = export_options_arg(&mut cx, 2)?;
-  let pages = pages_arg(&mut cx, 1, &options, &this)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
 
   let encoded = {
     if options.format=="pdf" && pages.len() > 1 {
@@ -178,10 +183,7 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
   let options = export_options_arg(&mut cx, 4)?;
-  let mut pages = pages_arg(&mut cx, 1, &options, &this)?;
-
-  // ensure cached bitmaps are sendable to other thread
-  pages.materialize(&this.borrow_mut().engine(), &options);
+  let pages = pages_arg(&mut cx, 1, &this)?;
 
   let channel = cx.channel();
   let (deferred, promise) = cx.promise();
@@ -196,9 +198,11 @@ pub fn save(mut cx: FunctionContext) -> JsResult<JsPromise> {
       }
     };
 
-    deferred.settle_with(&channel, move |mut cx| match result{
-      Err(msg) => cx.throw_error(format!("I/O Error: {}", msg)),
-      _ => Ok(cx.undefined())
+    deferred.settle_with(&channel, move |mut cx| {
+      match result{
+        Err(msg) => cx.throw_error(format!("I/O Error: {}", msg)),
+        _ => Ok(cx.undefined())
+      }
     });
   });
 
@@ -211,7 +215,7 @@ pub fn saveSync(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let sequence = !cx.argument::<JsValue>(3)?.is_a::<JsUndefined, _>(&mut cx);
   let padding = opt_float_arg(&mut cx, 3).unwrap_or(-1.0);
   let options = export_options_arg(&mut cx, 4)?;
-  let pages = pages_arg(&mut cx, 1, &options, &this)?;
+  let pages = pages_arg(&mut cx, 1, &this)?;
 
   let result = {
     if sequence {

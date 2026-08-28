@@ -23,23 +23,25 @@
   },
   "scripts": {
     "build": "node lib/prebuild.mjs compile",
-    "install": "node lib/prebuild.mjs download --or-compile",
+    "download": "node lib/prebuild.mjs download --or-compile",
     "upload": "node lib/prebuild.mjs upload",
-    "test": "node --test"
+    "test": "node tests/runner"
   },
   "dependencies": {
-    "detect-libc": "^2.1.1",
-    "follow-redirects": "^1.15.11",
-    "https-proxy-agent": "^7.0.6",
-    "string-split-by": "^1.0.0"
+    "detect-libc": "^2.1.2",
+    "follow-redirects": "^1.16.0",
+    "https-proxy-agent": "^7.0.6"
   },
   "devDependencies": {
-    "@hono/node-server": "^1.19.4",
-    "@types/node": "^24.5.2",
-    "cargo-cp-artifact": "^0.1",
-    "hono": "^4.9.8",
-    "nock": "^14.0.10",
-    "tmp": "^0.2.5"
+    "@hono/node-server": "^2.0.12",
+    "@types/node": "^24.13.3",
+    "chalk": "^4.1.2",
+    "clean-stack": "^5.2.0",
+    "hono": "^4.12.32",
+    "jest-diff": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.18"
   },
   "files": [
     "lib/*js",
@@ -64,5 +66,8 @@
     "pdf",
     "svg",
     "rust"
-  ]
+  ],
+  "volta": {
+    "node": "24.18.0"
+  }
 }

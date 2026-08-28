@@ -16,7 +16,7 @@ jobs:
         os:
           - macos-latest
           - windows-latest
-          - ubuntu-22.04
+          - ubuntu-24.04
         node:
           - 18
           - 24
@@ -43,9 +43,16 @@ jobs:
     - name: Use Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
 
+    - name: Install fontconfig (Linux only)
+      if: ${{ startsWith(matrix.os, 'ubuntu') }}
+      run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
+
     - name: Build module
       run: make optimized
 
     - name: Run tests
       run: |
         npm test
+
+    - name: Verify npm packaging
+      run: node tests/packaging.mjs

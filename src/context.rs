@@ -1,0 +1,978 @@
+use std::cell::RefCell;
+use neon::prelude::*;
+use skia_safe::{
+  Canvas as SkCanvas, Paint, Path, PathBuilder, PathOp, Image, ImageInfo, Contains,
+  Rect, IRect, Point, Size, ColorSpace, Color4f, PathFillType,
+  PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture, FontHinting,
+  font::Edging,
+  images, image_filters, dash_path_effect, path_1d_path_effect,
+  matrix::{ Matrix, TypeMask },
+  textlayout::{ParagraphStyle, TextStyle, StrutStyle},
+  canvas::SrcRectConstraint::Strict,
+  path_utils::fill_path_with_paint,
+  font_style::{FontStyle, Width},
+};
+
+#[path = "context_api.rs"]
+pub mod api;
+
+use crate::bridge::*;
+use crate::font_library::{FontLibrary, MetricsKey, cached_metrics};
+use crate::path::Path2D;
+use crate::drawlist::{Pen, Plotter};
+use crate::typography::{Typesetter, Baseline, DecorationStyle};
+use crate::filter::{Filter, ImageFilter, FilterQuality};
+use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
+use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
+use crate::texture::{CanvasTexture, BoxedCanvasTexture};
+use crate::image::ImageData;
+use crate::gfx::RenderingEngine;
+use crate::gfx::page::{PageRecorder, Page, PageRef, ExportOptions};
+
+pub type BoxedContext2D = JsBox<RefCell<Context2D>>;
+impl Finalize for Context2D {}
+
+pub struct Context2D{
+  pub bounds: Rect,
+  recorder: RefCell<PageRecorder>,
+  state: State,
+  stack: Vec<State>,
+  path: Path2D,
+}
+
+#[derive(Clone)]
+pub struct State{
+  clip: Option<Path>,
+  matrix: Matrix,
+  paint: Paint,
+
+  fill_style: Dye,
+  stroke_style: Dye,
+  shadow_blur: f32,
+  shadow_color: CssColor,
+  shadow_offset: Point,
+
+  stroke_width: f32,
+  line_dash_offset: f32,
+  line_dash_list: Vec<f32>,
+  line_dash_marker: Option<Path>,
+  line_dash_fit: path_1d_path_effect::Style,
+
+  global_alpha: f32,
+  global_composite_operation: BlendMode,
+  image_filter: ImageFilter,
+  filter: Filter,
+
+  font: String,
+  font_variant: String,
+  font_width: Width,
+  font_hinting: bool,
+  font_smoothing: bool,
+  font_synthesis: bool,
+  char_style: TextStyle,
+  graf_style: ParagraphStyle,
+  text_baseline: Baseline,
+  letter_spacing: Spacing,
+  word_spacing: Spacing,
+  text_decoration: DecorationStyle,
+  text_wrap: bool,
+  line_height: Option<f32>,
+}
+
+impl Default for State {
+  fn default() -> Self {
+    let mut paint = Paint::default();
+    paint
+      .set_stroke_miter(10.0)
+      .set_color4f(Color4f::new(0.0, 0.0, 0.0, 1.0), None)
+      .set_anti_alias(true)
+      .set_stroke_width(1.0)
+      .set_style(PaintStyle::Fill);
+
+    let graf_style = ParagraphStyle::new();
+    let font_spec = FontSpec::default();
+    let mut char_style = TextStyle::new();
+    char_style
+      .set_font_size(font_spec.size)
+      .set_font_families(&font_spec.families)
+      .set_font_style(font_spec.style());
+    let FontSpec{ canonical: font, variant: font_variant, width: font_width, .. } = font_spec;
+
+    State {
+      clip: None,
+      matrix: Matrix::new_identity(),
+
+      paint,
+      stroke_style: Dye::Color(CssColor::black()),
+      fill_style: Dye::Color(CssColor::black()),
+      stroke_width: 1.0,
+      line_dash_offset: 0.0,
+      line_dash_list: vec![],
+      line_dash_marker: None,
+      line_dash_fit: path_1d_path_effect::Style::Rotate,
+
+      global_alpha: 1.0,
+      global_composite_operation: BlendMode::SrcOver,
+      image_filter: ImageFilter{ smoothing:true, quality:FilterQuality::Low },
+      filter: Filter::default(),
+
+      shadow_blur: 0.0,
+      shadow_color: CssColor::transparent(),
+      shadow_offset: (0.0, 0.0).into(),
+
+      font,
+      font_variant,
+      font_width,
+      font_hinting: false,
+      font_smoothing: true,
+      font_synthesis: true,
+      char_style,
+      graf_style,
+      text_baseline: Baseline::Alphabetic,
+      letter_spacing: Spacing::default(),
+      word_spacing: Spacing::default(),
+      text_decoration: DecorationStyle::default(),
+      text_wrap: false,
+      line_height: None,
+    }
+  }
+}
+
+impl State{
+  // styling config for use by Typesetter
+  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, bool) {
+    let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
+    if char_style.typeface().is_none() { // if still using the implicit default font, resolve it now
+      char_style = FontLibrary::with_shared(|lib| lib.update_style(&char_style, &FontSpec::default()))
+        .unwrap_or(char_style);
+    }
+    char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
+    char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));
+    char_style.set_baseline_shift(self.text_baseline.get_offset(&char_style));
+
+    let mut graf_style = self.graf_style.clone(); // inherit align & ltr/rtl settings
+    let font_families = char_style.font_families(); // consult proper metrics for height & leading defaults
+
+    if self.text_wrap{
+      // render shy hyphens (U+00AD) rather than just breaking on them
+      graf_style.set_render_soft_hyphens(true);
+
+      // handle multi-line spacing
+      let mut strut_style = StrutStyle::new();
+      strut_style
+        .set_font_families(&font_families.iter().collect::<Vec<_>>())
+        .set_font_style(char_style.font_style())
+        .set_font_size(char_style.font_size())
+        .set_force_strut_height(true)
+        .set_strut_enabled(true);
+
+      // if lineHeight is unspecified leave letterspacing at -1 to use font's default spacing,
+      // otherwise adjust strut's height & leading appropriately
+      if let Some(height) = self.line_height{
+        strut_style
+          .set_leading((height - 1.0).max(0.0))
+          .set_height(height.min(1.0))
+          .set_height_override(true);
+      }
+
+      graf_style.set_strut_style(strut_style);
+    }else{
+      // omit anything that doesn't fit on a single line
+      graf_style.set_max_lines(Some(1));
+    }
+
+    // reflect context's `fontSynthesis`, `fontHinting`, & `fontSmoothing` settings
+    graf_style.set_fake_missing_font_styles(self.font_synthesis);
+    let (edging, subpixel) = if self.font_smoothing{ (Edging::AntiAlias, true) }else{ (Edging::Alias, false) };
+    let hinting = if self.font_hinting{ FontHinting::Normal }else{ FontHinting::None };
+    char_style.set_font_hinting(hinting);
+    char_style.set_font_edging(edging);
+    char_style.set_subpixel(subpixel);
+
+    ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap )
+  }
+
+  // font settings that cached measureText responses depend on
+  pub fn metrics_key(&self, text:&str, width:Option<f32>) -> MetricsKey{
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (
+      &self.font,
+      &self.font_variant,
+      *self.font_width,
+      self.letter_spacing.to_string(),
+      self.word_spacing.to_string(),
+      self.text_baseline as u8,
+      self.graf_style.text_align() as i32,
+      self.graf_style.text_direction() as i32,
+      self.text_wrap,
+      self.line_height.map(f32::to_bits),
+      (self.font_hinting, self.font_smoothing, self.font_synthesis),
+    ).hash(&mut h);
+
+    (h.finish(), text.to_string(), width.map(f32::to_bits))
+  }
+
+  fn dye(&self, style:PaintStyle) -> &Dye{
+    if style == PaintStyle::Stroke{ &self.stroke_style }
+    else{ &self.fill_style }
+  }
+
+  fn texture(&self, style:PaintStyle) -> Option<&CanvasTexture>{
+    match self.dye(style) {
+      Dye::Texture(texture) => Some(texture),
+      _ => None
+    }
+  }
+
+}
+
+impl Context2D{
+  pub fn color_space(&self) -> ColorSpace {
+    self.recorder.borrow().color_space()
+  }
+
+  pub fn new(color_space:ColorSpace) -> Self {
+    let bounds = Rect::from_wh(300.0, 150.0);
+
+    Context2D{
+      bounds,
+      recorder: RefCell::new(PageRecorder::new(bounds, color_space)),
+      path: Path2D::default(),
+      stack: vec![],
+      state: State::default(),
+    }
+  }
+
+  // Synchronously release all internal Skia state (rather than waiting until for the next event
+  // loop tick gets around to calling Drop). Drawing post-release will be ignored on the rust side
+  // and should be prevented by a js-side TypeError anyway.
+  pub fn release(&mut self){
+    self.recorder.borrow_mut().release();
+    self.stack.clear();
+    self.stack.shrink_to_fit();
+    self.state = State::default();
+    self.path = Path2D::default();
+    crate::gfx::cache::Cache::shared().sweep();
+  }
+
+  pub fn in_local_coordinates(&mut self, x: f32, y: f32) -> Point{
+    match self.state.matrix.invert(){
+      Some(inverse) => inverse.map_point((x, y)),
+      None => (x, y).into()
+    }
+  }
+
+  pub fn with_recorder<'a, F>(&'a self, f:F)
+    where F:FnOnce(std::cell::RefMut<'a, PageRecorder>)
+  {
+    f(self.recorder.borrow_mut());
+  }
+
+  pub fn with_canvas<F>(&self, f:F)
+    where F:FnOnce(&SkCanvas)
+  {
+    self.with_recorder(|mut recorder|{
+      recorder.append(f);
+    });
+  }
+
+  // like with_canvas, but for ops whose result depends on what is already on the target surface
+  // (e.g., a non-SrcOver composite, clear, or pixel blit) and requires an isolation group
+  pub fn with_dependent_canvas<F>(&self, f:F)
+    where F:FnOnce(&SkCanvas)
+  {
+    self.with_recorder(|mut recorder|{
+      recorder.mark_dependent();
+      recorder.append(f);
+    });
+  }
+
+  pub fn with_matrix<F>(&mut self, f:F)
+    where F:FnOnce(&mut Matrix) -> &Matrix
+  {
+    f(&mut self.state.matrix);
+    self.with_recorder(|mut recorder|{
+      recorder.set_matrix(self.state.matrix);
+    });
+  }
+
+  pub fn render_to_canvas<F>(&self, paint:&Paint, f:F)
+    where F:Fn(&SkCanvas, &Paint)
+  {
+    let render_shadow = |canvas:&SkCanvas, paint:&Paint|{
+      if let Some(shadow_paint) = self.paint_for_shadow(paint){
+        canvas.save();
+        canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
+        canvas.concat(&self.state.matrix);
+        f(canvas, &shadow_paint);
+        canvas.restore();
+      }
+    };
+
+    match self.is_region_blend(){
+      true =>{
+        // for blend modes that affect regions of the canvas outside of the bounds of the object
+        // being drawn, create an intermediate picture before drawing to the canvas
+        let mut layer_paint = paint.clone();
+        layer_paint.set_blend_mode(BlendMode::SrcOver);
+        let mut layer_recorder = PictureRecorder::new();
+        layer_recorder.begin_recording(self.bounds, true);
+        if let Some(layer) = layer_recorder.recording_canvas() {
+          // draw the dropshadow (if applicable)
+          render_shadow(layer, &layer_paint);
+          // draw normally
+          layer.set_matrix(&self.state.matrix.into());
+          f(layer, &layer_paint);
+        }
+
+        // transfer the picture contents to the canvas in a single operation, applying the blend
+        // mode to the whole canvas (regardless of the bounds of the text/path being drawn)
+        if let Some(pict) = layer_recorder.finish_recording_as_picture(None){
+          self.with_dependent_canvas(|canvas| {
+            canvas.save();
+            canvas.set_matrix(&Matrix::new_identity().into());
+            let mut blend_paint = Paint::default();
+            blend_paint.set_anti_alias(true);
+            blend_paint.set_blend_mode(self.state.global_composite_operation);
+            canvas.draw_picture(&pict, None, Some(&blend_paint));
+            canvas.restore();
+          });
+        }
+
+      },
+      false => {
+        let draw = |canvas:&SkCanvas|{
+          // draw the dropshadow (if applicable)
+          render_shadow(canvas, paint);
+          // draw with the normal paint
+          f(canvas, paint);
+        };
+        // even though the blend doesn't extend past the draw bounds, the object may still sample
+        // the backdrop (e.g., multiply, screen, etc.) making it target dependent
+        match self.is_target_dependent(){
+          true => self.with_dependent_canvas(draw),
+          false => self.with_canvas(draw),
+        }
+      }
+    };
+
+  }
+
+  // whether the blend mode reads/modifies the backdrop (rather than just compositing on top of it)
+  pub fn is_target_dependent(&self) -> bool{
+    self.state.global_composite_operation != BlendMode::SrcOver
+  }
+
+  // whether the blend mode affects the whole canvas (beyond the bounds of the drawn object)
+  pub fn is_region_blend(&self) -> bool{
+    matches!(self.state.global_composite_operation,
+      BlendMode::SrcIn | BlendMode::SrcOut |
+      BlendMode::DstIn | BlendMode::DstOut |
+      BlendMode::DstATop | BlendMode::Src)
+  }
+
+  pub fn map_points(&self, coords:&[f32]) -> Vec<Point>{
+    // treat the flat array of floats as x/y pairs
+    coords
+      .chunks_exact(2)
+      .map(|pair|
+        self.state.matrix.map_point(Point::new(pair[0], pair[1]))
+      )
+      .collect()
+  }
+
+  pub fn reset_size(&mut self, dims: impl Into<Size>) {
+    // called by the canvas when .width or .height are assigned to
+    self.bounds = Rect::from_size(dims);
+    self.path = Path2D::default();
+    self.stack = vec![];
+    self.state = State::default();
+
+    // erase any existing content
+    self.with_recorder(|mut recorder| {
+      recorder.set_bounds(self.bounds);
+    });
+  }
+
+  pub fn resize(&mut self, dims: impl Into<Size>) {
+    // non-destructively resize the canvas (via the canvas.resize() extension)
+    self.bounds = Rect::from_size(dims);
+    self.with_recorder(|mut recorder| {
+      recorder.update_bounds(self.bounds);
+    });
+  }
+
+  pub fn push(&mut self){
+    let new_state = self.state.clone();
+    self.stack.push(new_state);
+  }
+
+  pub fn pop(&mut self){
+    // don't do anything if we're already back at the initial stack frame
+    if let Some(old_state) = self.stack.pop(){
+      self.state = old_state;
+
+      self.with_recorder(|mut recorder|{
+        recorder.set_matrix(self.state.matrix);
+        recorder.set_clip(&self.state.clip);
+      });
+    }
+  }
+
+  pub fn begin_path(&mut self){
+    self.path = Path2D::default();
+  }
+
+  pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<PathFillType>){
+    let mut path = path.unwrap_or_else(|| {
+      // the current path has already incorporated its transform state
+      let inverse = self.state.matrix.invert().unwrap_or_default();
+      self.path.path().with_transform(&inverse)
+    });
+    path.set_fill_type(rule.unwrap_or(PathFillType::Winding));
+
+    // if path will fill the whole canvas and paint/blend are fully opaque...
+    if matches!(style, PaintStyle::Fill | PaintStyle::StrokeAndFill) &&
+      matches!(&self.state.global_composite_operation, BlendMode::SrcOver | BlendMode::Src | BlendMode::Clear) &&
+      self.state.fill_style.is_opaque() &&
+      self.state.global_alpha == 1.0 &&
+      self.state.clip.is_none() &&
+      path.conservatively_contains_rect(self.bounds)
+    {
+      // ...erase existing vector content layers (but preserve CTM & clip path)
+      self.with_recorder(|mut recorder|{
+        recorder.set_bounds(self.bounds);
+        recorder.set_matrix(self.state.matrix);
+        recorder.set_clip(&self.state.clip);
+      });
+    }
+
+    let paint = self.paint_for_drawing(style);
+    self.render_to_canvas(&paint, |canvas, paint| {
+      if let Some(tile) = self.state.texture(style){
+        // SKIA PATH EFFECT BUG WORKAROUND:
+        //
+        // Simply mixing the PathEffect into the paint and drawing totally misjudges the boundaries of the
+        // path being filled/stroked. Instead we'll create a path with the texture and a path with the
+        // desired outline separately, then draw their overlap
+
+        // paint containing the PathEffect
+        let mut tile_paint = paint.clone();
+        tile.mix_into(&mut tile_paint, self.state.global_alpha);
+
+        // outline strokes on user path (if paint style is stroke) so we can use a fill operation below
+        let mut stencil = PathBuilder::new();
+        fill_path_with_paint(&path, paint, &mut stencil, None, None);
+        let stencil = stencil.detach();
+
+        // construct a rectangle significantly larger than the path + stroke area (1.5x seems to work?)
+        let expanded_bounds = stencil.bounds().with_outset(tile.spacing() * 1.5);
+        let enclosing_frame = Path::rect(expanded_bounds, None);
+
+        if tile.use_clip(){
+          // apply the user path as a clipping mask and fill the whole enclosing rect with tile pattern
+          canvas.save();
+          canvas.clip_path(&stencil, Some(ClipOp::Intersect), Some(true));
+          canvas.draw_path(&enclosing_frame, &tile_paint);
+          canvas.restore();
+        }else{
+          // create a path merging the the tile pattern outlines and the enclosing rectangle
+          let mut textured_frame = PathBuilder::new();
+          fill_path_with_paint(&enclosing_frame, &tile_paint, &mut textured_frame, None, None);
+          let textured_frame = textured_frame.detach();
+
+          // intersect the rectangular texture with the user path and fill with flat color
+          let mut fill_paint = paint.clone();
+          fill_paint.set_style(PaintStyle::Fill);
+          if let Some(fill_path) = stencil.op(&textured_frame, PathOp::Intersect){
+            canvas.draw_path(&fill_path, &fill_paint);
+          }
+        }
+      }else{
+        canvas.draw_path(&path, paint);
+      }
+    });
+  }
+
+  pub fn clip_path(&mut self, path: Option<Path>, rule:PathFillType){
+    let mut clip = match path{
+      Some(path) => path.with_transform(&self.state.matrix),
+      None => self.path.path()
+    };
+    clip.set_fill_type(rule);
+
+    // update the clip with the intersection of the new path, unless it's larger than
+    // the canvas itself in which case the whole clip is discarded
+    self.state.clip = self.state.clip.as_ref()
+      .unwrap_or(&Path::rect(self.bounds, None))
+      .op(&clip, PathOp::Intersect)
+      .and_then(|path| match path.conservatively_contains_rect(self.bounds){
+        true => None,
+        false => Some(path),
+      });
+
+    self.with_recorder(|mut recorder|{
+      recorder.set_clip(&self.state.clip);
+    });
+  }
+
+  pub fn hit_test_path(&mut self, path: &mut Path, point:impl Into<Point>, rule:Option<PathFillType>, style: PaintStyle) -> bool {
+    let point = point.into();
+    let point = self.in_local_coordinates(point.x, point.y);
+    let rule = rule.unwrap_or(PathFillType::Winding);
+    let prev_rule = path.fill_type();
+    path.set_fill_type(rule);
+
+    let is_in = match style{
+      PaintStyle::Stroke => {
+        let paint = self.paint_for_drawing(PaintStyle::Stroke);
+        let precision = 0.3; // this is what Chrome uses to compute this
+        let scale = Matrix::scale((precision, precision));
+
+        let mut traced_path = PathBuilder::new();
+        if fill_path_with_paint(path, &paint, &mut traced_path, None, Some(scale)){
+          traced_path.detach().contains(point)
+        }else{
+          path.contains(point)
+        }
+      },
+      _ => path.contains(point)
+    };
+
+    path.set_fill_type(prev_rule);
+    is_in
+  }
+
+  pub fn clear_rect(&mut self, rect:&Rect){
+    match self.state.matrix.map_rect(rect).0.contains(self.bounds){
+
+      // if rect fully encloses canvas, erase existing content (but preserve CTM & clip path)
+      true =>  self.with_recorder(|mut recorder|{
+        recorder.set_bounds(self.bounds);
+        recorder.set_matrix(self.state.matrix);
+        recorder.set_clip(&self.state.clip);
+      }),
+
+      // otherwise, paint over the specified region but preserve overdrawn vectors
+      false => self.with_dependent_canvas(|canvas| {
+        let mut paint = Paint::default();
+        paint.set_anti_alias(true)
+             .set_style(PaintStyle::Fill)
+             .set_color4f(Color4f::new(1.0, 1.0, 1.0, 1.0), None) // white for SVG's benefit
+             .set_blend_mode(BlendMode::Clear);
+        canvas.draw_rect(rect, &paint);
+      })
+    }
+  }
+
+  // map the source's src_rect onto this canvas's dst_rect
+  fn fit_matrix(src_rect:&Rect, dst_rect:&Rect) -> Matrix{
+    let mag = Point::new(dst_rect.width()/src_rect.width(), dst_rect.height()/src_rect.height());
+    let mut matrix = Matrix::new_identity();
+    matrix.pre_scale( (mag.x, mag.y), None )
+      .pre_translate((dst_rect.x()/mag.x - src_rect.x(), dst_rect.y()/mag.y - src_rect.y()));
+    matrix
+  }
+
+  // detect whether a paint draws its content without modifying alpha, blend, effects
+  fn is_pass_through(paint:&Paint) -> bool{
+    matches!(
+      (paint.as_blend_mode(), paint.alpha(), paint.image_filter()),
+      (Some(BlendMode::SrcOver), 255, None)
+    )
+  }
+
+  pub fn draw_picture(&mut self, picture:&Picture, src_rect:&Rect, dst_rect:&Rect){
+    let paint = self.paint_for_image();
+    let matrix = Self::fit_matrix(src_rect, dst_rect);
+
+    self.render_to_canvas(&paint, |canvas, paint| {
+      // only use paint if we need it for alpha, blend, shadow, or effect since otherwise
+      // the SVG exporter will omit the picture altogether
+      let paint = match Self::is_pass_through(paint){ true => None, false => Some(paint) };
+      canvas.save();
+      canvas.clip_rect(dst_rect, ClipOp::Intersect, true);
+      canvas.draw_picture(&picture, Some(&matrix), paint);
+      canvas.restore();
+    });
+  }
+
+  // draw another page by reference, so its isolation can be handled
+  // appropriately (depending on whether a PDF/SVG/bitmap is being generated)
+  pub fn draw_page(&mut self, page:&Page, src_rect:&Rect, dst_rect:&Rect){
+    // does the source blit, clear, or use a non-SrcOver blend?
+    let isolate = page.dependent_ops || page.has_pages;
+
+    // do the source colors need to be clamped to sRGB (b/c the dest is display-p3)?
+    let remap_gamut = page.color_space != self.color_space() && page.color_space.is_srgb();
+
+    // is the placement axis-aligned and unflipped/skewed?
+    let matrix = Matrix::concat(&self.state.matrix, &Self::fit_matrix(src_rect, dst_rect));
+    let cacheable = matrix.skew_x() == 0.0 && matrix.skew_y() == 0.0 && !matrix.has_perspective()
+                 && matrix.scale_x() > 0.0 && matrix.scale_y() > 0.0
+                 && matrix.scale_x().is_finite() && matrix.scale_y().is_finite();
+
+    // render by page reference if any of those hold, but only if drawing doesn't need effects a PageRef can't provide
+    let by_reference = (isolate || remap_gamut || cacheable)
+                     && !self.has_shadow() && !self.is_region_blend() // doesn't require an enclosing paint
+                     && Self::is_pass_through(&self.paint_for_image()); // no alpha, effects, or dependent blend
+
+    if by_reference{
+      // record the source page and its position + clip for placement on the destination
+      let (bounds, clip) = self.page_region(dst_rect);
+      let page = page.clone();
+      self.with_recorder(|mut rec| rec.push_page(PageRef{ page, bounds, clip, matrix }));
+    }else{
+      // otherwise flatten to a Picture + transparency layer (which svg drops) and draw it immediately
+      if let Some(pict) = page.to_picture(None){
+        self.draw_picture(&pict, src_rect, dst_rect);
+      }
+    }
+  }
+
+  // the region a page reference occupies in *this* page's coordinate space. the clip is `Some` only when
+  // the bounding rect alone can't describe it (i.e. when the CTM rotates or skews, or a clip is live).
+  // `PageRef::clip_to` just uses the rect whenever the clip is `None`.
+  fn page_region(&self, dst_rect:&Rect) -> (Rect, Option<Path>){
+    let bounds = self.state.matrix.map_rect(dst_rect).0;
+    let clip = match (self.state.matrix.rect_stays_rect(), &self.state.clip){
+      (true, None) => None,
+      (_, clip) => {
+        let quad = Path::rect(dst_rect, None).with_transform(&self.state.matrix);
+        match clip{
+          Some(clip) => quad.op(clip, PathOp::Intersect),
+          None => Some(quad),
+        }
+      }
+    };
+    (bounds, clip)
+  }
+
+  pub fn draw_image(&mut self, image:&Image, src_rect:&Rect, dst_rect:&Rect){
+    let paint = self.paint_for_image();
+    self.render_to_canvas(&paint, |canvas, paint| {
+      let sampling = self.state.image_filter.sampling();
+      canvas.draw_image_rect_with_sampling_options(image, Some((src_rect, Strict)), dst_rect, sampling, paint);
+    });
+  }
+
+  pub fn get_page(&self) -> Page {
+    self.recorder.borrow_mut().get_page()
+  }
+
+  pub fn get_image(&self) -> Option<Image> {
+    self.recorder.borrow_mut().get_image()
+  }
+
+  pub fn get_picture(&mut self) -> Option<Picture> {
+    self.recorder.borrow_mut().get_page().to_picture(None)
+  }
+
+  pub fn write_pixels(&mut self, dst_buffer:&mut [u8], dst_info:&ImageInfo, crop:IRect, opts:ExportOptions, engine:RenderingEngine, read_frequently:bool) -> Result<(), String>{
+    self.recorder.borrow_mut().write_pixels(dst_buffer, dst_info, crop, opts, engine, read_frequently)
+  }
+
+  pub fn blit_pixels(&mut self, image_data:ImageData, src_rect:&Rect, dst_rect:&Rect){
+    // works just like draw_image in terms of src/dst rects, but replaces the dst_rect outright,
+    // without clips, transforms, alpha, blend, or shadows
+    let info = image_data.image_info();
+    if let Some(bitmap) = images::raster_from_data(&info, image_data.buffer, info.min_row_bytes()) {
+      self.push(); // cache matrix & clip in self.state
+      self.with_dependent_canvas(|canvas| {
+        let mut paint = Paint::default();
+        paint.set_blend_mode(BlendMode::Src); // replace the destination rather than compositing in
+        canvas.restore_to_count(1).save(); // discard current matrix & clip and create clean stack
+        canvas.draw_image_rect(&bitmap, Some((src_rect, Strict)), dst_rect, &paint);
+      });
+      self.pop(); // restore discarded matrix & clip
+    }
+  }
+
+  pub fn set_font(&mut self, spec: FontSpec){
+    if let Some(new_style) = FontLibrary::with_shared(|lib|
+      lib.update_style(&self.state.char_style, &spec)
+    ){
+      self.state.font = spec.canonical;
+      self.state.font_variant = spec.variant.to_string();
+      self.state.font_width = spec.width;
+      self.state.char_style = new_style;
+      self.state.line_height = spec.line_height;
+    }
+  }
+
+  pub fn set_font_variant(&mut self, variant:&str, features:&[(String, i32)]){
+    self.state.char_style.reset_font_features();
+    for (feat, val) in features{
+      self.state.char_style.add_font_feature(feat, *val);
+    }
+    self.state.font_variant = variant.to_string();
+  }
+
+  pub fn set_font_width(&mut self, width:Width){
+    let style = self.state.char_style.font_style();
+    let font_style =  FontStyle::new(style.weight(), width, style.slant());
+    self.state.char_style.set_font_style(font_style);
+    self.state.font_width = width;
+  }
+
+  pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, style:PaintStyle){
+    let paint = self.paint_for_drawing(style);
+    let typesetter = Typesetter::new(&self.state, text, width);
+    let origin = Point::new(x, y);
+    let layout = typesetter.layout(origin);
+
+    if self.state.texture(style).is_some(){
+      // convert text to path (so it can be filled/stroked with the texture)
+      self.draw_path(Some(layout.to_path()), style, None);
+
+      // add an invisible text run that embeds the selectable text (skipping render_to_canvas's shadows & compositing)
+      let mut invisible = Paint::default();
+      invisible.set_color4f(Color4f::new(0.0, 0.0, 0.0, 0.0), None);
+      self.with_canvas(|canvas| layout.draw_glyphs(canvas, &invisible));
+    }else if self.has_shadow() && layout.is_multi_op(){
+      // shadows + mutiple lines and/or text decorations can get wildly expensive because they're
+      // separate draw-ops that the shadow is applied to independently. instead, flatten to a picture
+      // so the shadow blur only has to composite *once*
+      if let Some(pic) = layout.to_picture(&paint){
+        self.render_to_canvas(&paint, |canvas, paint| { canvas.draw_picture(&pic, None, Some(paint)); });
+      }
+    }else{
+      self.render_to_canvas(&paint, |canvas, paint| layout.draw(canvas, paint));
+    }
+  }
+
+  pub fn measure_text(&self, text: &str, width:Option<f32>) -> String{
+    // memoized text metrics (invalidated if the font state changes)
+    cached_metrics(self.state.metrics_key(text, width), ||
+      Typesetter::new(&self.state, text, width).metrics().to_string()
+    )
+  }
+
+  pub fn outline_text(&self, text:&str, width:Option<f32>) -> Path{
+    Typesetter::new(&self.state, text, width).path((0.0, 0.0))
+  }
+
+  pub fn paint_for_drawing(&mut self, style:PaintStyle) -> Paint{
+    let mut paint = self.state.paint.clone();
+    self.state.filter.mix_into(&mut paint, self.state.matrix, false);
+    self.state.dye(style).mix_into(&mut paint, self.state.global_alpha, self.state.image_filter);
+    paint.set_style(style);
+
+    if style==PaintStyle::Stroke && !self.state.line_dash_list.is_empty(){
+      // if marker is set, apply the 1d_path_effect instead of the dash_path_effect
+      let effect = match &self.state.line_dash_marker{
+        Some(path) => {
+          let marker = match path.is_last_contour_closed(){
+            true => path.clone(),
+            false => {
+              let mut traced_path = PathBuilder::new();
+              fill_path_with_paint(path, &paint, &mut traced_path, None, None);
+              traced_path.detach()
+            }
+          };
+          path_1d_path_effect::new(
+            &marker,
+            self.state.line_dash_list[0],
+            self.state.line_dash_offset,
+            self.state.line_dash_fit
+          )
+        }
+        None => dash_path_effect::new(&self.state.line_dash_list, self.state.line_dash_offset)
+      };
+
+      paint.set_path_effect(effect);
+    }
+
+    paint
+  }
+
+  pub fn paint_for_image(&mut self) -> Paint {
+    let mut paint = self.state.paint.clone();
+    self.state.filter.mix_into(&mut paint, self.state.matrix, true)
+      .set_alpha_f(self.state.global_alpha);
+    paint
+  }
+
+  pub fn has_shadow(&self) -> bool {
+    let State {shadow_color, shadow_blur, shadow_offset, ..} = &self.state;
+    shadow_color.color.a != 0.0 && (*shadow_blur != 0.0 || !shadow_offset.is_zero())
+  }
+
+  pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint> {
+    let State {shadow_color, mut shadow_blur, shadow_offset, ..} = self.state;
+    if shadow_color.color.a == 0.0 || (shadow_blur == 0.0 && shadow_offset.is_zero()){
+      return None
+    }
+
+    // Per spec, sigma is exactly half the blur radius:
+    // https://www.w3.org/TR/css-backgrounds-3/#shadow-blur
+    shadow_blur *= 0.5;
+    let mut sigma = Point::new(shadow_blur, shadow_blur);
+    // Apply scaling from the current transform matrix to blur radius, if there is any of either.
+    if self.state.matrix.get_type().contains(TypeMask::SCALE) && !almost_zero(shadow_blur) {
+      // Decompose the matrix to just the scaling factors (matrix.scale_x/y() methods just return M11/M22 values)
+      if let Some(scale) = self.state.matrix.decompose_scale(None) {
+        if almost_zero(scale.width) {
+          sigma.x = 0.0;
+        } else {
+          sigma.x /= scale.width as f32;
+        }
+        if almost_zero(scale.height) {
+          sigma.y = 0.0;
+        } else {
+          sigma.y /= scale.height as f32;
+        }
+      }
+    }
+    let mut paint = base_paint.clone();
+    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma.x, sigma.y), shadow_color.color, ColorSpace::new_srgb(), None, None));
+    Some(paint)
+  }
+
+}
+
+// receives line-drawing verbs from the shared DrawList decoder and bakes the CTM into every point
+impl Pen for Context2D {
+  fn move_to(&mut self, x:f32, y:f32){
+    if let Some(dst) = self.map_points(&[x, y]).first(){
+      self.path.move_to(dst.x, dst.y);
+    }
+  }
+  fn line_to(&mut self, x:f32, y:f32){
+    if let Some(dst) = self.map_points(&[x, y]).first(){
+      self.path.line_to(dst.x, dst.y);
+    }
+  }
+  fn bezier_to(&mut self, c1x:f32, c1y:f32, c2x:f32, c2y:f32, x:f32, y:f32){
+    if let [cp1, cp2, dst] = self.map_points(&[c1x, c1y, c2x, c2y, x, y])[..3]{
+      self.path.bezier_to(cp1.x, cp1.y, cp2.x, cp2.y, dst.x, dst.y);
+    }
+  }
+  fn quad_to(&mut self, cx:f32, cy:f32, x:f32, y:f32){
+    if let [cp, dst] = self.map_points(&[cx, cy, x, y])[..2]{
+      self.path.quad_to(cp.x, cp.y, dst.x, dst.y);
+    }
+  }
+  fn conic_to(&mut self, cx:f32, cy:f32, x:f32, y:f32, w:f32){
+    if let [src, dst] = self.map_points(&[cx, cy, x, y])[..2]{
+      self.path.conic_to(src.x, src.y, dst.x, dst.y, w);
+    }
+  }
+  // arc* and ellipse `extend` the path, drawing a connecting line to their starting point
+  fn arc(&mut self, x:f32, y:f32, r:f32, start:f64, end:f64, ccw:bool){
+    let mut sub = Path2D::default();
+    sub.arc(x, y, r, start, end, ccw);
+    self.path.extend_path(&sub.path(), &self.state.matrix);
+  }
+  fn arc_to(&mut self, x1:f32, y1:f32, x2:f32, y2:f32, r:f32){
+    let mut sub = Path2D::default();
+    if let Some(pt) = self.path.last_point(){
+      // The arc's initial tangent is based on the path's current point, so begin the subpath with it
+      let local = self.in_local_coordinates(pt.x, pt.y);
+      sub.move_to(local.x, local.y);
+    }
+    sub.arc_to(x1, y1, x2, y2, r);
+    self.path.extend_path(&sub.path(), &self.state.matrix);
+  }
+  fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f64, start:f64, end:f64, ccw:bool){
+    let mut sub = Path2D::default();
+    sub.ellipse(x, y, xr, yr, rot, start, end, ccw);
+    self.path.extend_path(&sub.path(), &self.state.matrix);
+  }
+  // rect and round_rect `append` new subpaths, starting with a moveTo rather than a connecting line
+  fn rect(&mut self, x:f32, y:f32, w:f32, h:f32){
+    let mut sub = Path2D::default();
+    sub.rect(x, y, w, h);
+    self.path.append_path(&sub.path(), &self.state.matrix);
+  }
+  fn round_rect(&mut self, x:f32, y:f32, w:f32, h:f32, radii:[Point;4]){
+    let mut sub = Path2D::default();
+    sub.round_rect(x, y, w, h, radii);
+    self.path.append_path(&sub.path(), &self.state.matrix);
+  }
+  fn close(&mut self){
+    self.path.update().close();
+  }
+}
+
+// receives the context-specifc drawlist verbs (state stack, transforms, and painting)
+impl Plotter for Context2D {
+  fn begin_path(&mut self){                   Context2D::begin_path(self); }
+  fn save(&mut self){                         self.push(); }
+  fn restore(&mut self){                      self.pop(); }
+  fn translate(&mut self, x:f32, y:f32){      self.with_matrix(|ctm| ctm.pre_translate((x, y))); }
+  fn scale(&mut self, x:f32, y:f32){          self.with_matrix(|ctm| ctm.pre_scale((x, y), None)); }
+  fn rotate(&mut self, radians:f64){          let deg = radians.to_degrees() as f32; self.with_matrix(|ctm| ctm.pre_rotate(deg, None)); }
+  fn transform(&mut self, matrix:Matrix){     self.with_matrix(|ctm| ctm.pre_concat(&matrix)); }
+  fn set_transform(&mut self, matrix:Matrix){ self.with_matrix(|ctm| ctm.reset().pre_concat(&matrix)); }
+  fn reset_transform(&mut self){              self.with_matrix(|ctm| ctm.reset()); }
+  fn fill(&mut self, rule:PathFillType){      self.draw_path(None, PaintStyle::Fill, Some(rule)); }
+  fn stroke(&mut self){                       self.draw_path(None, PaintStyle::Stroke, None); }
+  fn fill_rect(&mut self, rect:Rect){         self.draw_path(Some(Path::rect(rect, None)), PaintStyle::Fill, None); }
+  fn stroke_rect(&mut self, rect:Rect){       self.draw_path(Some(Path::rect(rect, None)), PaintStyle::Stroke, None); }
+  fn clear_rect(&mut self, rect:Rect){        Context2D::clear_rect(self, &rect); }
+}
+
+//
+// Dye abstraction for Color / CanvasGradient / CanvasPattern
+//
+
+#[derive(Clone)]
+pub enum Dye{
+  Color(CssColor), // holds extended (unclamped) sRGB, so wide-gamut destinations are reachable
+  Gradient(CanvasGradient),
+  Pattern(CanvasPattern),
+  Texture(CanvasTexture)
+}
+
+impl Dye{
+  pub fn new<'a>(cx: &mut FunctionContext<'a>, value: Handle<'a, JsValue>) -> Option<Self> {
+    if let Ok(gradient) = value.downcast::<BoxedCanvasGradient, _>(cx){
+      Some(Dye::Gradient(gradient.borrow().clone()) )
+    }else if let Ok(pattern) = value.downcast::<BoxedCanvasPattern, _>(cx){
+      Some(Dye::Pattern(pattern.borrow().clone()) )
+    }else if let Ok(texture) = value.downcast::<BoxedCanvasTexture, _>(cx){
+      Some(Dye::Texture(texture.borrow().clone()) )
+    }else{
+      css_color_in(cx, value).map(Dye::Color)
+    }
+  }
+
+  pub fn value<'a>(&self, cx: &mut FunctionContext<'a>) -> JsResult<'a, JsValue> {
+    match self{
+      Dye::Color(css_color) => Ok(cx.string(css_color.to_css()).upcast()),
+      _ => Ok(cx.null().upcast()) // flag to the js context that it should use its cached pattern/gradient ref
+    }
+  }
+
+  pub fn is_opaque(&self) -> bool{
+    match self {
+      Dye::Color(css_color) => css_color.color.is_opaque(),
+      Dye::Gradient(gradient) => gradient.is_opaque(),
+      Dye::Pattern(pattern) => pattern.is_opaque(),
+      Dye::Texture(_) => false,
+    }
+  }
+
+  pub fn mix_into(&self, paint: &mut Paint, alpha: f32, image_filter: ImageFilter){
+    match self {
+      Dye::Color(css_color) => {
+        let mut color = css_color.color;
+        color.a *= alpha;
+        paint.set_color4f(color, None);
+      },
+      Dye::Gradient(gradient) =>{
+        paint.set_shader(gradient.shader())
+             .set_alpha_f(alpha);
+      },
+      Dye::Pattern(pattern) =>{
+        paint.set_shader(pattern.shader(image_filter))
+             .set_alpha_f(alpha);
+      }
+      Dye::Texture(texture) =>{
+        paint.set_color4f(texture.to_color_4f(alpha), None);
+      }
+    };
+  }
+}

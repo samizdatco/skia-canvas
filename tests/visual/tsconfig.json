@@ -1,0 +1,12 @@
+{
+  // the visual harness runs the same file in real browsers, so unlike the rest
+  // of the test tree it type-checks against the DOM's canvas types
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["**/*.js", "**/*.mjs"],
+  // clear the inherited `exclude` (which names this very directory, so leaving it
+  // in place would exclude everything this config means to check)
+  "exclude": []
+}

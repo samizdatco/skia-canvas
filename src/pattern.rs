@@ -4,10 +4,11 @@ use std::rc::Rc;
 use neon::prelude::*;
 use skia_safe::{Shader, TileMode, Size, Rect, Matrix, FilterMode};
 
-use crate::utils::*;
+use crate::bridge::*;
 use crate::image::{BoxedImage, Content};
 use crate::context::BoxedContext2D;
 use crate::filter::ImageFilter;
+use crate::mem;
 
 pub type BoxedCanvasPattern = JsBox<RefCell<CanvasPattern>>;
 impl Finalize for CanvasPattern {}
@@ -15,9 +16,24 @@ impl Finalize for CanvasPattern {}
 
 pub struct Stamp{
   content: Content,
+  #[allow(dead_code)] // not called after construction, but used for its side-effect on drop
+  footprint: mem::v8::Footprint,
   dims:Size,
   repeat:(TileMode, TileMode),
-  matrix:Matrix
+  matrix:Matrix,
+}
+
+impl Stamp{
+  fn new(content:Content, dims:Size, repeat:(TileMode, TileMode), matrix:Matrix) -> Self{
+    let footprint = mem::v8::Footprint::new(content.native_bytes()); // record the bitmap size for v8
+    Stamp{content, footprint, dims, repeat, matrix}
+  }
+}
+
+impl Drop for Stamp{
+  fn drop(&mut self) {
+    self.content.release();
+  }
 }
 
 #[derive(Clone)]
@@ -34,9 +50,10 @@ impl CanvasPattern{
         image.to_shader(stamp.repeat, image_filter.sampling(), None).map(|shader|
           shader.with_local_matrix(&stamp.matrix)
         ),
-      Content::Vector(pict, ..) => {
+      Content::Vector(pict, _, space) => {
         let tile_rect = Rect::from_size(stamp.dims);
         let shader = pict.to_shader(stamp.repeat, FilterMode::Linear, None, Some(&tile_rect));
+        let shader = shader.with_working_color_space(space.clone(), None); // rasterize in the source color space
         Some(shader.with_local_matrix(&stamp.matrix))
       },
       _ => None
@@ -69,17 +86,17 @@ pub fn from_image(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let mut matrix = Matrix::new_identity();
 
   if src.autosized && !dims.is_empty() {
-    // If this flag is set (for SVG images with no intrinsic size) then we need to scale the image to
-    // the canvas' smallest dimension. This preserves compatibility with how Chromium browsers behave.
-    let min_size = f32::min(canvas_width, canvas_height);
-    let factor = (min_size / dims.width, min_size / dims.height);
-    matrix.set_scale(factor, None);
+    // If this flag is set (for SVG images with no intrinsic size) then scale the tile to fit within
+    // the canvas, matching how Chromium sizes pattern tiles.
+    let factor = f32::min(canvas_width / dims.width, canvas_height / dims.height);
+    matrix.set_scale((factor, factor), None);
   }
 
-  let stamp = Stamp{content, dims, repeat, matrix};
+  let stamp = Stamp::new(content, dims, repeat, matrix);
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
-  Ok(cx.boxed(this))
+  let boxed = cx.boxed(this);
+  Ok(boxed)
 }
 
 pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
@@ -89,10 +106,11 @@ pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> 
   let dims:Size = content.size().into();
   let matrix = Matrix::new_identity();
 
-  let stamp = Stamp{content, dims, repeat, matrix};
+  let stamp = Stamp::new(content, dims, repeat, matrix);
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
-  Ok(cx.boxed(this))
+  let boxed = cx.boxed(this);
+  Ok(boxed)
 }
 
 pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
@@ -102,14 +120,13 @@ pub fn from_canvas(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> {
   let mut ctx = src.borrow_mut();
   let dims = ctx.bounds.size();
   let matrix = Matrix::new_identity();
-  let content = ctx.get_picture()
-    .map(|picture| Content::Vector(picture, dims))
-    .unwrap_or_default();
+  let content = Content::vector_from_context(&mut ctx);
 
-  let stamp = Stamp{content, dims, repeat, matrix};
+  let stamp = Stamp::new(content, dims, repeat, matrix);
   let canvas_pattern = CanvasPattern{ stamp:Rc::new(RefCell::new(stamp))};
   let this = RefCell::new(canvas_pattern);
-  Ok(cx.boxed(this))
+  let boxed = cx.boxed(this);
+  Ok(boxed)
 }
 
 pub fn setTransform(mut cx: FunctionContext) -> JsResult<JsUndefined> {

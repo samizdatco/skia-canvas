@@ -5,15 +5,18 @@ use neon::prelude::*;
 mod canvas;
 mod context;
 mod path;
+mod drawlist;
 mod image;
+mod pdf;
 mod filter;
 mod gradient;
 mod pattern;
 mod texture;
 mod font_library;
 mod typography;
-mod utils;
-mod gpu;
+mod bridge;
+mod mem;
+mod gfx;
 #[cfg(feature = "window")]
 mod gui;
 
@@ -29,16 +32,28 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     }
   }
 
+  // retire the GPU context cleanly at process (so its destructor runs while the driver is still alive)
+  bridge::install_exit_handler(&mut cx, || gfx::engine::retire_gpu())?;
+
+  // create a channel for telling v8 about native allocations associated with GC-able handles
+  mem::v8::install_channel(&mut cx);
+
   // -- Image -------------------------------------------------------------------------------------
 
   cx.export_function("Image_new", image::new)?;
   cx.export_function("Image_get_src", image::get_src)?;
   cx.export_function("Image_set_src", image::set_src)?;
   cx.export_function("Image_set_data", image::set_data)?;
+  cx.export_function("Image_dispose", image::dispose)?;
   cx.export_function("Image_get_width", image::get_width)?;
   cx.export_function("Image_get_height", image::get_height)?;
   cx.export_function("Image_get_complete", image::get_complete)?;
   cx.export_function("Image_pixels", image::pixels)?;
+
+  // -- PDF ---------------------------------------------------------------------------------------
+
+  cx.export_function("PDF_open", pdf::open)?;
+  cx.export_function("PDF_impose", pdf::impose)?;
 
   // -- Path2D ------------------------------------------------------------------------------------
 
@@ -46,17 +61,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_from_path", path::from_path)?;
   cx.export_function("Path2D_from_svg", path::from_svg)?;
   cx.export_function("Path2D_addPath", path::addPath)?;
-  cx.export_function("Path2D_closePath", path::closePath)?;
-  cx.export_function("Path2D_moveTo", path::moveTo)?;
-  cx.export_function("Path2D_lineTo", path::lineTo)?;
-  cx.export_function("Path2D_bezierCurveTo", path::bezierCurveTo)?;
-  cx.export_function("Path2D_quadraticCurveTo", path::quadraticCurveTo)?;
-  cx.export_function("Path2D_conicCurveTo", path::conicCurveTo)?;
-  cx.export_function("Path2D_arc", path::arc)?;
-  cx.export_function("Path2D_arcTo", path::arcTo)?;
-  cx.export_function("Path2D_ellipse", path::ellipse)?;
-  cx.export_function("Path2D_rect", path::rect)?;
-  cx.export_function("Path2D_roundRect", path::roundRect)?;
   cx.export_function("Path2D_op", path::op)?;
   cx.export_function("Path2D_interpolate", path::interpolate)?;
   cx.export_function("Path2D_simplify", path::simplify)?;
@@ -66,11 +70,23 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Path2D_jitter", path::jitter)?;
   cx.export_function("Path2D_offset", path::offset)?;
   cx.export_function("Path2D_transform", path::transform)?;
+  cx.export_function("Path2D_get_length", path::get_length)?;
+  cx.export_function("Path2D_positionAt", path::position_at)?;
+  cx.export_function("Path2D_tangentAt", path::tangent_at)?;
+  cx.export_function("Path2D_normalAt", path::normal_at)?;
+  cx.export_function("Path2D_slice", path::slice)?;
+  cx.export_function("Path2D_contours", path::contours)?;
+  cx.export_function("Path2D_points", path::points)?;
   cx.export_function("Path2D_bounds", path::bounds)?;
   cx.export_function("Path2D_contains", path::contains)?;
   cx.export_function("Path2D_edges", path::edges)?;
   cx.export_function("Path2D_get_d", path::get_d)?;
   cx.export_function("Path2D_set_d", path::set_d)?;
+  cx.export_function("Path2D_plot", drawlist::plot)?;
+
+  // -- Drawlist ----------------------------------------------------------------------------------
+
+  cx.export_function("DrawList_opcodes", drawlist::opcodes)?;
 
   // -- CanvasGradient ----------------------------------------------------------------------------
 
@@ -78,6 +94,12 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasGradient_radial", gradient::radial)?;
   cx.export_function("CanvasGradient_conic", gradient::conic)?;
   cx.export_function("CanvasGradient_addColorStop", gradient::addColorStop)?;
+  cx.export_function("CanvasGradient_get_colorInterpolationMethod", gradient::get_colorInterpolationMethod)?;
+  cx.export_function("CanvasGradient_set_colorInterpolationMethod", gradient::set_colorInterpolationMethod)?;
+  cx.export_function("CanvasGradient_get_hueInterpolationMethod", gradient::get_hueInterpolationMethod)?;
+  cx.export_function("CanvasGradient_set_hueInterpolationMethod", gradient::set_hueInterpolationMethod)?;
+  cx.export_function("CanvasGradient_get_premultipliedAlpha", gradient::get_premultipliedAlpha)?;
+  cx.export_function("CanvasGradient_set_premultipliedAlpha", gradient::set_premultipliedAlpha)?;
   cx.export_function("CanvasGradient_repr", gradient::repr)?;
 
   // -- CanvasPattern -----------------------------------------------------------------------------
@@ -104,6 +126,7 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- Canvas ------------------------------------------------------------------------------------
 
   cx.export_function("Canvas_new", canvas::new)?;
+  cx.export_function("Canvas_dispose", canvas::dispose)?;
 
   cx.export_function("Canvas_get_engine", canvas::get_engine)?;
   cx.export_function("Canvas_set_engine", canvas::set_engine)?;
@@ -126,32 +149,15 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_get_size", ctx::get_size)?;
   cx.export_function("CanvasRenderingContext2D_set_size", ctx::set_size)?;
   cx.export_function("CanvasRenderingContext2D_reset", ctx::reset)?;
+  cx.export_function("CanvasRenderingContext2D_dispose", ctx::dispose)?;
 
   // grid state
-  cx.export_function("CanvasRenderingContext2D_save", ctx::save)?;
-  cx.export_function("CanvasRenderingContext2D_restore", ctx::restore)?;
-  cx.export_function("CanvasRenderingContext2D_transform", ctx::transform)?;
-  cx.export_function("CanvasRenderingContext2D_translate", ctx::translate)?;
-  cx.export_function("CanvasRenderingContext2D_scale", ctx::scale)?;
-  cx.export_function("CanvasRenderingContext2D_rotate", ctx::rotate)?;
-  cx.export_function("CanvasRenderingContext2D_resetTransform", ctx::resetTransform)?;
   cx.export_function("CanvasRenderingContext2D_get_currentTransform", ctx::get_currentTransform)?;
   cx.export_function("CanvasRenderingContext2D_set_currentTransform", ctx::set_currentTransform)?;
   cx.export_function("CanvasRenderingContext2D_createProjection", ctx::createProjection)?;
 
   // bézier paths
-  cx.export_function("CanvasRenderingContext2D_beginPath", ctx::beginPath)?;
-  cx.export_function("CanvasRenderingContext2D_rect", ctx::rect)?;
-  cx.export_function("CanvasRenderingContext2D_roundRect", ctx::roundRect)?;
-  cx.export_function("CanvasRenderingContext2D_arc", ctx::arc)?;
-  cx.export_function("CanvasRenderingContext2D_ellipse", ctx::ellipse)?;
-  cx.export_function("CanvasRenderingContext2D_moveTo", ctx::moveTo)?;
-  cx.export_function("CanvasRenderingContext2D_lineTo", ctx::lineTo)?;
-  cx.export_function("CanvasRenderingContext2D_arcTo", ctx::arcTo)?;
-  cx.export_function("CanvasRenderingContext2D_bezierCurveTo", ctx::bezierCurveTo)?;
-  cx.export_function("CanvasRenderingContext2D_quadraticCurveTo", ctx::quadraticCurveTo)?;
-  cx.export_function("CanvasRenderingContext2D_conicCurveTo", ctx::conicCurveTo)?;
-  cx.export_function("CanvasRenderingContext2D_closePath", ctx::closePath)?;
+  cx.export_function("CanvasRenderingContext2D_plot", drawlist::plot)?;
   cx.export_function("CanvasRenderingContext2D_isPointInPath", ctx::isPointInPath)?;
   cx.export_function("CanvasRenderingContext2D_isPointInStroke", ctx::isPointInStroke)?;
   cx.export_function("CanvasRenderingContext2D_clip", ctx::clip)?;
@@ -159,9 +165,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // fill & stroke
   cx.export_function("CanvasRenderingContext2D_fill", ctx::fill)?;
   cx.export_function("CanvasRenderingContext2D_stroke", ctx::stroke)?;
-  cx.export_function("CanvasRenderingContext2D_fillRect", ctx::fillRect)?;
-  cx.export_function("CanvasRenderingContext2D_strokeRect", ctx::strokeRect)?;
-  cx.export_function("CanvasRenderingContext2D_clearRect", ctx::clearRect)?;
   cx.export_function("CanvasRenderingContext2D_get_fillStyle", ctx::get_fillStyle)?;
   cx.export_function("CanvasRenderingContext2D_set_fillStyle", ctx::set_fillStyle)?;
   cx.export_function("CanvasRenderingContext2D_get_strokeStyle", ctx::get_strokeStyle)?;
@@ -214,8 +217,12 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_wordSpacing", ctx::set_wordSpacing)?;
   cx.export_function("CanvasRenderingContext2D_get_fontHinting", ctx::get_fontHinting)?;
   cx.export_function("CanvasRenderingContext2D_set_fontHinting", ctx::set_fontHinting)?;
+  cx.export_function("CanvasRenderingContext2D_get_fontSmoothing", ctx::get_fontSmoothing)?;
+  cx.export_function("CanvasRenderingContext2D_set_fontSmoothing", ctx::set_fontSmoothing)?;
   cx.export_function("CanvasRenderingContext2D_get_fontVariant", ctx::get_fontVariant)?;
   cx.export_function("CanvasRenderingContext2D_set_fontVariant", ctx::set_fontVariant)?;
+  cx.export_function("CanvasRenderingContext2D_get_fontSynthesis", ctx::get_fontSynthesis)?;
+  cx.export_function("CanvasRenderingContext2D_set_fontSynthesis", ctx::set_fontSynthesis)?;
   cx.export_function("CanvasRenderingContext2D_get_fontStretch", ctx::get_fontStretch)?;
   cx.export_function("CanvasRenderingContext2D_set_fontStretch", ctx::set_fontStretch)?;
   cx.export_function("CanvasRenderingContext2D_get_textWrap", ctx::get_textWrap)?;
@@ -242,13 +249,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   // -- Window -----------------------------------------------------------------------------------
 
   #[cfg(feature = "window")] {
-    cx.export_function("App_register", gui::register)?;
     cx.export_function("App_activate", gui::activate)?;
     cx.export_function("App_quit", gui::quit)?;
     cx.export_function("App_closeWindow", gui::close)?;
     cx.export_function("App_openWindow", gui::open)?;
     cx.export_function("App_setRate", gui::set_rate)?;
-    cx.export_function("App_setMode", gui::set_mode)?;
   }
 
   Ok(())

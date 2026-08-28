@@ -3,12 +3,12 @@
 #![allow(dead_code)]
 use neon::prelude::*;
 
-use crate::utils::*;
+use crate::bridge::*;
 use crate::context::BoxedContext2D;
-use crate::gpu::RenderingEngine;
+use crate::gfx::RenderingEngine;
 
 pub mod app;
-use app::{App, LoopMode};
+use app::App;
 
 pub mod window;
 use window::WindowSpec;
@@ -16,6 +16,8 @@ use window::WindowSpec;
 pub mod event;
 
 pub mod window_mgr;
+
+pub mod cadence;
 
 fn validate_gpu(cx:&mut FunctionContext) -> NeonResult<()>{
     // bail out if we can't draw to the screen
@@ -25,20 +27,14 @@ fn validate_gpu(cx:&mut FunctionContext) -> NeonResult<()>{
     Ok(())
 }
 
-pub fn register(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    let callback = cx.argument::<JsFunction>(1)?.root(&mut cx);
-    App::register(callback);
-    Ok(cx.undefined())
-}
-
-
 pub fn activate(mut cx: FunctionContext) -> JsResult<JsPromise> {
     validate_gpu(&mut cx)?;
 
+    let callback = cx.argument::<JsFunction>(1)?.root(&mut cx);
     let (deferred, promise) = cx.promise();
     let channel = cx.channel();
 
-    App::activate(channel, deferred);
+    App::activate(channel, deferred, callback);
 
     Ok(promise)
 }
@@ -47,18 +43,6 @@ pub fn set_rate(mut cx: FunctionContext) -> JsResult<JsNumber> {
     let fps = float_arg(&mut cx, 1, "framesPerSecond")?;
     App::set_fps(fps);
     Ok(cx.number(fps as f64))
-}
-
-pub fn set_mode(mut cx: FunctionContext) -> JsResult<JsString> {
-    let mode = string_arg(&mut cx, 1, "eventLoopMode")?;
-    let loop_mode = match mode.as_str(){
-        "node" => Ok(LoopMode::Node),
-        "native" => Ok(LoopMode::Native),
-        _ => cx.throw_error(format!("Invalid event loop mode: {}", mode))
-    }?;
-
-    App::set_mode(loop_mode);
-    Ok(cx.string(mode))
 }
 
 pub fn open(mut cx: FunctionContext) -> JsResult<JsUndefined> {

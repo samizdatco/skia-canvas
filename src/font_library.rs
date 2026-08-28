@@ -9,14 +9,13 @@ use std::path::Path;
 use std::collections::HashMap;
 use neon::prelude::*;
 
-use skia_safe::{FontMgr, FontArguments, Typeface};
-use skia_safe::font_style::{FontStyle, Slant};
-use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
+use skia_safe::{font::Edging, FontHinting, FontMgr, Typeface};
+use skia_safe::font_style::FontStyle;
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
 use skia_safe::utils::OrderedFontMgr;
 
-use crate::utils::*;
-use crate::typography::{FontSpec, from_width, from_slant, typeface_wght_range, typeface_details};
+use crate::bridge::*;
+
 
 #[cfg(target_os = "windows")]
 use allsorts::{
@@ -29,26 +28,12 @@ use allsorts::{
 
 thread_local!( static LIBRARY: OnceLock<RefCell<FontLibrary>> = const{ OnceLock::new() }; );
 
-#[derive(PartialEq, Eq, Hash)]
-pub struct CollectionKey{ families:String, weight:i32, slant:Slant }
-
-impl CollectionKey{
-  pub fn new(style: &TextStyle) -> Self {
-    let families = style.font_families();
-    let families = families.iter().collect::<Vec<&str>>().join(", ");
-    let weight = *style.font_style().weight();
-    let slant = style.font_style().slant();
-    CollectionKey{ families, weight, slant }
-  }
-}
-
 pub struct FontLibrary{
     mgr: FontMgr,
     collection: Option<FontCollection>,
     fonts: Vec<(Typeface, Option<String>)>,
     generics_cache: Vec<(Typeface, Option<String>)>,
-    collection_cache: HashMap<CollectionKey, FontCollection>,
-    collection_hinted: bool,
+    collection_attrs: RenderAttrs,
   }
 
 impl FontLibrary{
@@ -65,13 +50,13 @@ impl FontLibrary{
           if !(has_config || has_override){
             if let Some(mut fallback_config_path) = process_path::get_dylib_path(){
               fallback_config_path.set_file_name("fonts");
-              std::env::set_var("FONTCONFIG_PATH", fallback_config_path);
+              unsafe { std::env::set_var("FONTCONFIG_PATH", fallback_config_path); }
             }
           }
         }
 
         RefCell::new(FontLibrary{
-          mgr:FontMgr::default(), fonts:vec![], collection:None, collection_cache:HashMap::new(), collection_hinted:false, generics_cache:vec![]
+          mgr:FontMgr::default(), fonts:vec![], collection:None, collection_attrs:RenderAttrs::default(), generics_cache:vec![]
         })
       });
 
@@ -79,7 +64,7 @@ impl FontLibrary{
     })
   }
 
-  fn font_collection(&mut self) -> FontCollection{
+  pub fn font_collection(&mut self) -> FontCollection{
     // lazily initialize font collection on first actual use
     if self.collection.is_none(){
       self.collection = Some(self.new_font_collection());
@@ -240,8 +225,13 @@ impl FontLibrary{
 
     // add the new typeface/alias and recreate the FontCollection to include it
     self.fonts.push((font, alias));
+    self.invalidate();
+  }
+
+  fn invalidate(&mut self){
+    // the font collection and metrics cache always need to be invalidated in tandem
     self.collection = None;
-    self.collection_cache.drain();
+    METRICS_CACHE.with_borrow_mut(|cache| *cache = MetricsCache::default());
   }
 
   pub fn update_style(&mut self, orig_style:&TextStyle, spec: &FontSpec) -> Option<TextStyle>{
@@ -264,77 +254,76 @@ impl FontLibrary{
       })
   }
 
-  pub fn set_hinting(&mut self, hinting:bool) -> &mut Self{
-    // skia's rasterizer cache doesn't take hinting into account, so manually invalidate if changed
-    if hinting != self.collection_hinted{
-      self.collection_hinted = hinting;
-      self.collection_cache.iter_mut().for_each(|(_, fc)| fc.clear_caches());
+  pub fn set_render_attrs(&mut self, attrs:RenderAttrs) -> &mut Self{
+    // skia's layout & font-resolution caches don't key on any of these attrs, so manually invalidate if changed
+    if attrs != self.collection_attrs{
+      self.collection_attrs = attrs;
       self.font_collection().clear_caches();
     }
     self
   }
+}
 
-  pub fn fonts_for_style(&mut self, style: &TextStyle) -> FontCollection {
-    let families = style.font_families();
-    let families:Vec<&str> = families.iter().collect();
-    let matches = self.font_collection().find_typefaces(&families, style.font_style());
+#[derive(Clone, Copy, PartialEq)]
+pub struct RenderAttrs{
+  pub hinting: FontHinting,
+  pub edging: Edging,
+  pub subpixel: bool,
+  pub synthesize: bool,
+}
 
-    // if any of the matched typefaces is a variable font, create an instance that
-    // matches the current weight settings and add it to a dynamic font mgr
-    if matches.iter().any(|font| font.variation_design_parameters().is_some()){
-      // memoize the generation of FontCollections for instanced variable fonts
-      let key = CollectionKey::new(style);
-      if let Some(collection) = self.collection_cache.get(&key){
-        return collection.clone()
-      }
-
-      // collect any instantiated variable fonts in a TFP to be used as the 'dynamic'
-      // font mgr (which is searched before the 'asset' or the 'default' mgr)
-      let mut dynamic = TypefaceFontProvider::new();
-
-      for font in matches.into_iter(){
-        font.variation_design_parameters()
-          .and_then(|params|{
-            // find the weight axis
-            params.into_iter().find(|param|{
-              let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-              let tag = String::from_utf8(chars).unwrap();
-              tag == "wght"
-            })
-          }).and_then(|param|{
-            // create an instance at the proper 'wght' for this weight
-            // NB: currently setting the value to *one less* than what was requested
-            //     to work around weird Skia behavior that returns something nonlinearly
-            //     weighted in many cases (but not for ±1 of that value). This makes it so
-            //     that n × 100 values will render correctly (and the bug will manifest at
-            //     n × 100 + 1 instead)
-            let weight = *style.font_style().weight() - 1;
-            let value = (weight as f32).max(param.min).min(param.max);
-            let coords = [ Coordinate { axis: param.tag, value } ];
-            let v_pos = VariationPosition { coordinates: &coords };
-            let args = FontArguments::new().set_variation_design_position(v_pos);
-            font.clone_with_arguments(&args)
-          }).map(|face|{
-            // maintain the user-defined family alias (if applicable)
-            let alias = self.fonts.iter().find_map(|(orig, alias)|
-              if Typeface::equal(&font, orig){ alias.clone() }else{ None }
-            );
-
-            // add the font to the dynamic font mgr
-            dynamic.register_typeface(face, alias.as_deref())
-          });
-      }
-
-      let mut collection = self.new_font_collection();
-      collection.set_dynamic_font_manager(Some(dynamic.into()));
-      self.collection_cache.insert(key, collection.clone());
-      collection
-    }else{
-      // if the matched font wasn't variable, then just return the standard collection
-      self.font_collection()
-    }
+impl Default for RenderAttrs{
+  fn default() -> Self{
+    Self{hinting:FontHinting::None, edging:Edging::AntiAlias, subpixel:true, synthesize:true}
   }
 }
+
+//
+// Text metrics cache (saves repeated multi-line measurement and serialization)
+//
+
+const METRICS_CAP: usize = 2048;
+
+pub type MetricsKey = (u64, String, Option<u32>); // (state hash, text, maxWidth bits)
+
+#[derive(Default)]
+struct MetricsCache{
+  hot: HashMap<MetricsKey, String>,
+  cold: HashMap<MetricsKey, String>,
+}
+
+impl MetricsCache{
+  fn get(&mut self, key:&MetricsKey) -> Option<String>{
+    if let Some(json) = self.hot.get(key){ return Some(json.clone()) }
+    let json = self.cold.remove(key)?;
+    self.put(key.clone(), json.clone()); // a cold hit is re-promoted into the current generation
+    Some(json)
+  }
+
+  fn put(&mut self, key:MetricsKey, json:String){
+    if self.hot.len() >= METRICS_CAP{
+      self.cold = std::mem::take(&mut self.hot); // demote; the old cold generation drops here
+    }
+    self.hot.insert(key, json);
+  }
+}
+
+thread_local!(
+  static METRICS_CACHE: RefCell<MetricsCache> = RefCell::default();
+);
+
+// look up a measurement, or compute-and-store it. the borrow is *not* held across `compute`
+// (house rule: never hold a store while doing real work — and here re-entry is a certainty, since
+// `compute` typesets, which borrows the library)
+pub fn cached_metrics(key:MetricsKey, compute:impl FnOnce() -> String) -> String{
+  if let Some(json) = METRICS_CACHE.with_borrow_mut(|cache| cache.get(&key)){
+    return json
+  }
+  let json = compute();
+  METRICS_CACHE.with_borrow_mut(|cache| cache.put(key, json.clone()));
+  json
+}
+
 
 //
 // Javascript Methods
@@ -441,8 +430,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   FontLibrary::with_shared(|lib|{
     lib.fonts.clear();
-    lib.collection = None;
-    lib.collection_cache.drain();
+    lib.invalidate();
   });
 
   Ok(cx.undefined())

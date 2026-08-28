@@ -24,10 +24,10 @@ dev: $(NPM) $(LIB_SRC)
 	@touch $(LIB)
 
 test: $(LIB)
-	node --test
+	node tests/runner full
 
 debug: $(LIB)
-	node --test --watch
+	node tests/runner debug
 
 visual: $(LIB)
 	@node --watch-path lib --watch-path tests/visual tests/visual
@@ -36,12 +36,11 @@ check:
 	cargo check
 
 clean:
+	cargo clean -p skia-canvas
 	rm -f $(LIB)
 
 distclean: clean
 	rm -rf $(NPM)
-	rm -rf $(CURDIR)/target/debug
-	rm -rf $(CURDIR)/target/release
 	cargo clean
 
 release:
