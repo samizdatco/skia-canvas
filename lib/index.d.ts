@@ -787,8 +787,11 @@ interface CanvasTextDrawingStyles {
      * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/font)
      */
     font: string;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontStretch) */
-    fontStretch: CanvasFontStretch;
+    /** A CSS `font-stretch` keyword or percentage string (e.g. `"condensed"` or `"75%"`).
+     * Percentages set the `wdth` variation axis directly on variable fonts.
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontStretch) */
+    fontStretch: CanvasFontStretch | (string & {});
     /**
      * A CSS length, e.g. `"2px"` or `"0.1em"`. Accepts `px`, `pt`, `pc`, `in`, `cm`, `mm`, `q`,
      * `em`, and `rem` (`em`/`rem` resolve against the current font size); other units are ignored.
@@ -857,6 +860,9 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
    *  `canvas.height` for the most recently added page. */
   readonly height: number
   fontVariant: FontVariantSetting
+  /** A CSS `font-variation-settings` string (e.g. `'"wght" 625, "opsz" 48'`) giving low-level
+   *  control over variable-font axes. Set to `"normal"` to clear. */
+  fontVariationSettings: string
   fontHinting: boolean
   fontSmoothing: boolean
   fontSynthesis: boolean

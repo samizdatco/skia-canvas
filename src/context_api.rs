@@ -707,14 +707,13 @@ pub fn set_font(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 pub fn get_fontStretch(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();
-  Ok(cx.string(from_width(this.state.font_width)))
+  Ok(cx.string(stretch_label(this.state.font_stretch)))
 }
 
 pub fn set_fontStretch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  if let Some(stretch) = opt_string_arg(&mut cx, 1){
-    let mut this = this.borrow_mut();
-    this.set_font_width(to_width(&stretch));
+  if let Some(percent) = font_stretch_arg(&mut cx, 1)?{
+    this.borrow_mut().set_font_width(percent);
   }
   Ok(cx.undefined())
 }
@@ -875,6 +874,21 @@ pub fn set_fontVariant(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let feat_obj: Handle<JsObject> = arg.get(&mut cx, "features")?;
     let features = font_features(&mut cx, &feat_obj)?;
     this.borrow_mut().set_font_variant(&variant, &features);
+  }
+  Ok(cx.undefined())
+}
+
+pub fn get_fontVariationSettings(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow_mut();
+  Ok(cx.string(this.state.font_axes.css_string()))
+}
+
+pub fn set_fontVariationSettings(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  if let Some(arg) = opt_object_arg(&mut cx, 1){
+    let settings = variation_settings(&mut cx, &arg)?;
+    this.borrow_mut().set_font_variation(settings);
   }
   Ok(cx.undefined())
 }

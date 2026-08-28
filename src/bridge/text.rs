@@ -1,9 +1,10 @@
 #![allow(non_snake_case)]
 use core::ops::Range;
 use neon::prelude::*;
-use skia_safe::Typeface;
+use skia_safe::{Typeface, FourByteTag, FontArguments};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
-use skia_safe::textlayout::{TextAlign, TextDecorationStyle};
+use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
+use skia_safe::textlayout::{TextAlign, TextDecorationStyle, TextStyle};
 
 use super::*;
 use crate::typography::{Baseline, DecorationKind, DecorationLine, DecorationStyle};
@@ -266,6 +267,119 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
   }else{
     Ok(None)
   }
+}
+
+// font-stretch keywords and their corresponding percentages
+const STRETCH_BUCKETS: [(Width, f32); 9] = [
+  (Width::ULTRA_CONDENSED, 50.0),  (Width::EXTRA_CONDENSED, 62.5),
+  (Width::CONDENSED,       75.0),  (Width::SEMI_CONDENSED,  87.5),
+  (Width::NORMAL,         100.0),  (Width::SEMI_EXPANDED,  112.5),
+  (Width::EXPANDED,       125.0),  (Width::EXTRA_EXPANDED, 150.0),
+  (Width::ULTRA_EXPANDED, 200.0),
+];
+
+// convert from a keyword-based Width to a `wdth` percentage
+pub fn width_percent(width:Width) -> f32{
+  STRETCH_BUCKETS.iter().find(|(w, _)| *w == width).map(|(_, p)| *p).unwrap_or(100.0)
+}
+
+// find the nearest Width to a given `wdth` percentage
+pub fn nearest_width(pct:f32) -> Width{
+  STRETCH_BUCKETS.iter()
+    .min_by(|(_, a), (_, b)| (a - pct).abs().total_cmp(&(b - pct).abs()))
+    .map(|(w, _)| *w)
+    .unwrap_or(Width::NORMAL)
+}
+
+// convert percentage to a css keyword string (if one matches) or a percent string
+pub fn stretch_label(pct:f32) -> String{
+  match STRETCH_BUCKETS.iter().find(|(_, p)| *p == pct){
+    Some((w, _)) => from_width(*w),
+    None => format!("{}%", pct),
+  }
+}
+
+// parse a css keyword or percentage string into a `wdth` percentage
+pub fn font_stretch_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<f32>> {
+  if let Some(percent) = opt_float_arg(cx, idx){
+    Ok(Some(percent))
+  }else if let Some(keyword) = opt_string_arg(cx, idx){
+    let lower = keyword.trim().to_lowercase();
+    let width = to_width(&lower); // map non-matches to NORMAL
+    match from_width(width) == lower{
+      true => Ok(Some(width_percent(width))),
+      false => cx.throw_type_error(format!("⚠️Invalid font stretch: {:?}", keyword)),
+    }
+  }else{
+    Ok(None)
+  }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FontAxes{
+  variations: Vec<(String, f32)>, // decoded fontVariationSettings
+}
+
+impl FontAxes{
+  pub fn set_variations(&mut self, mut variations:Vec<(String, f32)>){
+    variations.sort_by(|(a, _), (b, _)| a.cmp(b));
+    self.variations = variations;
+  }
+
+  // reconstruct the canonical css serialization
+  pub fn css_string(&self) -> String{
+    if self.variations.is_empty(){ return "normal".to_string() }
+    self.variations.iter()
+      .map(|(tag, value)| format!("\"{}\" {}", tag, value))
+      .collect::<Vec<_>>()
+      .join(", ")
+  }
+
+  pub fn clear_variations(&mut self){
+    self.variations.clear();
+  }
+
+  // merge the variable font instancing fields into the provided char_style
+  pub fn apply(&self, char_style:&mut TextStyle, stretch:f32){
+    let font_style = char_style.font_style();
+    let axes = char_style.typeface().and_then(|tf| tf.variation_design_parameters());
+    let has_axis = |tag| axes.as_ref().is_some_and(|params| params.iter().any(|p| p.tag == tag));
+    let slant_only_font = has_axis(Coordinate::slnt) && !has_axis(Coordinate::ital);
+
+    let mut coords = vec![
+      Coordinate{ axis:Coordinate::wght, value:*font_style.weight() as f32 },
+      Coordinate{ axis:Coordinate::wdth, value:stretch },
+    ];
+    coords.push(match (font_style.slant(), slant_only_font){
+      (Slant::Italic, true)  => Coordinate{ axis:Coordinate::slnt, value:-14.0 },
+      (Slant::Italic, false) => Coordinate{ axis:Coordinate::ital, value:1.0 },
+      _                      => Coordinate{ axis:Coordinate::ital, value:0.0 },
+    });
+    for (tag, value) in &self.variations{
+      let b = tag.as_bytes();
+      let axis = FourByteTag::from_chars(b[0] as char, b[1] as char, b[2] as char, b[3] as char);
+      coords.push(Coordinate{ axis, value:*value });
+    }
+
+    let args = FontArguments::new()
+      .set_variation_design_position(VariationPosition{ coordinates: &coords });
+    char_style.set_font_arguments(&args);
+  }
+
+  // state the measureText cache depends on
+  pub fn cache_key(&self) -> Vec<(String, u32)>{
+    self.variations.iter().map(|(tag, value)| (tag.clone(), value.to_bits())).collect()
+  }
+}
+
+// unpack the js `fontVariationSettings` mapping
+pub fn variation_settings(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, f32)>>{
+  let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
+  let mut settings:Vec<(String, f32)> = vec![];
+  for key in strings_in(cx, &keys).iter() {
+    settings.push( (key.to_string(), float_for_key(cx, obj, key)?) );
+  }
+  Ok(settings)
 }
 
 //

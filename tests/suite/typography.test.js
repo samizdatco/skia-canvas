@@ -161,6 +161,75 @@ describe("Typography", () => {
     assert(!differs(render(true), smoothed))
   })
 
+  describe("fontVariationSettings", () => {
+    let opaque = () => ctx.getImageData(0, 0, WIDTH, HEIGHT).data.filter((v, i) => i % 4 == 3 && v > 10).length
+    let ink = () => { ctx.clearRect(0, 0, WIDTH, HEIGHT); ctx.fillText("Hamburg", 20, 100); return opaque() }
+
+    test("parses & serializes CSS-canonically", () => {
+      assert.equal(ctx.fontVariationSettings, "normal") // default
+
+      // sorted alphabetically by tag, double-quoted, minimal numbers
+      ctx.fontVariationSettings = '"wght" 625, "opsz" 48, "GRAD" -30'
+      assert.equal(ctx.fontVariationSettings, '"GRAD" -30, "opsz" 48, "wght" 625')
+
+      // repeated tag: last value wins
+      ctx.fontVariationSettings = '"wght" 400, "wght" 900'
+      assert.equal(ctx.fontVariationSettings, '"wght" 900')
+
+      // `normal` / empty clears
+      ctx.fontVariationSettings = "normal"
+      assert.equal(ctx.fontVariationSettings, "normal")
+      ctx.fontVariationSettings = '"wght" 700'
+      ctx.fontVariationSettings = ""
+      assert.equal(ctx.fontVariationSettings, "normal")
+    })
+
+    test("ignores malformed values", () => {
+      ctx.fontVariationSettings = '"wght" 700'
+      // each of these is invalid and should be a silent no-op (leaving the prior value intact)
+      ctx.fontVariationSettings = 'wght 700'     // tag not quoted
+      ctx.fontVariationSettings = '"wght"'       // missing value
+      ctx.fontVariationSettings = '"wg" 700'     // tag not 4 chars
+      ctx.fontVariationSettings = '"wght" abc'   // non-numeric value
+      assert.equal(ctx.fontVariationSettings, '"wght" 700')
+    })
+
+    test("instances arbitrary axes", () => {
+      // Amstelvar exposes wght, opsz, wdth + custom axes (GRAD, XOPQ, …)
+      FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
+      ctx.font = "80px AmstelvarAlpha"
+
+      ctx.fontVariationSettings = '"wght" 100'
+      let light = ink()
+      ctx.fontVariationSettings = '"wght" 900'
+      let heavy = ink()
+      assert(heavy > light) // heavier axis lays down more ink
+
+      // a non-`wght` custom axis (GRAD = grade) also changes rendering
+      ctx.fontVariationSettings = '"GRAD" 88'
+      let lowGrade = ink()
+      ctx.fontVariationSettings = '"GRAD" 150'
+      let highGrade = ink()
+      assert(highGrade > lowGrade)
+    })
+
+    test("overrides the weight/stretch-derived axes", () => {
+      FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
+
+      // font-weight says 100, but an explicit `wght` in the settings must win (CSS Fonts 4)
+      ctx.font = "100 80px AmstelvarAlpha"
+      let byWeight = ink()
+      ctx.fontVariationSettings = '"wght" 900'
+      let bySettings = ink()
+      assert(bySettings > byWeight)
+    })
+
+    test("is reset by the `font` shorthand", () => {
+      ctx.fontVariationSettings = '"opsz" 48'
+      ctx.font = "40px serif"
+      assert.equal(ctx.fontVariationSettings, "normal")
+    })
+  })
 
   describe("fontVariant", () => {
     test("defaults to normal", () => {
@@ -225,7 +294,7 @@ describe("Typography", () => {
       assert.equal(ctx.fontStretch, "normal")
     })
 
-    test("stretch keywords", () => {
+    test("parses keywords and percent", () => {
       /** @type {Array<import('../../lib').CanvasRenderingContext2D['fontStretch']>} */
       let keywords = ["ultra-condensed", "extra-condensed", "condensed", "semi-condensed",
                       "semi-expanded", "expanded", "extra-expanded", "ultra-expanded", "normal"]
@@ -233,12 +302,33 @@ describe("Typography", () => {
         ctx.fontStretch = kw
         assert.equal(ctx.fontStretch, kw)
       }
+
+      // a percentage that lands exactly on a named bucket normalizes to the keyword…
+      ctx.fontStretch = "75%"
+      assert.equal(ctx.fontStretch, "condensed")
+      ctx.fontStretch = "100%"
+      assert.equal(ctx.fontStretch, "normal")
+
+      // …but an off-bucket percentage stays a percentage
+      ctx.fontStretch = "83%"
+      assert.equal(ctx.fontStretch, "83%")
     })
 
+    test("instances variable wdth axis", () => {
+      // Amstelvar's wdth axis ranges 35–100 (condenses only)
+      FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
+      ctx.font = "80px AmstelvarAlpha"
+
+      ctx.fontStretch = "normal"
+      let wide = ctx.measureText("Hamburg").width
+      ctx.fontStretch = "50%"
+      let narrow = ctx.measureText("Hamburg").width
+      assert(narrow < wide) // condensing the width axis shrinks the advance
+    })
+    
     test("ignores invalid values", () => {
       ctx.fontStretch = "condensed"
       assert.doesNotThrow(() => {
-        // @ts-expect-error - "bogus" is not a valid CanvasFontStretch
         ctx.fontStretch = "bogus"
       })
       assert.equal(ctx.fontStretch, "condensed")

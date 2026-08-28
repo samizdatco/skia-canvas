@@ -10,7 +10,7 @@ use skia_safe::{
   textlayout::{ParagraphStyle, TextStyle, StrutStyle},
   canvas::SrcRectConstraint::Strict,
   path_utils::fill_path_with_paint,
-  font_style::{FontStyle, Width},
+  font_style::FontStyle,
 };
 
 #[path = "context_api.rs"]
@@ -65,7 +65,8 @@ pub struct State{
 
   font: String,
   font_variant: String,
-  font_width: Width,
+  font_stretch: f32,
+  font_axes: FontAxes,
   font_hinting: bool,
   font_smoothing: bool,
   font_synthesis: bool,
@@ -91,13 +92,14 @@ impl Default for State {
 
     let graf_style = ParagraphStyle::new();
     let font_spec = FontSpec::default();
+    let font_axes = FontAxes::default();
     let mut char_style = TextStyle::new();
     char_style
       .set_font_size(font_spec.size)
       .set_font_families(&font_spec.families)
       .set_font_style(font_spec.style());
-    let FontSpec{ canonical: font, variant: font_variant, width: font_width, .. } = font_spec;
-
+    let FontSpec{ canonical: font, variant: font_variant, width, .. } = font_spec;
+    
     State {
       clip: None,
       matrix: Matrix::new_identity(),
@@ -122,7 +124,8 @@ impl Default for State {
 
       font,
       font_variant,
-      font_width,
+      font_axes,
+      font_stretch: width_percent(width),
       font_hinting: false,
       font_smoothing: true,
       font_synthesis: true,
@@ -140,7 +143,7 @@ impl Default for State {
 
 impl State{
   // styling config for use by Typesetter
-  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, bool) {
+  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, bool, f32, FontAxes) {
     let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
     if char_style.typeface().is_none() { // if still using the implicit default font, resolve it now
       char_style = FontLibrary::with_shared(|lib| lib.update_style(&char_style, &FontSpec::default()))
@@ -189,7 +192,7 @@ impl State{
     char_style.set_font_edging(edging);
     char_style.set_subpixel(subpixel);
 
-    ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap )
+    ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap, self.font_stretch, self.font_axes.clone() )
   }
 
   // font settings that cached measureText responses depend on
@@ -199,7 +202,8 @@ impl State{
     (
       &self.font,
       &self.font_variant,
-      *self.font_width,
+      self.font_stretch.to_bits(),
+      self.font_axes.cache_key(),
       self.letter_spacing.to_string(),
       self.word_spacing.to_string(),
       self.text_baseline as u8,
@@ -695,9 +699,10 @@ impl Context2D{
     ){
       self.state.font = spec.canonical;
       self.state.font_variant = spec.variant.to_string();
-      self.state.font_width = spec.width;
       self.state.char_style = new_style;
       self.state.line_height = spec.line_height;
+      self.state.font_stretch = width_percent(spec.width);
+      self.state.font_axes.clear_variations();
     }
   }
 
@@ -709,11 +714,15 @@ impl Context2D{
     self.state.font_variant = variant.to_string();
   }
 
-  pub fn set_font_width(&mut self, width:Width){
+  pub fn set_font_width(&mut self, pct:f32){
     let style = self.state.char_style.font_style();
-    let font_style =  FontStyle::new(style.weight(), width, style.slant());
+    let font_style = FontStyle::new(style.weight(), nearest_width(pct), style.slant());
     self.state.char_style.set_font_style(font_style);
-    self.state.font_width = width;
+    self.state.font_stretch = pct;
+  }
+
+  pub fn set_font_variation(&mut self, settings:Vec<(String, f32)>){
+    self.state.font_axes.set_variations(settings);
   }
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, style:PaintStyle){
