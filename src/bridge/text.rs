@@ -20,16 +20,13 @@ pub struct FontSpec{
   pub weight: Weight,
   pub width: Width,
   pub slant: Slant,
+  pub oblique: Option<f32>,
   pub features: Vec<(String, i32)>,
   pub variant: String,
   pub canonical: String
 }
 
 impl FontSpec{
-  // pub fn with_width(&self, width:Width) -> Self{
-  //   Self{width, ..self.clone()}
-  // }
-
   pub fn style(&self) -> FontStyle{
     FontStyle::new(self.weight, self.width, self.slant)
   }
@@ -44,6 +41,7 @@ impl Default for FontSpec{
       weight: Weight::NORMAL,
       width: Width::NORMAL,
       slant: Slant::Upright,
+      oblique: None,
       features: vec![],
       variant: "normal".to_string(),
       canonical: "10px sans-serif".to_string(),
@@ -62,6 +60,7 @@ pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontS
   let size = float_for_key(cx, &font_desc, "size")?;
   let weight = Weight::from(float_for_key(cx, &font_desc, "weight")? as i32);
   let slant = to_slant(string_for_key(cx, &font_desc, "style")?.as_str());
+  let oblique = opt_float_for_key(cx, &font_desc, "obliqueAngle");
   let width = to_width(string_for_key(cx, &font_desc, "stretch")?.as_str());
   let line_height = opt_float_for_key(cx, &font_desc, "lineHeight")
     .map(|pt_size| pt_size / size);
@@ -71,7 +70,7 @@ pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontS
 
   Ok(match families[0] == ""{
     true => None, // silently fail if a family name was omitted (e.g., "bold 50px")
-    false => Some(FontSpec{ families, size, line_height, weight, slant, width, features, variant, canonical})
+    false => Some(FontSpec{ families, size, line_height, weight, slant, oblique, width, features, variant, canonical})
   })
 }
 
@@ -340,7 +339,7 @@ impl FontAxes{
   }
 
   // merge the variable font instancing fields into the provided char_style
-  pub fn apply(&self, char_style:&mut TextStyle, stretch:f32){
+  pub fn apply(&self, char_style:&mut TextStyle, stretch:f32, oblique:Option<f32>){
     let font_style = char_style.font_style();
     let axes = char_style.typeface().and_then(|tf| tf.variation_design_parameters());
     let has_axis = |tag| axes.as_ref().is_some_and(|params| params.iter().any(|p| p.tag == tag));
@@ -350,11 +349,17 @@ impl FontAxes{
       Coordinate{ axis:Coordinate::wght, value:*font_style.weight() as f32 },
       Coordinate{ axis:Coordinate::wdth, value:stretch },
     ];
-    coords.push(match (font_style.slant(), slant_only_font){
-      (Slant::Italic, true)  => Coordinate{ axis:Coordinate::slnt, value:-14.0 },
-      (Slant::Italic, false) => Coordinate{ axis:Coordinate::ital, value:1.0 },
-      _                      => Coordinate{ axis:Coordinate::ital, value:0.0 },
-    });
+    match (font_style.slant(), slant_only_font){
+      // for slnt-only fonts, map an italic style to the default oblique angle
+      (Slant::Italic, true)  => coords.push(Coordinate{ axis:Coordinate::slnt, value:-14.0 }),
+      (Slant::Italic, false) => coords.push(Coordinate{ axis:Coordinate::ital, value:1.0 }),
+      // if oblique is explicitly selected, disable ital to ensure roman letterforms
+      (Slant::Oblique, _) => coords.extend([
+        Coordinate{ axis:Coordinate::ital, value:0.0 },
+        Coordinate{ axis:Coordinate::slnt, value:-oblique.unwrap_or(14.0) },
+      ]),
+      _ => coords.push(Coordinate{ axis:Coordinate::ital, value:0.0 }),
+    }
     for (tag, value) in &self.variations{
       let b = tag.as_bytes();
       let axis = FourByteTag::from_chars(b[0] as char, b[1] as char, b[2] as char, b[3] as char);

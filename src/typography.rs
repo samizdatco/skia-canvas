@@ -24,13 +24,11 @@ pub struct Typesetter{
   graf_style: ParagraphStyle,
   text_decoration: DecorationStyle,
   text_wrap: bool,
-  font_stretch: f32,
-  font_axes: FontAxes,
 }
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
-    let (char_style, graf_style, text_decoration, text_wrap, font_stretch, font_axes) = state.typography();
+    let (char_style, graf_style, text_decoration, text_wrap) = state.typography();
 
     let typefaces = FontLibrary::with_shared(|lib|
       lib
@@ -48,17 +46,14 @@ impl Typesetter{
       false => text.replace("\n", " ")
     };
 
-    Typesetter{text, width, typefaces, char_style, graf_style, text_decoration, text_wrap, font_stretch, font_axes}
+    Typesetter{text, width, typefaces, char_style, graf_style, text_decoration, text_wrap}
   }
 
   // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`) and
   // provide a y-axis offset from the requested origin to the alphabetic baseline
   fn shape_text(&self) -> (Paragraph, Point) {
-    let mut char_style = self.char_style.clone();
-    self.font_axes.apply(&mut char_style, self.font_stretch);
-
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
-    paragraph_builder.push_style(&char_style);
+    paragraph_builder.push_style(&self.char_style);
     paragraph_builder.add_text(&self.text);
 
     let mut paragraph = paragraph_builder.build();

@@ -66,6 +66,7 @@ pub struct State{
   font: String,
   font_variant: String,
   font_stretch: f32,
+  font_oblique: Option<f32>,
   font_axes: FontAxes,
   font_hinting: bool,
   font_smoothing: bool,
@@ -98,7 +99,7 @@ impl Default for State {
       .set_font_size(font_spec.size)
       .set_font_families(&font_spec.families)
       .set_font_style(font_spec.style());
-    let FontSpec{ canonical: font, variant: font_variant, width, .. } = font_spec;
+    let FontSpec{ canonical: font, variant: font_variant, width, oblique, .. } = font_spec;
     
     State {
       clip: None,
@@ -126,6 +127,7 @@ impl Default for State {
       font_variant,
       font_axes,
       font_stretch: width_percent(width),
+      font_oblique: oblique,
       font_hinting: false,
       font_smoothing: true,
       font_synthesis: true,
@@ -143,7 +145,7 @@ impl Default for State {
 
 impl State{
   // styling config for use by Typesetter
-  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, bool, f32, FontAxes) {
+  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, bool) {
     let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
     if char_style.typeface().is_none() { // if still using the implicit default font, resolve it now
       char_style = FontLibrary::with_shared(|lib| lib.update_style(&char_style, &FontSpec::default()))
@@ -192,7 +194,10 @@ impl State{
     char_style.set_font_edging(edging);
     char_style.set_subpixel(subpixel);
 
-    ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap, self.font_stretch, self.font_axes.clone() )
+    // set the variable-font axes (`wght`/`wdth`/`ital`/`slnt` + fontVariationSettings) for instancing
+    self.font_axes.apply(&mut char_style, self.font_stretch, self.font_oblique);
+
+    ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap )
   }
 
   // font settings that cached measureText responses depend on
@@ -202,7 +207,7 @@ impl State{
     (
       &self.font,
       &self.font_variant,
-      self.font_stretch.to_bits(),
+      (self.font_stretch.to_bits(), self.font_oblique.map(f32::to_bits)),
       self.font_axes.cache_key(),
       self.letter_spacing.to_string(),
       self.word_spacing.to_string(),
@@ -702,6 +707,7 @@ impl Context2D{
       self.state.char_style = new_style;
       self.state.line_height = spec.line_height;
       self.state.font_stretch = width_percent(spec.width);
+      self.state.font_oblique = spec.oblique;
       self.state.font_axes.clear_variations();
     }
   }
