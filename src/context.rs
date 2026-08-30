@@ -69,6 +69,7 @@ pub struct State{
   font_stretch: f32,
   font_oblique: Option<f32>,
   font_axes: FontAxes,
+  font_features: FontFeatures,
   font_hinting: bool,
   font_smoothing: bool,
   font_synthesis: bool,
@@ -130,6 +131,7 @@ impl Default for State {
       font_axes,
       font_stretch: width_percent(width),
       font_oblique: oblique,
+      font_features: FontFeatures::default(),
       font_hinting: false,
       font_smoothing: true,
       font_synthesis: true,
@@ -195,9 +197,10 @@ impl State{
     char_style.set_font_hinting(hinting);
     char_style.set_font_edging(edging);
     char_style.set_subpixel(subpixel);
-    if self.font_kerning == "none" {
-      char_style.add_font_feature("kern", 0);
-    }
+
+    // assemble the OpenType features low-to-high: fontVariant, then fontKerning's `kern` toggle
+    // (`none` disables it), then the explicit fontFeatureSettings — which win last
+    self.font_features.apply(&mut char_style, self.font_kerning == "none");
 
     // set the variable-font axes (`wght`/`wdth`/`ital`/`slnt` + fontVariationSettings) for instancing
     self.font_axes.apply(&mut char_style, self.font_stretch, self.font_oblique);
@@ -211,7 +214,7 @@ impl State{
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (
       &self.font,
-      (&self.font_variant, &self.font_kerning),
+      (self.font_features.cache_key(), &self.font_kerning),
       (self.font_stretch.to_bits(), self.font_oblique.map(f32::to_bits)),
       self.font_axes.cache_key(),
       self.letter_spacing.to_string(),
@@ -714,15 +717,14 @@ impl Context2D{
       self.state.font_stretch = width_percent(spec.width);
       self.state.font_oblique = spec.oblique;
       self.state.font_axes.clear_variations();
+      self.state.font_features.set_named(&spec.features);
+      self.state.font_features.clear_tagged();
     }
   }
 
   pub fn set_font_variant(&mut self, variant:&str, features:&[(String, i32)]){
-    self.state.char_style.reset_font_features();
-    for (feat, val) in features{
-      self.state.char_style.add_font_feature(feat, *val);
-    }
     self.state.font_variant = variant.to_string();
+    self.state.font_features.set_named(features);
   }
 
   pub fn set_font_width(&mut self, pct:f32){
@@ -734,6 +736,9 @@ impl Context2D{
 
   pub fn set_font_variation(&mut self, settings:Vec<(String, f32)>){
     self.state.font_axes.set_variations(settings);
+  }
+  pub fn set_font_feature_settings(&mut self, settings:Vec<(String, i32)>){
+    self.state.font_features.set_tagged(settings);
   }
 
   pub fn draw_text(&mut self, text: &str, x: f32, y: f32, width: Option<f32>, style:PaintStyle){

@@ -265,7 +265,6 @@ describe("Typography", () => {
       ctx.font = "40px serif"
       assert.equal(ctx.fontVariationSettings, "normal")
     })
-
     test("sets optical sizing correctly", () => {
       // `opsz` is instanced from the pixel font size by default (48px -> opsz 48), matching browsers
       // rather than converting to points; an explicit `opsz` overrides it (last-wins on duplicate axes)
@@ -342,6 +341,80 @@ describe("Typography", () => {
     })
   })
 
+  describe("fontFeatureSettings", () => {
+    let width = str => ctx.measureText(str).width
+
+    test("parses & serializes CSS-canonically", () => {
+      assert.equal(ctx.fontFeatureSettings, "normal") // default
+
+      // tag-sorted, double-quoted; an omitted value defaults to `on` (1)
+      ctx.fontFeatureSettings = '"tnum" 1, "liga" 0, "ss01"'
+      assert.equal(ctx.fontFeatureSettings, '"liga" 0, "ss01" 1, "tnum" 1')
+
+      // last value wins for a repeated tag; `on`/`off` keywords map to 1/0
+      ctx.fontFeatureSettings = '"liga" 1, "liga" off'
+      assert.equal(ctx.fontFeatureSettings, '"liga" 0')
+
+      // `normal`/`""` clear it
+      ctx.fontFeatureSettings = "normal"
+      assert.equal(ctx.fontFeatureSettings, "normal")
+
+      // a malformed entry rejects the whole string (leaving the prior value)
+      ctx.fontFeatureSettings = '"liga" 1'
+      ctx.fontFeatureSettings = 'liga 1'     // tag not quoted
+      ctx.fontFeatureSettings = '"lig" 1'    // tag not 4 chars
+      ctx.fontFeatureSettings = '"liga" -1'  // negative value
+      assert.equal(ctx.fontFeatureSettings, '"liga" 1')
+    })
+
+    test("applies OpenType features & is reset by the `font` shorthand", () => {
+      FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      ctx.font = "100px Montserrat"
+      let text = "AVAWAToTa"
+
+      let on = width(text)
+      ctx.fontFeatureSettings = '"kern" 0' // disabling kerning widens a kerned run
+      assert(width(text) > on)
+
+      ctx.font = "100px Montserrat" // the shorthand resets feature settings to normal
+      assert.equal(ctx.fontFeatureSettings, "normal")
+      assert.nearEqual(width(text), on)
+    })
+
+    test("wins over fontVariant & fontKerning on conflicting tags", () => {
+      FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      ctx.font = "100px Montserrat"
+      let text = "AVAWAToTa"
+
+      // explicit `kern` beats fontKerning (the experts-only escape hatch has the final word)
+      let kerned = width(text)
+      ctx.fontKerning = "none"
+      assert(width(text) > kerned)
+      ctx.fontFeatureSettings = '"kern" 1'
+      assert.nearEqual(width(text), kerned)
+
+      // explicit `tnum` beats fontVariant's opposite setting
+      ctx.font = "100px Montserrat" // reset kerning-adjacent state
+      ctx.fontFeatureSettings = '"tnum" 0'
+      let proportional = width("1")
+      ctx.fontVariant = "tabular-nums"       // would set tnum=1
+      ctx.fontFeatureSettings = '"tnum" 0'   // …but the low-level setting overrides it
+      assert.nearEqual(width("1"), proportional)
+    })
+
+    test("composes with fontVariant on non-conflicting tags", () => {
+      FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      ctx.font = "100px Montserrat"
+      let text = "AVAWAToTa"
+      let kernOn = width(text)
+
+      ctx.fontVariant = "tabular-nums"     // tnum=1 -> equal digit advances
+      ctx.fontFeatureSettings = '"kern" 0' // a different feature; both must apply
+      assert.nearEqual(width("1"), width("4")) // variant (tnum) still in effect
+      assert(width(text) > kernOn)             // settings (kern off) also in effect
+    })
+  })
+  
   describe("fontStretch", () => {
     test("defaults to normal", () => {
       assert.equal(ctx.fontStretch, "normal")

@@ -907,6 +907,21 @@ pub fn set_fontVariationSettings(mut cx: FunctionContext) -> JsResult<JsUndefine
   Ok(cx.undefined())
 }
 
+pub fn get_fontFeatureSettings(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow_mut();
+  Ok(cx.string(this.state.font_features.css_string()))
+}
+
+pub fn set_fontFeatureSettings(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  if let Some(arg) = opt_object_arg(&mut cx, 1){
+    let settings = feature_settings(&mut cx, &arg)?;
+    this.borrow_mut().set_font_feature_settings(settings);
+  }
+  Ok(cx.undefined())
+}
+
 pub fn get_textWrap(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();

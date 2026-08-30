@@ -246,10 +246,6 @@ impl FontLibrary{
         style.set_font_families(&spec.families);
         style.set_font_style(spec.style());
         style.set_font_size(spec.size);
-        style.reset_font_features();
-        for (feat, val) in &spec.features{
-          style.add_font_feature(feat, *val);
-        }
         style
       })
   }

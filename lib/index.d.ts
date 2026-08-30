@@ -866,6 +866,10 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   /** A CSS `font-variation-settings` string (e.g. `'"wght" 625, "opsz" 48'`) giving low-level
    *  control over variable-font axes. Set to `"normal"` to clear. */
   fontVariationSettings: string
+  /** A CSS `font-feature-settings` string (e.g. `'"liga" 0, "tnum" 1, "ss01"'`) giving low-level
+   *  control over OpenType features. Overrides `fontVariant`/`fontKerning` on conflicting tags. Set
+   *  to `"normal"` to clear. */
+  fontFeatureSettings: string
   fontHinting: boolean
   fontSmoothing: boolean
   fontSynthesis: boolean

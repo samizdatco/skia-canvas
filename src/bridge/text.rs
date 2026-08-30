@@ -388,6 +388,58 @@ pub fn variation_settings(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> N
   Ok(settings)
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct FontFeatures{
+  named:  Vec<(String, i32)>, // decoded from fontVariant keywords
+  tagged: Vec<(String, i32)>, // raw 4-character tags from fontFeatureSettings
+}
+
+impl FontFeatures{
+  pub fn set_named(&mut self, features:&[(String, i32)]){ 
+    self.named = features.to_vec(); 
+  }
+
+  pub fn set_tagged(&mut self, mut tagged:Vec<(String, i32)>){
+    tagged.sort_by(|(a, _), (b, _)| a.cmp(b));
+    self.tagged = tagged;
+  }
+  
+  pub fn clear_tagged(&mut self){ 
+    self.tagged.clear(); 
+  }
+
+  // reconstruct the canonical css serialization
+  pub fn css_string(&self) -> String{
+    if self.tagged.is_empty(){ return "normal".to_string() }
+    self.tagged.iter()
+      .map(|(tag, value)| format!("\"{}\" {}", tag, value))
+      .collect::<Vec<_>>()
+      .join(", ")
+  }
+
+  // merge the keyword- and tag-based feature settings into the provided char_style
+  pub fn apply(&self, char_style:&mut TextStyle, kerning_off:bool){
+    for (feat, val) in &self.named{ char_style.add_font_feature(feat, *val); } // fontVariant
+    if kerning_off{ char_style.add_font_feature("kern", 0); } // fontKerning
+    for (feat, val) in &self.tagged{ char_style.add_font_feature(feat, *val); } // fontFeatureSettings
+  }
+
+  // state the measureText cache depends on
+  pub fn cache_key(&self) -> Vec<(String, i32)>{
+    self.named.iter().chain(self.tagged.iter()).cloned().collect()
+  }
+}
+
+// unpack the `{tag: value, …}` map sent by the js `fontFeatureSettings` parser
+pub fn feature_settings(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
+  let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
+  let mut settings:Vec<(String, i32)> = vec![];
+  for key in strings_in(cx, &keys).iter() {
+    settings.push( (key.to_string(), float_for_key(cx, obj, key)? as i32) );
+  }
+  Ok(settings)
+}
+
 //
 // Em-relative lengths (for text spacing & decoration thickness)
 //
