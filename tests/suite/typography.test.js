@@ -161,6 +161,42 @@ describe("Typography", () => {
     assert(!differs(render(true), smoothed))
   })
 
+  test("fontKerning", () => {
+    let width = str => ctx.measureText(str).width
+
+    // defaults to auto & round-trips (auto/normal/none only)
+    assert.equal(ctx.fontKerning, "auto") // the CSS/canvas default
+    ctx.fontKerning = "normal"; assert.equal(ctx.fontKerning, "normal")
+    ctx.fontKerning = "none";   assert.equal(ctx.fontKerning, "none")
+    ctx.fontKerning = "auto";   assert.equal(ctx.fontKerning, "auto")
+    // @ts-expect-error — deliberately invalid; only auto/normal/none are valid, others are silently ignored
+    ctx.fontKerning = "loose"
+    assert.equal(ctx.fontKerning, "auto")
+
+    // `none` disables kerning: Montserrat kerns AV/VA/To tightly, so turning it off widens the run
+    FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+    ctx.font = "100px Montserrat"
+    let text = "AVAWAToTa"
+    ctx.fontKerning = "auto"
+    let on = width(text)
+    ctx.fontKerning = "none"
+    assert(width(text) > on)
+    ctx.fontKerning = "normal" // auto & normal both leave kerning on
+    assert.nearEqual(width(text), on)
+
+    // composes with fontVariant (the kern toggle must not clobber its features): tabular-nums keeps
+    // digit advances equal even with kerning disabled
+    ctx.fontKerning = "none"
+    ctx.fontVariant = "tabular-nums"
+    assert.nearEqual(width("1"), width("8"))
+    ctx.fontVariant = "normal"
+
+    // font-kerning isn't part of the CSS `font` grammar, so (like letterSpacing) it survives the shorthand
+    ctx.fontKerning = "none"
+    ctx.font = "40px serif"
+    assert.equal(ctx.fontKerning, "none")
+  })
+  
   describe("fontVariationSettings", () => {
     let opaque = () => ctx.getImageData(0, 0, WIDTH, HEIGHT).data.filter((v, i) => i % 4 == 3 && v > 10).length
     let ink = () => { ctx.clearRect(0, 0, WIDTH, HEIGHT); ctx.fillText("Hamburg", 20, 100); return opaque() }

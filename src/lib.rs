@@ -227,6 +227,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_fontSynthesis", ctx::set_fontSynthesis)?;
   cx.export_function("CanvasRenderingContext2D_get_fontStretch", ctx::get_fontStretch)?;
   cx.export_function("CanvasRenderingContext2D_set_fontStretch", ctx::set_fontStretch)?;
+  cx.export_function("CanvasRenderingContext2D_get_fontKerning", ctx::get_fontKerning)?;
+  cx.export_function("CanvasRenderingContext2D_set_fontKerning", ctx::set_fontKerning)?;
   cx.export_function("CanvasRenderingContext2D_get_textWrap", ctx::get_textWrap)?;
   cx.export_function("CanvasRenderingContext2D_set_textWrap", ctx::set_textWrap)?;
   cx.export_function("CanvasRenderingContext2D_get_textDecoration", ctx::get_textDecoration)?;

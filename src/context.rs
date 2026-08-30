@@ -65,6 +65,7 @@ pub struct State{
 
   font: String,
   font_variant: String,
+  font_kerning: String,
   font_stretch: f32,
   font_oblique: Option<f32>,
   font_axes: FontAxes,
@@ -125,6 +126,7 @@ impl Default for State {
 
       font,
       font_variant,
+      font_kerning: "auto".to_string(), // font-kerning: auto is the CSS/canvas default
       font_axes,
       font_stretch: width_percent(width),
       font_oblique: oblique,
@@ -186,13 +188,16 @@ impl State{
       graf_style.set_max_lines(Some(1));
     }
 
-    // reflect context's `fontSynthesis`, `fontHinting`, & `fontSmoothing` settings
+    // reflect context's `fontSynthesis`, `fontHinting`, `fontSmoothing`, & `fontKerning` settings
     graf_style.set_fake_missing_font_styles(self.font_synthesis);
     let (edging, subpixel) = if self.font_smoothing{ (Edging::AntiAlias, true) }else{ (Edging::Alias, false) };
     let hinting = if self.font_hinting{ FontHinting::Normal }else{ FontHinting::None };
     char_style.set_font_hinting(hinting);
     char_style.set_font_edging(edging);
     char_style.set_subpixel(subpixel);
+    if self.font_kerning == "none" {
+      char_style.add_font_feature("kern", 0);
+    }
 
     // set the variable-font axes (`wght`/`wdth`/`ital`/`slnt` + fontVariationSettings) for instancing
     self.font_axes.apply(&mut char_style, self.font_stretch, self.font_oblique);
@@ -206,7 +211,7 @@ impl State{
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (
       &self.font,
-      &self.font_variant,
+      (&self.font_variant, &self.font_kerning),
       (self.font_stretch.to_bits(), self.font_oblique.map(f32::to_bits)),
       self.font_axes.cache_key(),
       self.letter_spacing.to_string(),

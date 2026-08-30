@@ -549,7 +549,7 @@ type CanvasTextAlign = "center" | "end" | "left" | "right" | "start" | "justify"
 type CanvasTextBaseline = "alphabetic" | "bottom" | "hanging" | "ideographic" | "middle" | "top";
 type CanvasLineCap = "butt" | "round" | "square";
 type CanvasLineJoin = "bevel" | "miter" | "round";
-// type CanvasFontKerning = "auto" | "none" | "normal";
+type CanvasFontKerning = "auto" | "none" | "normal";
 // type CanvasFontVariantCaps = "all-petite-caps" | "all-small-caps" | "normal" | "petite-caps" | "small-caps" | "titling-caps" | "unicase";
 // type CanvasTextRendering = "auto" | "geometricPrecision" | "optimizeLegibility" | "optimizeSpeed";
 
@@ -792,6 +792,11 @@ interface CanvasTextDrawingStyles {
      *
      * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontStretch) */
     fontStretch: CanvasFontStretch | (string & {});
+    /** Whether to apply the font's kerning. `"auto"`/`"normal"` keep it on; `"none"` disables the
+     * `kern` feature.
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontKerning) */
+    fontKerning: CanvasFontKerning;
     /**
      * A CSS length, e.g. `"2px"` or `"0.1em"`. Accepts `px`, `pt`, `pc`, `in`, `cm`, `mm`, `q`,
      * `em`, and `rem` (`em`/`rem` resolve against the current font size); other units are ignored.
@@ -814,8 +819,6 @@ interface CanvasTextDrawingStyles {
     // UNIMPLEMENTED
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textRendering) */
     // textRendering: CanvasTextRendering;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontKerning) */
-    // fontKerning: CanvasFontKerning;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontVariantCaps) */
     // fontVariantCaps: CanvasFontVariantCaps;
 }

@@ -718,6 +718,20 @@ pub fn set_fontStretch(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+pub fn get_fontKerning(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow();
+  Ok(cx.string(&this.state.font_kerning))
+}
+
+pub fn set_fontKerning(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  if let Some(mode) = opt_string_arg(&mut cx, 1){
+    this.borrow_mut().state.font_kerning = mode;
+  }
+  Ok(cx.undefined())
+}
+
 pub fn get_textAlign(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();
