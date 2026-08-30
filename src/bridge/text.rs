@@ -348,6 +348,7 @@ impl FontAxes{
     let mut coords = vec![
       Coordinate{ axis:Coordinate::wght, value:*font_style.weight() as f32 },
       Coordinate{ axis:Coordinate::wdth, value:stretch },
+      Coordinate{ axis:Coordinate::opsz, value:char_style.font_size() },
     ];
     match (font_style.slant(), slant_only_font){
       // for slnt-only fonts, map an italic style to the default oblique angle

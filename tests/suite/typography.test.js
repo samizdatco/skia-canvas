@@ -229,6 +229,23 @@ describe("Typography", () => {
       ctx.font = "40px serif"
       assert.equal(ctx.fontVariationSettings, "normal")
     })
+
+    test("sets optical sizing correctly", () => {
+      // `opsz` is instanced from the pixel font size by default (48px -> opsz 48), matching browsers
+      // rather than converting to points; an explicit `opsz` overrides it (last-wins on duplicate axes)
+      FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
+      ctx.font = "48px AmstelvarAlpha"
+      let auto = ink()
+
+      ctx.fontVariationSettings = '"opsz" 48'
+      assert.equal(ink(), auto) // px passthrough: the 48px default matches an explicit opsz of 48
+
+      ctx.fontVariationSettings = '"opsz" 36'
+      assert(ink() != auto) // the pt interpretation (48*0.75=36) would differ
+
+      ctx.fontVariationSettings = '"opsz" 8'
+      assert(ink() != auto) // an explicit opsz overrides the automatic one
+    })
   })
 
   describe("fontVariant", () => {
