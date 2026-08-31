@@ -1,6 +1,10 @@
 #![allow(non_snake_case)]
 use core::ops::Range;
 use neon::prelude::*;
+use std::collections::HashMap;
+use allsorts::binary::read::ReadScope;
+use allsorts::tables::NameTable;
+use allsorts::get_name::fontcode_get_name;
 use skia_safe::{Typeface, FourByteTag, FontArguments};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
@@ -86,49 +90,6 @@ pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonRe
     }
   }
   Ok(features)
-}
-
-pub fn typeface_details<'a>(cx: &mut FunctionContext<'a>, filename:&str, font: &Typeface, alias:Option<String>) -> JsResult<'a, JsObject> {
-  let style = font.font_style();
-
-  let filename = cx.string(filename);
-  let family = cx.string(match alias{
-    Some(name) => name,
-    None => font.family_name()
-  });
-  let weight = cx.number(*style.weight() as f64);
-  let slant = cx.string(from_slant(style.slant()));
-  let width = cx.string(from_width(style.width()));
-
-  let dict = JsObject::new(cx);
-  let attr = cx.string("family"); dict.set(cx, attr, family)?;
-  let attr = cx.string("weight"); dict.set(cx, attr, weight)?;
-  let attr = cx.string("style");  dict.set(cx, attr, slant)?;
-  let attr = cx.string("width");  dict.set(cx, attr, width)?;
-  let attr = cx.string("file");   dict.set(cx, attr, filename)?;
-  Ok(dict)
-}
-
-pub fn typeface_wght_range(font:&Typeface) -> Vec<i32>{
-  let mut wghts = vec![];
-  if let Some(params) = font.variation_design_parameters(){
-    for param in params {
-      let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-      let tag = String::from_utf8(chars).unwrap();
-      let (min, max) = (param.min as i32, param.max as i32);
-      if tag == "wght"{
-        let mut val = min;
-        while val <= max {
-          wghts.push(val);
-          val = val + 100 - (val % 100);
-        }
-        if !wghts.contains(&max){
-          wghts.push(max);
-        }
-      }
-    }
-  }
-  wghts
 }
 
 pub fn to_slant(slant_name:&str) -> Slant{
@@ -314,6 +275,228 @@ pub fn font_stretch_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Opti
   }
 }
 
+//
+// Font capabilities (variation axes and OpenType features)
+//
+
+pub fn typeface_details<'a>(cx: &mut FunctionContext<'a>, filename:&str, font: &Typeface, alias:Option<String>) -> JsResult<'a, JsObject> {
+  let style = font.font_style();
+  let caps = FontCapabilities::new(font);
+  let variations = caps.variations_object(cx)?;
+  let features = caps.features_object(cx)?;
+
+  let dict = JsObject::new(cx);
+  dict.prop(cx, "family").set(alias.unwrap_or_else(|| font.family_name()))?;
+  dict.prop(cx, "weight").set(*style.weight() as f64)?;
+  dict.prop(cx, "style").set(from_slant(style.slant()))?;
+  dict.prop(cx, "width").set(from_width(style.width()))?;
+  dict.prop(cx, "file").set(filename)?;
+  dict.prop(cx, "variable").set(!caps.axes.is_empty())?;
+  dict.prop(cx, "variations").set(variations)?;
+  dict.prop(cx, "features").set(features)?;
+  Ok(dict)
+}
+
+#[derive(Debug, Clone)]
+pub struct AxisDetails{
+  pub tag: String,
+  pub min: f32,
+  pub max: f32,
+  pub def: f32,
+  pub label: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FeatureDetails{
+  pub tag: String,
+  pub label: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct FontCapabilities{
+  pub axes: Vec<AxisDetails>, // variable-font design axes (in fvar order)
+  pub features: Vec<FeatureDetails>, // OpenType features (from GSUB/GPOS tables)
+}
+
+impl FontCapabilities{
+  pub fn new(font:&Typeface) -> Self{
+    // read the font's `name` table (for accessing both variation-axis and feature names)
+    let mut names:HashMap<u16, String> = HashMap::new();
+    if let Some(data) = font.copy_table_data(*FourByteTag::from_chars('n','a','m','e')){
+      let bytes = data.as_bytes();
+      if let Ok(table) = ReadScope::new(bytes).read::<NameTable<'_>>(){
+        for record in table.name_records.iter(){
+          // skip record 0 since that's also the no-label-for-this-feature ID
+          if record.name_id == 0 || names.contains_key(&record.name_id){ continue }
+
+          // use fontcode_get_name so it weights by unicode-coverage of the platform+encoding
+          if let Some(name) = fontcode_get_name(bytes, record.name_id).ok().flatten()
+            .and_then(|name| name.into_string().ok())
+            .filter(|name| !name.is_empty()){
+              names.insert(record.name_id, name);
+          }
+        }
+      }
+    }
+
+    // walk the font's variation-axis table and build a tag -> human-readable label mapping
+    let mut axis_labels:Vec<(String, Option<String>)> = vec![];
+    if let Some(data) = font.copy_table_data(*FourByteTag::from_chars('f','v','a','r')){
+      let bytes = data.as_bytes();
+
+      if bytes.len() >= 12 {
+        // read fvar header
+        let offset = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
+        let count = u16::from_be_bytes([bytes[8], bytes[9]]) as usize;
+        let size = u16::from_be_bytes([bytes[10], bytes[11]]) as usize;
+
+        // extract each VariationAxisRecord
+        for i in 0..count {
+          let rec = offset + i * size;
+          if size < 20 || rec + 20 > bytes.len() { break }
+          let tag = match std::str::from_utf8(&bytes[rec..rec + 4]){
+            Ok(tag) => tag.trim_end().to_string(),
+            Err(_) => continue,
+          };
+          let name_id = u16::from_be_bytes([bytes[rec + 18], bytes[rec + 19]]);
+          axis_labels.push((tag, names.get(&name_id).cloned()));
+        }
+      }
+    }
+
+    // extract each axis's value-range and merge in the labels (preserving the fvar table's ordering)
+    let mut axes = vec![];
+    if let Some(params) = font.variation_design_parameters(){
+      for param in params {
+        let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
+        if let Ok(tag) = String::from_utf8(chars){
+          let label = axis_labels.iter().find(|(t, _)| *t == tag).and_then(|(_, label)| label.clone());
+          axes.push(AxisDetails{ tag, min:param.min, max:param.max, def:param.def, label });
+        }
+      }
+    }
+
+    // extract supported feature tags from the GSUB+GPOS tables and pair with their human-readable labels
+    let mut features:Vec<FeatureDetails> = vec![];
+    for table in [FourByteTag::from_chars('G','S','U','B'), FourByteTag::from_chars('G','P','O','S')]{
+      let data = match font.copy_table_data(*table){ Some(data) => data, None => continue };
+      let bytes = data.as_bytes();
+
+      // read GSUB or GPOS table header
+      if bytes.len() < 8 { continue }
+      let offset = u16::from_be_bytes([bytes[6], bytes[7]]) as usize;
+      if offset == 0 || offset + 2 > bytes.len() { continue }
+      let count = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]) as usize;
+
+      // extract each FeatureRecord
+      for i in 0..count {
+        let rec = offset + 2 + i * 6;
+        if rec + 6 > bytes.len() { break }
+        let tag = match std::str::from_utf8(&bytes[rec..rec + 4]){
+          Ok(tag) => tag.trim_end().to_string(),
+          Err(_) => continue,
+        };
+
+        // most features use the 0 "no label" ID (since we have the canonical names for them anyway)
+        let mut name_id = 0;
+
+        // stylistic sets (ss01–ss20) and character variants (cv01–cv99) may have custom labels worth extracting...
+        if tag.len() == 4
+          && (tag.starts_with("ss") || tag.starts_with("cv"))
+          && tag[2..].bytes().all(|b| b.is_ascii_digit())
+        {
+          // ...so look at the known location (the second u16) in their FeatureParams tables for the label ID
+          let feat_tbl = offset + u16::from_be_bytes([bytes[rec + 4], bytes[rec + 5]]) as usize;
+          if feat_tbl + 2 <= bytes.len(){
+            let params = feat_tbl + u16::from_be_bytes([bytes[feat_tbl], bytes[feat_tbl + 1]]) as usize;
+            if params > feat_tbl && params + 4 <= bytes.len(){
+              name_id = u16::from_be_bytes([bytes[params + 2], bytes[params + 3]]);
+            }
+          }
+        }
+
+        // keep the first label either table provided for a tag
+        let label = names.get(&name_id).cloned();
+        match features.iter_mut().find(|existing| existing.tag == tag){
+          Some(existing) => { if existing.label.is_none(){ existing.label = label; } }
+          None => features.push(FeatureDetails{ tag, label }),
+        }
+      }
+    }
+    features.sort_by(|a, b| a.tag.cmp(&b.tag));
+
+    FontCapabilities{ axes, features }
+  }
+
+  // expand range to the union of the two sets of axes+features (so a family of faces can be summarized)
+  pub fn merge(&mut self, other:Self){
+    for axis in other.axes {
+      match self.axes.iter_mut().find(|existing| existing.tag == axis.tag){
+        Some(existing) => {
+          existing.min = existing.min.min(axis.min);
+          existing.max = existing.max.max(axis.max);
+          if existing.label.is_none(){ existing.label = axis.label; }
+        }
+        None => self.axes.push(axis),
+      }
+    }
+
+    for feature in other.features {
+      match self.features.iter_mut().find(|existing| existing.tag == feature.tag){
+        Some(existing) => { if existing.label.is_none(){ existing.label = feature.label; } }
+        None => self.features.push(feature),
+      }
+    }
+    self.features.sort_by(|a, b| a.tag.cmp(&b.tag));
+  }
+
+  // the min & max weights covered by the `wght` axis and all 100x steps in between
+  pub fn wght_range(&self) -> Vec<i32>{
+    let mut wghts = vec![];
+    if let Some(axis) = self.axes.iter().find(|axis| axis.tag == "wght"){
+      let (min, max) = (axis.min as i32, axis.max as i32);
+      let mut val = min;
+      while val <= max {
+        wghts.push(val);
+        val = val + 100 - (val % 100);
+      }
+      if !wghts.contains(&max){
+        wghts.push(max);
+      }
+    }
+    wghts
+  }
+
+  // return a js object mapping axis tags to {min, max, default, label} summaries
+  pub fn variations_object<'a>(&self, cx: &mut FunctionContext<'a>) -> JsResult<'a, JsObject>{
+    let dict = JsObject::new(cx);
+    for axis in &self.axes {
+      let range = JsObject::new(cx);
+      range.prop(cx, "min")    .set(axis.min as f64)?;
+      range.prop(cx, "max")    .set(axis.max as f64)?;
+      range.prop(cx, "default").set(axis.def as f64)?;
+      if let Some(label) = &axis.label{
+        range.prop(cx, "label").set(label.as_str())?;
+      }
+      dict.prop(cx, axis.tag.as_str()).set(range)?;
+    }
+    Ok(dict)
+  }
+
+  // return a js object mapping feature tags to font-provided labels
+  pub fn features_object<'a>(&self, cx: &mut FunctionContext<'a>) -> JsResult<'a, JsObject>{
+    let dict = JsObject::new(cx);
+    for feature in &self.features {
+      dict.prop(cx, feature.tag.as_str()).set(feature.label.as_deref().unwrap_or(""))?;
+    }
+    Ok(dict)
+  }
+}
+
+//
+// Active variation-axis/feature settings
+//
+
 #[derive(Clone, Debug, Default)]
 pub struct FontAxes{
   variations: Vec<(String, f32)>, // decoded fontVariationSettings
@@ -395,17 +578,17 @@ pub struct FontFeatures{
 }
 
 impl FontFeatures{
-  pub fn set_named(&mut self, features:&[(String, i32)]){ 
-    self.named = features.to_vec(); 
+  pub fn set_named(&mut self, features:&[(String, i32)]){
+    self.named = features.to_vec();
   }
 
   pub fn set_tagged(&mut self, mut tagged:Vec<(String, i32)>){
     tagged.sort_by(|(a, _), (b, _)| a.cmp(b));
     self.tagged = tagged;
   }
-  
-  pub fn clear_tagged(&mut self){ 
-    self.tagged.clear(); 
+
+  pub fn clear_tagged(&mut self){
+    self.tagged.clear();
   }
 
   // reconstruct the canonical css serialization

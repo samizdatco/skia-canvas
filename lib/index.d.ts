@@ -1066,11 +1066,26 @@ export interface TextMetricsRun {
   readonly strikethrough: number
 }
 
+export interface FontVariationAxis {
+  min: number
+  max: number
+  default: number
+  label?: string
+}
+
+export interface FontFeature {
+  label?: string
+  type: "on/off" | "indexed"
+}
+
 export interface FontFamily {
   family: string
   weights: number[]
   widths: string[]
   styles: string[]
+  variable: boolean
+  variations: Record<string, FontVariationAxis>
+  features: Record<string, FontFeature>
 }
 
 export interface Font {
@@ -1079,6 +1094,9 @@ export interface Font {
   style: string
   width: string
   file: string
+  variable: boolean
+  variations: Record<string, FontVariationAxis>
+  features: Record<string, FontFeature>
 }
 
 interface FontLibrary {

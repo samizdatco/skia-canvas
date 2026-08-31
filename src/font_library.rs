@@ -167,7 +167,7 @@ impl FontLibrary{
     names
   }
 
-  fn family_details(&self, family:&str) -> (Vec<f32>, Vec<String>, Vec<String>){
+  fn family_details(&self, family:&str) -> (Vec<f32>, Vec<String>, Vec<String>, FontCapabilities){
     // merge the system fonts and our dynamically added fonts into one list of FontStyles
     let mut dynamic = TypefaceFontProvider::new();
     for (font, alias) in &self.fonts{
@@ -191,13 +191,15 @@ impl FontLibrary{
     let mut weights:Vec<i32> = vec![];
     let mut widths:Vec<String> = vec![];
     let mut styles:Vec<String> = vec![];
+    let mut caps = FontCapabilities::default();
     all_styles.for_each(|(style, _name)| {
       widths.push(from_width(style.width()));
       styles.push(from_slant(style.slant()));
       weights.push(*style.weight());
       if let Some(font) = var_fc.find_typefaces(&[&family], style).first(){
-        // for variable fonts, report all the 100× sizes they support within their wght range
-        weights.append(&mut typeface_wght_range(font));
+        let face = FontCapabilities::new(font);
+        weights.append(&mut face.wght_range()); // if variable: include all supported 100x sizes
+        caps.merge(face); // merge variable font axes and opentype features
       }
     });
 
@@ -209,7 +211,7 @@ impl FontLibrary{
     weights.sort_unstable();
     weights.dedup();
     let weights = weights.iter().map(|w| *w as f32 ).collect();
-    (weights, widths, styles)
+    (weights, widths, styles, caps)
   }
 
   fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
@@ -341,7 +343,7 @@ pub fn has(mut cx: FunctionContext) -> JsResult<JsBoolean> {
 
 pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
   let family = string_arg(&mut cx, 1, "familyName")?;
-  let (weights, widths, styles) = FontLibrary::with_shared(|lib|
+  let (weights, widths, styles, caps) = FontLibrary::with_shared(|lib|
     lib.family_details(&family)
   );
 
@@ -349,16 +351,20 @@ pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
     return Ok(cx.undefined().upcast())
   }
 
-  let name = cx.string(family);
   let weights = floats_to_array(&mut cx, &weights)?;
   let widths = strings_to_array(&mut cx, &widths)?;
   let styles = strings_to_array(&mut cx, &styles)?;
+  let variations = caps.variations_object(&mut cx)?;
+  let features = caps.features_object(&mut cx)?;
 
   let details = JsObject::new(&mut cx);
-  let attr = cx.string("family"); details.set(&mut cx, attr, name)?;
-  let attr = cx.string("weights"); details.set(&mut cx, attr, weights)?;
-  let attr = cx.string("widths"); details.set(&mut cx, attr, widths)?;
-  let attr = cx.string("styles"); details.set(&mut cx, attr, styles)?;
+  details.prop(&mut cx, "family").set(family)?;
+  details.prop(&mut cx, "weights").set(weights)?;
+  details.prop(&mut cx, "widths").set(widths)?;
+  details.prop(&mut cx, "styles").set(styles)?;
+  details.prop(&mut cx, "variable").set(!caps.axes.is_empty())?;
+  details.prop(&mut cx, "variations").set(variations)?;
+  details.prop(&mut cx, "features").set(features)?;
 
   Ok(details.upcast())
 }

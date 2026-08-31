@@ -1266,7 +1266,7 @@ describe("ImageData", () => {
 
     test("Float16Array", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
       let [width, height] = [8, 8]
-  
+
       // a bare Float16Array defaults to the RGBAF16 colorType (symmetric with u8 → 'rgba')
       let f16 = new Float16Array(width * height * 4).fill(0.5)
       let bmp = new ImageData(f16, width, height)
@@ -1275,23 +1275,23 @@ describe("ImageData", () => {
       assert.ok(bmp.data instanceof Float16Array)
       assert.equal(bmp.data, f16) // kept byte-for-byte, not clamp-coerced
       assert.equal(bmp.data.length, width * height * 4)
-  
+
       // an explicit half-float colorType is honored; RGBAF16Norm shares the RGBAF16 layout
       let norm = new ImageData(f16, width, height, {colorType:'RGBAF16Norm'})
       assert.equal(norm.colorType, 'RGBAF16Norm')
       assert.ok(norm.data instanceof Float16Array)
-  
+
       // length validation is byteLength-based, so wrong dims still throw for an f16 buffer
       assert.throws(() => new ImageData(f16, width+1, height))
-  
+
       // a Float16Array declared with a non-float colorType is a contradiction → throw
       assert.throws(() => new ImageData(f16, width, height, {colorType:'rgba'}), /half-float colorType/)
-  
+
       // allocation-only with a half-float colorType yields a Float16Array
       let alloc = new ImageData(width, height, {colorType:'RGBAF16'})
       assert.ok(alloc.data instanceof Float16Array)
       assert.equal(alloc.data.length, width * height * 4)
-  
+
       // toSharp() refuses half-float buffers rather than letting sharp misread them
       assert.throws(() => bmp.toSharp(), /half-float/)
     })
@@ -1398,6 +1398,68 @@ describe("FontLibrary", ()=>{
     assert.equal(info && typeof info.styles[0], 'string');
   })
 
+  test("can identify variable fonts", ()=>{
+    let [statik] = useTestFace(),
+        [variable] = FontLibrary.use("VariableFace", [findFont("AmstelvarAlpha-VF.ttf")]);
+
+    // the flag is set for faces with an `fvar` table (and the axes it describes are reported too)
+    assert.equal(statik.variable, false)
+    assert.deepEqual(statik.variations, {})
+    assert.equal(variable.variable, true)
+    assert(Object.keys(variable.variations).length > 0)
+
+    // family() summarizes the same thing for the family as a whole
+    assert.equal(FontLibrary.family("TestFace").variable, false)
+    assert.equal(FontLibrary.family("VariableFace").variable, true)
+  })
+
+  test("can describe variation axes", ()=>{
+    let [face] = FontLibrary.use("VariableFace", [findFont("AmstelvarAlpha-VF.ttf")]),
+        family = FontLibrary.family("VariableFace");
+
+    for (let {variations} of [face, family]){
+      // the registered axes, with the ranges & names from the font's `fvar` and `name` tables
+      assert.matchesSubset(variations.wght, {min:100, max:900, default:400, label:"Weight"})
+      assert.matchesSubset(variations.wdth, {min:35, max:100, default:100, label:"Width"})
+      assert.matchesSubset(variations.opsz, {min:10, max:72, default:14, label:"Optical Size"})
+
+      // …plus Amstelvar's non-standard, upper-case tagged ones
+      assert.matchesSubset(variations.GRAD, {min:88, max:150, default:88, label:"Grade"})
+    }
+
+    // the family's weight list is derived from the endpoints of its `wght` axis
+    assert.contains(family.weights, 100)
+    assert.contains(family.weights, 900)
+
+    // non-variable faces report no axes at all
+    assert.deepEqual(useTestFace()[0].variations, {})
+  })
+
+  test("can describe OpenType features", ()=>{
+    let [face] = useTestFace(),
+        family = FontLibrary.family("TestFace");
+
+    for (let {features} of [face, family]){
+      // tags found in the font's GSUB/GPOS tables, labelled from the OpenType registry
+      assert.matchesSubset(features.liga, {label:"Standard Ligatures", type:"on/off"})
+      assert.matchesSubset(features.kern, {label:"Kerning", type:"on/off"})
+      assert.matchesSubset(features.tnum, {label:"Tabular Figures", type:"on/off"})
+      assert(!Object.hasOwn(features, 'smcp')) // a tag this font doesn't define
+
+      // tags are listed alphabetically
+      assert.deepEqual(Object.keys(features), Object.keys(features).slice().sort())
+    }
+
+    // features taking an alternate's index (rather than an on/off toggle) are flagged as such
+    let [oswald] = FontLibrary.use("Alternates", [findFont("Oswald-Medium.ttf")])
+    assert.matchesSubset(oswald.features.aalt, {label:"Access All Alternates", type:"indexed"})
+
+    // a family's features are the union of all its faces'
+    FontLibrary.use("Chimera", [findFont("Oswald-Medium.ttf"), findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+    let tags = Object.keys(FontLibrary.family("Chimera").features)
+    assert.contains(tags, "sups") // only in Oswald
+    assert.contains(tags, "tnum") // only in Montserrat
+  })
   test("can register fonts", ()=>{
     let ttf = findFont("AmstelvarAlpha-VF.ttf"),
         name = "AmstelvarAlpha",
