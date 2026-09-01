@@ -676,6 +676,93 @@ describe("Context2D", ()=>{
       assert.equal(ctx.filter, 'blur(4px) invert(50%)')
       ctx.filter = 'none'
       assert.equal(ctx.filter, 'none')
+
+      // a unitless zero is a valid <length> even though every other number needs a unit
+      ctx.filter = 'drop-shadow(20px 20px 0 red)'
+      assert.equal(ctx.filter, 'drop-shadow(20px 20px 0 red)')
+      ctx.filter = 'blur(0)'
+      assert.equal(ctx.filter, 'blur(0)')
+      ctx.filter = 'drop-shadow(20px 20px 1 red)' // …but a non-zero one still doesn't
+      assert.equal(ctx.filter, 'blur(0)')
+
+      // an unparseable drop-shadow color invalidates the whole declaration rather than
+      // dropping just the shadow (which would leave `filter` describing a no-op)
+      ctx.filter = 'drop-shadow(10px 10px 5px bogusColor)'
+      assert.equal(ctx.filter, 'blur(0)')
+
+      // a unitless zero is also a valid <angle> in hue-rotate()
+      ctx.filter = 'hue-rotate(0)'
+      assert.equal(ctx.filter, 'hue-rotate(0)')
+      ctx.filter = 'hue-rotate(1)' // …but a bare number still isn't
+      assert.equal(ctx.filter, 'hue-rotate(0)')
+
+      // whitespace is allowed inside the parens, not just around the terms
+      ctx.filter = 'blur( 5px )'
+      assert.equal(ctx.filter, 'blur(5px)')
+      ctx.filter = 'drop-shadow( 1px 1px 1px red )'
+      assert.equal(ctx.filter, 'drop-shadow(1px 1px 1px red)')
+
+      // drop-shadow()'s grammar is `<color>? && <length>{2,3}`: the blur radius is optional and
+      // the color may lead or trail the lengths
+      for (let spec of ['drop-shadow(10px 10px)', 'drop-shadow(10px 10px red)',
+                        'drop-shadow(red 10px 10px)', 'drop-shadow(red 10px 10px 5px)',
+                        'drop-shadow(rgb(0 0 0 / 50%) 1px 1px)']){
+        ctx.filter = spec
+        assert.equal(ctx.filter, spec)
+      }
+      // …but not 1 or 4 lengths, two colors, or a color splitting the run of lengths
+      ctx.filter = 'blur(2px)'
+      for (let junk of ['drop-shadow(10px)', 'drop-shadow(1px 2px 3px 4px)', 'drop-shadow()',
+                        'drop-shadow(red blue 1px 1px)', 'drop-shadow(10px red 10px)',
+                        'drop-shadow(1px 1px medium)']){
+        ctx.filter = junk
+        assert.equal(ctx.filter, 'blur(2px)', `"${junk}" should be rejected whole`)
+      }
+
+      // per spec, non-string values are unparseable and leave the filter untouched
+      for (let bad of [null, undefined, 5, {}, []]){
+        // @ts-expect-error — deliberately invalid assignment
+        ctx.filter = bad
+        assert.equal(ctx.filter, 'blur(2px)')
+      }
+
+      // junk *inside* a function's parens is no more valid than junk glued outside it
+      ctx.filter = 'blur(2px)'
+      for (let junk of ['blur(4pxjunk)', 'blur(1.2.3px)', 'blur(5.px)', 'hue-rotate(abc90deg)',
+                        'hue-rotate(90degjunk)', 'drop-shadow(10pxjunk 10px red)']){
+        ctx.filter = junk
+        assert.equal(ctx.filter, 'blur(2px)', `"${junk}" should be rejected whole`)
+      }
+
+      // a leading sign is part of the number, not junk
+      ctx.filter = 'blur(+4px)'
+      assert.equal(ctx.filter, 'blur(+4px)')
+
+      // percentages may be fractional (they were integer-only, and parsed with parseInt)
+      ctx.filter = 'opacity(12.5%) saturate(150.5%)'
+      assert.equal(ctx.filter, 'opacity(12.5%) saturate(150.5%)')
+      assert.nearEqual(css.filter('opacity(12.5%)').filters['opacity'], 0.125)
+      assert.nearEqual(css.filter('sepia(.5%)').filters['sepia'], 0.005)
+
+      // …and hue-rotate's sign is honored: it used to be dropped, making ±90° identical
+      let hued = deg => {
+        ctx.filter = 'none'
+        ctx.clearRect(0, 0, WIDTH, HEIGHT)
+        ctx.filter = `hue-rotate(${deg}deg)`
+        ctx.fillStyle = 'red'
+        ctx.fillRect(0, 0, 20, 20)
+        return pixel(10, 10)
+      }
+      assert.notDeepEqual(hued(-90), hued(90))
+
+      // an omitted drop-shadow color means opaque black
+      ctx.filter = 'none'
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      ctx.filter = 'drop-shadow(40px 40px)'
+      ctx.fillStyle = 'white'
+      ctx.fillRect(10, 10, 20, 20)
+      assert.deepEqual(pixel(60, 60), BLACK)
+      ctx.filter = 'none'
     })
 
     test('shadow', async() => {
@@ -2263,6 +2350,7 @@ describe("Context2D", ()=>{
         'italic small-caps 300 condensed 20px Arial': { size: 20, style: 'italic', variant: 'small-caps', weight: 300, stretch: 'condensed', family: ['Arial'] },
         '20px "new century schoolbook", serif': { size: 20, family: ['new century schoolbook','serif'] },
         '20px "Arial bold 300"': { size: 20, family: ['Arial bold 300'], variant: 'normal' }, // synthetic case with weight keyword inside family
+        '+12px Arial': { size: 12, family: ['Arial'] }, // a leading sign is valid CSS
         'italic\n16px\nArial': { size: 16, style: 'italic', family: ['Arial'] },
         'bold\n50px\nArial,\nsans-serif': { size: 50, weight: 700, family: ['Arial','sans-serif'] },
       }
@@ -2273,6 +2361,15 @@ describe("Context2D", ()=>{
         assert.matchesSubset(parsed, expected)
       })
 
+      // a size has to be a complete CSS number + unit (or a bare keyword): trailing junk,
+      // malformed decimals, and keywords with characters glued on invalidate the shorthand
+      for (let bad of ['12pxjunk Arial', '1.2.3px Arial', '5.px Arial', 'junkmedium Arial',
+                       'mediumjunk Arial', '16px/12pxjunk Arial',
+                       // `ex` & `ch` need font metrics the parsers can't see, so they're rejected
+                       // rather than approximated (a no-op here; a TypeError under strict mode)
+                       '2ex Arial', '2ch Arial']){
+        assert.equal(css.font(bad), null, `"${bad}" should be rejected`)
+      }
     })
 
     test('textDecoration', () => {

@@ -878,7 +878,11 @@ describe("Typography", () => {
           ['fontVariant',    'small-caps bogus',                true],
           ['fontStretch',    'bogus',                           true],
           ['letterSpacing',  'bogus',                           true],
+          // ex & ch are deliberately unsupported units, not oversights
           ['wordSpacing',    '2ex',                             true],
+          ['letterSpacing',  '2ch',                             true],
+          ['font',           '2ex serif',                       true],
+          ['filter',         'blur(1ex)',                       true],
           ['textDecoration', 'notaword blue',                   true],
           ['filter',         'blur(2px)junk',                   true],
           ['filter',         'blur(2px) garbage(3)',            true],

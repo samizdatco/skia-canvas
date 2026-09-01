@@ -151,10 +151,10 @@
 [newPage]: /docs/api/canvas.md#newpage
 [getContextAttributes]: /docs/api/context.md#getcontextattributes
 [css_color4]: https://developer.mozilla.org/en-US/docs/Web/CSS/color_value
-[CanvasGradient]: /docs/api/canvas-gradient.md
-[colorInterpolationMethod]: /docs/api/canvas-gradient.md#colorinterpolationmethod
-[hueInterpolationMethod]: /docs/api/canvas-gradient.md#hueinterpolationmethod
-[premultipliedAlpha]: /docs/api/canvas-gradient.md#premultipliedalpha
+[CanvasGradient]: /docs/api/context.md#canvasgradient-objects
+[colorInterpolationMethod]: /docs/api/context.md#colorinterpolationmethod
+[hueInterpolationMethod]: /docs/api/context.md#hueinterpolationmethod
+[premultipliedAlpha]: /docs/api/context.md#premultipliedalpha
 [fontSmoothing]: /docs/api/context.md#fontsmoothing
 [fontSynthesis]: /docs/api/context.md#fontsynthesis
 [fontVariant]: /docs/api/context.md#fontvariant

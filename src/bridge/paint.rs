@@ -23,10 +23,11 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, V
         let nums = values.to_vec(cx)?;
         let dims = floats_in(cx, &nums);
         let color_str = values.get::<JsString, _, _>(cx, 3)?.value(cx);
-        if let Some(color) = css_to_color4f(&color_str) {
-          filters.push(FilterSpec::Shadow{
+        match css_to_color4f(&color_str) {
+          Some(color) => filters.push(FilterSpec::Shadow{
             offset: Point::new(dims[0], dims[1]), blur: dims[2], color
-          });
+          }),
+          None => return cx.throw_type_error(format!("⚠️Invalid filter: {:?}", canonical)),
         }
       },
       _ => {
