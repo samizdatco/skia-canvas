@@ -24,7 +24,17 @@
 - Text in PDF exports is now selectable and searchable (thanks to @Mythie's PR #295 for the proof of concept)
 - The new [`fontSmoothing`][fontSmoothing] property can be set to `false` to render un-antialiased text that is aligned to the pixel grid. By default, fonts use greyscale AA and are sub-pixel positioned
 - The [`fontSynthesis`][fontSynthesis] property allows you to control whether a fake bold and oblique should be generated when a font family lacks a real one. Note that this now defaults to **true**, matching browser behavior but breaking from previous Skia Canvas defaults
-- The [`letterSpacing`][letterSpacing] and [`wordSpacing`][wordSpacing] properties now accept `em` and `rem` units. `em` is relative to the current font size and `rem` uses a 16px root size
+- The [`fontKerning`][fontKerning] property controls whether the OpenType `kern` feature is enabled: `"auto"`/`"normal"` (the default) leaves it on, `"none"` turns it off.
+- The [`letterSpacing`][letterSpacing] and [`wordSpacing`][wordSpacing] properties now accept `em` and `rem` units. `em` is relative to the current font size and `rem` uses a 16px root size.
+- Variable fonts that support optical sizing (the `opsz` axis) are now automatically sized to the current `font` site (matching browser behavior).
+- The `font` setting can now include an oblique angle (e.g., `"oblique 14deg 24px Times"`) for variable fonts that support the `slnt` axis.
+- The new [`fontVariationSettings`][fontVariationSettings] property takes a CSS `font-variation-settings` string (e.g. `'"wght" 625, "opsz" 48'`) for low-level control over arbitrary variable-font axes. Set it to `"normal"` to clear.
+- The new [`fontFeatureSettings`][fontFeatureSettings] property takes a CSS `font-feature-settings` string (e.g. `'"liga" 0, "tnum" 1, "ss01"'`) for directly enabling or disabling OpenType features by tag. On conflicting tags it overrides `fontVariant` and `fontKerning`. Set it to `"normal"` to clear.
+- The `font` attribute now accepts an explicit oblique angle (e.g. `"oblique 14deg 24px Times"`), clamped to CSS's ±90° range. When an oblique angle is selected, the font's real italic (`ital`) axis is disabled so you get slanted roman letterforms rather than true italics.
+- The **FontLibrary**’s `use()` and `family()` methods now include additional fields describing the capabilities of user-loaded or system-installed fonts:
+  - `variable`: A boolean flag identifying that this is a variable font
+  - `variations`: Variable font axes represented an object with supported axis tags (e.g., `wdth`, `slnt`) mapping to `{min, max, default, label}` summaries
+  - `features`: OpenType features represented as an object with supported feature tags (e.g., `liga`, `smcp`) mapping to `{type, label}` summaries
 
 #### Imagery
 - SVG images now apply CSS rules contained in `<style>` elements and support most CSS selectors (#276). Custom properties have only basic support: `var()` references resolve against `:root` and inline `style` declarations only and chained definitions (`--foo: var(--bar)`) are not currently handled.
@@ -68,7 +78,7 @@
 
 ### Misc. Improvements
 - The postinstall script for downloading precompiled native binaries has been replaced by platform-specific `optionalDependencies` in the `@skia-canvas/*` namespace. Installs now work with `--ignore-scripts` enabled (#275) and behind firewalls that only mirror the npm registry (#287). As a fallback, the binaries can still be downloaded from the GitHub release via an explicit `npm run build` or `npm run download`.
-- Each **Context** now exposes read-only `width` & `height` properties describing its own size (useful for multi-page canvases, where the Canvas's dimensions only correspond to the *final* page).
+- [`getContextAttributes()`][getContextAttributes] now also includes the **Context**'s `width` & `height`, which is the only way to get page-specifc dimensions in a multi-page canvas (since the Canvas's size corresponds to the *final* page).
 - The [`points()`][p2d_points] method now takes a sampling `mode` argument: the default `"even"` fits the step to each contour so both endpoints are present, while the new `"exact"` mode samples at precise multiples of the requested step.
 - [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] now take a `timeout` [request option][request_opts], rejecting the Promise if the request stalls. See also: the [`AbortSignal.timeout()`][mdn_abortTimeout] `signal` option.
 - Upgraded Skia to [milestone 150](https://github.com/rust-skia/rust-skia/releases/tag/0.99.0) (via `skia-safe` 0.99.0) and `winit` to 0.30.13
@@ -168,6 +178,9 @@
 [transformPoint()]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrixReadOnly/transformPoint
 [window_fit]: /docs/api/window.md#fit
 [mdn_abortTimeout]: https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static
+[fontVariationSettings]: /docs/api/context.md#fontvariationsettings
+[fontFeatureSettings]: /docs/api/context.md#fontfeaturesettings
+[fontKerning]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fontKerning
 
 ## 📦 ⟩ [v3.0.8] ⟩ Sep 25, 2025
 
