@@ -66,19 +66,21 @@ describe("Canvas", ()=>{
       assert.deepEqual(pixel(0,0), CLEAR)
     })
 
-    test('ctx width & height (r/o)', () => {
+    test('per-page dimensions', () => {
+      const size = ctx => { let {width, height} = ctx.getContextAttributes(); return [width, height] }
+
       // each page keeps the size it was created at, so only the newest matches the canvas
-      assert.deepEqual([ctx.width, ctx.height], [WIDTH, HEIGHT])
+      assert.deepEqual(size(ctx), [WIDTH, HEIGHT])
 
       let second = canvas.newPage(300, 200)
-      assert.deepEqual([second.width, second.height], [300, 200])
+      assert.deepEqual(size(second), [300, 200])
       assert.deepEqual([canvas.width, canvas.height], [300, 200])
-      assert.deepEqual([ctx.width, ctx.height], [WIDTH, HEIGHT]) // the first page is unchanged
+      assert.deepEqual(size(ctx), [WIDTH, HEIGHT]) // the first page is unchanged
 
       // and they track a resize of the page that's current
       canvas.width = 42
-      assert.deepEqual([second.width, second.height], [42, 200])
-      assert.deepEqual([ctx.width, ctx.height], [WIDTH, HEIGHT])
+      assert.deepEqual(size(second), [42, 200])
+      assert.deepEqual(size(ctx), [WIDTH, HEIGHT])
     })
   })
 
@@ -742,7 +744,8 @@ describe("Canvas", ()=>{
   describe("loadCanvas()", () => {
     var PNG_PATH = 'tests/assets/pentagon.png',
         SVG_PATH = 'tests/assets/image/format.svg',
-        firstPixel = ctx => Array.from(ctx.getImageData(0, 0, 1, 1).data)
+        firstPixel = ctx => Array.from(ctx.getImageData(0, 0, 1, 1).data),
+        pageSize = ctx => { let {width, height} = ctx.getContextAttributes(); return [width, height] }
   
     // a 3-page document: red, a deliberately blank middle page, then blue on a wider final page
     const makePdf = async () => {
@@ -762,7 +765,7 @@ describe("Canvas", ()=>{
   
       // one canvas page per document page, each at its own size…
       assert.equal(doc.pages.length, 3)
-      assert.deepEqual(doc.pages.map(p => [p.width, p.height]), [[100, 100], [120, 90], [200, 100]])
+      assert.deepEqual(doc.pages.map(pageSize), [[100, 100], [120, 90], [200, 100]])
   
       // …with the canvas itself sized to the last page, as after any newPage()
       assert.deepEqual([doc.width, doc.height], [200, 100])
@@ -778,7 +781,7 @@ describe("Canvas", ()=>{
           again = await loadCanvas(await doc.toBuffer('pdf'))
   
       assert.equal(again.pages.length, 3)
-      assert.deepEqual(again.pages.map(p => [p.width, p.height]), [[100, 100], [120, 90], [200, 100]])
+      assert.deepEqual(again.pages.map(pageSize), [[100, 100], [120, 90], [200, 100]])
       assert.deepEqual(firstPixel(again.pages[2]), [0, 0, 255, 255])
     })
   

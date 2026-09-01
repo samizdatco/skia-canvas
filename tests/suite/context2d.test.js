@@ -204,8 +204,8 @@ describe("Context2D", ()=>{
     test('a display-p3 colorSpace', async () => {
       let canvas = new Canvas(4, 4),
           ctx = canvas.getContext('2d', {colorSpace:'display-p3'})
-      // full browser-parity shape: colorSpace is latched, the other fields are fixed defaults
-      assert.deepEqual(ctx.getContextAttributes(), {alpha:true, colorSpace:'display-p3', desynchronized:false, willReadFrequently:false})
+      // the browser's four settings (colorSpace latched, the rest fixed defaults) plus the page's size
+      assert.deepEqual(ctx.getContextAttributes(), {alpha:true, colorSpace:'display-p3', desynchronized:false, willReadFrequently:false, width:4, height:4})
 
       ctx.fillStyle = '#f00'
       ctx.fillRect(0, 0, 4, 4)

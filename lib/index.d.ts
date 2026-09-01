@@ -856,12 +856,6 @@ interface CanvasTransform {
 export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/canvas) */
   readonly canvas: Canvas
-  /** This page's width. Pages keep the size they were created at, so this only matches
-   *  `canvas.width` for the most recently added page. */
-  readonly width: number
-  /** This page's height. Pages keep the size they were created at, so this only matches
-   *  `canvas.height` for the most recently added page. */
-  readonly height: number
   fontVariant: FontVariantSetting
   /** A CSS `font-variation-settings` string (e.g. `'"wght" 625, "opsz" 48'`) giving low-level
    *  control over variable-font axes. Set to `"normal"` to clear. */
@@ -883,7 +877,10 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   set currentTransform(matrix: Matrix)
   createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
   conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
-  getContextAttributes(): {alpha: boolean, colorSpace: ColorSpace, desynchronized: boolean, willReadFrequently: boolean}
+  /** The settings this page was created with, plus its own dimensions. Pages keep the size they
+   *  were created at, so `width` & `height` only match `canvas.width`/`height` for the most
+   *  recently added page. */
+  getContextAttributes(): {alpha: boolean, colorSpace: ColorSpace, desynchronized: boolean, willReadFrequently: boolean, width: number, height: number}
 
   // add optional maxWidth to work in conjunction with textWrap
   measureText(text: string, maxWidth?: number): TextMetrics
