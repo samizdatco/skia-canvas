@@ -1324,6 +1324,37 @@ describe("ImageData", () => {
       let bgraData = ctx.getImageData(0, 0, 60, 60, {colorType:'bgra'})
       assert.matchesSubset(bgraData, BGRA)
     })
+
+    test("GPU surfaces", () => {
+      // GPU backends refuse some ColorTypes as readback destinations even though Skia can convert
+      // into them — BGR101010x is the one that trips it — so getImageData stages through rgba
+      // when the direct read fails. Without that, these throw on GPU while working fine on CPU.
+      const COLOR_TYPES = ["Alpha8","Gray8","R8UNorm","A16Float","A16UNorm","ARGB4444","R8G8UNorm",
+        "RGB565","rgb","RGB888x","rgba","RGBA8888","bgra","BGRA8888","BGR101010x","RGB101010x",
+        "BGRA1010102","RGBA1010102","R16G16Float","R16G16UNorm","SRGBA8888","R16G16B16A16UNorm",
+        "RGBAF16","RGBAF16Norm","RGBAF32"]
+
+      const painted = gpu => {
+        let ctx = new Canvas(8, 1, {gpu}).getContext('2d')
+        ctx.fillStyle = 'rgb(200 100 50)'; ctx.fillRect(0, 0, 4, 1)
+        ctx.fillStyle = 'rgb(10 220 130)'; ctx.fillRect(4, 0, 4, 1)
+        return ctx
+      }
+
+      for (const colorType of /** @type {import('../../lib').ColorType[]} */(COLOR_TYPES)){
+        let gpu = painted(true).getImageData(0, 0, 8, 1, {colorType}),
+            cpu = painted(false).getImageData(0, 0, 8, 1, {colorType})
+
+        assert.equal(gpu.colorType, colorType)
+        assert.equal(gpu.data.length, cpu.data.length)
+
+        // the staged readback must not diverge from what the CPU backend produces directly
+        // (a small tolerance covers ordinary GPU/CPU rasterization differences)
+        for (let i = 0; i < cpu.data.length; i++){
+          assert.nearEqual(gpu.data[i], cpu.data[i], 12)
+        }
+      }
+    })
   })
 
   test("supports colorSpace setting", () => {

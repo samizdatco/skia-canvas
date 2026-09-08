@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Instant;
 
-use skia_safe::{Color, IRect, ImageInfo, Surface};
+use skia_safe::{Color, ColorType, Data, IRect, ImageInfo, Surface, image::images};
 use crate::gfx::page::{Page, PageVersion, ExportOptions, Replay};
 use crate::gfx::RenderingEngine;
 use crate::mem;
@@ -80,9 +80,25 @@ impl ReadbackSurface{
   }
 
   pub fn copy_pixels(&mut self, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8]) -> bool{
-    self.surface.as_mut().map(|surface|{
-      surface.read_pixels(dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y()))
-    }).unwrap_or(false)
+    let Some(surface) = self.surface.as_mut() else { return false };
+    if surface.read_pixels(dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y())){
+      return true
+    }
+
+    // GPU surfaces refuse to read back in certain color types (e.g., `BGR101010x` on Metal).
+    // Rather than throwing, perform the readback through a supported type...
+    let staged = dst_info.with_color_type(ColorType::RGBA8888);
+    let mut rgba = vec![0u8; staged.compute_min_byte_size()];
+    if !surface.read_pixels(&staged, &mut rgba, staged.min_row_bytes(), (src.x(), src.y())){
+      return false
+    }
+
+    // ...then convert back to the requested type
+    images::raster_from_data(&staged, Data::new_copy(&rgba), staged.min_row_bytes())
+      .map(|image| image.read_pixels(
+        dst_info, pixels, dst_info.min_row_bytes(), (0,0), skia_safe::image::CachingHint::Allow
+      ))
+      .unwrap_or(false)
   }
 
   // logical byte-size of the current surface (w×h×4×density²), 0 if none — for the cache budget
