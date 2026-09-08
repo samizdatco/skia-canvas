@@ -1268,6 +1268,43 @@ describe("ImageData", () => {
       assert.throws(() => new ImageData(buffer, 60, 59), /ImageData dimensions must match buffer length/)
     })
 
+    test("Uint8Array", () => {
+      // Buffer is a Uint8Array subclass, so rejecting the superclass while accepting the subclass
+      // was arbitrary — and it surfaced as a RangeError about the dimensions, not the argument
+      let bytes = new Uint8Array(fs.readFileSync(FORMAT))
+      assert.matchesSubset(new ImageData(bytes, 60, 60), RGBA)
+    })
+
+    test("shares memory with the array it was given", () => {
+      // the spec has the constructor *use* the array it was handed, so writes through the
+      // original are visible in `.data` — for every accepted buffer type, not just one
+      for (const source of [new Uint8ClampedArray(16), new Uint8Array(16), Buffer.alloc(16)]){
+        source.fill(10)
+        let imgData = new ImageData(source, 2, 2)
+        source[0] = 99
+        assert.equal(imgData.data[0], 99, `${source.constructor.name} should alias, not copy`)
+      }
+    })
+
+    test("copies when the byte offset can't be aliased", () => {
+      // a Buffer carved out of the shared pool can land on an odd byteOffset, which a 2-byte
+      // element type can't view directly
+      let odd = Buffer.alloc(33).subarray(1)
+      let imgData = new ImageData(odd, 2, 2, {colorType:'RGBAF16'})
+      assert.equal(imgData.data.length, 16)
+      odd[0] = 99
+      assert.notEqual(imgData.data[0], 99) // fell back to a copy rather than throwing
+    })
+
+    test("rejects buffer types it can't interpret", () => {
+      // a wide typed array is ambiguous — Uint16Array could be raw bytes or 16-bit samples —
+      // so name the problem instead of reading it as a width
+      for (const bad of [new Uint16Array(8), new Float32Array(4), new ArrayBuffer(16)]){
+        // @ts-expect-error — these are exactly the types the constructor should refuse
+        assert.throws(() => new ImageData(bad, 2, 2), /Expected a Uint8ClampedArray/)
+      }
+    })
+
     test("Float16Array", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
       let [width, height] = [8, 8]
 

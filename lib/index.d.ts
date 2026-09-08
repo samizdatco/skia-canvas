@@ -173,7 +173,7 @@ export type ImageDataArray = Uint8ClampedArray | Float16Array
 export class ImageData {
   prototype: ImageData
   constructor(sw: number, sh: number, settings?: ImageDataSettings)
-  constructor(data: ImageDataArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
+  constructor(data: ImageDataArray | Uint8Array | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
   constructor(image: Image, settings?: ImageDataSettings)
   constructor(imageData: ImageData)
 
