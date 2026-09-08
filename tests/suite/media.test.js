@@ -1250,6 +1250,10 @@ describe("Image", () => {
 
 const HAS_FLOAT16 = typeof Float16Array !== 'undefined' // Float16Array is a Node 23+ global
 
+// `sharp` is an optional integration, deliberately not a declared dependency, so the tests that
+// actually push pixels through it only run where someone has installed it
+const HAS_SHARP = (() => { try{ require('sharp'); return true }catch{ return false } })()
+
 describe("ImageData", () => {
   var FORMAT = 'tests/assets/image/format.raw',
       RGBA = {width:60, height:60, colorType:'rgba'},
@@ -1292,8 +1296,18 @@ describe("ImageData", () => {
       assert.ok(alloc.data instanceof Float16Array)
       assert.equal(alloc.data.length, width * height * 4)
 
-      // toSharp() refuses half-float buffers rather than letting sharp misread them
-      assert.throws(() => bmp.toSharp(), /half-float/)
+      // RGBAF16 now reaches sharp (Skia widens it to f32 first) rather than being refused.
+      // `sharp` is an optional integration and not a declared dependency, so tolerate it being
+      // absent — the point is that the old half-float rejection is gone.
+      try{ bmp.toSharp() }
+      catch(e){ assert.match(e.message, /Cannot find module 'sharp'/) }
+
+      // every half-float type reaches sharp now, routed to its unsigned equivalent — the values
+      // were already clamped to [0,1] by the 8-bit surface, so there is no range to preserve
+      for (const colorType of /** @type {import('../../lib').ColorType[]} */(['A16Float', 'R16G16Float'])){
+        try{ new ImageData(4, 4, {colorType}).toSharp() }
+        catch(e){ assert.match(e.message, /Cannot find module 'sharp'/) }
+      }
     })
 
     test("loadImageData call", async () => {
@@ -1338,6 +1352,169 @@ describe("ImageData", () => {
     let u8 = ctx.getImageData(0, 0, width, height)
     assert.ok(u8.data instanceof Uint8ClampedArray)
     assert.deepEqual(Array.from(u8.data.slice(0, 4)), [255, 255, 255, 255])
+  })
+
+  describe("toSharp()", {skip: HAS_SHARP ? false : "sharp is not installed"}, () => {
+    const sharp = HAS_SHARP ? require('sharp') : null
+    const SWATCHES = ['rgb(200 100 50)', 'rgb(10 220 130)', 'rgb(255 0 0)', 'rgb(17 34 51)']
+    const p3Context = () => {
+      let ctx = new Canvas(SWATCHES.length, 1).getContext('2d', {colorSpace:'display-p3'})
+      SWATCHES.forEach((color, i) => { ctx.fillStyle = color; ctx.fillRect(i, 0, 1, 1) })
+      return ctx
+    }
+
+    // Every colorType below must survive the trip into sharp with its channels in RGBA order and
+    // its precision intact. `tolerance` is the format's own quantization (4-bit and 5-bit channels
+    // genuinely cannot round-trip 8-bit values), not slack for layout errors.
+    /** @type {{colorType: import('../../lib').ColorType, tolerance: number, channels?: number, depth?: string}[]} */
+    const CASES = [
+      {colorType:'rgba',              tolerance:0},
+      {colorType:'bgra',              tolerance:0},  // channel order must be corrected, not passed through
+      {colorType:'BGRA8888',          tolerance:0},
+      {colorType:'RGB888x',           tolerance:0, channels:3},
+      {colorType:'RGBA1010102',       tolerance:0, depth:'ushort'},  // 10-bit widened, not truncated
+      {colorType:'BGRA1010102',       tolerance:0, depth:'ushort'},
+      {colorType:'R16G16B16A16UNorm', tolerance:0, depth:'ushort'},
+      {colorType:'RGB565',            tolerance:4},  // 5/6/5 bits
+      {colorType:'ARGB4444',          tolerance:8},  // 4 bits per channel
+      // the float types route to unsigned bands: skia-canvas rasterizes into 8-bit surfaces, so they
+      // carry precision rather than dynamic range, and libvips would read a float band as linear scRGB
+      {colorType:'RGBAF32',           tolerance:0, depth:'ushort'},
+    ]
+    if (HAS_FLOAT16) CASES.push(
+      {colorType:'RGBAF16',     tolerance:0, depth:'ushort'},
+      {colorType:'RGBAF16Norm', tolerance:0, depth:'ushort'},
+    )
+
+    // the colorTypes that also get checked in a display-p3 context (`RGB888x` is the name CASES uses
+    // for the `rgb` alias)
+    const P3_TYPES = ['rgba', 'bgra', 'RGB888x', 'RGBA1010102', 'R16G16B16A16UNorm', 'RGBAF16']
+
+    describe("can round-trip", () => {
+      for (const {colorType, tolerance, channels=4, depth='uchar'} of CASES){
+        test(colorType, async () => {
+          let canvas = new Canvas(SWATCHES.length, 1),
+              ctx = canvas.getContext('2d')
+          SWATCHES.forEach((color, i) => { ctx.fillStyle = color; ctx.fillRect(i, 0, 1, 1) })
+
+          let expected = ctx.getImageData(0, 0, SWATCHES.length, 1).data,
+              img = ctx.getImageData(0, 0, SWATCHES.length, 1, {colorType}).toSharp()
+
+          let meta = await img.metadata()
+          assert.equal(meta.channels, channels, `${colorType} should reach sharp as ${channels} channels`)
+          assert.equal(meta.depth, depth, `${colorType} should reach sharp as ${depth}`)
+
+          // srgb takes the raw handoff — wrapping it in a profiled container would be pure overhead
+          assert.ok(!meta.icc, `${colorType} shouldn't carry a profile on the srgb path`)
+
+          // normalize back to 8-bit sRGB and compare against the canvas's own RGB
+          let {data} = await img.toColorspace('srgb').removeAlpha().raw().toBuffer({resolveWithObject:true})
+          for (let p = 0; p < SWATCHES.length; p++){
+            for (let c = 0; c < 3; c++){
+              // nearEqual's comparison is strictly `<`, so a lossless format needs exact equality
+              if (tolerance == 0) assert.equal(data[p*3 + c], expected[p*4 + c])
+              else assert.nearEqual(data[p*3 + c], expected[p*4 + c], tolerance + 1)
+            }
+          }
+
+          // A display-p3 ImageData holds different byte values for the same color, and libvips reads
+          // raw pixels as sRGB with no way to say otherwise — so those bytes have to reach sharp
+          // inside a container carrying their ICC profile, not as a raw handoff.
+          if (P3_TYPES.includes(colorType)){
+            let ctx = p3Context(),
+                // what those p3 pixels *mean*, expressed in srgb by skia itself
+                expected = ctx.getImageData(0, 0, SWATCHES.length, 1, {colorSpace:'srgb'}).data,
+                wide = ctx.getImageData(0, 0, SWATCHES.length, 1, {colorType}),
+                narrow = ctx.getImageData(0, 0, SWATCHES.length, 1, {colorType, colorSpace:'srgb'}),
+                img = wide.toSharp()
+
+            // the same swatches really are stored differently in p3, or there'd be nothing to tag
+            assert.notDeepEqual(Array.from(wide.data), Array.from(narrow.data),
+                                `${colorType} should hold different bytes in display-p3 than in srgb`)
+
+            // the profile has to survive into sharp, or the pixels are just mislabeled sRGB
+            let meta = await img.metadata()
+            assert.ok(meta.icc, `${colorType} should carry an ICC profile into sharp`)
+
+            // ...and survive sharp's own re-encoding, not just the handoff
+            let exported = await sharp(await wide.toSharp().png().toBuffer()).metadata()
+            assert.ok(exported.icc, `${colorType} should not be flattened to srgb by a png export`)
+
+            // the band count belongs to the colorType, not the color space — `rgb`'s pad byte is
+            // dropped on the way into the TIFF too, rather than arriving as an extra opaque alpha band
+            assert.equal(meta.channels, (await narrow.toSharp().metadata()).channels,
+                         `${colorType} should reach sharp with the same band count in either color space`)
+
+            // `withIccProfile` color-manages through the profile; `toColorspace` only relabels the
+            // band format, which would hand back the p3 numbers unconverted
+            let {data} = await img.withIccProfile('srgb').removeAlpha().raw().toBuffer({resolveWithObject:true})
+            for (let p = 0; p < SWATCHES.length; p++){
+              for (let c = 0; c < 3; c++) assert.nearEqual(data[p*3 + c], expected[p*4 + c], 3)
+            }
+          }
+        })
+      }
+    })
+
+
+    // Three opaque bands, reached from opposite directions: the 2-channel formats widen into a third
+    // band (libvips reads band 2 of a 2-band image as *alpha*, so a direct handoff would turn green
+    // into transparency), while the padded RGB formats narrow, dropping their unused 4th byte rather
+    // than passing it off as alpha.
+    describe("partial-channel formats omit alpha", () => {
+      const partial = /** @type {{colorType: import('../../lib').ColorType, pixels: number[]}[]} */ ([
+        {colorType:'rgb',         pixels:[200, 100, 50, 10, 220, 130]},
+        {colorType:'RGB888x',     pixels:[200, 100, 50, 10, 220, 130]},
+        {colorType:'R8G8UNorm',   pixels:[200, 100,  0, 10, 220,   0]},
+        {colorType:'R16G16UNorm', pixels:[200, 100,  0, 10, 220,   0]},
+        {colorType:'R16G16Float', pixels:[200, 100,  0, 10, 220,   0]},
+      ])
+
+      for (const {colorType, pixels} of partial){
+        test(`${colorType}`, async () => {
+          let ctx = new Canvas(2, 1).getContext('2d')
+          ctx.fillStyle = 'rgb(200 100 50)'; ctx.fillRect(0, 0, 1, 1)
+          ctx.fillStyle = 'rgb(10 220 130)'; ctx.fillRect(1, 0, 1, 1)
+
+          let img = ctx.getImageData(0, 0, 2, 1, {colorType}).toSharp(),
+              meta = await img.metadata()
+
+          // 3 opaque bands, never 2 or 4 — the surplus sample is dropped, not read as transparency
+          assert.equal(meta.channels, 3)
+          assert.equal(meta.hasAlpha, false)
+
+          let {data} = await img.raw().toBuffer({resolveWithObject:true})
+          assert.deepEqual(Array.from(data), pixels)
+
+          // and it has to hold up under an alpha-aware op: with the surplus sample mistaken for
+          // alpha, this flattened 200,100 to 78
+          let flat = await ctx.getImageData(0, 0, 2, 1, {colorType}).toSharp()
+            .flatten({background:'#000'}).raw().toBuffer({resolveWithObject:true})
+          assert.deepEqual(Array.from(flat.data), pixels)
+        })
+      }
+    })
+
+    // A lone band has nothing for `channels` to drop and no RGB round trip to check, so these can't
+    // ride along with the `can round-trip` cases — only that the band's width survives the handoff
+    // (and that the float type lands on its unsigned equivalent rather than a linear-scRGB band).
+    describe("single-channel formats maintain bit-depth", () => {
+      const singleChannel = /** @type {{colorType: import('../../lib').ColorType, depth: string}[]} */ ([
+        {colorType:'Alpha8',   depth:'uchar'},
+        {colorType:'Gray8',    depth:'uchar'},
+        {colorType:'R8UNorm',  depth:'uchar'},
+        {colorType:'A16UNorm', depth:'ushort'},
+        {colorType:'A16Float', depth:'ushort'},
+      ])
+
+      for (const {colorType, depth} of singleChannel){
+        test(`${colorType}`, async () => {
+          let meta = await new ImageData(2, 1, {colorType}).toSharp().metadata()
+          assert.equal(meta.channels, 1, `${colorType} should reach sharp as a single band`)
+          assert.equal(meta.depth, depth, `${colorType} should reach sharp as ${depth}`)
+        })
+      }
+    })
   })
 })
 

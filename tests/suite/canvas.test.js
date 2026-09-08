@@ -27,6 +27,8 @@ const BLACK = [0,0,0,255],
         svg: "image/svg+xml"
       });
 
+const HAS_SHARP = (() => { try{ require('sharp'); return true }catch{ return false } })()
+
 describe("Canvas", ()=>{
   /** @type {Canvas} */
   let canvas
@@ -417,141 +419,6 @@ describe("Canvas", ()=>{
     })
   })
 
-  describe("can export with options", ()=>{
-    test("density", async () => {
-      let small = new Canvas(50, 50),
-          ctx = small.getContext('2d')
-      ctx.fillStyle = 'red'
-      ctx.fillRect(10, 10, 30, 30)
-
-      let img = await loadImage(await small.toBuffer('png', {density:2}))
-      assert.equal(img.width, 100)
-      assert.equal(img.height, 100)
-
-      // content scales up with the pixel grid
-      let dest = new Canvas(100, 100),
-          dtx = dest.getContext('2d')
-      dtx.drawImage(img, 0, 0)
-      assert.deepEqual(Array.from(dtx.getImageData(50, 50, 1, 1).data), [255, 0, 0, 255])
-      assert.deepEqual(Array.from(dtx.getImageData(10, 10, 1, 1).data), CLEAR)
-    })
-
-    test("matte", async () => {
-      // a matte is a backdrop for the export, not content the canvas is allowed to erase. a
-      // region-affecting composite makes the page depend on its own prior pixels, and replaying
-      // it onto the matte let it treat the matte as those pixels and wipe it out — so both modes
-      // have to leave the same square over the same backdrop
-      for (const mode of ['source-over', 'destination-in']){
-        ctx.reset()
-        ctx.fillStyle = 'red'
-        if (mode == 'destination-in'){
-          ctx.fillRect(0, 0, WIDTH, HEIGHT) // fill everything, then erase back to just the square
-          ctx.globalCompositeOperation = mode
-        }
-        ctx.fillRect(100, 100, 100, 100)
-        assert.deepEqual(pixel(50, 50), CLEAR)
-        assert.deepEqual(pixel(150, 150), [255, 0, 0, 255])
-
-        let img = await loadImage(await canvas.toBuffer('png', {matte:'white'}))
-        let flat = new Canvas(WIDTH, HEIGHT),
-            ftx = flat.getContext('2d')
-        ftx.drawImage(img, 0, 0)
-        assert.deepEqual(Array.from(ftx.getImageData(50, 50, 1, 1).data), WHITE, `matte erased by ${mode}`)
-        assert.deepEqual(Array.from(ftx.getImageData(150, 150, 1, 1).data), [255, 0, 0, 255], `content lost with ${mode}`)
-      }
-    })
-
-    test("quality", async () => {
-      // noisy content so compression quality has bytes to trade away
-      for (let i = 0; i < 50; i++){
-        ctx.fillStyle = `hsl(${i * 7}, 80%, 50%)`
-        ctx.beginPath()
-        ctx.arc(WIDTH/2, HEIGHT/2, 250 - i * 5, 0, 2 * Math.PI)
-        ctx.fill()
-      }
-      let hi = await canvas.toBuffer('jpg', {quality:1.0}),
-          lo = await canvas.toBuffer('jpg', {quality:0.2})
-      assert(lo.length < hi.length / 2)
-    })
-
-    test("outline", async () => {
-      FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
-      ctx.font = '40px Monoton'
-      ctx.fillText('Hi', 20, 60)
-
-      let glyphs = (await canvas.toBuffer('svg')).toString(),
-          outlined = (await canvas.toBuffer('svg', {outline:true})).toString()
-      assert.equal(glyphs.includes('<text'), true)
-      assert.equal(outlined.includes('<text'), false)
-      assert.equal(outlined.includes('<path'), true)
-    })
-
-    test("colorSpace", async () => {
-      // a page renders in the space its context was created with — there's no export-time setting
-      let wide = new Canvas(8, 8),
-          wideCtx = wide.getContext('2d', {colorSpace:'display-p3'})
-      canvas.width = canvas.height = 8
-      for (const c of [ctx, wideCtx]){
-        c.fillStyle = '#f00'
-        c.fillRect(0, 0, 8, 8)
-      }
-
-      // raw exports convert pixel values into the page's space
-      let srgb = await canvas.toBuffer('raw'),
-          p3 = await wide.toBuffer('raw')
-      assert.deepEqual(Array.from(srgb.slice(0, 4)), [255, 0, 0, 255])
-      assert.deepEqual(Array.from(p3.slice(0, 4)), [234, 51, 35, 255])
-
-      // png output embeds an ICC profile for display-p3 (vs a bare sRGB chunk by default)
-      let sPng = await canvas.toBuffer('png'),
-          pPng = await wide.toBuffer('png')
-      assert(sPng.includes('sRGB') && !sPng.includes('iCCP'))
-      assert(pPng.includes('iCCP') && !pPng.includes('sRGB'))
-
-      // …while jpeg embeds it in an APP2 segment
-      let pJpg = await wide.toBuffer('jpg')
-      assert(pJpg.includes('ICC_PROFILE'))
-    })
-
-    test("colorSpace (RGBAF16)", async () => {
-      // decode an IEEE-754 binary16 (half-float) channel from a raw buffer
-      let f16 = (buf, i) => {
-        let h = buf.readUInt16LE(i*2),
-            sign = (h & 0x8000) ? -1 : 1,
-            exp = (h >> 10) & 0x1f,
-            frac = h & 0x3ff
-        return exp==0    ? sign * 2**-14 * (frac/1024)
-             : exp==0x1f ? sign * (frac ? NaN : Infinity)
-             :             sign * 2**(exp-15) * (1 + frac/1024)
-      }
-
-      let wide = new Canvas(8, 8),
-          wideCtx = wide.getContext('2d', {colorSpace:'display-p3'})
-      canvas.width = canvas.height = 8
-      for (const c of [ctx, wideCtx]){
-        c.fillStyle = '#f00'
-        c.fillRect(0, 0, 8, 8)
-      }
-
-      // an RGBAF16 raw export carries 8 bytes/pixel (4 channels × binary16), and
-      // its display-p3 values match the 8-bit conversion ([234, 51, 35, 255]) — but
-      // at float precision rather than quantized to 1/255 steps. Note that F16 buys
-      // precision here, not out-of-gamut headroom: read_pixels still clamps to the
-      // destination gamut during conversion regardless of bit depth.
-      let p3 = await wide.toBuffer('raw', {colorType:'RGBAF16'})
-      assert.equal(p3.length, 8 * 8 * 8)
-      assert.nearEqual(f16(p3, 0), 234/255)
-      assert.nearEqual(f16(p3, 1), 51/255)
-      assert.nearEqual(f16(p3, 2), 35/255)
-      assert.nearEqual(f16(p3, 3), 1.0)
-
-      // the same colorType works for the default sRGB space (pure red is exact in F16)
-      let srgb = await canvas.toBuffer('raw', {colorType:'RGBAF16'})
-      assert.equal(srgb.length, 8 * 8 * 8)
-      assert.deepEqual([0,1,2,3].map(c => f16(srgb, c)), [1, 0, 0, 1])
-    })
-  })
-
   describe("can create | sync", ()=>{
     beforeEach(() => {
       TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'skia-canvas-'))
@@ -739,6 +606,168 @@ describe("Canvas", ()=>{
       let canvas = new Canvas(200, 200)
       assert.doesNotThrow( () => canvas.toURLSync("png") )
     })
+
+    test("Sharp images", {skip: HAS_SHARP ? false : "sharp is not installed"}, async () => {
+      const sharp = require('sharp')
+      const SWATCHES = ['rgb(200 100 50)', 'rgb(10 220 130)', 'rgb(255 0 0)', 'rgb(17 34 51)']
+
+      let wide = new Canvas(SWATCHES.length, 1),
+          wideCtx = wide.getContext('2d', {colorSpace:'display-p3'})
+      SWATCHES.forEach((color, i) => { wideCtx.fillStyle = color; wideCtx.fillRect(i, 0, 1, 1) })
+
+      let expected = wideCtx.getImageData(0, 0, SWATCHES.length, 1, {colorSpace:'srgb'}).data,
+          png = await wide.toSharp().png().toBuffer(),
+          meta = await sharp(png).metadata()
+
+      assert.ok(meta.icc, 'a display-p3 canvas should not be labeled srgb')
+
+      let {data} = await sharp(png).removeAlpha().raw().toBuffer({resolveWithObject:true})
+      for (let p = 0; p < SWATCHES.length; p++){
+        for (let c = 0; c < 3; c++) assert.nearEqual(data[p*3 + c], expected[p*4 + c], 3)
+      }
+
+      let scaled = new Canvas(2, 1)
+      scaled.getContext('2d', {colorSpace:'display-p3'})
+      let scaledMeta = await sharp(await scaled.toSharp({density:2}).png().toBuffer()).metadata()
+      assert.equal(scaledMeta.width, 4)
+      assert.equal(scaledMeta.height, 2)
+      assert.equal(scaledMeta.density, 144)
+    })
+  })
+
+  describe("can export with options", ()=>{
+    test("density", async () => {
+      let small = new Canvas(50, 50),
+          ctx = small.getContext('2d')
+      ctx.fillStyle = 'red'
+      ctx.fillRect(10, 10, 30, 30)
+
+      let img = await loadImage(await small.toBuffer('png', {density:2}))
+      assert.equal(img.width, 100)
+      assert.equal(img.height, 100)
+
+      // content scales up with the pixel grid
+      let dest = new Canvas(100, 100),
+          dtx = dest.getContext('2d')
+      dtx.drawImage(img, 0, 0)
+      assert.deepEqual(Array.from(dtx.getImageData(50, 50, 1, 1).data), [255, 0, 0, 255])
+      assert.deepEqual(Array.from(dtx.getImageData(10, 10, 1, 1).data), CLEAR)
+    })
+
+    test("matte", async () => {
+      // a matte is a backdrop for the export, not content the canvas is allowed to erase. a
+      // region-affecting composite makes the page depend on its own prior pixels, and replaying
+      // it onto the matte let it treat the matte as those pixels and wipe it out — so both modes
+      // have to leave the same square over the same backdrop
+      for (const mode of ['source-over', 'destination-in']){
+        ctx.reset()
+        ctx.fillStyle = 'red'
+        if (mode == 'destination-in'){
+          ctx.fillRect(0, 0, WIDTH, HEIGHT) // fill everything, then erase back to just the square
+          ctx.globalCompositeOperation = mode
+        }
+        ctx.fillRect(100, 100, 100, 100)
+        assert.deepEqual(pixel(50, 50), CLEAR)
+        assert.deepEqual(pixel(150, 150), [255, 0, 0, 255])
+
+        let img = await loadImage(await canvas.toBuffer('png', {matte:'white'}))
+        let flat = new Canvas(WIDTH, HEIGHT),
+            ftx = flat.getContext('2d')
+        ftx.drawImage(img, 0, 0)
+        assert.deepEqual(Array.from(ftx.getImageData(50, 50, 1, 1).data), WHITE, `matte erased by ${mode}`)
+        assert.deepEqual(Array.from(ftx.getImageData(150, 150, 1, 1).data), [255, 0, 0, 255], `content lost with ${mode}`)
+      }
+    })
+
+    test("quality", async () => {
+      // noisy content so compression quality has bytes to trade away
+      for (let i = 0; i < 50; i++){
+        ctx.fillStyle = `hsl(${i * 7}, 80%, 50%)`
+        ctx.beginPath()
+        ctx.arc(WIDTH/2, HEIGHT/2, 250 - i * 5, 0, 2 * Math.PI)
+        ctx.fill()
+      }
+      let hi = await canvas.toBuffer('jpg', {quality:1.0}),
+          lo = await canvas.toBuffer('jpg', {quality:0.2})
+      assert(lo.length < hi.length / 2)
+    })
+
+    test("outline", async () => {
+      FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
+      ctx.font = '40px Monoton'
+      ctx.fillText('Hi', 20, 60)
+
+      let glyphs = (await canvas.toBuffer('svg')).toString(),
+          outlined = (await canvas.toBuffer('svg', {outline:true})).toString()
+      assert.equal(glyphs.includes('<text'), true)
+      assert.equal(outlined.includes('<text'), false)
+      assert.equal(outlined.includes('<path'), true)
+    })
+
+    test("colorSpace", async () => {
+      // a page renders in the space its context was created with — there's no export-time setting
+      let wide = new Canvas(8, 8),
+          wideCtx = wide.getContext('2d', {colorSpace:'display-p3'})
+      canvas.width = canvas.height = 8
+      for (const c of [ctx, wideCtx]){
+        c.fillStyle = '#f00'
+        c.fillRect(0, 0, 8, 8)
+      }
+
+      // raw exports convert pixel values into the page's space
+      let srgb = await canvas.toBuffer('raw'),
+          p3 = await wide.toBuffer('raw')
+      assert.deepEqual(Array.from(srgb.slice(0, 4)), [255, 0, 0, 255])
+      assert.deepEqual(Array.from(p3.slice(0, 4)), [234, 51, 35, 255])
+
+      // png output embeds an ICC profile for display-p3 (vs a bare sRGB chunk by default)
+      let sPng = await canvas.toBuffer('png'),
+          pPng = await wide.toBuffer('png')
+      assert(sPng.includes('sRGB') && !sPng.includes('iCCP'))
+      assert(pPng.includes('iCCP') && !pPng.includes('sRGB'))
+
+      // …while jpeg embeds it in an APP2 segment
+      let pJpg = await wide.toBuffer('jpg')
+      assert(pJpg.includes('ICC_PROFILE'))
+    })
+
+    test("colorSpace (RGBAF16)", async () => {
+      // decode an IEEE-754 binary16 (half-float) channel from a raw buffer
+      let f16 = (buf, i) => {
+        let h = buf.readUInt16LE(i*2),
+            sign = (h & 0x8000) ? -1 : 1,
+            exp = (h >> 10) & 0x1f,
+            frac = h & 0x3ff
+        return exp==0    ? sign * 2**-14 * (frac/1024)
+             : exp==0x1f ? sign * (frac ? NaN : Infinity)
+             :             sign * 2**(exp-15) * (1 + frac/1024)
+      }
+
+      let wide = new Canvas(8, 8),
+          wideCtx = wide.getContext('2d', {colorSpace:'display-p3'})
+      canvas.width = canvas.height = 8
+      for (const c of [ctx, wideCtx]){
+        c.fillStyle = '#f00'
+        c.fillRect(0, 0, 8, 8)
+      }
+
+      // an RGBAF16 raw export carries 8 bytes/pixel (4 channels × binary16), and
+      // its display-p3 values match the 8-bit conversion ([234, 51, 35, 255]) — but
+      // at float precision rather than quantized to 1/255 steps. Note that F16 buys
+      // precision here, not out-of-gamut headroom: read_pixels still clamps to the
+      // destination gamut during conversion regardless of bit depth.
+      let p3 = await wide.toBuffer('raw', {colorType:'RGBAF16'})
+      assert.equal(p3.length, 8 * 8 * 8)
+      assert.nearEqual(f16(p3, 0), 234/255)
+      assert.nearEqual(f16(p3, 1), 51/255)
+      assert.nearEqual(f16(p3, 2), 35/255)
+      assert.nearEqual(f16(p3, 3), 1.0)
+
+      // the same colorType works for the default sRGB space (pure red is exact in F16)
+      let srgb = await canvas.toBuffer('raw', {colorType:'RGBAF16'})
+      assert.equal(srgb.length, 8 * 8 * 8)
+      assert.deepEqual([0,1,2,3].map(c => f16(srgb, c)), [1, 0, 0, 1])
+    })
   })
 
   describe("loadCanvas()", () => {
@@ -746,7 +775,7 @@ describe("Canvas", ()=>{
         SVG_PATH = 'tests/assets/image/format.svg',
         firstPixel = ctx => Array.from(ctx.getImageData(0, 0, 1, 1).data),
         pageSize = ctx => { let {width, height} = ctx.getContextAttributes(); return [width, height] }
-  
+
     // a 3-page document: red, a deliberately blank middle page, then blue on a wider final page
     const makePdf = async () => {
       let canvas = new Canvas(100, 100),
@@ -759,43 +788,43 @@ describe("Canvas", ()=>{
       ctx.fillRect(0, 0, 300, 300)
       return canvas.toBuffer('pdf')
     }
-  
+
     test("reads multipage PDFs", async () => {
       let doc = await loadCanvas(await makePdf())
-  
+
       // one canvas page per document page, each at its own size…
       assert.equal(doc.pages.length, 3)
       assert.deepEqual(doc.pages.map(pageSize), [[100, 100], [120, 90], [200, 100]])
-  
+
       // …with the canvas itself sized to the last page, as after any newPage()
       assert.deepEqual([doc.width, doc.height], [200, 100])
-  
+
       assert.deepEqual(firstPixel(doc.pages[0]), [255, 0, 0, 255])
       assert.deepEqual(firstPixel(doc.pages[1]), [0, 0, 0, 0]) // the blank page survives the load
       assert.deepEqual(firstPixel(doc.pages[2]), [0, 0, 255, 255])
     })
-  
+
     test("can re-export multipage docs", async () => {
       // the pages hold real geometry, so the document can make a round trip
       let doc = await loadCanvas(await makePdf()),
           again = await loadCanvas(await doc.toBuffer('pdf'))
-  
+
       assert.equal(again.pages.length, 3)
       assert.deepEqual(again.pages.map(pageSize), [[100, 100], [120, 90], [200, 100]])
       assert.deepEqual(firstPixel(again.pages[2]), [0, 0, 255, 255])
     })
-  
+
     test("reads single-page sources", async () => {
       // a bitmap is sized to its pixel dimensions and pre-drawn
       let bitmap = await loadCanvas(PNG_PATH)
       assert.equal(bitmap.pages.length, 1)
       assert.deepEqual([bitmap.width, bitmap.height], [125, 125])
-  
+
       // as is an SVG with an intrinsic size
       let vector = await loadCanvas(SVG_PATH)
       assert.equal(vector.pages.length, 1)
       assert.deepEqual([vector.width, vector.height], [60, 60])
-  
+
       // and a one-page PDF is just a document that happens to be short
       let solo = new Canvas(50, 60)
       solo.getContext('2d').fillStyle = '#0f0'
@@ -805,37 +834,37 @@ describe("Canvas", ()=>{
       assert.deepEqual([short.width, short.height], [50, 60])
       assert.deepEqual(firstPixel(short.getContext('2d')), [0, 255, 0, 255])
     })
-  
+
     test("uses the viewBox for sizeless SVGs", async () => {
       let svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250"></svg>')
       assert.deepEqual((c => [c.width, c.height])(await loadCanvas(svg)), [400, 250])
-  
+
       // …while loadImage() keeps reporting Chrome's 150px-tall default for the same file
       assert.matchesSubset(await loadImage(svg), {width:240, height:150})
-  
+
       // with no viewBox to go on, both fall back to that default (Chrome's 300×150 default object size)
       let bare = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>')
       assert.deepEqual((c => [c.width, c.height])(await loadCanvas(bare)), [300, 150])
     })
-  
+
     test("parses canvas & context options", async () => {
       let doc = await loadCanvas(PNG_PATH, {colorSpace:'display-p3', gpu:false, textGamma:1.8})
       assert.equal(doc.getContext('2d').getContextAttributes().colorSpace, 'display-p3')
       assert.equal(doc.gpu, false)
       assert.equal(doc.engine.textGamma, 1.8)
-  
+
       // every page of a document inherits the settings, not just the first
       let pdf = await loadCanvas(await makePdf(), {colorSpace:'display-p3'})
       for (let page of pdf.pages){
         assert.equal(page.getContextAttributes().colorSpace, 'display-p3')
       }
-  
+
       // an unusable colorSpace is silently ignored rather than thrown (outside of strict mode)
       // @ts-expect-error — deliberately passing an unknown color space
       let fallback = await loadCanvas(PNG_PATH, {colorSpace:'nonsense'})
       assert.equal(fallback.getContext('2d').getContextAttributes().colorSpace, 'srgb')
     })
-  
+
     test("rejects undecodable data", async () => {
       await assert.rejects(loadCanvas(Buffer.from('not an image')), /Could not decode/)
     })

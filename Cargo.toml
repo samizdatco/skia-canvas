@@ -35,6 +35,9 @@ hayro-interpret = "0.7"
 kurbo = "0.13"
 smallvec = "1"
 roxmltree = "0.20"
+# only used to wrap ImageData pixels in an uncompressed, ICC-tagged container for `toSharp()`;
+# none of the compression codecs are wanted, hence no default features
+tiff = { version = "0.11", default-features = false }
 simplecss = { path = "vendor/simplecss" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }

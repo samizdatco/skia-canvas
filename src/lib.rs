@@ -49,6 +49,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("Image_get_height", image::get_height)?;
   cx.export_function("Image_get_complete", image::get_complete)?;
   cx.export_function("Image_pixels", image::pixels)?;
+  cx.export_function("ImageData_toRaw", image::to_raw)?;
+  cx.export_function("ImageData_toTiff", image::to_tiff)?;
 
   // -- PDF ---------------------------------------------------------------------------------------
 
