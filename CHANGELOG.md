@@ -15,7 +15,7 @@
 #### Wide-gamut Color
 - The canvas's color space can now be selected via `getContext('2d', {colorSpace})` and set to either `"srgb"` (the default) or `"display-p3"`. The setting will be inherited by any subsequent pages but can be overridden by passing a `colorSpace` option to [`newPage()`][newPage].
 - The [`getImageData()`][mdn_getImageData] function also takes a `colorSpace` option, selecting how the raw pixels it returns will be clamped (by default it uses the context's color space setting). Likewise, the [**ImageData**][ImageData] constructor and [`createImageData()`][mdn_createImageData] now also take an optional `colorSpace` arg.
-- Bitmap exports will use the context's color space and embed a matching ICC profile, PDFs will do the same for *images* drawn onto the canvas but not path drawing, and SVGs have no wide-gamut support.
+- Bitmap exports (and [toSharp()][imgdata_tosharp]) will use the context's color space and embed a matching ICC profile, PDFs will do the same for *images* drawn onto the canvas but not path drawing, and SVGs have no wide-gamut support.
 - Color strings can now use full [CSS Color 4][css_color4] syntax everywhere a color is accepted (`fillStyle`, `strokeStyle`, `shadowColor`, gradient stops, [`matte`][matte], and `drop-shadow()` filters). This includes support for `oklch()`, `oklab()`, `lab()`, `lch()`, and `color(display-p3 …)`, but relative color syntax like `rgb(from …)` is not currently supported.
 - [**CanvasGradient**][CanvasGradient] objects now have [`colorInterpolationMethod`][colorInterpolationMethod], [`hueInterpolationMethod`][hueInterpolationMethod], and [`premultipliedAlpha`][premultipliedAlpha] properties controlling how colors are blended between stops
 - Windows on macOS now use Display P3. Vulkan windows remain sRGB (no tested driver advertised P3 support), though this may change in the future
@@ -123,6 +123,7 @@
 - [`drawImage()`][mdn_drawImage] and [`drawCanvas()`][drawcanvas] now clip the source rectangle to the image's actual bounds and skip the draw entirely when the crop doesn't overlap it. Previously a zero-overlap crop with a composite mode like `copy` or `destination-in` could erase the whole canvas.
 - A failed **Image** load without an `error` handler no longer terminates the process.
 - SVG exports no longer double-draw bitmaps added to the canvas via `putImageData`.
+- The [toSharp()][imgdata_tosharp] method now produces correct pixel values for *all* supported color types, not just the 8-bit formats.
 
 #### Compositing
 - Drawing one canvas onto another (via [`drawImage()`][mdn_drawImage] or [`drawCanvas()`][drawcanvas]) now isolates the source's compositing from the destination. Previously, if the drawn canvas used a non-`source-over` blend mode, called `clearRect()`, or blitted an ImageData it would blend against (or erase) the destination canvas's content.
@@ -140,6 +141,7 @@
 - [`unwind()`][p2d_unwind] has been deprecated in favor of [`simplify('evenodd')`][p2d_simplify], which selects the same region; it will be removed in a future release
 - Boolean-op and [`simplify()`][p2d_simplify] results now render differently when filled with the default `"nonzero"` rule. Results containing holes (e.g., via `xor` or `difference`) previously filled in solid without an explicit `evenodd`
 - SVG **Image**s lacking an explicit `width` and `height` now use the CSS default sizing algorithm (a 300×150 default object size) to establish a default intrinsic size. An SVG with only one concrete dimension plus a `viewBox` ratio now resolves to a fully-determined intrinsic size. This changes both the reported `width`/`height` of such images and how they scale when drawn without explicit size arguments (including when used as fill/stroke-pattern tiles).
+- An **ImageData** created from a Node `Buffer` object now *shares* the buffer's memory rather than copying it.
 
 [pointerevent]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent
 [pointerevent_types]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent#pointer_event_types
