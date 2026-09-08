@@ -436,7 +436,7 @@ pub fn round(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 // Clips a proportional segment out of the middle of the path (or the edges if invert=true)
 pub fn trim(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let begin = float_arg_or_bail(&mut cx, 1, "begin")?;
+  let start = float_arg_or_bail(&mut cx, 1, "start")?;
   let end = float_arg_or_bail(&mut cx, 2, "end")?;
   let invert = bool_arg_or(&mut cx, 3, false);
 
@@ -446,7 +446,7 @@ pub fn trim(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let stroke_rec = StrokeRec::new_hairline();
   let mode = if invert{ trim_path_effect::Mode::Inverted }else{ trim_path_effect::Mode::Normal };
 
-  if let Some(trimmer) = PathEffect::trim(begin, end, mode){
+  if let Some(trimmer) = PathEffect::trim(start, end, mode){
     if let Some((trimmed, _)) = trimmer.filter_path(&path, &stroke_rec, bounds){
       return Ok(cx.boxed(RefCell::new(Path2D::from(trimmed))))
     }
@@ -567,8 +567,8 @@ pub fn normal_at(mut cx: FunctionContext) -> JsResult<JsValue> {
 // create a new Path2D spanning between two locations along the path (or its complement)
 pub fn slice(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let this = cx.argument::<BoxedPath2D>(0)?;
-  let from = opt_distance_arg(&mut cx, 1);
-  let to = opt_distance_arg(&mut cx, 2);
+  let start = opt_distance_arg(&mut cx, 1);
+  let end = opt_distance_arg(&mut cx, 2);
   let inverted = bool_arg_or(&mut cx, 3, false);
   let this = this.borrow();
   let measure = this.measure();
@@ -584,24 +584,24 @@ pub fn slice(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
     }
   };
 
-  // the requested stretch(es): empty if from>=to, flipped if inverted==true
-  let from = normalize(from, 0.0);
-  let to = normalize(to, measure.total);
-  let ranges:Vec<(f64, f64)> = match (inverted, from <= to){
-    (false, true) => vec![(from, to)],
+  // the requested stretch(es): empty if start>=end, flipped if inverted==true
+  let start = normalize(start, 0.0);
+  let end = normalize(end, measure.total);
+  let ranges:Vec<(f64, f64)> = match (inverted, start <= end){
+    (false, true) => vec![(start, end)],
     (false, false) => vec![],
-    (true, true) => vec![(0.0, from), (to, measure.total)],
+    (true, true) => vec![(0.0, start), (end, measure.total)],
     (true, false) => vec![(0.0, measure.total)],
   };
 
   // emit each contour in the range (preserving the moveTo gaps between them)
   let mut builder = PathBuilder::new();
   for (contour, &offset) in measure.contours.iter().zip(measure.offsets.iter()){
-    for &(start, stop) in ranges.iter(){
-      let begin = (start.max(offset) - offset) as f32;
-      let end = (stop.min(offset + contour.length() as f64) - offset) as f32;
-      if end > begin{
-        let _ = contour.get_segment(begin, end, &mut builder, true);
+    for &(from, to) in ranges.iter(){
+      let lo = (from.max(offset) - offset) as f32;
+      let hi = (to.min(offset + contour.length() as f64) - offset) as f32;
+      if hi > lo{
+        let _ = contour.get_segment(lo, hi, &mut builder, true);
       }
     }
   }
