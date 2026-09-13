@@ -680,8 +680,10 @@ describe("Path2D", ()=>{
       line.lineTo(100, 0)
       assert.deepEqual(line.positionAt(25), {x:25, y:0})
 
+      // negative distances measure back from the end of the path
+      assert.deepEqual(line.positionAt(-5), {x:95, y:0})
+
       // out-of-range distances clamp to the path's endpoints
-      assert.deepEqual(line.positionAt(-5), line.positionAt(0))
       assert.deepEqual(line.positionAt(1e6), {x:100, y:0})
       assert.deepEqual(line.positionAt(-Infinity), {x:0, y:0})
       assert.deepEqual(line.positionAt(Infinity), {x:100, y:0})

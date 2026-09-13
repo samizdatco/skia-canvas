@@ -238,10 +238,16 @@ impl Measure{
     Self{contours, offsets, total, bytes:measure_size_estimate(path)}
   }
 
+  // canonicalize a user distance: negatives count back from the end, clamp to [0, total]
+  fn normalize(&self, d:f64) -> Option<f64> {
+    if d.is_nan(){ return None }
+    let d = if d < 0.0 { d + self.total } else { d };
+    Some(d.clamp(0.0, self.total))
+  }
+
   // map a whole-path distance to a position + tangent
   fn locate(&self, d:f64) -> Option<(Point, Vector)> {
-    if d.is_nan(){ return None } // bail on NaN
-    let d = d.clamp(0.0, self.total); // clamp out-of-bounds distances into range
+    let d = self.normalize(d)?;
     let idx = self.offsets.partition_point(|&start| start <= d).saturating_sub(1);
     let contour = self.contours.get(idx)?;
     contour.pos_tan((d - self.offsets[idx]) as f32)
@@ -575,18 +581,10 @@ pub fn slice(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 
   // use Array.slice conventions: omitted args span the whole path, NaN coerces to
   // zero, negatives count back from the end, and everything clamps to [0, length]
-  let normalize = |d:Option<f64>, default:f64| match d{
-    None => default,
-    Some(d) => {
-      let d = if d.is_nan(){ 0.0 }else{ d };
-      let d = if d < 0.0{ d + measure.total }else{ d };
-      d.clamp(0.0, measure.total)
-    }
-  };
+  let start = measure.normalize(start.unwrap_or(0.0)).unwrap_or(0.0);
+  let end = measure.normalize(end.unwrap_or(measure.total)).unwrap_or(0.0);
 
   // the requested stretch(es): empty if start>=end, flipped if inverted==true
-  let start = normalize(start, 0.0);
-  let end = normalize(end, measure.total);
   let ranges:Vec<(f64, f64)> = match (inverted, start <= end){
     (false, true) => vec![(start, end)],
     (false, false) => vec![],
