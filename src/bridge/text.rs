@@ -290,10 +290,10 @@ pub fn typeface_details<'a>(cx: &mut FunctionContext<'a>, filename:&str, font: &
   dict.prop(cx, "weight").set(*style.weight() as f64)?;
   dict.prop(cx, "style").set(from_slant(style.slant()))?;
   dict.prop(cx, "width").set(from_width(style.width()))?;
-  dict.prop(cx, "file").set(filename)?;
   dict.prop(cx, "variable").set(!caps.axes.is_empty())?;
   dict.prop(cx, "variations").set(variations)?;
   dict.prop(cx, "features").set(features)?;
+  dict.prop(cx, "file").set(filename)?;
   Ok(dict)
 }
 
