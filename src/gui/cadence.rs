@@ -118,34 +118,26 @@ mod vblank {
         pub fn start(proxy:EventLoopProxy<AppEvent>, window_mgr:&WindowManager) -> Self{
             let interval = window_mgr.refresh_interval();
 
-            // SKIA_CANVAS_VBLANK=off (also 0/false) disables the real per-platform vblank source and
-            // drives frames from the plain refresh-rate timer (for debugging misbehaving systems)
-            let vblank_disabled = std::env::var("SKIA_CANVAS_VBLANK")
-                .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "0" | "false" | "off"))
-                .unwrap_or(false);
-
             // try to find a real vblank source or fall back to using an un-anchored timer
-            if !vblank_disabled{
-                #[cfg(all(unix, not(target_os = "macos")))]
-                if std::env::var_os("WAYLAND_DISPLAY").is_some(){
-                    return Source::RedrawEvent;
-                }
+            #[cfg(all(unix, not(target_os = "macos")))]
+            if std::env::var_os("WAYLAND_DISPLAY").is_some(){
+                return Source::RedrawEvent;
+            }
 
-                #[cfg(target_os = "macos")]
-                if let Some(link) = window_mgr.primary_display_id()
-                    .and_then(|id| mac::start(proxy.clone(), id)){
-                    return Source::Callback(link);
-                }
+            #[cfg(target_os = "macos")]
+            if let Some(link) = window_mgr.primary_display_id()
+                .and_then(|id| mac::start(proxy.clone(), id)){
+                return Source::Callback(link);
+            }
 
-                #[cfg(target_os = "windows")]
-                if let Some(thread) = windows::start(proxy.clone(), interval){
-                    return Source::Thread(thread);
-                }
+            #[cfg(target_os = "windows")]
+            if let Some(thread) = windows::start(proxy.clone(), interval){
+                return Source::Thread(thread);
+            }
 
-                #[cfg(all(unix, not(target_os = "macos")))]
-                if let Some(thread) = linux::start(proxy.clone(), interval){
-                    return Source::Thread(thread);
-                }
+            #[cfg(all(unix, not(target_os = "macos")))]
+            if let Some(thread) = linux::start(proxy.clone(), interval){
+                return Source::Thread(thread);
             }
 
             Source::Thread(timer_thread(proxy, interval))
