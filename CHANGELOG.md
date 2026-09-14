@@ -145,11 +145,11 @@
 
 [pointerevent]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent
 [pointerevent_types]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent#pointer_event_types
-[raf]: /docs/api/window.md#requestanimationframe
-[caf]: /docs/api/window.md#cancelanimationframe
+[raf]: https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame
+[caf]: https://developer.mozilla.org/en-US/docs/Web/API/Window/cancelAnimationFrame
 [dispose]: /docs/api/canvas.md#dispose
 [release]: /docs/api/canvas.md#release
-[getContext]: /docs/api/canvas.md#getcontext
+[getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
 [newPage]: /docs/api/canvas.md#newpage
 [getContextAttributes]: /docs/api/context.md#getcontextattributes
 [css_color4]: https://developer.mozilla.org/en-US/docs/Web/CSS/color_value
@@ -165,13 +165,13 @@
 [mdn_fill]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fill
 [canvas_engine]: /docs/api/canvas.md#engine
 [skia_canvas_trim]: /docs/getting-started.md#environment-variables
-[bool-ops]: /docs/api/path2d.md#complement-difference-intersect-union-and-xor
+[bool-ops]: /docs/api/path2d.md#complement-difference-intersect-union-xor
 [p2d_simplify]: /docs/api/path2d.md#simplify
 [p2d_points]: /docs/api/path2d.md#points
 [p2d_length]: /docs/api/path2d.md#length
 [p2d_positionAt]: /docs/api/path2d.md#positionat
-[p2d_tangentAt]: /docs/api/path2d.md#tangentat
-[p2d_normalAt]: /docs/api/path2d.md#normalat
+[p2d_tangentAt]: /docs/api/path2d.md#tangentat--normalat
+[p2d_normalAt]: /docs/api/path2d.md#tangentat--normalat
 [p2d_slice]: /docs/api/path2d.md#slice
 [p2d_contours]: /docs/api/path2d.md#contours
 [loadCanvas]: /docs/api/canvas.md#loadcanvas
@@ -318,7 +318,7 @@
 - `startRange` and `endRange` in TextMetrics.lines[] now correspond to character indices in the string passed to measureText(), not byte indices into the UTF-8 buffer backing it
 
 [App.launch()]: /docs/api/app.md#launch
-[app_eventLoop]: /docs/api/app.md#eventLoop
+[app_eventLoop]: /docs/api/app.md#eventloop
 [app_idle]: /docs/api/app.md#idle
 [win_close]: /docs/api/window.md#close
 [win_closed]: /docs/api/window.md#closed
@@ -743,7 +743,7 @@
   - Added new test suites for `Path2D`, `Image`, and `Canvas`’s format support.
   - Created [workflows](https://github.com/samizdatco/skia-canvas/tree/master/.github/workflows) to automate precompiled binary builds, testing, and npm package updating.
 
-[boolean-ops]: /docs/api/path2d.md#complement-difference-intersect-union-and-xor
+[boolean-ops]: /docs/api/path2d.md#complement-difference-intersect-union-xor
 [p2d_bounds]: /docs/api/path2d.md#bounds
 [createConicGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createConicGradient
 [loadImage()]: /docs/api/image.md#loadimage
