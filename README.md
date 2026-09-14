@@ -84,7 +84,7 @@ Alternatively, you can add a [`pnpm.onlyBuiltDependencies`](https://pnpm.io/9.x/
 
 Skia Canvas runs on Linux, macOS, or Windows as well as serverless platforms like Vercel and AWS Lambda. Precompiled versions of the library’s native code will be automatically downloaded in the appropriate architecture (`arm64` or `x64`) when you install it via npm.
 
-The underlying Rust library uses [N-API][node_napi] v8 which allows it to run on all [currently supported](https://nodejs.org/en/about/previous-releases) Node.js releases, and it is backward compatible with versions going back to v12.22+, v14.17+, v15.12+, and v16+.
+The underlying Rust library uses [N-API][node_napi] v8 which allows it to run on all [currently supported](https://nodejs.org/en/about/previous-releases) Node.js releases, and it is backward compatible with versions going back to Node 18.0.
 
 ### Linux
 
