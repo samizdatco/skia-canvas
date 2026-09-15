@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 use std::iter::zip;
+use std::sync::Once;
 use std::collections::BTreeSet;
 use serde_json::{json, Value};
 use skia_safe::{FontMetrics, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
@@ -40,6 +41,12 @@ impl Typesetter{
         })
         .font_collection()
     );
+
+    static FONT_CHECK:Once = Once::new();
+    FONT_CHECK.call_once(|| if FontLibrary::is_empty(){
+      eprintln!("Warning: Cannot render text because no fonts are installed on this system.")
+    });
+
     let width = width.unwrap_or(100_000.0); // if not wrapping, pick an effectively infinite width
     let text = match text_wrap{
       true => text.to_string(),

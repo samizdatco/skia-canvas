@@ -64,6 +64,10 @@ impl FontLibrary{
     })
   }
 
+  pub fn is_empty() -> bool{
+    Self::with_shared(|lib| lib.families().is_empty())
+  }
+
   pub fn font_collection(&mut self) -> FontCollection{
     // lazily initialize font collection on first actual use
     if self.collection.is_none(){
