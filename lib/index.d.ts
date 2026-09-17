@@ -540,8 +540,8 @@ export class CanvasTexture {}
 // Context
 //
 
-type CanvasDrawable = Canvas | Image | ImageData;
-type CanvasPatternSource = Canvas | Image | ImageData;
+type CanvasDrawable = Canvas | CanvasRenderingContext2D | Image | ImageData;
+type CanvasPatternSource = Canvas | CanvasRenderingContext2D | Image | ImageData;
 type CanvasDirection = "inherit" | "ltr" | "rtl";
 type CanvasFillRule = "evenodd" | "nonzero";
 type CanvasFontStretch = "condensed" | "expanded" | "extra-condensed" | "extra-expanded" | "normal" | "semi-condensed" | "semi-expanded" | "ultra-condensed" | "ultra-expanded";

@@ -5,7 +5,7 @@
 
 const {assert} = require('../runner/assert'),
       {describe, test, beforeEach, afterEach} = require('node:test'),
-      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage} = require('../../lib'),
+      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage, loadCanvas} = require('../../lib'),
       css = require('../../lib/classes/css')
 
 const BLACK = [0,0,0,255],
@@ -351,6 +351,26 @@ describe("Context2D", ()=>{
             blackPixel ? BLACK : WHITE
           )
         }
+      })
+
+      test("from a page context", () => {
+        let checkers = new Canvas(2, 2),
+            page1 = checkers.getContext('2d')
+        page1.fillStyle = 'white'
+        page1.fillRect(0, 0, 2, 2)
+        page1.fillStyle = 'black'
+        page1.fillRect(0, 0, 1, 1)
+        page1.fillRect(1, 1, 1, 1)
+        checkers.newPage() // a blank newer page: the context arg must still select page 1
+
+        ctx.imageSmoothingEnabled = false
+        ctx.fillStyle = ctx.createPattern(checkers.pages[0], 'repeat')
+        ctx.fillRect(0, 0, 20, 20)
+
+        assert.deepEqual(pixel(0, 0), BLACK)
+        assert.deepEqual(pixel(1, 0), WHITE)
+        assert.deepEqual(pixel(0, 1), WHITE)
+        assert.deepEqual(pixel(1, 1), BLACK)
       })
 
       test("from ImageData", () => {
@@ -1922,6 +1942,44 @@ describe("Context2D", ()=>{
         assert.doesNotThrow( () => ctx.drawCanvas(image, 0, 0) )
       })
 
+      test('with a page context as source', () => {
+        // a multi-page canvas source draws its *newest* page; passing a specific context
+        // from `.pages` selects any page instead (on both the vector and raster paths)
+        let src = new Canvas(8, 8),
+            page1 = src.getContext('2d')
+        page1.fillStyle = 'green'
+        page1.fillRect(0, 0, 8, 8)
+        let page2 = src.newPage()
+        page2.fillStyle = 'white'
+        page2.fillRect(0, 0, 8, 8)
+
+        ctx.drawCanvas(src, 0, 0)           // canvas → newest page
+        ctx.drawCanvas(src.pages[0], 20, 0) // context → first page
+        ctx.drawImage(src.pages[0], 40, 0)  // rasterizing path accepts contexts too
+        assert.deepEqual(pixel(4, 4), WHITE)
+        assert.deepEqual(pixel(24, 4), GREEN)
+        assert.deepEqual(pixel(44, 4), GREEN)
+      })
+
+      test('with a loaded PDF page as source', async () => {
+        // the contact-sheet path: parse a multi-page pdf once with loadCanvas, then
+        // composite arbitrary pages by drawing their contexts
+        let doc = new Canvas(8, 8),
+            page1 = doc.getContext('2d')
+        page1.fillStyle = 'green'
+        page1.fillRect(0, 0, 8, 8)
+        let page2 = doc.newPage()
+        page2.fillStyle = 'white'
+        page2.fillRect(0, 0, 8, 8)
+
+        let loaded = await loadCanvas(doc.toBufferSync('pdf'))
+        assert.equal(loaded.pages.length, 2)
+        ctx.drawCanvas(loaded.pages[0], 0, 0)
+        ctx.drawCanvas(loaded.pages[1], 20, 0)
+        assert.deepEqual(pixel(4, 4), GREEN)
+        assert.deepEqual(pixel(24, 4), WHITE)
+      })
+
       test("with a self-compositing source", async () => {
         // An embedded canvas has to look the same as that canvas rasterized and drawn as an image:
         // every mode but `source-over` reads the destination inside the drawn object's bounds, so a
@@ -2667,8 +2725,8 @@ describe("Context2D", ()=>{
       assert.throws(() => ctx.putImageData(id,NaN,0), /Expected a number/)
       assert.throws(() => ctx.putImageData(id,0,0,0,0,NaN,0), /Expected a number for `dirtyWidth`/)
       assert.throws(() => lax.putImageData({},0,0), /Expected an ImageData as 1st arg/)
-      assert.throws(() => lax.drawImage(), /Expected an Image or a Canvas/)
-      assert.throws(() => lax.drawCanvas(), /Expected an Image or a Canvas/)
+      assert.throws(() => lax.drawImage(), /Expected an Image, Canvas, or CanvasRenderingContext2D/)
+      assert.throws(() => lax.drawCanvas(), /Expected an Image, Canvas, or CanvasRenderingContext2D/)
       assert.throws(() => lax.fill(NaN), /Expected `fillRule`/)
       assert.throws(() => lax.clip(NaN), /Expected `fillRule`/)
       assert.throws(() => lax.stroke(NaN), /Expected a Path2D/)
