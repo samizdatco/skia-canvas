@@ -2,9 +2,11 @@
 // PDF parsing: convert a Hayro content stream into Skia ops recorded into a Picture
 //
 use std::sync::Arc;
+use std::borrow::Cow;
 use std::rc::Rc;
-use std::cell::RefCell;
-use std::collections::HashMap;
+use std::cell::{Cell, OnceCell, RefCell};
+use std::collections::{HashMap, VecDeque};
+use std::hash::Hasher;
 use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{
   AlphaType, BlendMode as SkBlendMode, Canvas as SkCanvas, Color4f, ColorSpace, ColorType, Data,
@@ -22,13 +24,18 @@ use hayro_interpret::{
   StrokeProps, interpret_page,
   Context as PdfContext,
   color::AlphaColor,
-  font::{Glyph, OutlineGlyph},
-  hayro_syntax::{Pdf, page::Page as PdfPage},
+  font::{FontData, Glyph, OutlineGlyph},
+  hayro_cmap::BfString,
+  hayro_syntax::{
+    Pdf, page::Page as PdfPage,
+    object::{Array, Dict, Name, Object as PdfObject, ObjectIdentifier, Stream, dict::keys::{DESCENDANT_FONTS, FONT_DESC, FONT_FILE, FONT_FILE3, SUBTYPE, TYPE}},
+  },
   pattern::{Pattern, ShadingPattern, TilingPattern},
   shading::{ShadingFunction, ShadingType},
   util::TransformExt,
 };
 use crate::context::BoxedContext2D;
+use crate::font_library::FontLibrary;
 
 // the header may at any newline in the opening bytes of the file (so check the first 1kb)
 pub fn is_pdf(data:&[u8]) -> bool{
@@ -54,7 +61,7 @@ pub fn read_page(data:&Data, page_num:usize) -> Option<(Picture, Size)>{
   undecodable_on_panic(||{
     let pdf = Pdf::new(Arc::new(PdfBytes(data.clone()))).ok()?;
     let page = pdf.pages().get(page_num.checked_sub(1)?)?;
-    render_page(page, &InterpreterCache::new(), &Rc::default())
+    render_page(&pdf, page, &InterpreterCache::new(), &DocumentFonts::for_file(data))
   })
 }
 
@@ -62,20 +69,20 @@ pub fn read_page(data:&Data, page_num:usize) -> Option<(Picture, Size)>{
 pub fn read_document(data:&Data) -> Option<Vec<(Picture, Size)>>{
   undecodable_on_panic(||{
     let pdf = Pdf::new(Arc::new(PdfBytes(data.clone()))).ok()?;
-    let (cache, fonts) = (InterpreterCache::new(), Rc::default());
+    let (cache, fonts) = (InterpreterCache::new(), DocumentFonts::for_file(data));
     pdf.pages().iter()
-      .map(|page| render_page(page, &cache, &fonts))
+      .map(|page| render_page(&pdf, page, &cache, &fonts))
       .collect::<Option<Vec<_>>>()
   })
 }
 
-fn render_page<'a>(page:&PdfPage<'a>, cache:&InterpreterCache<'a>, fonts:&Rc<FontCache>) -> Option<(Picture, Size)>{
+fn render_page<'a>(pdf:&'a Pdf, page:&PdfPage<'a>, cache:&InterpreterCache<'a>, fonts:&Rc<DocumentFonts>) -> Option<(Picture, Size)>{
   let (width, height) = page.render_dimensions();
   let size = Size::new(width, height);
 
   let mut recorder = PictureRecorder::new();
   let canvas = recorder.begin_recording(SkRect::from_size(size), true);
-  let mut device = PictureDevice::new(canvas, fonts.clone());
+  let mut device = PictureDevice::new(canvas, pdf, fonts.clone());
   let mut context = PdfContext::new(
     page.initial_transform(true).to_kurbo(), // pdf user space (y-up) → top-left-origin device space
     kurbo::Rect::new(0.0, 0.0, width as f64, height as f64),
@@ -99,14 +106,15 @@ struct PictureDevice<'a, 'c>{
   mask: Option<SoftMask<'a>>,             // soft mask applied around each individual draw
   blend: BlendMode,                       // blend mode carried on each draw's paint
   group_masks: Vec<Option<SoftMask<'a>>>, // mask stack to restore when transparency groups pop
-  fonts: Rc<FontCache>,                   // parsed fonts, shared with the rest of the document
+  pdf: &'a Pdf,                           // the document, for locating the font programs hayro withholds
+  fonts: Rc<DocumentFonts>,               // parsed fonts, shared with the rest of the document (and later loads of it)
   run: Option<GlyphRun<'a>>,              // glyphs accumulated for the pending text run
 }
 
 impl<'a, 'c> PictureDevice<'a, 'c>{
-  fn new(canvas:&'c SkCanvas, fonts:Rc<FontCache>) -> Self{
+  fn new(canvas:&'c SkCanvas, pdf:&'a Pdf, fonts:Rc<DocumentFonts>) -> Self{
     PictureDevice{
-      canvas, mask:None, blend:BlendMode::Normal, group_masks:vec![], fonts, run:None
+      canvas, mask:None, blend:BlendMode::Normal, group_masks:vec![], pdf, fonts, run:None
     }
   }
 }
@@ -140,16 +148,15 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
 
     // check whether the next glyph is compatible with being batched into a text-run
     if let Glyph::Outline(outline) = glyph
-      && let Some((typeface, size, glyph_id, position, orientation)) = self.run_glyph(outline, glyph_transform)
+      && let Some((font, glyph_id, position, orientation)) = self.run_glyph(outline, glyph_transform)
     {
       // append compatible glyphs onto the pending TextBlob
       let transform = transform * orientation;
-      if !self.run.as_ref().is_some_and(|run| run.accepts(&typeface, size, transform, paint, &stroke)){
+      if !self.run.as_ref().is_some_and(|run| run.accepts(&font, transform, paint, &stroke)){
         self.flush_glyphs(); // flush & clear the run if the font, size, paint, draw mode, or text-transform changed
       }
-      let run = self.run.get_or_insert_with(|| GlyphRun::new(typeface, size, transform, paint, stroke));
-      run.glyphs.push(glyph_id);
-      run.positions.push(position);
+      let run = self.run.get_or_insert_with(|| GlyphRun::new(font, transform, paint, stroke));
+      run.push(glyph_id, position, outline.as_unicode());
     }else{
       // if not-batchable, draw the glyph individually
       self.flush_glyphs();
@@ -272,50 +279,68 @@ impl<'a> PictureDevice<'a, '_>{
   // map a glyph's embedded font to a skia Typeface (and memoize the lookup)
   fn font_for(&mut self, glyph:&OutlineGlyph) -> Option<Typeface>{
     let font_key = glyph.font_cache_key();
-    let typeface = self.fonts.faces.borrow_mut().entry(font_key).or_insert_with(||
-      glyph.font_data()
-        .and_then(|font| FONT_MGR.with(|mgr| mgr.new_from_data((*font.data).as_ref(), None)))
+    let (pdf, fonts) = (self.pdf, &self.fonts);
+    let typeface = fonts.faces.borrow_mut().entry(font_key).or_insert_with(||
+      glyph.font_data().map(|font| font.data)
+        .or_else(|| fonts.font_data(pdf, font_key))
+        .and_then(|data| match FontLibrary::sfnt_from((*data).as_ref())?{
+          Cow::Borrowed(_) => Some(data), // already a sfnt: use data as-is
+          Cow::Owned(ttf) => Some(Arc::new(ttf) as FontData), // Type1/CFF converted to TTF
+        })
+        .and_then(|data|{
+          fonts.size.set(fonts.size.get() + (*data).as_ref().len());
+          FONT_MGR.with(|mgr| mgr.new_from_data((*data).as_ref(), None))
+        })
     ).clone()?;
-
-    // verification needs to be per-glyph since any one glyph may be a fallback font
-    let verified = *self.fonts.verified.borrow_mut().entry((font_key, glyph.glyph_id().to_u32()))
-      .or_insert_with(|| matches_outline(&typeface, glyph));
-    verified.then_some(typeface)
+    fonts.verify_glyph(font_key, &typeface, glyph).then_some(typeface)
   }
 
-  // glyphs can join a TextBlob if it has a matching font and its glyph_transform has a uniform scale
-  // plus rotation/reflection, then translation (i.e., no shearing, stretching, vertical layout)
-  fn run_glyph(&mut self, glyph:&OutlineGlyph, glyph_transform:Affine) -> Option<(Typeface, f32, u16, SkPoint, Affine)>{
-    // confirm the transform is compatible
+  // glyphs can join a TextBlob if they have a matching font and an invertible glyph_transform
+  fn run_glyph(&mut self, glyph:&OutlineGlyph, glyph_transform:Affine) -> Option<(SkFont, u16, SkPoint, Affine)>{
+    // the glyph matrix's columns, with the y-axis flipped since skia is y-down and hayro is y-up
     let [a, b, c, d, e, f] = glyph_transform.as_coeffs();
-    let scale = (a * a + b * b).sqrt();
-    let similarity = scale > 0.0
-      && ((c * c + d * d).sqrt() - scale).abs() <= scale * 1e-4 // columns of equal length,
-      && (a * c + b * d).abs() <= scale * scale * 1e-4;         // and at right angles
-    if !similarity{ return None }
+    let (x_axis, y_axis) = ((a, b), (-c, -d));
 
-    // extract the transform and account for a y-flip (skia is y-down, hayro is y-up)
-    let orientation = Affine::new([a, b, c, d, 0.0, 0.0])
-      * Affine::scale_non_uniform(1.0 / scale, -1.0 / scale);
+    // QR-factor the matrix into perpendicular unit axes `q` & `p/r22` (rotation/reflection).
+    // `r11` & `r22` are the axes' lengths, `r12` is the skew between them, and 0 means singular
+    let r11 = (x_axis.0 * x_axis.0 + x_axis.1 * x_axis.1).sqrt();
+    if r11 <= 0.0{ return None }
+    let q = (x_axis.0 / r11, x_axis.1 / r11);
+    let r12 = q.0 * y_axis.0 + q.1 * y_axis.1;
+    let p = (y_axis.0 - r12 * q.0, y_axis.1 - r12 * q.1);
+    let r22 = (p.0 * p.0 + p.1 * p.1).sqrt();
+    if r22 <= 0.0{ return None }
 
+    // extract the rotation from the glyph (to be used by the run) and embed size/stretch/slant in a Font
+    let orientation = Affine::new([q.0, q.1, p.0 / r22, p.1 / r22, 0.0, 0.0]);
     let glyph_id = u16::try_from(glyph.glyph_id().to_u32()).ok()?;
-    let typeface = self.font_for(glyph)?;
+    let mut font = unhinted_font(self.font_for(glyph)?, (r22 * 1000.0) as f32);
+    font.set_scale_x((r11 / r22) as f32);
+    font.set_skew_x((r12 / r22) as f32);
 
-    // remap each glyph's 2D position relative to the TextBlob's frame (which may be multi-line)
+    // place each glyph within the TextBlob's (potentially multi-line) frame
     let placed = orientation.inverse() * kurbo::Point::new(e, f);
     let position = SkPoint::new(placed.x as f32, placed.y as f32);
-    Some((typeface, (scale * 1000.0) as f32, glyph_id, position, orientation))
+    Some((font, glyph_id, position, orientation))
   }
 
   // draw the pending run as a single TextBlob
   fn flush_glyphs(&mut self){
     let Some(run) = self.run.take() else { return };
     self.with_mask(|dev|{
-      let font = unhinted_font(run.typeface, run.size);
+      let font = run.font;
       let mut builder = TextBlobBuilder::new();
 
-      // preserve PDF glyph positions rather than re-advancing from font metrics
-      let (glyphs, points) = builder.alloc_run_pos(&font, run.glyphs.len(), None);
+      // preserve searchable text and PDF glyph positions (rather than re-advancing from font metrics)
+      let (glyphs, points) = match run.text.is_empty(){
+        true => builder.alloc_run_pos(&font, run.glyphs.len(), None),
+        false => {
+          let (glyphs, points, text, clusters) = builder.alloc_run_text_pos(&font, run.glyphs.len(), run.text.len(), None);
+          text.copy_from_slice(run.text.as_bytes());
+          clusters.copy_from_slice(&run.clusters);
+          (glyphs, points)
+        }
+      };
       glyphs.copy_from_slice(&run.glyphs);
       points.copy_from_slice(&run.positions);
       let Some(blob) = builder.make() else { return };
@@ -396,7 +421,7 @@ impl<'a> PictureDevice<'a, '_>{
     // record the replayable tile stamp (which hayro has already clipped to its bbox)
     let mut cell_recorder = PictureRecorder::new();
     let cell_canvas = cell_recorder.begin_recording(skia_rect(tile.bbox), true);
-    let mut cell_device = PictureDevice::new(cell_canvas, self.fonts.clone());
+    let mut cell_device = PictureDevice::new(cell_canvas, self.pdf, self.fonts.clone());
     tile.interpret(&mut cell_device, Affine::IDENTITY, is_stroke);
     cell_device.flush_glyphs();
     drop(cell_device);
@@ -503,61 +528,145 @@ impl<'a> PictureDevice<'a, '_>{
 }
 
 //
+// Embedded fonts
+//
+
+thread_local!(static DOCUMENT_FONTS: RefCell<VecDeque<(u64, Rc<DocumentFonts>)>> = RefCell::default());
+const MAX_FONT_DOCUMENTS:usize = 16;   // memoize converted fonts from up to 16 docs
+const MAX_FONT_BYTES:usize = 16 << 20; // but cap storage at 16MB (and evict LRU)
+
+#[derive(Default)]
+struct DocumentFonts{
+  faces: RefCell<HashMap<u128, Option<Typeface>>>,  // embedded fonts by hayro's font_cache_key
+  dicts: OnceCell<HashMap<u128, ObjectIdentifier>>, // every font dict in the file by font_cache_key
+  verified: RefCell<HashMap<(u128, u32), bool>>,    // per-glyph outline agreement, by font_cache_key & glyph id
+  size: Cell<usize>,                                // total length of the font data in `faces`
+}
+
+impl DocumentFonts{
+  fn for_file(data:&Data) -> Rc<Self>{
+    // use the document's content hash to recognize subsequent requests
+    let mut hasher = ahash::AHasher::default();
+    hasher.write(data.as_bytes());
+    let key = hasher.finish();
+
+    DOCUMENT_FONTS.with(|docs|{
+      // move most-recently-used to the front
+      let mut docs = docs.borrow_mut();
+      let fonts = docs.iter().position(|(k, _)| *k == key)
+        .and_then(|i| docs.remove(i)).map(|(_, fonts)| fonts) // reuse the memoized entry + typefaces (if any)
+        .unwrap_or_default(); // start a fresh entry if none exists
+      docs.push_front((key, fonts.clone()));
+
+      // evict least-recently-used to stay under budget
+      while docs.len() > MAX_FONT_DOCUMENTS || (docs.len() > 1 && docs.iter().map(|(_, d)| d.size.get()).sum::<usize>() > MAX_FONT_BYTES){
+        docs.pop_back();
+      }
+      fonts
+    })
+  }
+
+  // wrap hayro's `font_data` (which returns None for Type1 & CFF) and find the font dict manually if it's being hidden from us
+  fn font_data(&self, pdf:&Pdf, key:u128) -> Option<FontData>{
+    let dicts = self.dicts.get_or_init(||
+      pdf.objects().into_iter().filter_map(|obj| match obj{
+        PdfObject::Dict(dict) if dict.get::<Name>(TYPE).is_some_and(|t| t.as_str() == "Font") => Some((dict.cache_key(), dict.obj_id()?)),
+        _ => None
+      }).collect()
+    );
+    let dict:Dict = pdf.xref().get(*dicts.get(&key)?)?;
+
+    // find the descriptor (either in the first descendent CIDFont for Type0 fonts, or directly for everything else)
+    let descriptor = match dict.get::<Name>(SUBTYPE).is_some_and(|s| s.as_str() == "Type0"){
+      true => dict.get::<Array>(DESCENDANT_FONTS)?.iter::<Dict>().next()?.get::<Dict>(FONT_DESC)?,
+      false => dict.get::<Dict>(FONT_DESC)?,
+    };
+
+    // extract the actual font data (whether it's a FontFile3 CFF or a FontFile Type1)
+    let stream = descriptor.get::<Stream>(FONT_FILE3).or_else(|| descriptor.get::<Stream>(FONT_FILE))?;
+    Some(Arc::new(stream.decoded().ok()?.into_owned()))
+  }
+
+  // confirm skia's glyph id matches the shape hayro is about to draw (fails if hayro is using a fallback,
+  // glyph ids are mismatched, or the FontMgr can't actually render the blob)
+  fn verify_glyph(&self, key:u128, typeface:&Typeface, glyph:&OutlineGlyph) -> bool{
+    *self.verified.borrow_mut().entry((key, glyph.glyph_id().to_u32())).or_insert_with(||{
+      let Ok(glyph_id) = u16::try_from(glyph.glyph_id().to_u32()) else { return false };
+      let font = unhinted_font(typeface.clone(), 1000.0);
+      let reference = glyph.outline().bounding_box();
+      let skia_path = font.get_path(glyph_id).filter(|path| !path.is_empty());
+      match (reference.is_zero_area(), skia_path){
+        (true, None) => true, // both agree the glyph is blank
+        (false, Some(path)) => {
+          let bounds = path.bounds();
+          [
+            bounds.left as f64 - reference.x0, bounds.right as f64 - reference.x1,
+            bounds.top as f64 + reference.y1, bounds.bottom as f64 + reference.y0,
+          ].iter().all(|delta| delta.abs() <= 5.0)
+        }
+        _ => false,
+      }
+    })
+  }
+}
+
+//
 // Text runs
 //
 
 // share one FontMgr per thread to amortize its expensive (~30ms) setup time
 thread_local!(static FONT_MGR: FontMgr = FontMgr::new());
 
-// per-document font cache
-#[derive(Default)]
-struct FontCache{
-  faces: RefCell<HashMap<u128, Option<Typeface>>>, // embedded fonts by font_cache_key (None = unparseable)
-  verified: RefCell<HashMap<(u128, u32), bool>>,   // per-glyph outline agreement, by font_cache_key & glyph id
-}
-
 // set of glyphs sharing a font, size, paint, and text-space transform (to be converted to a TextBlob)
 struct GlyphRun<'a>{
-  typeface: Typeface,
-  size: f32,
-  transform: Affine,
-  paint: Paint<'a>,
-  paint_key: Option<u128>, // None = uses a pattern paint that can't be compared (outside hayro) across neighboring glyphs
+  font: SkFont,                // the run's typeface (plus the size/scaleX/skewX extracted from the glyph transform)
+  transform: Affine,           // positions the run in device space (and applies any shared rotation)
+  paint: Paint<'a>,            // either a flat color or a pattern
   stroke: Option<StrokeProps>, // None = fill
-  glyphs: Vec<u16>,
-  positions: Vec<SkPoint>,
+  glyphs: Vec<u16>,            // glyph IDs (corresponding to indices of positions & clusters)
+  positions: Vec<SkPoint>,     // per-glyph coordinates (relative to run origin)
+  clusters: Vec<u32>,          // each glyph's byte offset into `text`
+  text: String,                // unicode text represented by the glyphs
 }
 
 impl<'a> GlyphRun<'a>{
-  fn new(typeface:Typeface, size:f32, transform:Affine, paint:&Paint<'a>, stroke:Option<StrokeProps>) -> Self{
+  fn new(font:SkFont, transform:Affine, paint:&Paint<'a>, stroke:Option<StrokeProps>) -> Self{
     GlyphRun{
-      typeface, size, transform, paint_key:Self::paint_key(paint), paint:paint.clone(), stroke,
-      glyphs:vec![], positions:vec![],
+      font, transform, paint:paint.clone(), stroke,
+      glyphs:vec![], positions:vec![], text:String::new(), clusters:vec![],
+    }
+  }
+
+  fn push(&mut self, glyph_id:u16, position:SkPoint, unicode:Option<BfString>){
+    self.glyphs.push(glyph_id);
+    self.positions.push(position);
+    self.clusters.push(self.text.len() as u32);
+    match unicode{
+      Some(BfString::Char(c)) => self.text.push(c),
+      Some(BfString::String(s)) => self.text.push_str(&s),
+      None => {} // a glyph with no known unicode gets an empty cluster
     }
   }
 
   // a glyph can extend the run only if everything the TextBlob bakes in is unchanged
-  fn accepts(&self, typeface:&Typeface, size:f32, transform:Affine, paint:&Paint, stroke:&Option<StrokeProps>) -> bool{
-    let paint_key = Self::paint_key(paint);
-    paint_key.is_some()
-      && self.paint_key == paint_key
-      && self.typeface.unique_id() == typeface.unique_id()
-      && (self.size - size).abs() <= size * 1e-4
-      && self.transform == transform
-      && match (&self.stroke, stroke){
-        // stroke settings are part of the run's identity too: any change breaks the batch
-        (None, None) => true,
-        (Some(a), Some(b)) =>
-          (a.line_width, a.miter_limit, a.line_cap, a.line_join, &a.dash_array, a.dash_offset) ==
-          (b.line_width, b.miter_limit, b.line_cap, b.line_join, &b.dash_array, b.dash_offset),
-        _ => false,
-      }
-  }
-
-  // a paint's identity: Some for solid colors and None for patterns (whose keys are lossy and
-  // collide). None never lets a glyph join a run, so pattern-filled glyphs each draw alone
-  fn paint_key(paint:&Paint) -> Option<u128>{
-    matches!(paint, Paint::Color(_)).then(|| paint.cache_key())
+  fn accepts(&self, font:&SkFont, transform:Affine, paint:&Paint, stroke:&Option<StrokeProps>) -> bool{
+    match (&self.paint, paint){
+      (Paint::Color(_), Paint::Color(_)) => // solid colors compare by value
+        self.paint.cache_key() == paint.cache_key()
+          && self.font.typeface().unique_id() == font.typeface().unique_id()
+          && (self.font.size() - font.size()).abs() <= font.size() * 1e-4
+          && (self.font.scale_x() - font.scale_x()).abs() <= 1e-4
+          && (self.font.skew_x() - font.skew_x()).abs() <= 1e-4
+          && self.transform == transform
+          && match (&self.stroke, stroke){
+            (None, None) => true,
+            (Some(a), Some(b)) =>
+              (a.line_width, a.miter_limit, a.line_cap, a.line_join, &a.dash_array, a.dash_offset) ==
+              (b.line_width, b.miter_limit, b.line_cap, b.line_join, &b.dash_array, b.dash_offset),
+            _ => false,
+          },
+      _ => false, // pattern paint can't be compared (or shared) across glyphs
+    }
   }
 }
 
@@ -571,25 +680,6 @@ fn unhinted_font(typeface:Typeface, size:f32) -> SkFont{
   font
 }
 
-// confirm the typeface actually reproduces the embedded font (since the FontMgr may parse the
-// blob without honoring it) by comparing skia's glyph bounds vs hayro's
-fn matches_outline(typeface:&Typeface, glyph:&OutlineGlyph) -> bool{
-  let Ok(glyph_id) = u16::try_from(glyph.glyph_id().to_u32()) else { return false };
-  let font = unhinted_font(typeface.clone(), 1000.0);
-  let reference = glyph.outline().bounding_box();
-  let skia_path = font.get_path(glyph_id).filter(|path| !path.is_empty());
-  match (reference.is_zero_area(), skia_path){
-    (true, None) => true, // both agree the glyph is blank
-    (false, Some(path)) => {
-      let bounds = path.bounds();
-      [
-        bounds.left as f64 - reference.x0, bounds.right as f64 - reference.x1,
-        bounds.top as f64 + reference.y1, bounds.bottom as f64 + reference.y0,
-      ].iter().all(|delta| delta.abs() <= 5.0)
-    }
-    _ => false,
-  }
-}
 
 //
 // Shading patterns

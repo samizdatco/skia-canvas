@@ -10,6 +10,7 @@ const path = require('path'),
       os = require('os'),
       fs = require('fs'),
       http = require('http'),
+      zlib = require('zlib'),
       {assert} = require('../runner/assert'),
       {describe, test, before, after, beforeEach, afterEach} = require('node:test'),
       {pathToFileURL, fileURLToPath} = require('url'),
@@ -549,6 +550,61 @@ describe("Image", () => {
       await assert.rejects(loadImage(pdf, {page:NaN}), /Could not decode/)
       // @ts-expect-error — deliberately passing a non-numeric page
       await assert.rejects(loadImage(pdf, {page:'nope'}), /Could not decode/)
+    })
+
+    test("with byte-identical font dicts in different documents", async () => {
+      // decoded documents are cached across loadImage() calls, keyed by the file's bytes. hayro's own font
+      // key hashes just the font dict, and these two files share one byte-for-byte while embedding
+      // different programs (Oswald Medium vs Bold) — a cache keyed on the font alone would hand the
+      // second file the first one's typeface, whose glyphs then fail verification and get outlined
+      let programs = []
+      for (const fixture of ['cff-medium', 'cff-bold']){
+        let page = await loadImage(`tests/assets/embed-${fixture}.pdf`),
+            canvas = new Canvas(page.width, page.height)
+        canvas.getContext('2d').drawImage(page, 0, 0)
+
+        let pdf = await canvas.toBuffer('pdf'),
+            raw = pdf.toString('latin1'),
+            content = ''
+        for (const m of raw.matchAll(/(?<!end)stream\r?\n/g)){
+          let start = m.index + m[0].length
+          try{ content += zlib.inflateSync(pdf.subarray(start, pdf.indexOf('endstream', start))).toString('latin1') }catch{}
+        }
+        assert.match(content, /\sTj\b/, `${fixture}: no text operators`)
+        assert.doesNotMatch(content.split(/\sBT\s/)[1] || '', /\sf\*?\s/, `${fixture}: glyphs filled as paths`)
+        programs.push(raw.match(/\/FontFile2 (\d+) 0 R/)?.[1] && raw.slice(raw.indexOf(`\n${raw.match(/\/FontFile2 (\d+) 0 R/)[1]} 0 obj`)).match(/stream\r?\n([\s\S]{200})/)?.[1])
+      }
+      assert.notEqual(programs[0], programs[1], 'the second document was exported with the first one\'s font program')
+    })
+
+    test("with embedded CFF & Type 1 text that survives export as text", async () => {
+      // hayro withholds the program for Type 1 & CFF simple fonts, so pdf.rs reads the FontFile /
+      // FontFile3 stream itself and rebuilds it as a TrueType font. When that works the re-exported
+      // page keeps its text operators and a font resource instead of filling every glyph as a path.
+      // Each fixture's second line has a stretched & sheared text matrix, which the text-run batcher
+      // absorbs as font scaleX/skewX
+      for (const [fixture, letters] of [['cff-medium', 'MediumSlantCF'], ['type1', 'MediumSlantTyp1']]){
+        let page = await loadImage(`tests/assets/embed-${fixture}.pdf`),
+            canvas = new Canvas(page.width, page.height)
+        canvas.getContext('2d').drawImage(page, 0, 0)
+
+        let pdf = await canvas.toBuffer('pdf'),
+            streams = []
+        for (const m of pdf.toString('latin1').matchAll(/(?<!end)stream\r?\n/g)){
+          let start = m.index + m[0].length
+          try{ streams.push(zlib.inflateSync(pdf.subarray(start, pdf.indexOf('endstream', start))).toString('latin1')) }catch{}
+        }
+        let content = streams.find(ops => /\sBT\s/.test(ops))
+        assert.match(pdf.toString('latin1'), /\/Subtype \/CIDFontType2/, `${fixture}: no TrueType font in output`)
+        assert.match(content, /\sTj\b/, `${fixture}: no text operators`)  // glyphs went out as text…
+        assert.doesNotMatch(content, /\sf\*?\s/, `${fixture}: glyphs filled as paths`) // …none as filled paths
+
+        // …and the run's unicode (from the source PDF, not the embedded font) landed in /ToUnicode,
+        // so the text is searchable & copyable: every letter of the fixture's text is a bfchar destination
+        let cmap = streams.filter(ops => ops.includes('beginbfchar')).join(),
+            mapped = new Set([...cmap.matchAll(/<[0-9A-F]+> <([0-9A-F]{4})>/g)].map(m => String.fromCharCode(parseInt(m[1], 16))))
+        for (const ch of letters) assert(mapped.has(ch), `${fixture}: ${ch} missing from ToUnicode (${[...mapped].join('')})`)
+      }
     })
 
     test("a reused vector Image", async () => {

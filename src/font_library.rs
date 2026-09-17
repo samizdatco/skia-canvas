@@ -3,6 +3,7 @@
 //
 #![allow(non_snake_case)]
 use std::sync::{OnceLock};
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::fs;
 use std::path::Path;
@@ -15,7 +16,15 @@ use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
 use skia_safe::utils::OrderedFontMgr;
 
 use crate::bridge::*;
-
+use kurbo::{BezPath, CubicBez, PathEl, Point};
+use read_fonts::{model::pen::OutlinePen, types::GlyphId, ps::{cff::CffFontRef, type1::Type1Font}};
+use write_fonts::{
+  FontBuilder, types::{FWord, NameId, UfWord},
+  tables::{
+    cmap::Cmap, glyf::{Glyph, GlyfLocaBuilder, SimpleGlyph}, head::{Flags, Head}, hhea::Hhea, hmtx::{Hmtx, LongMetric},
+    maxp::Maxp, name::{Name, NameRecord}, os2::{Os2, SelectionFlags}, post::Post,
+  },
+};
 
 #[cfg(target_os = "windows")]
 use allsorts::{
@@ -264,6 +273,136 @@ impl FontLibrary{
     }
     self
   }
+
+  // return data that's already an sfnt as-is and convert Type1/CFF data to TTF
+  pub fn sfnt_from(data:&[u8]) -> Option<Cow<'_, [u8]>>{
+    if matches!(data.get(..4), Some(b"OTTO" | b"true" | b"ttcf" | [0, 1, 0, 0])){
+      Some(Cow::Borrowed(data)) // already an sfnt
+    }else if data.first() == Some(&1) && data.get(2).is_some_and(|hdr_size| *hdr_size >= 4){
+      Glyphs::from_cff(data)?.to_ttf().map(Cow::Owned)
+    }else if data.starts_with(b"%!") || data.starts_with(&[0x80, 1]){
+      Glyphs::from_type1(data)?.to_ttf().map(Cow::Owned)
+    }else{
+      None
+    }
+  }
+}
+
+//
+// TrueType synthesis from the outlines of Type 1 & CFF fonts (which would otherwise be drawn as paths)
+//
+
+// the glyphs of a Type 1 or CFF font, drawn one at a time into kurbo paths
+#[derive(Default)]
+struct Glyphs{
+  ps_name: String,                       // the original font's FontName
+  outlines: Vec<(BezPath, Option<f32>)>, // each glyph's path & advance in charstring order
+  outline: BezPath,                      // the glyph currently being drawn (see OutlinePen impl)
+}
+
+const UNITS_PER_EM:f32 = 1000.0; // hayro normalises its outlines to this em as well
+const ACCURACY:f64 = 1.0;        // max deviation of the quadratic approximation, in font units
+
+impl Glyphs{
+  // a bare CFF font (from a PDF's FontFile3 stream)
+  fn from_cff(data:&[u8]) -> Option<Self>{
+    let font = CffFontRef::new(data, 0, None).ok()?;
+    let subfonts = (0..font.num_subfonts()).map(|i| font.subfont(i, &[]).ok()).collect::<Option<Vec<_>>>()?;
+    let mut glyphs = Glyphs{ ps_name:font.metadata().and_then(|meta| meta.name()).unwrap_or("CFF").to_string(), ..Default::default() };
+    for gid in (0..font.num_glyphs()).map(GlyphId::new){
+      let advance = font.subfont_index(gid).and_then(|i| subfonts.get(i as usize))
+        .and_then(|subfont| font.draw(subfont, gid, &[], Some(UNITS_PER_EM), &mut glyphs).ok().flatten());
+      glyphs.outlines.push((std::mem::take(&mut glyphs.outline), advance));
+    }
+    Some(glyphs)
+  }
+
+  // a pfa or pfb Type 1 font (from a PDF's FontFile stream)
+  fn from_type1(data:&[u8]) -> Option<Self>{
+    let font = Type1Font::new(data).ok()?;
+    let mut glyphs = Glyphs{ ps_name:font.name().unwrap_or("Type1").to_string(), ..Default::default() };
+    for gid in (0..font.num_glyphs()).map(GlyphId::new){
+      let advance = font.draw(gid, Some(UNITS_PER_EM), &mut glyphs).ok().flatten();
+      glyphs.outlines.push((std::mem::take(&mut glyphs.outline), advance));
+    }
+    Some(glyphs)
+  }
+
+  fn to_ttf(self) -> Option<Vec<u8>>{
+    let ps_name = self.ps_name.as_str();
+    let mut glyf = GlyfLocaBuilder::new();
+    let (mut metrics, mut bbox, mut max_points, mut max_contours) = (vec![], [0i16; 4], 0, 0);
+    for (path, advance) in self.outlines{
+      // replace each cubic with quadratics
+      let mut last = Point::ZERO;
+      let quadratic:BezPath = path.elements().iter().flat_map(|el| match *el{
+        PathEl::CurveTo(c1, c2, p) => {
+          let quads = CubicBez::new(last, c1, c2, p).to_quads(ACCURACY).map(|(_, _, q)| PathEl::QuadTo(q.p1, q.p2)).collect::<Vec<_>>();
+          last = p;
+          quads
+        }
+        el => { if let Some(p) = el.end_point(){ last = p } vec![el] }
+      }).collect();
+
+      let glyph = match SimpleGlyph::from_bezpath(&quadratic){
+        Ok(g) if !g.contours.is_empty() => g,
+        _ => { glyf.add_glyph(&Glyph::Empty).ok()?; metrics.push(LongMetric{ advance:advance.unwrap_or(0.0) as u16, side_bearing:0 }); continue }
+      };
+      let b = glyph.bbox;
+      bbox = [bbox[0].min(b.x_min), bbox[1].min(b.y_min), bbox[2].max(b.x_max), bbox[3].max(b.y_max)];
+      max_points = max_points.max(glyph.contours.iter().map(|c| c.len()).sum::<usize>());
+      max_contours = max_contours.max(glyph.contours.len());
+      // TrueType rasterizers shift each outline so that xMin lands on its left sidebearing
+      metrics.push(LongMetric{ advance:advance.unwrap_or(0.0).round().clamp(0.0, 65535.0) as u16, side_bearing:b.x_min });
+      glyf.add_glyph(&glyph).ok()?;
+    }
+    let (glyf, loca, loca_format) = glyf.build();
+    let [x_min, y_min, x_max, y_max] = bbox;
+    let n = metrics.len() as u16;
+
+    let head = Head{
+      flags:Flags::BASELINE_AT_Y_0 | Flags::LSB_AT_X_0 | Flags::FORCE_INTEGER_PPEM, units_per_em:UNITS_PER_EM as u16, x_min, y_min, x_max, y_max,
+      lowest_rec_ppem:8, font_direction_hint:2, index_to_loc_format:loca_format as i16, ..Default::default()
+    };
+    let hhea = Hhea::new(
+      FWord::new(y_max), FWord::new(y_min), FWord::new(0), UfWord::new(metrics.iter().map(|m| m.advance).max().unwrap_or(0)),
+      FWord::new(x_min), FWord::new(0), FWord::new(x_max), 1, 0, 0, n,
+    );
+    let maxp = Maxp{
+      max_points:Some(max_points as u16), max_contours:Some(max_contours as u16), max_composite_points:Some(0), max_composite_contours:Some(0), max_zones:Some(1),
+      max_twilight_points:Some(0), max_storage:Some(0), max_function_defs:Some(0), max_instruction_defs:Some(0), max_stack_elements:Some(0),
+      max_size_of_instructions:Some(0), max_component_elements:Some(0), max_component_depth:Some(0), ..Maxp::new(n)
+    };
+    let os2 = Os2{
+      x_avg_char_width:(metrics.iter().map(|m| m.advance as u32).sum::<u32>() / n.max(1) as u32) as i16, us_weight_class:400, us_width_class:5,
+      fs_selection:SelectionFlags::REGULAR, us_first_char_index:0xFFFF, us_last_char_index:0xFFFF, s_typo_ascender:y_max, s_typo_descender:y_min,
+      us_win_ascent:y_max.max(0) as u16, us_win_descent:(-y_min).max(0) as u16, ul_code_page_range_1:Some(0), ul_code_page_range_2:Some(0),
+      sx_height:Some(0), s_cap_height:Some(0), us_default_char:Some(0), us_break_char:Some(32), us_max_context:Some(0), ..Default::default()
+    };
+    let postscript_name:String = ps_name.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect(); // the name table's version can't hold spaces or punctuation
+    let names = [(NameId::FAMILY_NAME, ps_name), (NameId::SUBFAMILY_NAME, "Regular"), (NameId::FULL_NAME, ps_name), (NameId::POSTSCRIPT_NAME, &postscript_name)];
+    let name = Name::new([(1, 0, 0), (3, 1, 0x409)].into_iter() // mac roman, then windows unicode (records must stay sorted)
+      .flat_map(|(platform, encoding, language)| names.iter().map(move |(id, s)| NameRecord::new(platform, encoding, language, *id, s.to_string().into()))).collect());
+
+    let mut font = FontBuilder::new();
+    font.add_table(&head).ok()?.add_table(&hhea).ok()?.add_table(&Hmtx::new(metrics, vec![])).ok()?.add_table(&maxp).ok()?
+      .add_table(&glyf).ok()?.add_table(&loca).ok()?.add_table(&os2).ok()?.add_table(&Post::default()).ok()?.add_table(&name).ok()?
+      .add_table(&Cmap::from_mappings([]).ok()?).ok()?; // an empty cmap: glyphs are addressed by id, unicode travels with the text runs
+    Some(font.build())
+  }
+}
+
+// add `read-fonts` support and drop segments that arrive before a move_to
+impl OutlinePen for Glyphs{
+  fn move_to(&mut self, x:f32, y:f32){ self.outline.move_to((x as f64, y as f64)) }
+  fn line_to(&mut self, x:f32, y:f32){ if !self.outline.elements().is_empty(){ self.outline.line_to((x as f64, y as f64)) } }
+  fn quad_to(&mut self, cx:f32, cy:f32, x:f32, y:f32){
+    if !self.outline.elements().is_empty(){ self.outline.quad_to((cx as f64, cy as f64), (x as f64, y as f64)) }
+  }
+  fn curve_to(&mut self, cx0:f32, cy0:f32, cx1:f32, cy1:f32, x:f32, y:f32){
+    if !self.outline.elements().is_empty(){ self.outline.curve_to((cx0 as f64, cy0 as f64), (cx1 as f64, cy1 as f64), (x as f64, y as f64)) }
+  }
+  fn close(&mut self){ if !self.outline.elements().is_empty(){ self.outline.close_path() } }
 }
 
 #[derive(Clone, Copy, PartialEq)]

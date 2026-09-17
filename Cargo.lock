@@ -2132,6 +2132,7 @@ dependencies = [
 name = "skia-canvas"
 version = "3.0.8"
 dependencies = [
+ "ahash",
  "allsorts",
  "ash",
  "color",
@@ -2155,6 +2156,7 @@ dependencies = [
  "process_path",
  "raw-window-metal",
  "rayon",
+ "read-fonts",
  "roxmltree",
  "serde",
  "serde_json",
@@ -2165,6 +2167,7 @@ dependencies = [
  "tiff",
  "vulkano",
  "winit",
+ "write-fonts",
 ]
 
 [[package]]
@@ -3154,6 +3157,19 @@ name = "wit-bindgen"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
+
+[[package]]
+name = "write-fonts"
+version = "0.48.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb731d4c4d93eacc69a1ad2f270f905788a98e4a3438267bcafbe08d3431c8d8"
+dependencies = [
+ "font-types",
+ "indexmap",
+ "kurbo",
+ "log",
+ "read-fonts",
+]
 
 [[package]]
 name = "x11-dl"
