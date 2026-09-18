@@ -1526,7 +1526,10 @@ describe("Context2D", ()=>{
         let m16 = ctx.measureText('measure me').width
         ctx.font = '32px sans-serif'
         let m32 = ctx.measureText('measure me').width
-        assert.nearEqual(m32, m16 * 2) // same face at double size: stale cache would return m16
+        // same face at double size: a stale cache would return m16, i.e. be off by 2×. The tolerance is
+        // relative because FreeType reports unhinted advances in 1/64 px (and skparagraph offers no
+        // linear-metrics switch), so on Linux the doubling isn't bit-exact
+        assert.nearEqual(m32, m16 * 2, m32 * 1e-3)
 
         ctx.letterSpacing = '4px'
         assert.ok(ctx.measureText('measure me').width > m32, 'letterSpacing should re-measure')
