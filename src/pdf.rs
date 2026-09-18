@@ -515,23 +515,15 @@ impl<'a> PictureDevice<'a, '_>{
         });
       }
       Paint::Pattern(_) => {
-        // fill the stencil's rect with the pattern, then knock out the mask's off-bits with DstIn
+        // an alpha-only image drawn with a shader paint acts as a mask for that shader
         let rect = kurbo::Rect::new(0.0, 0.0, stencil.width as f64, stencil.height as f64);
         let Some(mut pattern_paint) = self.paint_for(paint, transform, false, || map_rect(transform, rect)) else { return };
         let Some(mask) = alpha_image(&stencil) else { return };
-
-        // apply the blend more when compositing the masked result, not inside the layer
-        let layer_paint = blend_paint(blend_mode(self.blend));
-        pattern_paint.set_blend_mode(SkBlendMode::SrcOver);
+        pattern_paint.set_anti_alias(false); // prevent fringing at outer edge
 
         self.with_ctm(transform, |dev|{
-          dev.clip_to_shading(paint, transform); // outside the layer, so it bounds the mask too
-          dev.canvas.save_layer(&SaveLayerRec::default().paint(&layer_paint));
-          dev.canvas.draw_rect(skia_rect(rect), &pattern_paint);
-          dev.canvas.draw_image_with_sampling_options(
-            &mask, (0, 0), sampling(stencil.interpolate), Some(&blend_paint(SkBlendMode::DstIn))
-          );
-          dev.canvas.restore();
+          dev.clip_to_shading(paint, transform);
+          dev.canvas.draw_image_with_sampling_options(&mask, (0, 0), sampling(stencil.interpolate), Some(&pattern_paint));
         });
       }
     }
