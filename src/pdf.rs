@@ -427,9 +427,20 @@ impl<'a> PictureDevice<'a, '_>{
     drop(cell_device);
     let cell = cell_recorder.finish_recording_as_picture(None)?;
 
+    // record pattern stamps pre-scaled and clamped to within skia's limits (1–2048px)
+    let c = tile.matrix.as_coeffs();
+    let ideal = (c[0] * c[3] - c[1] * c[2]).abs().sqrt();
+    let (long, short) = (tile_rect.width().max(tile_rect.height()), tile_rect.width().min(tile_rect.height()));
+    let scale = match ideal.is_finite() && ideal > 0.0 && long.is_finite() && short > 0.0{
+      true => { let ceiling = 2048.0 / long; ideal.clamp((1.0 / short).min(ceiling), ceiling) }
+      false => 1.0, // degenerate matrix or tile: nothing to normalize against
+    };
+    let rescaled = |r:kurbo::Rect| kurbo::Rect::new(r.x0 * scale, r.y0 * scale, r.x1 * scale, r.y1 * scale);
+
     let mut recorder = PictureRecorder::new();
     let cull = tile.bbox.union(tile_rect).inflate(nx as f64 * x_step, ny as f64 * y_step);
-    let canvas = recorder.begin_recording(skia_rect(cull), true);
+    let canvas = recorder.begin_recording(skia_rect(rescaled(cull)), true);
+    canvas.scale((scale as f32, scale as f32));
     for dy in -ny..=ny{
       for dx in -nx..=nx{
         let offset = Matrix::translate((dx as f32 * x_step as f32, dy as f32 * y_step as f32));
@@ -438,10 +449,10 @@ impl<'a> PictureDevice<'a, '_>{
     }
 
     let picture = recorder.finish_recording_as_picture(None)?;
-    let local_matrix = skia_matrix(ctm.inverse() * tile.matrix);
+    let local_matrix = skia_matrix(ctm.inverse() * tile.matrix * Affine::scale(1.0 / scale));
     Some(picture.to_shader(
       Some((TileMode::Repeat, TileMode::Repeat)), FilterMode::Linear,
-      Some(&local_matrix), Some(&skia_rect(tile_rect)),
+      Some(&local_matrix), Some(&skia_rect(rescaled(tile_rect))),
     ))
   }
 
