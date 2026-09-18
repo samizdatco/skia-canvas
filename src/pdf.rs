@@ -138,7 +138,7 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
 
   fn draw_path(&mut self, path:&BezPath, transform:Affine, paint:&Paint<'a>, draw_mode:&PathDrawMode){
     self.flush_glyphs();
-    self.with_mask(|dev| dev.draw_bez_path(path, transform, paint, draw_mode));
+    self.with_compositing(|| Some(path_bounds(path, transform, draw_mode)), |dev| dev.draw_bez_path(path, transform, paint, draw_mode));
   }
 
   fn draw_glyph(&mut self, glyph:&Glyph<'a>, transform:Affine, glyph_transform:Affine, paint:&Paint<'a>, draw_mode:&GlyphDrawMode){
@@ -162,28 +162,41 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
     }else{
       // if not-batchable, draw the glyph individually
       self.flush_glyphs();
-      self.with_mask(|dev| match glyph{
+      match glyph{
         Glyph::Outline(outline) => {
           // trace the glyph as a path with glyph_transform baked in, so only the text-transform scales the stroke
           let path = glyph_transform * outline.outline();
           let path_mode = stroke.map(PathDrawMode::Stroke).unwrap_or(PathDrawMode::Fill(FillRule::NonZero));
-          dev.draw_bez_path(&path, transform, paint, &path_mode);
+          self.with_compositing(
+            || Some(path_bounds(&path, transform, &path_mode)),
+            |dev| dev.draw_bez_path(&path, transform, paint, &path_mode),
+          );
         }
         Glyph::Type3(glyph) => {
-          // replay the glyph's drawing procedure directly
-          glyph.interpret(dev, transform, glyph_transform, paint);
-          dev.flush_glyphs();
+          self.with_compositing(
+            || None, // hayro doesn't expose the Type3 bbox
+            |dev| {
+              glyph.interpret(dev, transform, glyph_transform, paint);
+              dev.flush_glyphs();
+            }
+          );
         }
-      });
+      }
     }
   }
 
   fn draw_image(&mut self, image:Image<'a, '_>, transform:Affine){
     self.flush_glyphs();
-    self.with_mask(|dev| match image{
-      Image::Raster(raster) => raster.with_rgba(|data, alpha| dev.draw_raster_image(data, alpha, transform), None),
-      Image::Stencil(stencil) => stencil.with_stencil(|data, paint| dev.draw_stencil_image(data, paint, transform), None),
-    });
+    match image{
+      Image::Raster(raster) => raster.with_rgba(|data, alpha| {
+        let extent = image_bounds(data.width(), data.height(), data.scale_factors(), transform);
+        self.with_compositing(move || Some(extent), |dev| dev.draw_raster_image(data, alpha, transform))
+      }, None),
+      Image::Stencil(stencil) => stencil.with_stencil(|data, paint| {
+        let extent = image_bounds(data.width, data.height, data.scale_factors, transform);
+        self.with_compositing(move || Some(extent), |dev| dev.draw_stencil_image(data, paint, transform))
+      }, None),
+    };
   }
 
   fn push_clip_path(&mut self, clip_path:&ClipPath){
@@ -213,7 +226,7 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
     let Some(group) = self.groups.pop() else { return };
     if group.paint.is_none(){ // its layer was opened, so it has to be closed
       if let Some(mask) = group.mask{
-        self.apply_mask(&mask);
+        self.apply_mask(&mask, None);
       }
       self.canvas.restore();
     }
@@ -245,29 +258,39 @@ impl<'a> PictureDevice<'a, '_>{
     self.blend = blend;
   }
 
-  // wrap a single draw in a masked layer when a soft mask is active (w/ the current blend mode on the layer)
-  fn with_mask(&mut self, f:impl FnOnce(&mut Self)){
+  // emit one draw with the PDF's compositing state applied. an active soft mask wraps it in a layer so that
+  // the mask and the blend mode both apply to the finished draw as a whole, rather than to each primitive
+  // inside it. `extent` sets the layer size rather than defaulting to the clip (the whole page by default)
+  fn with_compositing(&mut self, extent:impl FnOnce() -> Option<kurbo::Rect>, f:impl FnOnce(&mut Self)){
     match self.mask.clone(){
       Some(mask) => {
-        self.canvas.save_layer(&SaveLayerRec::default().paint(&blend_paint(blend_mode(self.blend))));
+        let extent = extent(); // only run the measurement lazily (when we know it will be used)
+        let layer_paint = blend_paint(blend_mode(self.blend));
+        match extent.map(skia_rect){
+          Some(rect) => self.canvas.save_layer(&SaveLayerRec::default().paint(&layer_paint).bounds(&rect)),
+          None => self.canvas.save_layer(&SaveLayerRec::default().paint(&layer_paint)),
+        };
         self.without_compositing(f);
-        self.apply_mask(&mask);
+        self.apply_mask(&mask, extent);
         self.canvas.restore();
       }
-      None => f(self)
+      None => f(self) // if no soft mask is active, just draw in place
     }
   }
 
   // wrap the mask group into a DstIn layer and replay atop the current layer (converting
   // luminance to alpha for /Luminosity masks). transfer functions aren't supported
-  fn apply_mask(&mut self, mask:&SoftMask<'a>){
+  fn apply_mask(&mut self, mask:&SoftMask<'a>, bounds:Option<kurbo::Rect>){
     let luminosity = mask.mask_type() == MaskType::Luminosity;
     let mut mask_paint = blend_paint(SkBlendMode::DstIn);
     if luminosity{
       mask_paint.set_color_filter(luma_color_filter::new());
     }
 
-    self.canvas.save_layer(&SaveLayerRec::default().paint(&mask_paint));
+    match bounds.map(skia_rect){
+      Some(rect) => self.canvas.save_layer(&SaveLayerRec::default().paint(&mask_paint).bounds(&rect)),
+      None => self.canvas.save_layer(&SaveLayerRec::default().paint(&mask_paint)),
+    };
     if luminosity{
       // unpainted areas count as transparent and only need a fill if the background isn't black
       let bg = mask.background_color().to_rgba();
@@ -333,25 +356,25 @@ impl<'a> PictureDevice<'a, '_>{
   // draw the pending run as a single TextBlob
   fn flush_glyphs(&mut self){
     let Some(run) = self.run.take() else { return };
-    self.with_mask(|dev|{
-      let font = run.font;
-      let mut builder = TextBlobBuilder::new();
+    let font = run.font;
+    let mut builder = TextBlobBuilder::new();
 
-      // preserve searchable text and PDF glyph positions (rather than re-advancing from font metrics)
-      let (glyphs, points) = match run.text.is_empty(){
-        true => builder.alloc_run_pos(&font, run.glyphs.len(), None),
-        false => {
-          let (glyphs, points, text, clusters) = builder.alloc_run_text_pos(&font, run.glyphs.len(), run.text.len(), None);
-          text.copy_from_slice(run.text.as_bytes());
-          clusters.copy_from_slice(&run.clusters);
-          (glyphs, points)
-        }
-      };
-      glyphs.copy_from_slice(&run.glyphs);
-      points.copy_from_slice(&run.positions);
-      let Some(blob) = builder.make() else { return };
+    // preserve searchable text and PDF glyph positions (rather than re-advancing from font metrics)
+    let (glyphs, points) = match run.text.is_empty(){
+      true => builder.alloc_run_pos(&font, run.glyphs.len(), None),
+      false => {
+        let (glyphs, points, text, clusters) = builder.alloc_run_text_pos(&font, run.glyphs.len(), run.text.len(), None);
+        text.copy_from_slice(run.text.as_bytes());
+        clusters.copy_from_slice(&run.clusters);
+        (glyphs, points)
+      }
+    };
+    glyphs.copy_from_slice(&run.glyphs);
+    points.copy_from_slice(&run.positions);
+    let Some(blob) = builder.make() else { return };
 
-      let device_bounds = || map_rect(run.transform, kurbo_rect(*blob.bounds())); // guaranteed not to clip
+    let device_bounds = || map_rect(run.transform, kurbo_rect(*blob.bounds())); // guaranteed not to clip
+    self.with_compositing(|| Some(device_bounds()), |dev|{
       let Some(mut sk_paint) = dev.paint_for(&run.paint, run.transform, run.stroke.is_some(), device_bounds) else { return };
       if let Some(props) = &run.stroke{
         stroke_paint(&mut sk_paint, props);
@@ -392,13 +415,7 @@ impl<'a> PictureDevice<'a, '_>{
   }
 
   fn draw_bez_path(&mut self, path:&BezPath, transform:Affine, paint:&Paint<'a>, draw_mode:&PathDrawMode){
-    let device_bounds = ||{
-      let mut bounds = path.bounding_box();
-      if let PathDrawMode::Stroke(props) = draw_mode{
-        bounds = bounds.inflate(props.line_width as f64, props.line_width as f64);
-      }
-      map_rect(transform, bounds)
-    };
+    let device_bounds = || path_bounds(path, transform, draw_mode);
     let is_stroke = matches!(draw_mode, PathDrawMode::Stroke(_));
     let Some(mut sk_paint) = self.paint_for(paint, transform, is_stroke, device_bounds) else { return };
     let mut sk_path = skia_path(path);
@@ -495,7 +512,8 @@ impl<'a> PictureDevice<'a, '_>{
     self.with_ctm(transform, |dev| match alpha.filter(|_| !merged_alpha){
       Some(a) => {
         // if the alpha channel has different dimensions, composite it with the colors in a DstIn layer
-        dev.canvas.save_layer(&SaveLayerRec::default().paint(&sk_paint));
+        let layer_bounds = SkRect::from_iwh(width as i32, height as i32);
+        dev.canvas.save_layer(&SaveLayerRec::default().paint(&sk_paint).bounds(&layer_bounds));
         dev.canvas.draw_image_with_sampling_options(&sk_image, (0, 0), sample_opts, None);
         if let Some(mask) = alpha_image(&a){
           dev.canvas.draw_image_rect_with_sampling_options(
@@ -720,6 +738,22 @@ fn unhinted_font(typeface:Typeface, size:f32) -> SkFont{
   font
 }
 
+
+// the page-space rect a path covers (stroke width included)
+fn path_bounds(path:&BezPath, transform:Affine, draw_mode:&PathDrawMode) -> kurbo::Rect{
+  let mut bounds = path.bounding_box();
+  if let PathDrawMode::Stroke(props) = draw_mode{
+    bounds = bounds.inflate(props.line_width as f64, props.line_width as f64);
+  }
+  map_rect(transform, bounds)
+}
+
+// the page-space rect an image covers: its pixel grid, scaled back to the dimensions the PDF
+// declared (the decoder may have handed back a different resolution), mapped through the CTM
+fn image_bounds(width:u32, height:u32, scale:(f32, f32), transform:Affine) -> kurbo::Rect{
+  let (w, h) = (width as f64 * scale.0 as f64, height as f64 * scale.1 as f64);
+  map_rect(transform, kurbo::Rect::new(0.0, 0.0, w, h))
+}
 
 //
 // Shading patterns
