@@ -105,7 +105,7 @@ struct PictureDevice<'a, 'c>{
   canvas: &'c SkCanvas,
   mask: Option<SoftMask<'a>>,             // soft mask applied around each individual draw
   blend: BlendMode,                       // blend mode carried on each draw's paint
-  group_masks: Vec<Option<SoftMask<'a>>>, // mask stack to restore when transparency groups pop
+  groups: Vec<Group<'a>>,                 // open transparency groups, innermost last
   pdf: &'a Pdf,                           // the document, for locating the font programs hayro withholds
   fonts: Rc<DocumentFonts>,               // parsed fonts, shared with the rest of the document (and later loads of it)
   run: Option<GlyphRun<'a>>,              // glyphs accumulated for the pending text run
@@ -114,7 +114,7 @@ struct PictureDevice<'a, 'c>{
 impl<'a, 'c> PictureDevice<'a, 'c>{
   fn new(canvas:&'c SkCanvas, pdf:&'a Pdf, fonts:Rc<DocumentFonts>) -> Self{
     PictureDevice{
-      canvas, mask:None, blend:BlendMode::Normal, group_masks:vec![], pdf, fonts, run:None
+      canvas, mask:None, blend:BlendMode::Normal, groups:vec![], pdf, fonts, run:None
     }
   }
 }
@@ -123,6 +123,7 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
   fn set_soft_mask(&mut self, mask:Option<SoftMask<'a>>){
     if self.mask != mask{
       self.flush_glyphs();
+      if mask.is_some(){ self.flush_groups() } // masked draws can see the group's isolation
       self.mask = mask;
     }
   }
@@ -130,6 +131,7 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
   fn set_blend_mode(&mut self, blend:BlendMode){
     if self.blend != blend{
       self.flush_glyphs();
+      if !matches!(blend, BlendMode::Normal){ self.flush_groups() } // so can non-SrcOver ones
       self.blend = blend;
     }
   }
@@ -186,6 +188,7 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
 
   fn push_clip_path(&mut self, clip_path:&ClipPath){
     self.flush_glyphs();
+    self.flush_groups(); // keep the deferred saves from interleaving with this one
     let mut sk_path = skia_path(&clip_path.path);
     sk_path.set_fill_type(fill_type(clip_path.fill));
     self.canvas.save();
@@ -199,18 +202,21 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
 
   fn push_transparency_group(&mut self, opacity:f32, mask:Option<SoftMask<'a>>, blend:BlendMode){
     self.flush_glyphs();
-    let mut layer_paint = blend_paint(blend_mode(blend));
-    layer_paint.set_alpha_f(opacity);
-    self.canvas.save_layer(&SaveLayerRec::default().paint(&layer_paint));
-    self.group_masks.push(mask);
+    let needs_layer = mask.is_some() || opacity < 1.0 || !matches!(blend, BlendMode::Normal)
+      || self.mask.is_some() || !matches!(self.blend, BlendMode::Normal);
+    self.groups.push(Group::new(opacity, mask, blend));
+    if needs_layer{ self.flush_groups() }
   }
 
   fn pop_transparency_group(&mut self){
     self.flush_glyphs();
-    if let Some(Some(mask)) = self.group_masks.pop(){
-      self.apply_mask(&mask);
+    let Some(group) = self.groups.pop() else { return };
+    if group.paint.is_none(){ // its layer was opened, so it has to be closed
+      if let Some(mask) = group.mask{
+        self.apply_mask(&mask);
+      }
+      self.canvas.restore();
     }
-    self.canvas.restore();
   }
 }
 
@@ -231,7 +237,7 @@ impl<'a> PictureDevice<'a, '_>{
   }
 
   // run the callback with mask & blend state cleared (for mask groups & type3 glyphs that already account for them)
-  fn isolated(&mut self, f:impl FnOnce(&mut Self)){
+  fn without_compositing(&mut self, f:impl FnOnce(&mut Self)){
     let mask = self.mask.take();
     let blend = std::mem::replace(&mut self.blend, BlendMode::Normal);
     f(self);
@@ -244,7 +250,7 @@ impl<'a> PictureDevice<'a, '_>{
     match self.mask.clone(){
       Some(mask) => {
         self.canvas.save_layer(&SaveLayerRec::default().paint(&blend_paint(blend_mode(self.blend))));
-        self.isolated(f);
+        self.without_compositing(f);
         self.apply_mask(&mask);
         self.canvas.restore();
       }
@@ -269,7 +275,7 @@ impl<'a> PictureDevice<'a, '_>{
         self.canvas.draw_color(color4f(bg), SkBlendMode::Src);
       }
     }
-    self.isolated(|dev| {
+    self.without_compositing(|dev| {
       mask.interpret(dev);
       dev.flush_glyphs();
     });
@@ -356,6 +362,14 @@ impl<'a> PictureDevice<'a, '_>{
         dev.canvas.draw_text_blob(&blob, (0.0, 0.0), &sk_paint);
       });
     });
+  }
+
+  // open layers for any deferred groups in the stack (outer-to-inner). called whenever there's a potential
+  // need for isolation in the drawing commands that could arrive next
+  fn flush_groups(&mut self){
+    for group in &mut self.groups{
+      group.open(self.canvas);
+    }
   }
 
   // solid colors can be used directly but pattern shaders need the CTM so they can position themselves in page-space
@@ -526,6 +540,29 @@ impl<'a> PictureDevice<'a, '_>{
           dev.canvas.draw_image_with_sampling_options(&mask, (0, 0), sampling(stencil.interpolate), Some(&pattern_paint));
         });
       }
+    }
+  }
+}
+
+// transparency groups composite against transparent black rather than the page, but this is only
+// visible for non-SrcOver blend modes. the Group struct defers creation of the layer until something
+// is drawn within it that actually requires isolation
+struct Group<'a>{
+  mask: Option<SoftMask<'a>>,  // applied with DstIn when the group pops
+  paint: Option<SkPaint>,      // set to Some while the layer is still deferred
+}
+
+impl<'a> Group<'a>{
+  fn new(opacity:f32, mask:Option<SoftMask<'a>>, blend:BlendMode) -> Self{
+    let mut paint = blend_paint(blend_mode(blend));
+    paint.set_alpha_f(opacity);
+    Group{ mask, paint:Some(paint) } // every group starts deferred
+  }
+
+  fn open(&mut self, canvas:&SkCanvas){
+    // open the layer if it hasn't been already (and set `paint` to None to flag it)
+    if let Some(paint) = self.paint.take(){
+      canvas.save_layer(&SaveLayerRec::default().paint(&paint));
     }
   }
 }
