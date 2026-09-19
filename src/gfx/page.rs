@@ -126,6 +126,7 @@ pub struct PageRecorder{
   matrix: Matrix,
   clip: Option<Path>,
   color_space: ColorSpace,
+  props: SurfaceProps, // the parent canvas's text-rendering settings
   changed: bool, // whether the recorder contains new ops not yet written to a Layer
   disposed: bool, // prevent additional drawing after PictureRecorder has been dropped
   eviction: PostedEviction, // whether cached rasters need to be dropped on the render thread
@@ -139,14 +140,14 @@ pub struct PageRecorder{
 }
 
 impl PageRecorder{
-  pub fn new(bounds:Rect, color_space:ColorSpace) -> Self {
+  pub fn new(bounds:Rect, color_space:ColorSpace, props:SurfaceProps) -> Self {
     // recorder ids climb from 1 while `Page::picture_id`s descend from usize::MAX
     static COUNTER:AtomicUsize = AtomicUsize::new(1);
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
 
     PageRecorder{
       current:None, layers:vec![], changed:false, disposed:false,
-      matrix:Matrix::default(), clip:None, bounds, id, epoch:0, color_space,
+      matrix:Matrix::default(), clip:None, bounds, id, epoch:0, color_space, props,
       eviction:PostedEviction::default(),
       approx_ops:0,
       footprint:mem::v8::Footprint::default(),
@@ -217,7 +218,7 @@ impl PageRecorder{
   }
 
   pub fn set_bounds(&mut self, bounds:Rect){
-    *self = PageRecorder::new(bounds, self.color_space.clone());
+    *self = PageRecorder::new(bounds, self.color_space.clone(), self.props);
   }
 
   pub fn update_bounds(&mut self, bounds:Rect){
@@ -323,7 +324,7 @@ impl PageRecorder{
         // rasterize the canvas's contents clamped to its native gamut (in case it's an sRGB context
         // that is being drawn to a display-p3 one)
         images::deferred_from_picture(
-          pict, size, None, None, BitDepth::U8, Some(self.color_space.clone()), None
+          pict, size, None, None, BitDepth::U8, Some(self.color_space.clone()), self.props
         )
       })?;
 
@@ -511,11 +512,15 @@ impl Page{
     let (w, h) = ((size.width * sx + phase.x).ceil(), (size.height * sy + phase.y).ceil());
     if !(w >= 1.0 && h >= 1.0 && w <= 8192.0 && h <= 8192.0){ return None }
 
-    // pack the scale and sub-pixel phase into the cache's placement key, in disjoint bit fields so
-    // the two can't alias: 5 bits per phase axis (`bucket` above caps each at 16) and 27 per scale,
-    // quantized to 1/64 — which saturates well past any scale the 8192² cap admits
-    let q = |v:f32| ((v * 64.0).round() as u64).min((1 << 27) - 1);
-    let key = (px << 59) | (py << 54) | (q(sx) << 27) | q(sy);
+    // pack the sub-pixel phase, scale, and the destination's text-rendering props into the cache's
+    // placement key, in disjoint bit fields so they can't alias: 5 bits per phase axis (`bucket`
+    // above caps each at 16), 21 per scale quantized to 1/64 (saturating well past any scale the
+    // 8192² cap admits for a ≥1px page), and 6 per props axis (contrast spans [0,1], gamma [0,4))
+    let props = canvas.base_props();
+    let qc = ((props.text_contrast() * 63.0).round() as u64) & 0x3f;
+    let qg = ((props.text_gamma() * 63.0 / 4.0).round() as u64) & 0x3f;
+    let q = |v:f32| ((v * 64.0).round() as u64).min((1 << 21) - 1);
+    let key = (px << 59) | (py << 54) | (q(sx) << 33) | (q(sy) << 12) | (qc << 6) | qg;
     let cost = (w as u64) * (h as u64) * 4;
     let dims = ISize::new(w as i32, h as i32);
     // the callback runs only when there is no usable raster yet; a reusable one comes back without it, and

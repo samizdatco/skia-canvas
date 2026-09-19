@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use neon::prelude::*;
 use skia_safe::{
   Canvas as SkCanvas, Paint, Path, PathBuilder, PathOp, Image, ImageInfo, Contains,
-  Rect, IRect, Point, Size, ColorSpace, Color4f, PathFillType,
+  Rect, IRect, Point, Size, ColorSpace, Color4f, PathFillType, SurfaceProps,
   PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture, FontHinting,
   font::Edging,
   images, image_filters, dash_path_effect, path_1d_path_effect,
@@ -249,12 +249,12 @@ impl Context2D{
     self.recorder.borrow().color_space()
   }
 
-  pub fn new(color_space:ColorSpace) -> Self {
+  pub fn new(color_space:ColorSpace, props:SurfaceProps) -> Self {
     let bounds = Rect::from_wh(300.0, 150.0);
 
     Context2D{
       bounds,
-      recorder: RefCell::new(PageRecorder::new(bounds, color_space)),
+      recorder: RefCell::new(PageRecorder::new(bounds, color_space, props)),
       path: Path2D::default(),
       stack: vec![],
       state: State::default(),

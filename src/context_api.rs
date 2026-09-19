@@ -21,8 +21,8 @@ use crate::bridge::*;
 pub fn new(mut cx: FunctionContext) -> JsResult<BoxedContext2D> {
   let parent = cx.argument::<BoxedCanvas>(1)?;
   let color_space = to_color_space(&opt_string_arg(&mut cx, 2).unwrap_or("srgb".to_string()));
-  let this = RefCell::new(Context2D::new(color_space));
   let parent = parent.borrow();
+  let this = RefCell::new(Context2D::new(color_space, parent.export_options().surface_props()));
 
   this.borrow_mut().reset_size((parent.width, parent.height));
   Ok(cx.boxed(this))
