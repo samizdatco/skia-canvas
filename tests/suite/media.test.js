@@ -1377,7 +1377,7 @@ describe("ImageData", () => {
       }
     })
 
-    test("copies when the byte offset can't be aliased", () => {
+    test("copies when the byte offset can't be aliased", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
       // a Buffer carved out of the shared pool can land on an odd byteOffset, which a 2-byte
       // element type can't view directly
       let odd = Buffer.alloc(33).subarray(1)

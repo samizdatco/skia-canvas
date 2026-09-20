@@ -61,7 +61,7 @@ try{
   }catch(e){
     failure = `${e.stderr || ''}${e.stdout || ''}${e.message}`
   }
-  for (const expected of [platformPkg, 'npm/cli/issues/4828', 'prebuild.mjs download']){
+  for (const expected of [platformPkg, 'supportedArchitectures', 'prebuild.mjs download']){
     if (!failure.includes(expected)) throw Error(`missing-binary error doesn't mention "${expected}":\n${failure}`)
   }
   console.log(`✓ missing-binary error names ${platformPkg} and remedies`)

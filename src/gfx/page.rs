@@ -516,7 +516,7 @@ impl Page{
     // placement key, in disjoint bit fields so they can't alias: 5 bits per phase axis (`bucket`
     // above caps each at 16), 21 per scale quantized to 1/64 (saturating well past any scale the
     // 8192² cap admits for a ≥1px page), and 6 per props axis (contrast spans [0,1], gamma [0,4))
-    let props = canvas.base_props();
+    let props = unsafe{ canvas.surface() }.map(|s| *s.props()).unwrap_or_default();
     let qc = ((props.text_contrast() * 63.0).round() as u64) & 0x3f;
     let qg = ((props.text_gamma() * 63.0 / 4.0).round() as u64) & 0x3f;
     let q = |v:f32| ((v * 64.0).round() as u64).min((1 << 21) - 1);
