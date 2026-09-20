@@ -16,6 +16,10 @@ const path = require('path'),
       {pathToFileURL, fileURLToPath} = require('url'),
       {Canvas, Image, ImageData, FontLibrary, loadImage, loadImageData, loadCanvas} = require('../../lib')
 
+// `sharp` is an optional integration, deliberately not a declared dependency, so the tests that
+// actually push pixels through it only run where someone has installed it
+const HAS_SHARP = (() => { try{ require('sharp'); return true }catch{ return false } })()
+
 // serve the repo's files over http so the url-loading tests have a real server to talk to
 const PORT = 41777,
       HOST = `http://127.0.0.1:${PORT}`
@@ -134,7 +138,7 @@ describe("Image", () => {
       assert.throws(() => new Image(URI), /Expected a valid data URL/)
     })
 
-    test("loadImage call", async () => {
+    test("loadImage calls", async () => {
       assert.matchesSubset(img, FRESH)
 
       img = await loadImage(URI)
@@ -169,9 +173,7 @@ describe("Image", () => {
       assert.matchesSubset(await loadImage(SVG_PATH, {page:5}), PARSED)
 
       await assert.rejects(loadImage(`${HOST}/nonesuch`), /HTTP error 404/)
-    })
 
-    test("request timeouts", async () => {
       // each of these has to sit through the full stall, so run them concurrently
       await Promise.all([
         // socket-inactivity timeout, before and after the response starts
@@ -191,6 +193,43 @@ describe("Image", () => {
 
       // neither option disturbs a request that finishes in time
       assert.matchesSubset(await loadImage(URI, {timeout:5000}), LOADED)
+    })
+
+    test("Sharp objects", {skip: HAS_SHARP ? false : "sharp is not installed"}, async () => {
+      const sharp = require('sharp')
+      const CREATE = /** @type {import('sharp').SharpOptions} */ ({create:{width:8, height:8, channels:4, background:"skyblue"}}),
+            SKYBLUE = [135, 206, 235, 255]
+
+      await Promise.all([
+        // synthesized inputs have no input.file/buffer to derive a src string from
+        loadImage(sharp(CREATE)).then(img => {
+          assert.matchesSubset(img, {complete:true, width:8, height:8})
+          assert.equal(img.src, "::Sharp::")
+          let ctx = new Canvas(8, 8).getContext("2d")
+          ctx.drawImage(img, 0, 0)
+          assert.deepEqual(Array.from(ctx.getImageData(0, 0, 1, 1).data), SKYBLUE)
+        }),
+
+        // the ImageData path shares fetchData's sharp handling
+        loadImageData(sharp(CREATE)).then(imgData => {
+          assert.matchesSubset(imgData, {width:8, height:8})
+          assert.deepEqual(Array.from(imgData.data.slice(0, 4)), SKYBLUE)
+        }),
+
+        // text-based synthesis has no src string either
+        loadImage(sharp({text:{text:"hello", width:80, height:20}})).then(img => {
+          assert.matchesSubset(img, {complete:true, src:"::Sharp::"})
+          assert.ok(img.width > 0 && img.height > 0)
+        }),
+
+        // …and the same holds when assigned to src rather than passed to loadImage
+        (async () => {
+          let img = new Image()
+          img.src = sharp(CREATE)
+          await img.decode()
+          assert.matchesSubset(img, {complete:true, width:8, height:8})
+        })(),
+      ])
     })
   })
 
@@ -1305,10 +1344,6 @@ describe("Image", () => {
 })
 
 const HAS_FLOAT16 = typeof Float16Array !== 'undefined' // Float16Array is a Node 23+ global
-
-// `sharp` is an optional integration, deliberately not a declared dependency, so the tests that
-// actually push pixels through it only run where someone has installed it
-const HAS_SHARP = (() => { try{ require('sharp'); return true }catch{ return false } })()
 
 describe("ImageData", () => {
   var FORMAT = 'tests/assets/image/format.raw',
