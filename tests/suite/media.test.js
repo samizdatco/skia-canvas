@@ -229,7 +229,49 @@ describe("Image", () => {
           await img.decode()
           assert.matchesSubset(img, {complete:true, width:8, height:8})
         })(),
+
+        // semi-transparent sources must load as straight alpha (r would read ≈255 if the
+        // bytes were misinterpreted as premultiplied)
+        (async () => {
+          let halfRed = Buffer.alloc(8 * 8 * 4)
+          for (let i = 0; i < halfRed.length; i += 4){ halfRed[i] = 128; halfRed[i + 3] = 128 }
+          let img = await loadImage(sharp(halfRed, {raw:{width:8, height:8, channels:4}}))
+          let ctx = new Canvas(8, 8).getContext("2d")
+          ctx.drawImage(img, 0, 0)
+          let [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data
+          assert.nearEqual(r, 128, 3)
+          assert.deepEqual([g, b, a], [0, 0, 128])
+        })(),
       ])
+    })
+
+    test("Sharp objects with non-RGBA output", {skip: HAS_SHARP ? false : "sharp is not installed"}, async () => {
+      const sharp = require('sharp')
+      const GREY = /** @type {import('sharp').SharpOptions} */ ({create:{width:8, height:8, channels:3, background:'#808080'}})
+
+      const pixel = async (src) => {
+        let img = await loadImage(src),
+            ctx = new Canvas(img.width, img.height).getContext("2d")
+        ctx.drawImage(img, 0, 0)
+        return Array.from(ctx.getImageData(0, 0, 1, 1).data)
+      }
+
+      // greyscale looks emit 1–2 channel raw buffers (sharp's colourspace conversion runs after
+      // ensureAlpha and drops the added channel), previously failing with a decode error
+      for (let grey of [sharp(GREY).greyscale(), sharp(GREY).toColourspace('b-w'), sharp(GREY).toColourspace('grey16')]){
+        let [r, g, b, a] = await pixel(grey)
+        assert.nearEqual(r, 128, 3)
+        assert.deepEqual([g, b, a], [r, r, 255])
+      }
+      assert.matchesSubset(await loadImageData(sharp(GREY).greyscale()), {width:8, height:8})
+
+      // cmyk pipelines emit 5-channel buffers that previously loaded as scrambled RGBA
+      assert.deepEqual(await pixel(sharp(GREY).toColourspace('cmyk')), [128, 128, 128, 255])
+
+      // 16-bit working spaces previously read back clamped to white, and a user-set 16-bit raw
+      // depth could corrupt the pixel stride
+      assert.deepEqual(await pixel(sharp(GREY).toColourspace('rgb16')), [128, 128, 128, 255])
+      assert.deepEqual(await pixel(sharp(GREY).toColourspace('rgb16').raw({depth:'ushort'})), [128, 128, 128, 255])
     })
   })
 

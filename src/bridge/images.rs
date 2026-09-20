@@ -32,10 +32,7 @@ pub fn opt_image_info_arg(cx: &mut FunctionContext, idx:usize) -> NeonResult<Opt
           float_for_key(cx, &raw_info, "height")? as _
         ),
         ColorType::RGBA8888,
-        match bool_for_key(cx, &raw_info, "premultiplied")?{
-          false => AlphaType::Unpremul,
-          true => AlphaType::Premul
-        },
+        AlphaType::Unpremul, // raw pixels are always straight alpha (per ImageData spec)
         ColorSpace::new_srgb(),
       )))
   }else{
