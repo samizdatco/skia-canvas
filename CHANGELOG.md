@@ -42,6 +42,7 @@
   - Single pages can be loaded via [`loadImage()`][loadImage()] which now accepts a 1-based `page` number option, so you can draw PDFs to other Canvases.
   - Whole documents can be loaded via [`loadCanvas()`][loadCanvas], which adds each PDF page as a content-sized entry in the Canvas's `pages` attribute allowing you to draw annotations onto them.
 - [**ImageData**][ImageData] now supports `Float16Array` (on Node 23+) for half-float pixel formats and [`getImageData()`][mdn_getImageData] will return one when a float-based `colorType` is requested (#271).
+- When [exporting][Canvas.toFile] in `"raw"` format, you can now include a `premultiplied` option to leave the pixel values in their GPU-native state (and avoid a potentially lossy conversion to un-premultiplied at low alpha).
 
 #### Paths
 - **Path2D** objects can now be measured by arc length: the [`length`][p2d_length] property reports the total length of all contours, and [`positionAt()`][p2d_positionAt], [`tangentAt()`][p2d_tangentAt], and [`normalAt()`][p2d_normalAt] return the location (as `{x, y}`) and tangent/normal angles (in radians) at the requested distance along the path.
@@ -175,6 +176,7 @@
 [p2d_slice]: /docs/api/path2d.md#slice
 [p2d_contours]: /docs/api/path2d.md#contours
 [loadCanvas]: /docs/api/canvas.md#loadcanvas
+[imgdata_toSharp]: /docs/api/imagedata.md#tosharp
 [DOMPoint]: https://developer.mozilla.org/en-US/docs/Web/API/DOMPoint
 [matrixTransform()]: https://developer.mozilla.org/en-US/docs/Web/API/DOMPointReadOnly/matrixTransform
 [transformPoint()]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrixReadOnly/transformPoint

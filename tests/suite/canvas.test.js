@@ -768,6 +768,23 @@ describe("Canvas", ()=>{
       assert.equal(srgb.length, 8 * 8 * 8)
       assert.deepEqual([0,1,2,3].map(c => f16(srgb, c)), [1, 0, 0, 1])
     })
+
+    test("premultiplied", async () => {
+      canvas.width = canvas.height = 8
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.5)'
+      ctx.fillRect(0, 0, 8, 8)
+
+      // pure red at half opacity: straight alpha keeps r=255, premultiplied scales it down to == alpha
+      let straight = await canvas.toBuffer('raw'),
+          premul = await canvas.toBuffer('raw', {premultiplied:true}),
+          alpha = straight[3]
+      assert.deepEqual(Array.from(straight.slice(0, 4)), [255, 0, 0, alpha])
+      assert.deepEqual(Array.from(premul.slice(0, 4)), [alpha, 0, 0, alpha])
+
+      // combines with colorType reordering and works in the sync path
+      let bgra = canvas.toBufferSync('raw', {premultiplied:true, colorType:'bgra'})
+      assert.deepEqual(Array.from(bgra.slice(0, 4)), [0, 0, alpha, alpha])
+    })
   })
 
   describe("loadCanvas()", () => {

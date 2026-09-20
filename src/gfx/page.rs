@@ -649,7 +649,8 @@ impl Page{
           match opts.format.as_str() {
             "raw" => {
               // return a Rendered::Raw buffer of pixels converted to destination color type
-              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, AlphaType::Unpremul, Some(color_space.clone()));
+              let alpha_type = if opts.premultiplied{ AlphaType::Premul }else{ AlphaType::Unpremul };
+              let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, alpha_type, Some(color_space.clone()));
               let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
               match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
                 true => Ok(Rendered::Raw(buffer)),
@@ -894,6 +895,7 @@ pub struct ExportOptions{
   pub jpeg_downsample: bool,
   pub text_contrast: f32,
   pub text_gamma: f32,
+  pub premultiplied: bool,
 }
 
 impl Default for ExportOptions{
@@ -901,7 +903,7 @@ impl Default for ExportOptions{
     Self{
       format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
       jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
-      color_type:ColorType::RGBA8888, outline:true,
+      color_type:ColorType::RGBA8888, outline:true, premultiplied:false,
     }
   }
 }

@@ -343,6 +343,9 @@ export interface ExportOptions extends RenderOptions {
 
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType
+
+  /** Leave pixel data in premultiplied-alpha form ("raw" format only) */
+  premultiplied?: boolean
 }
 
 export interface SaveOptions extends ExportOptions {

@@ -148,6 +148,7 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let quality = float_for_key(cx, &opts, "quality")?;
   let density = float_for_key(cx, &opts, "density")?;
   let jpeg_downsample = bool_for_key(cx, &opts, "downsample")?;
+  let premultiplied = bool_for_key(cx, &opts, "premultiplied")?;
   let matte = opt_color_4f_for_key(cx, &opts, "matte");
   let msaa = opt_float_for_key(cx, &opts, "msaa")
     .map(|num| num.floor() as usize);
@@ -158,6 +159,6 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let outline = bool_for_key(cx, &opts, "outline")?;
 
   Ok(ExportOptions{
-    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma
+    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma, premultiplied
   })
 }
