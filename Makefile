@@ -5,7 +5,8 @@ GIT_TAG = $(shell git describe)
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | sed -e 's/^.*=/v/')
 PRERELEASE_FLAG = $(subst -rc,--prerelease,$(findstring -rc,$(PACKAGE_VERSION)))
 NPM_VERSION = $(shell npm view skia-canvas version)
-.PHONY: optimized dev test debug visual check clean distclean release skia-version with-local-skia
+CONTAINER_VERSION ?= $(shell date +%Y.%m)
+.PHONY: optimized dev test debug visual check clean distclean release containers skia-version with-local-skia
 .DEFAULT_GOAL := $(LIB)
 
 $(NPM):
@@ -59,6 +60,11 @@ release:
 	@printf "\nCreating new release...\n"
 	@gh release create $(PACKAGE_VERSION) $(PRERELEASE_FLAG) --draft --fail-on-no-commits --generate-notes
 	@printf "\nNext: publish the release on github to submit to npm\n"
+
+containers:
+	@gh workflow run containers.yml -f version=$(CONTAINER_VERSION)
+	@printf "\nBuilding containers with version label :$(CONTAINER_VERSION)\n  https://github.com/samizdatco/skia-canvas/actions/workflows/containers.yml\n"
+	@printf "\nNext: update the Linux container URLs in build.yml to match\n"
 
 # linux-build helpers
 skia-version:

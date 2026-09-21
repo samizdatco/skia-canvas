@@ -1,6 +1,10 @@
 name: Build containers
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image tag, e.g. 2026.09 (also moves :latest)'
+        required: true
 
 jobs:
   # run arm & intel builds on native runners create 4 single-arch images
@@ -88,11 +92,57 @@ jobs:
       working-directory: /tmp/digests
       env:
         IMAGE: ghcr.io/${{ github.repository }}-${{ matrix.libc }}
+        VERSION: ${{ inputs.version }}
       run: |
-        docker buildx imagetools create -t "$IMAGE:latest" \
+        docker buildx imagetools create -t "$IMAGE:latest" -t "$IMAGE:$VERSION" \
           $(printf "$IMAGE@sha256:%s " *)
 
     - name: Inspect manifest
       env:
         IMAGE: ghcr.io/${{ github.repository }}-${{ matrix.libc }}
-      run: docker buildx imagetools inspect "$IMAGE:latest"
+        VERSION: ${{ inputs.version }}
+      run: docker buildx imagetools inspect "$IMAGE:$VERSION"
+
+  # try running the linux builds inside the new container images
+  test:
+    runs-on: ${{ matrix.platform.runner }}
+    needs: merge
+    strategy:
+      fail-fast: false
+      matrix:
+        libc: [glibc, musl]
+        platform:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    container:
+      image: ghcr.io/${{ github.repository }}-${{ matrix.libc }}:${{ inputs.version }}
+
+    steps:
+    - name: Install rust
+      run: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        echo CARGO_TERM_COLOR=always >> $GITHUB_ENV
+
+    - name: Checkout skia-canvas
+      env:
+        SERVER: ${{ github.server_url }}
+        REPO: ${{ github.repository }}
+        REF: ${{ github.ref_name }}
+      run: |
+        git clone --depth 1 --branch $REF ${SERVER}/${REPO} skia-canvas
+
+    - name: Checkout rust-skia and apply static deps patch
+      run: |
+        export TAG=$(make -sC skia-canvas skia-version)
+        git clone --depth 1 --branch $TAG --recurse-submodules -j8 https://github.com/rust-skia/rust-skia.git
+        patch -d rust-skia -p1 -F10 < ./skia-canvas/containers/use-static-fontconfig.patch
+
+    - name: Build module
+      run: |
+        make -sC skia-canvas with-local-skia
+        cd skia-canvas && make optimized
+
+    - name: Run tests
+      run: |
+        cd skia-canvas && npm test
