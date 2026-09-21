@@ -2,7 +2,7 @@ name: Publish to NPM
 on:
   workflow_dispatch:
   release:
-    types: [released]
+    types: [published]
 
 jobs:
   publish:
@@ -16,7 +16,7 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 22
+        node-version: 24
         registry-url: 'https://registry.npmjs.org'
 
     - name: Install dependencies
@@ -36,12 +36,13 @@ jobs:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
         VERSION=$(npm pkg get version | tr -d '"')
+        if [[ $VERSION == *-* ]]; then TAG_FLAG="--tag next"; else TAG_FLAG=""; fi
         for pkg in assets/npm/*/ ; do
           NAME=$(node -p "require('./$pkg/package.json').name")
           if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
             echo "$NAME@$VERSION already published — skipping"
           else
-            npm publish "./$pkg"
+            npm publish $TAG_FLAG "./$pkg"
           fi
         done
 
@@ -49,4 +50,12 @@ jobs:
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
-        npm publish
+        VERSION=$(npm pkg get version | tr -d '"')
+        if [[ $VERSION == *-* ]]; then
+          npm publish --tag next
+        else
+          npm publish
+          # try to keep `next` pointing at the newest published version even for stable releases
+          # (OIDC will prevent this until npm/cli#8547 so it will just log a warning for now)
+          npm dist-tag add "skia-canvas@$VERSION" next || echo "::warning::dist-tag add failed for skia-canvas@$VERSION (npm/cli#8547) — re-point next manually"
+        fi

@@ -1,9 +1,9 @@
 NPM := $(CURDIR)/node_modules
 LIB := $(CURDIR)/lib/skia.node
 LIB_SRC := Cargo.toml lib/prebuild.mjs $(wildcard src/*.rs) $(wildcard src/*/*.rs) $(wildcard src/*/*/*.rs)
-GIT_TAG = $(shell git describe)
+LATEST_RELEASE = $(shell gh release list --limit 1 --json tagName,isDraft --jq '.[0] | .tagName + (if .isDraft then " (draft)" else "" end)')
 PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | sed -e 's/^.*=/v/')
-PRERELEASE_FLAG = $(subst -rc,--prerelease,$(findstring -rc,$(PACKAGE_VERSION)))
+PRERELEASE_FLAG = $(if $(findstring -,$(PACKAGE_VERSION)),--prerelease)
 NPM_VERSION = $(shell npm view skia-canvas version)
 CONTAINER_VERSION ?= $(shell date +%Y.%m)
 .PHONY: optimized dev test debug visual check clean distclean release containers skia-version with-local-skia
@@ -45,21 +45,28 @@ distclean: clean
 	cargo clean
 
 release:
-	@if [[ `git status -s package.json` != "" ]]; then printf "Commit changes to package.json first:\n\n"; git --no-pager diff package.json; exit 1; fi
-	@if [[ `git cherry -v` != "" ]]; then printf "Unpushed commits:\n"; git --no-pager log --oneline main --not --remotes="*/main"; exit 1; fi
-	@if gh release view $(PACKAGE_VERSION) --json id > /dev/null; then printf "Already published $(PACKAGE_VERSION)\n"; exit 1; fi
+	@if [[ `jj diff --from main --to @ package.json` != "" ]]; then \
+	  printf "Commit the package.json change onto main first:\n\n"; \
+	  jj diff --from main --to @ package.json; exit 1; fi
+	@if [[ `jj log --ignore-working-copy --no-graph -r 'main@origin..main' -T 'commit_id ++ "\n"'` != "" ]]; then \
+	  printf "Unpushed commits on main:\n"; \
+	  jj log --ignore-working-copy --no-graph -r 'main@origin..main' \
+	    -T 'commit_id.shortest(9) ++ " " ++ description.first_line() ++ "\n"'; exit 1; fi
+	@if [[ `gh release view $(PACKAGE_VERSION) --json isDraft --jq .isDraft 2>/dev/null` == "false" ]]; then \
+	  printf "Already published $(PACKAGE_VERSION)\n"; exit 1; fi
 	@echo
 	@echo "Currently on NPM:  $(NPM_VERSION)"
-	@echo "Last Git Tag:     $(GIT_TAG)"
-	@echo "Package Version:  $(PACKAGE_VERSION)"
+	@echo "Latest Release:    $(LATEST_RELEASE)"
+	@echo "Package Version:   $(PACKAGE_VERSION)"
 	@echo
-	@/bin/echo -n "Update release -> $(PACKAGE_VERSION)? [y/N] "
-	@read line; if [[ $$line = "y" ]]; then printf "\nPushing tag to github...\n"; else exit 1; fi
-	@git tag -a $(PACKAGE_VERSION) -m $(PACKAGE_VERSION)
-	@git push origin --tags
-	@printf "\nCreating new release...\n"
-	@gh release create $(PACKAGE_VERSION) $(PRERELEASE_FLAG) --draft --fail-on-no-commits --generate-notes
-	@printf "\nNext: publish the release on github to submit to npm\n"
+	@/bin/echo -n "Release $(PACKAGE_VERSION) (draft + build)? [y/N] "
+	@read line; if [[ $$line != "y" ]]; then exit 1; fi
+	@if ! gh release view $(PACKAGE_VERSION) > /dev/null 2>&1; then \
+	  gh release create $(PACKAGE_VERSION) $(PRERELEASE_FLAG) --draft --fail-on-no-commits --generate-notes \
+	    --target `jj log --ignore-working-copy --no-graph -r main -T commit_id`; fi
+	@gh workflow run build.yml --ref main
+	@printf "\nBuilding native binaries for $(PACKAGE_VERSION)\n  https://github.com/samizdatco/skia-canvas/actions/workflows/build.yml\n"
+	@printf "\nNext: once build is complete, publish the release on github to submit to npm\n"
 
 containers:
 	@gh workflow run containers.yml -f version=$(CONTAINER_VERSION)
