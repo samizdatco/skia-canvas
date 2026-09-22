@@ -22,21 +22,64 @@ The `.families` property contains a list of family names, merging together all t
 ## Methods
 
 ### `family()`
-```js returns="{family, weights, widths, styles}"
+```js returns="{family, weights, widths, styles, variable, variations, features}"
 FontLibrary.family(name)
 ```
 
-If the `name` argument is the name of a known font family, this method will return an object with information about the available weights and styles. For instance, on my system `FontLibrary.family("Avenir Next")` returns:
+If `name` matches the name of an installed font family, this method will return an object with information about the available weights and styles (aggregated across all the individual fonts in the family). If no matches are found, it will return `undefined`.
+
+For instance, on my system `FontLibrary.family("Raleway")` returns:
 ```js
 {
-  family: 'Avenir Next',
-  weights: [ 100, 400, 500, 600, 700, 800 ],
+  family: 'Raleway',
+  weights: [
+    100, 200, 300,
+    400, 500, 600,
+    700, 800, 900
+  ],
   widths: [ 'normal' ],
-  styles: [ 'normal', 'italic' ]
+  styles: [ 'normal' ],
+  variable: true,
+  variations: { wght: { min: 100, max: 900, default: 100, label: 'Weight' } },
+  features: {
+    aalt: { label: 'Access All Alternates', type: 'indexed' },
+    c2sc: { label: 'Small Capitals From Capitals', type: 'on/off' },
+    ccmp: { label: 'Glyph Composition / Decomposition', type: 'on/off' },
+    dlig: { label: 'Discretionary Ligatures', type: 'on/off' },
+    dnom: { label: 'Denominators', type: 'on/off' },
+    frac: { label: 'Fractions', type: 'on/off' },
+    kern: { label: 'Kerning', type: 'on/off' },
+    liga: { label: 'Standard Ligatures', type: 'on/off' },
+    lnum: { label: 'Lining Figures', type: 'on/off' },
+    locl: { label: 'Localized Forms', type: 'on/off' },
+    mark: { label: 'Mark Positioning', type: 'on/off' },
+    mkmk: { label: 'Mark to Mark Positioning', type: 'on/off' },
+    numr: { label: 'Numerators', type: 'on/off' },
+    ordn: { label: 'Ordinals', type: 'on/off' },
+    salt: { label: 'Stylistic Alternates', type: 'indexed' },
+    sinf: { label: 'Scientific Inferiors', type: 'on/off' },
+    smcp: { label: 'Small Capitals', type: 'on/off' },
+    ss01: { label: 'Stylistic Set 1', type: 'on/off' },
+    ss02: { label: 'Stylistic Set 2', type: 'on/off' },
+    ss03: { label: 'Stylistic Set 3', type: 'on/off' },
+    ss04: { label: 'Stylistic Set 4', type: 'on/off' },
+    ss05: { label: 'Stylistic Set 5', type: 'on/off' },
+    ss06: { label: 'Stylistic Set 6', type: 'on/off' },
+    ss07: { label: 'Stylistic Set 7', type: 'on/off' },
+    ss08: { label: 'Stylistic Set 8', type: 'on/off' },
+    ss09: { label: 'Stylistic Set 9', type: 'on/off' },
+    ss10: { label: 'Stylistic Set 10', type: 'on/off' },
+    ss11: { label: 'Stylistic Set 11', type: 'on/off' },
+    subs: { label: 'Subscript', type: 'on/off' },
+    sups: { label: 'Superscript', type: 'on/off' }
+  }
 }
 ```
 
-Asking for details about an unknown family will return `undefined`.
+Because Raleway is a [variable font][VariableFonts], the `variable` flag is set to `true`, and its variation axes are itemized in the `variations` object. Each key in `variations` is a four-character code that can be used with the Context's  [`fontVariationSettings`][fontvariations] property and points to an object with the font's `min`, `max`, and `default` values for that axis (plus a human-readable `label`).
+
+The `features` object itemizes all the OpenType features the font supports, identifying them using four-character codes that can be used with the [`fontFeatureSettings`][fontfeatures] property. Each feature's `type` can either be `"on/off"` (meaning it can be set to `1` to enable it or `0` to disable it) or `indexed` (meaning it allows you to select among different alternates via a 1-based index, or `0` to use the default form).
+
 
 ### `has()`
 ```js
@@ -50,29 +93,31 @@ Returns `true` if the family is installed on the system or has been added via `F
 Uninstalls any dynamically loaded fonts that had been added via `FontLibrary.use()`.
 
 ### `use()`
-```js returns="{family, weight, style, width, file}[]"
+```js returns="{family, weight, style, width, variable, variations, features, file}[]"
 FontLibrary.use([...fontPaths])
 FontLibrary.use(familyName, [...fontPaths])
-FontLibrary.use({familyName:[...fontPaths], ...)
+FontLibrary.use({familyName:[...fontPaths], ...})
 ```
 
 The `FontLibrary.use()` method allows you to dynamically load local font files and use them with your canvases. It can read fonts in the OpenType (`.otf`), TrueType (`.ttf`), and web-font (`.woff` & `.woff2`) file formats.
 
-
-By default the family name will be take from the font metadata, but this can be overridden by an alias you provide. Since font-wrangling can be messy, `use` can be called in a number of different ways:
+By default the family name will be taken from the font metadata, but this can be overridden by an alias you provide. Since font-wrangling can be messy, `use` can be called in a number of different ways:
 
 #### with a list of file paths
 ```js
 import {FontLibrary} from 'skia-canvas'
 
-// with default family name
+// use the default family name
 FontLibrary.use([
   "fonts/Oswald-Regular.ttf",
   "fonts/Oswald-SemiBold.ttf",
   "fonts/Oswald-Bold.ttf",
 ])
+```
 
-// with an alias
+#### with a custom family name
+```js
+// override the default name (possibly to avoid conflicts with system fonts)
 FontLibrary.use("Grizwald", [
   "fonts/Oswald-Regular.ttf",
   "fonts/Oswald-SemiBold.ttf",
@@ -82,33 +127,17 @@ FontLibrary.use("Grizwald", [
 
 #### multiple families with aliases
 ```js
+// each key is the custom family name, values are the fonts in that family
 FontLibrary.use({
   Nieuwveen: ['fonts/AmstelvarAlpha-VF.ttf', 'fonts/AmstelvarAlphaItalic-VF.ttf'],
   Fairway: 'fonts/Raleway/*.ttf'
 })
 ```
 
-The return value will be either a list or an object (matching the style in which it was called) with an entry describing each font file that was added. For instance, one of the entries from the first example could be:
-```js
-{
-  family: 'Grizwald',
-  weight: 600,
-  style: 'normal',
-  width: 'normal',
-  file: 'fonts/Oswald-SemiBold.ttf'
-}
-```
-
 #### with a list of ‘glob’ patterns
 
-:::warning
-Glob support is no longer built-in as of v3.0: Try installing the [`glob`][glob] or [`fast-glob`][fastglob] module if you'd like to emulate the old behavior.
-:::
-
-> Note to Windows users: glob patterns require that you write paths using unix-style _forward_ slashes. Backslashes are used solely for escaping wildcard characters.
-
 ```js
-import {globSync:glob} from 'fast-glob'
+import {globSync as glob} from 'fast-glob'
 
 // with default family name
 FontLibrary.use(glob('fonts/Crimson_Pro/*.ttf'))
@@ -117,8 +146,39 @@ FontLibrary.use(glob('fonts/Crimson_Pro/*.ttf'))
 FontLibrary.use("Stinson", glob('fonts/Crimson_Pro/*.ttf'))
 ```
 
+---
+
+The return value will be either a list or an object (matching the style in which it was called) with an entry describing each font file that was added. For instance, the Semibold from the "Grizwald" alias example above could be:
+```js
+{
+  family: 'Grizwald',
+  weight: 600,
+  style: 'normal',
+  width: 'normal',
+  variable: false,
+  variations: {},
+  features: {
+    aalt: { label: 'Access All Alternates', type: 'indexed' },
+    case: { label: 'Case-Sensitive Forms', type: 'on/off' },
+    ccmp: { label: 'Glyph Composition / Decomposition', type: 'on/off' },
+    dlig: { label: 'Discretionary Ligatures', type: 'on/off' },
+    frac: { label: 'Fractions', type: 'on/off' },
+    kern: { label: 'Kerning', type: 'on/off' },
+    liga: { label: 'Standard Ligatures', type: 'on/off' },
+    locl: { label: 'Localized Forms', type: 'on/off' },
+    mark: { label: 'Mark Positioning', type: 'on/off' },
+    mkmk: { label: 'Mark to Mark Positioning', type: 'on/off' },
+    ordn: { label: 'Ordinals', type: 'on/off' },
+    sups: { label: 'Superscript', type: 'on/off' }
+  },
+  file: 'fonts/Oswald-SemiBold.ttf'
+}
+```
+
+
 
 <!-- references_begin -->
-[glob]: https://www.npmjs.com/package/glob
-[fastglob]: https://www.npmjs.com/package/fast-glob
+[fontvariations]: context.md#fontvariationsettings
+[fontfeatures]: context.md#fontfeaturesettings
+[VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
 <!-- references_end -->

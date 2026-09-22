@@ -5,12 +5,12 @@ description: Display a canvas in a window and handle UI events
 
 > The `Window` class allows you to open a native OS window and draw within its frame. You can create multiple windows (each with their own event-handling and rendering routines) and update them in response to user input.
 
-| Dimensions               | Content                          | Interface                    | Mode                         | Methods            |
-| --                       | --                               | --                           | --                           | --                 |
-| [**left**][win_layout]   | [**background**][win_background] | [**borderless**][borderless] | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind] / [off()][win_bind] |
-| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor]         | [**resizable**][resizable]   | [open()][open]     |
-| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]               | [**fullscreen**][fullscreen] | [close()][close]   |
-| [**height**][win_layout] | [**page**][win_page]             | [**title**][title]           | [**closed**][closed]         |                    |
+| Dimensions               | Content                          | Interface                    | Mode                         | Events             | Visibility          |
+| --                       | --                               | --                           | --                           | --                 | --                 |
+| [**left**][win_layout]   | [**background**][win_background] | [**borderless**][borderless] | [**visible**][visible]       | [on()][win_bind] / [once()][win_bind] / [off()][win_bind] | [open()][open]     |
+| [**top**][win_layout]    | [**canvas**][win_canvas]         | [**cursor**][cursor]         | [**resizable**][resizable]   | [requestAnimationFrame()][requestAnimationFrame] | [close()][close]   |
+| [**width**][win_layout]  | [**ctx**][win_ctx]               | [**fit**][fit]               | [**fullscreen**][fullscreen] | [cancelAnimationFrame()][cancelAnimationFrame] |                    |
+| [**height**][win_layout] | [**page**][win_page]             | [**title**][title]           | [**closed**][closed]         |                    |                    |
 
 ##  Creating new `Window` objects
 
@@ -24,7 +24,7 @@ console.log(win.canvas)
 You can specify a size (to be shared by the window and canvas) by passing width & height arguments:
 ```js
 let smaller = new Window(256, 128)
-````
+```
 
 All of the other window properties can be customized by passing an options object, either in addition to the width & height or all by itself:
 
@@ -36,13 +36,13 @@ let titled = new Window({title:"Canvas Window"}) // use default 512×512 size
 After creating the window, you can modify these properties through simple assignment:
 
 ```js
-let win = new Window(800, 600, {title="Multi-step Window"})
+let win = new Window(800, 600, {title:"Multi-step Window"})
 win.background = "skyblue"
 win.top = 40
 win.left = 40
 ```
 
-The object accessible through the window’s `.canvas` attribute is no different than any other `Canvas` you create. You can even create a `Window` after setting up a canvas and tell the window to use it instead of automatically creating one. If you pass it to the constructor without specifying a window size, the window will match the dimensions of the canvas:
+The object accessible through the window’s `.canvas` attribute is no different from any other `Canvas` you create. You can even create a `Window` after setting up a canvas and tell the window to use it instead of automatically creating one. If you pass it to the constructor without specifying a window size, the window will match the dimensions of the canvas:
 
 ```js prints="[1024, 1024]"
 let bigCanvas = new Canvas(1024, 1024)
@@ -61,7 +61,6 @@ console.log("canvas", [win.canvas.width, win.canvas.height])
 ```
 
 > When the window and canvas sizes don’t perfectly match, the canvas will be scaled using the approach selected via the window’s [`fit`][fit] property.
-
 
 ## Controlling Font Rendering
 
@@ -115,7 +114,7 @@ win.on('keydown', e => {
 
 Once you've created a `Window` object, Node will wait for your current function to end and then switch over to an OS-controlled event loop for the rest of your program’s runtime. This means it can actively redraw your canvas when you resize the window or update its contents, but also means the Node interpreter will be frozen for the duration.
 
-As a result, you cannot rely upon Node's traditional asynchrononous behavior for structuring your program. In particular, the usual methods for scheduling callbacks like `setTimeout`, `setImmediate`, and `setInterval` **will not work**.
+As a result, you cannot rely upon Node's traditional asynchronous behavior for structuring your program. In particular, the usual methods for scheduling callbacks like `setTimeout`, `setImmediate`, and `setInterval` **will not work**.
 
 Instead, you must use event handlers attached to the `Window` object. By calling the window’s `.on()`, `.off()`, and `.once()` methods, you can respond to [user interface events][win_bind] like mouse and keyboard input, the window being dragged or resized, a new window becoming active, etc.
 
@@ -156,7 +155,7 @@ win1.on('mousedown', closeWindow)
 win2.on('mousedown', closeWindow)
 ```
 
-Alternatively, we could have created our event handler using a `function(e){…}` defintion (rather than an `(e) => {…}` arrow expression) in which case the `this` variable will point to the window:
+Alternatively, we could have created our event handler using a `function(e){…}` definition (rather than an `(e) => {…}` arrow expression) in which case the `this` variable will point to the window:
 ```js
 function closeWindow(e){
   console.log("now closing window:", this)
@@ -171,11 +170,11 @@ In the previous example you may have noticed that the canvas’s contents were p
 
 But another common case is creating animations in which you redraw the canvas at regular intervals (quite possibly from scratch rather than layering atop the previous contents). In these situations you’ll want to use a set of events that are driven by *timing* rather than interaction:
   - [`setup`][setup] fires once, just before your window is first drawn to the screen
-  - [`frame`][frame] fires [60 times per second][fps] and provides a frame counter in its event object
+  - [`frame`][frame] fires each time your display refreshes (or at your specified [`fps`][fps] rate) and provides a frame counter in its event object
   - [`draw`][draw] fires immediately after `frame` and **clears the canvas** of any window that has event handlers for it
 
 
-To create a ‘flipbook’ animation (in which the screen is fully redrawn in each pass), your best choice is set up an event handler for the `draw` event. Since `draw` automatically erases the canvas before your code begins to run, you can presume a clean slate each time. The event object passed as an argument to your handler contains a propery called `frame` which will increment by one each time you draw (making it handy for advancing the ‘state’ of your animation):
+To create a ‘flipbook’ animation (in which the screen is fully redrawn in each pass), your best choice is set up an event handler for the `draw` event. Since `draw` automatically erases the canvas before your code begins to run, you can presume a clean slate each time. The event object passed as an argument to your handler contains a property called `frame` which will increment by one each time you draw (making it handy for advancing the ‘state’ of your animation):
 
 ```js
 let win = new Window(300, 300, {background:'red'}),
@@ -191,7 +190,24 @@ win.on("draw", e => {
   ctx.lineTo(200,100)
   ctx.stroke()
 })
-````
+```
+
+You can also use the Window's [`requestAnimationFrame()`][requestAnimationFrame] method to queue up a *single* callback invocation synced to the next display refresh. It passes a monotonically increasing frame number as the sole argument to your callback:
+
+```js
+let win = new Window(150, 150),
+    {ctx} = win
+
+function redraw(frame){
+  ctx.reset() // clear the canvas
+  ctx.fillText(`frame ${frame}`, 30, 75)
+  win.requestAnimationFrame(redraw) // keep animating
+}
+
+// queue up the first frame
+win.requestAnimationFrame(redraw)
+```
+
 
 ## Properties
 
@@ -261,19 +277,21 @@ The `Window` object is an [Event Emitter][event_emitter] subclass and supports a
 
 The events emitted by the `Window` object are mostly consistent with browser-based DOM events, but include some non-standard additions (🧪) specific to Skia Canvas:
 
-| Mouse                        | Keyboard                | Window                            | Animation          | Focus                |
-| --                           | --                      | --                                | --                 | --                   |
-| [mousedown][mousedown]       | [keydown][keydown]      | [close][close-event] 🧪           | [setup][setup] 🧪   | [blur][blur]         |
-| [mouseup][mouseup]           | [keyup][keyup]          | [fullscreen][fullscreen-event] 🧪 | [frame][frame] 🧪   | [focus][focus]       |
-| [mousemove][mousemove]       | [input][input]          | [move][move-event] 🧪             | [draw][draw] 🧪     |                      |
-| [wheel][wheel]               | [compositionstart][compositionstart] <br/> [compositionupdate][compositionupdate] <br/> [compositionend][compositionend] | [resize][resize] |
+| Mouse                        | Pointer                                                | Keyboard                | Window                            | Animation          | Focus                |
+| --                           | --                                                     | --                      | --                                | --                 | --                   |
+| [mousedown][mousedown]       | [pointerup][pointerup]                                 | [keydown][keydown]      | [close][close-event] 🧪           | [setup][setup] 🧪   | [blur][blur]         |
+| [mouseup][mouseup]           | [pointerdown][pointerdown]                             | [keyup][keyup]          | [fullscreen][fullscreen-event] 🧪 | [frame][frame] 🧪   | [focus][focus]       |
+| [mousemove][mousemove]       | [pointerenter][pointerenter]                           | [input][input]          | [move][move-event] 🧪             | [draw][draw] 🧪     |                      |
+| [wheel][wheel]               | [pointerleave][pointerleave]                           | [compositionstart][compositionstart] | [resize][resize]     |                    |                      |
+|                              | [pointermove][pointermove]                             | [compositionupdate][compositionupdate] |                    |                    |                      |
+|                              | [pointercancel][pointercancel]                         | [compositionend][compositionend]     |                                   |                    |                      |
 
 ### `close`
 
 Emitted when a window is closed via a user interface click on its close widget or by a programmatic call to the window's [`close()`][close] method.
 
 ### `fullscreen`
-Emitted when the a window switches into or out of full-screen mode. The event object includes a boolean `enabled` property flagging the new state.
+Emitted when a window switches into or out of full-screen mode. The event object includes a boolean `enabled` property flagging the new state.
 
 ### `move`
 Emitted when the user drags the window to a new position. The event object includes `top` and `left` properties expressed in resolution-independent points.
@@ -323,10 +341,18 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 [mouseup]: https://developer.mozilla.org/en-US/docs/Web/API/Element/mouseup_event
 [mousemove]: https://developer.mozilla.org/en-US/docs/Web/API/Element/mousemove_event
 [wheel]: https://developer.mozilla.org/en-US/docs/Web/API/Element/wheel_event
+[pointerdown]: https://developer.mozilla.org/en-US/docs/Web/API/Element/pointerdown_event
+[pointerup]: https://developer.mozilla.org/en-US/docs/Web/API/Element/pointerup_event
+[pointermove]: https://developer.mozilla.org/en-US/docs/Web/API/Element/pointermove_event
+[pointerenter]: https://developer.mozilla.org/en-US/docs/Web/API/Element/pointerenter_event
+[pointerleave]: https://developer.mozilla.org/en-US/docs/Web/API/Element/pointerleave_event
+[pointercancel]: https://developer.mozilla.org/en-US/docs/Web/API/Element/pointercancel_event
 [keydown]: https://developer.mozilla.org/en-US/docs/Web/API/Element/keydown_event
 [keyup]: https://developer.mozilla.org/en-US/docs/Web/API/Element/keyup_event
 [input]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/input_event
 [resize]: https://developer.mozilla.org/en-US/docs/Web/API/Window/resize_event
+[requestAnimationFrame]: https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame
+[cancelAnimationFrame]: https://developer.mozilla.org/en-US/docs/Web/API/Window/cancelAnimationFrame
 [focus]: https://developer.mozilla.org/en-US/docs/Web/API/Window/focus_event
 [blur]: https://developer.mozilla.org/en-US/docs/Web/API/Window/blur_event
 [compositionstart]: https://developer.mozilla.org/en-US/docs/Web/API/Element/compositionstart_event

@@ -6,13 +6,13 @@ description: An emulation of the HTML <canvas> element
 > The Canvas object is a stand-in for the HTML `<canvas>` element. It defines image dimensions and provides a [rendering context][context] to draw to it. Once you’re ready to save or display what you’ve drawn, the canvas can [save][toFile] it to a file, or hand it off to you as a [data buffer][toBuffer] or [string][toURL] to process manually.
 
 
-| Rendering Contexts            | Output                                                              | Image Dimensions               |
-| --                            | --                                                                  | --                             |
-| [**gpu**][canvas_gpu] 🧪      | [**pdf**, **svg**, **png**, **jpg**, **webp**, **raw**][shorthands] 🧪       | [**width**][canvas_width]      |
-| [**engine**][engine] 🧪       | [toFile()][toFile] / [toFileSync()][toFile] 🧪                      | [**height**][canvas_height]    |
-| [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪              |                                |
-| [getContext()][getContext]    | [toURL()][toURL] / [toURLSync()][toURL] 🧪                          |                                |
-| [newPage()][newPage] 🧪       | [toSharp()][canvas_tosharp] 🧪                                      |                                |
+| Rendering Contexts            | Output                                                                  | Image Dimensions               | Memory |
+| --                            | --                                                                      | --                             | -- |
+| [**gpu**][canvas_gpu] 🧪      | [**pdf**, **svg**, **png**, **jpg**, **webp**, **raw**][shorthands] 🧪  | [**width**][canvas_width]      | [**disposed** 🧪](#disposed)
+| [**engine**][engine] 🧪       | [toFile()][toFile] / [toFileSync()][toFile] 🧪                          | [**height**][canvas_height]    | [dispose() 🧪](#dispose)
+| [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪                  |                                | [release() 🧪](#release)
+| [getContext()][getContext]    | [toURL()][toURL] / [toURLSync()][toURL] 🧪                              |                                |
+| [newPage()][newPage] 🧪       | [toSharp()][canvas_tosharp] 🧪                                          |                                |
 | | [toDataURL][toDataURL_mdn] |
 ## Creating new `Canvas` objects
 
@@ -22,6 +22,29 @@ Rather than calling a DOM method to create a new canvas, you can simply call the
 let defaultCanvas = new Canvas() // without arguments, defaults to 300 × 150 px
 let squareCanvas = new Canvas(512, 512) // creates a 512 px square
 ```
+
+To actually *draw* to a canvas you'll also need to get a reference to its Context:
+```js
+let canvas = new Canvas()
+let ctx = canvas.getContext("2d") // the "2d" arg is required
+ctx.fillStyle = "red"
+ctx.fillRect(20, 20, 50, 50)
+```
+
+The [`getContext()`][getContext] call also accepts an optional settings object (whose values will persist for the lifetime of the Canvas, even if you call `getContext()` again later):
+```js
+let canvas = new Canvas()
+let ctx = canvas.getContext("2d", {
+  colorSpace: "srgb", // can also be set to "display-p3" for a wider gamut
+  willReadFrequently: false // set this to `true` for faster getImageData calls
+})
+```
+- The `colorSpace` setting controls the color gamut of any bitmaps you later [export][toFile] from the Canvas. It also sets the range of colors used when one Canvas is [drawn][drawcanvas] to another.
+- The `willReadFrequently` flag keeps a copy of the Canvas's backing bitmap in memory so repeated calls to `getImageData` don't need to re-render the content each time. Note that the bitmap will remain in memory until the Canvas is garbage collected.
+
+You can also create a new Canvas with content pre-drawn to it by pointing [`loadCanvas()`][loadcanvas] at a bitmap, SVG, or PDF file. This is most useful for loading multi-page PDFs, since it preserves their structure and sizing, drawing each PDF page into its own context in the Canvas's [`pages`][canvas_pages] array. For other file types, only a single page will be created. Consider using [`loadCanvas()`][loadcanvas] when you want to draw **on** an existing file's contents, and use [`loadImage()`][loadimage] when you want to draw a file's contents **to** another Canvas.
+
+
 ## Saving graphics to files, buffers, and strings
 
 In order to be capable of generating both vector and bitmap graphics from your canvases, Skia Canvas defers rendering until you call one of its export methods. When the canvas renders images and writes them to disk, it does so in a background thread so as not to block execution within your script (allowing for multiple images to render in parallel).
@@ -70,12 +93,38 @@ An optional text-rendering argument can be included when creating a new Canvas a
 ## Choosing a Rendering Engine
 
 ```js
-new Canvas(512, 512, {gpu:false}) // use CPU-based rendering
+new Canvas(512, 512, {gpu: false}) // use CPU-based rendering
 ```
 
 By default, Skia will make use of your system’s GPU for faster rendering. You can toggle this on and off after creating a canvas object by reassigning its [`gpu` property][canvas_gpu] (see below), or you can pass a `gpu` option to the constructor when creating it in the first place. In general, you'll get significantly better performance from the GPU when rendering complex scenes (i.e., those with a large number of drawing operations).
 
-The main scenario in which you should consider disabling the `gpu` is when you are repeatedly accessing the canvas’s [bitmap data][ctx_imagedata] from your JavaScript code rather than writing it to the filesystem. In those cases the overhead of copying the pixels between GPU and CPU memory may outweigh any potential speedup in rendering.
+The main scenario in which you should consider disabling the `gpu` is when you are repeatedly accessing the canvas’s [bitmap data][ctx_imagedata] from your JavaScript code rather than writing it to the filesystem and you have a *discrete* GPU with its own dedicated memory pool. In those cases the overhead of copying the pixels between GPU and CPU memory may outweigh any potential speedup in rendering.
+
+## Cleaning Up
+
+When you're done with a Canvas, just let its reference go out of scope and the Node garbage collector will release its system memory and GPU resources during the next sweep. Note, however, that the garbage collector only runs in between event loop ticks, so if you're creating a large number of temporary canvases (especially in a tight, **synchronous** loop) a lot of unfreed memory can build up.
+
+You can keep memory usage under control in these situations by using explicit resource management. On Node 24+ you can use the [`using`][using] or [`await using`][await_using] keywords to automatically free resources when the Canvas goes out of scope. On Node 22 and earlier you'll want to call the [`dispose()`](#dispose) or [`release()`](#release) methods directly for the same effect.
+
+In synchronous loops, prefer the `using` keyword:
+```js
+for (let i=0; i<9999; i++) {
+  using canvas = new Canvas(512, 512)
+  const ctx = canvas.getContext('2d')
+  // ...draw...
+  canvas.toFileSync(`out/frame-${i}.png`)
+} // ← calls canvas.dispose() at the end of each loop iteration
+```
+
+In async loops it's less necessary, but the `await using` keyword will still keep memory usage measurably lower:
+```js
+for (let i=0; i<9999; i++) {
+  await using canvas = new Canvas(512, 512)
+  const ctx = canvas.getContext('2d')
+  // ...draw...
+  await canvas.toFile(`out/frame-${i}.png`)
+} // ← calls canvas.release() at the end of each loop iteration
+```
 
 --------
 
@@ -99,11 +148,39 @@ The `.engine` property is a read-only object that provides you with a status rep
 
 ### `.pages`
 
-The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the `newPage()` method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
+The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the [`newPage()`][newPage] method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
+
+You can also use each of the Contexts in the `pages` array as a drawing source that can be passed to [`drawImage()`][drawimage] to produce a bitmap or [`drawCanvas()`][drawcanvas] to draw the page's contents as a vector:
+
+```js
+let canvas = new Canvas(512, 512)
+let s = canvas.width/2
+
+// draw four single-color pages
+for (let [i, color] of ['red', 'orange', 'skyblue', 'olive'].entries()){
+  let ctx = canvas.newPage()
+  ctx.fillStyle = color
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  ctx.fillStyle = 'black'
+  ctx.textAlign = 'center'
+  ctx.fillText(`page ${i+1}`, s, s)
+}
+
+// add a fifth page with all the previous pages drawn to it
+let ctx = canvas.newPage()
+ctx.drawImage( canvas.pages[0], 0, 0, s, s) // rasterized
+ctx.drawImage( canvas.pages[1], s, 0, s, s) // rasterized
+ctx.drawCanvas(canvas.pages[2], 0, s, s, s) // drawn as vector
+ctx.drawCanvas(canvas.pages[3], s, s, s, s) // drawn as vector
+```
+
+### `.disposed`
+
+The `.disposed` flag identifies when the canvas's resources have been freed and it is no longer valid as a drawing source or target. It will be `false` until the canvas's [`dispose()`](#dispose) or [`release()`](#release) method is called.
 
 ### `pdf`, `svg`, `png`, `jpg`, `webp`, & `raw`
 
-These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included unless you’ve accessed the `.pdf` property in which case the buffer will contain a multi-page PDF. The `raw` property will produce a buffer containing unencoded pixels using `rgba` order.
+These properties are syntactic sugar for calling the `toBuffer()` method. Each returns a [Promise][Promise] that resolves to a Node [`Buffer`][Buffer] object with the contents of the canvas in the given format. If more than one page has been added to the canvas, only the most recent one will be included. The exception to this is the `.pdf` property, which will return a buffer containing a multi-page PDF. The `raw` property will produce a buffer containing unencoded pixels using `rgba` order.
 
 --------
 
@@ -111,10 +188,12 @@ These properties are syntactic sugar for calling the `toBuffer()` method. Each r
 
 ### `newPage()`
 ```js returns="CanvasRenderingContext2D"
-newPage(width, height)
+newPage(width, height, {colorSpace, willReadFrequently})
 ```
 
-This method allows for the creation of additional drawing contexts that are fully independent of one another but will be part of the same output batch. It is primarily useful in the context of creating a multi-page PDF but can be used to create multi-file image-sequences in other formats as well. Creating a new page with a different size than the previous one will update the parent Canvas object’s `.width` and `.height` attributes but will not affect any other pages that have been created previously.
+This method allows for the creation of additional drawing contexts that are fully independent of one another but will be part of the same output batch. It is primarily useful in the context of creating a multi-page PDF but can be used to create multi-file image-sequences in other formats as well.
+
+Creating a new page with a different size than the previous one will update the parent Canvas object’s `.width` and `.height` attributes but will not affect any other pages that have been created previously. Likewise, the optional settings argument can choose a different color space or read-frequency that will apply only to the newly created page.
 
 The method’s return value is a `CanvasRenderingContext2D` object which you can either save a reference to or recover later from the `.pages` array.
 
@@ -126,16 +205,17 @@ toFile(filename, {
   format,
   density=1,
   quality=0.92,
-  msaa=true,
-  outline=false,
-  downsample=false,
-  colorType='rgba'
+  msaa=false,
+  outline=false,      // svg only
+  downsample=false,   // jpeg only
+  colorType='rgba',   // raw only
+  premultiplied=false // raw only
 })
 ```
 
 ##### Synchronous version
 ```js returns="void"
-toFileSync(filename, {page, matte, format, density, quality, msaa, outline, downsample, colorType})
+toFileSync(filename, {page, matte, format, density, quality, msaa, outline, downsample, colorType, premultiplied})
 ```
 
 The `toFile` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
@@ -166,10 +246,10 @@ canvas.toFile('image@3x.png') // equivalent to setting the density to 3
 ```
 
 #### msaa
-The `msaa` argument allows you to control the number of samples used for each pixel by the GPU's multi-scale antialiasing (common values are `2`, `4`, & `8`, corresponding to 2𝗑, 4𝗑, or 8𝗑 sampling). Higher values will produce smoother-looking images but also increase resource usage. Setting the value to `false` will disable MSAA and use (slower but potentially higher-quality) shader-based AA routines instead. If omitted, the renderer defaults to 4x MSAA as it produces good results with relatively low overhead.
+The `msaa` option allows you to enable multi-scale antialiasing on the GPU and select the number of samples per pixel (common values are `2`, `4`, or `8`). If omitted (or set to `false` or `0`), multisampling is disabled and shader-based AA is used instead, which is typically faster and also a closer match to the results produced by the CPU-based renderer. Text rendering is unaffected by this setting.
 
 #### quality
-The `quality` option is a number between 0 and 1.0 that controls the level of compression both when making JPEG or WEBP files directly and when embedding them in a PDF. If omitted, quality will default to 0.92.
+The `quality` option is a number between 0 and 1.0 that controls the level of compression both when making JPEG or WEBP files directly and when embedding them in a PDF. For lossless PNG exports, the `quality` setting controls the level of zlib compression, so higher values will yield smaller files but take longer to encode. If omitted, quality will default to 0.92.
 
 #### outline
 :::warning[SVG format only]
@@ -194,6 +274,14 @@ When exporting to JPEG, you can enable 4:2:0 [chroma subsampling][chroma_subsamp
 
 Specifies the color type to use when exporting pixel data in `"raw"` format (for other formats this setting has no effect). If omitted, defaults to `"rgba"`. See the ImageData documentation for a [list of supported `colorType` formats][imgdata_colortype]
 
+
+#### premultiplied
+
+:::warning[RAW format only]
+*Default value: __`false`__*
+:::
+
+By default, pixel values in `"raw"` exports will use ‘straight’ (unpremultiplied) alpha, mirroring the representation used in an [ImageData][imagedata] object's buffer. Internally, the GPU stores pixels using premultiplied values and only converts them on export. By setting the optional `premultiplied` option to `true`, you can have it skip this conversion (which can be lossy at low opacities) and use the format typically preferred by other GPU-backed graphics pipelines.
 
 ### `toBuffer()`
 ```js returns="Promise<Buffer>"
@@ -228,7 +316,7 @@ toSharpSync({page, matte, msaa, density})
 The Sharp library is an optional dependency that you must [install separately][sharp_npm]:
 :::
 
-The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
+The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The `colorSpace` chosen upon creating the Canvas's context will be preserved as an ICC profile. The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
 
 Note that while this method returns synchronously, you will need to `await` most operations on the resulting Sharp object:
 
@@ -241,20 +329,94 @@ As a result, when using method-chaining you'll want to `await` the whole thing:
 await canvas.toSharp().heif({compression:'hevc'}).toFile("image.heif")
 ```
 
+
+### `dispose()`
+```js returns="void"
+dispose()
+```
+
+Synchronously frees all resources associated with the Canvas and marks it as [`disposed`](#disposed) (preventing future drawing operations or exports). This is the method called behind the scenes by the [`using`][using] keyword when the canvas reference goes out of scope.
+
+```js
+for (let i=0; i<9999; i++) {
+  const canvas = new Canvas(512, 512)
+  try {
+    const ctx = canvas.getContext('2d')
+    // ...draw...
+    canvas.toFileSync(`out/frame-${i}.png`)
+  } finally {
+    canvas.dispose() // synchronously free the canvas
+  }
+}
+```
+
+
+### `release()`
+```js returns="Promise<void>"
+release()
+```
+
+Synchronously frees all resources associated with the Canvas and marks it as [`disposed`](#disposed), then asychronously yields to the event loop (which has the side effect of running any deferred finalizers for *other* objects as well). This is the method called by the [`await using`][await_using] keyword when the canvas reference goes out of scope.
+
+```js
+for (let i=0; i<9999; i++) {
+  const canvas = new Canvas(512, 512)
+  try {
+    const ctx = canvas.getContext('2d')
+    // ...draw...
+    await canvas.toFile(`out/frame-${i}.png`)
+  } finally {
+    await canvas.release() // free the canvas and run deferred finalizers
+  }
+}
+```
+
+## Helpers
+
+### `loadCanvas()`
+
+```js returns="Promise<Canvas>"
+loadCanvas(src)                   // all other settings are optional
+loadCanvas(src, {
+  textContrast, textGamma, gpu,   // canvas options
+  colorSpace, willReadFrequently, // context options
+  ...                             // HTTP request options
+})
+```
+
+Similar to the [`loadImage()`][loadimage] utility, `loadCanvas()` will asynchronously fetch an image file from a URL or local file path. But rather than returning an [Image][image] for you to draw manually, it creates a new Canvas (matched to the image's size) with the file's contents already rendered to it. It supports the same sets of [file formats][loadimage_sources] and HTTP [request options][loadimage_request_opts] as `loadImage()`, as well as the set of optional arguments you'd ordinarily pass to the Canvas constructor or `getContext()`:
+- `colorSpace` & `willReadFrequently` for configuring the [drawing context](#creating-new-canvas-objects)
+- `textContrast` & `textGamma` for controlling [font rendering](#controlling-font-rendering)
+- `gpu` for choosing the [rendering engine](#choosing-a-rendering-engine)
+
+Note that if you load a multi-page PDF, all of the pages will be available as individual Contexts in the [`pages`][canvas_pages] attribute, but the Canvas's `width` & `height` will correspond to the *final* page (which is also what [`getContext()`][getContext] will return a reference to). If you'd like to access the dimensions for individual pages, read the `width` and `height` values returned by each page's [`getContextAttributes()`][ctx_attrs].
+
+Use `loadCanvas()` when you want to draw *onto* some existing content and then re-export it. It's especially handy when dealing with multi-page PDFs since you can make your modifications and save a new multi-page copy while keeping the page flow intact. If your goal is to draw an image or a single page *to* another canvas, consider using the [`loadImage()`][loadimage] helper instead.
+
+
 <!-- references_begin -->
 [canvas_gpu]: #gpu
 [canvas_pages]: #pages
 [canvas_tosharp]: #tosharp
 [context]: context.md
+[drawcanvas]: context.md#drawcanvas
+[drawimage]: context.md#drawimage
 [engine]: #engine
 [fonthinting]: context.md#fonthinting
+[ctx_attrs]: context.md#getcontextattributes
+[loadimage]: image.md#loadimage
+[loadimage_sources]: image.md#image-sources
+[loadimage_request_opts]: image.md#loading-urls
 [newPage]: #newpage
+[image]: image.md
+[imagedata]: imagedata.md
 [imgdata_colortype]: imagedata.md#colortype
 [ctx_imagedata]: context.md#createimagedata--getimagedata
 [toFile]: #tofile
 [shorthands]: #pdf-svg-png-jpg-webp--raw
 [toBuffer]: #tobuffer
 [toURL]: #tourl
+[loadcanvas]: #loadcanvas
 [multithreading]: ../getting-started.md#multithreading
 [Buffer]: https://nodejs.org/api/buffer.html
 [chroma_subsampling]: https://en.wikipedia.org/wiki/Chroma_subsampling
@@ -266,4 +428,6 @@ await canvas.toSharp().heif({compression:'hevc'}).toFile("image.heif")
 [toDataURL_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
 [Promise]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
 [CanvasRenderingContext2D]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
+[await_using]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/await_using
+[using]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using
 <!-- references_end -->

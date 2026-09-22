@@ -1,6 +1,7 @@
 ---
 sidebar_position: 1
 title: Getting Started
+toc_max_heading_level: 3
 ---
 ## Installation
 
@@ -9,38 +10,40 @@ If you’re running on a supported platform, installation should be as simple as
 npm install skia-canvas
 ```
 
-This will download a pre-compiled library from the project’s most recent [release](https://github.com/samizdatco/skia-canvas/releases).
+The precompiled binary for your platform will be downloaded automatically as a `@skia-canvas/*` optional dependency, so installation should succeed even if `--ignore-scripts` is enabled or you are using a proxied npm registry mirror. On the other hand, installation will now fail if you have disabled optional dependencies via `--no-optional`, `NPM_CONFIG_OMIT`, etc.
 
+Because optional dependencies are platform-specific, your `node_modules` directory only includes the binary for the machine you originally ran `install` on. Syncing that directory to a server that runs a different OS or architecture may result in a ‘native binary missing’ error when you attempt to run your script remotely.
 
-### `pnpm`
-If you use the `pnpm` package manager, it will not download `skia-canvas`'s platform-native binary unless you explicitly allow it. You can do this interactively via the ‘approve builds’ command (note that you need to press `<space>` to toggle the selection and then `<enter>` to proceed):
+Working around this requires different approaches based on your package manager of choice:
 
-```bash
-pnpm install skia-canvas
-pnpm approve-builds
-```
-In non-interactive scenarios (like building via CI), you can approve the build step when you add `skia-canvas` to your project:
+### `npm`
+
+The default `npm` package manager installs whichever optional depenency matches the *current* machine's OS & architecture by default. But you can also create a `node_modules` folder that's directly shippable to your target platform by specifying its configuration explicitly:
 
 ```bash
-pnpm install skia-canvas --allow-build=skia-canvas
+npm ci --os=linux --cpu=x64 --libc=glibc # (or --libc=musl)
 ```
 
-Alternatively, you can add a [`pnpm.onlyBuiltDependencies`](https://pnpm.io/9.x/package_json#pnpmonlybuiltdependencies) entry to your `package.json` file to mark the build-step as allowed:
-```json
-{
-  "pnpm": {
-    "onlyBuiltDependencies": ["skia-canvas"]
-  }
-}
+> Note that the `--libc` flag is only supported on npm 10.4+, so you may need to upgrade `npm` first if you want to select a `musl` target.
+
+### `pnpm` or `yarn`
+
+You can add a `supportedArchitectures` snippet to your `pnpm-workspace.yaml` or `.yarnrc.yml` configuration that supports both your development machine (`current`) and the system you plan to deploy to (e.g., x64 Linux for both glibc and musl-based distributions):
+
+```yml
+supportedArchitectures:
+  os: [current, linux]
+  cpu: [current, x64]
+  libc: [current, glibc, musl]
 ```
 
-
+Once this is in place, you can run `pnpm install` or `yarn install` and the generated lockfile will contain all the specified optional dependencies. If you're adding this to an existing project, you may want to delete the existing lockfile before running `install` to ensure it picks up the change.
 
 ## Platform Support
 
-Skia Canvas runs on Linux, macOS, or Windows as well as serverless platforms like Vercel and AWS Lambda. Precompiled versions of the library’s native code will be automatically downloaded in the appropriate architecture (`arm64` or `x64`) when you install it via npm.
+Skia Canvas runs on Linux, macOS, or Windows as well as serverless platforms like Vercel, Cloudflare Containers, and AWS Lambda. Precompiled versions of the library’s native code will be automatically downloaded in the appropriate architecture (`arm64` or `x64`) when you install it via npm.
 
-The underlying Rust library uses [N-API][node_napi] v8 which allows it to run on all [currently supported](https://nodejs.org/en/about/previous-releases) Node.js releases, and it is backward compatible with versions going back to v12.22+, v14.17+, v15.12+, and v16+.
+The underlying Rust library uses [N-API][node_napi] v8 which allows it to run on all [currently supported](https://nodejs.org/en/about/previous-releases) Node.js releases, and it is backward compatible with versions going back to Node 18.0.
 
 ### Linux
 
@@ -59,16 +62,37 @@ If you wish to use Alpine as the underlying distribution, you can start with som
 FROM node:alpine
 ```
 
+Whichever distribution you choose, you'll probably want to bundle the `node_modules` folder into the container image itself so you can ensure it includes the correct optional dependencies for the target architecture:
+
+```dockerfile
+FROM node:lts-slim
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY . .
+
+USER node
+CMD ["node", "your-script-name.js"]
+```
+
+You'll also want to make sure that your project's `.dockerignore` contains `node_modules`, so your local copy doesn't partially overwrite and corrupt the version that's created by `npm ci`.
+
+### Cloudflare
+
+To use Skia Canvas as part of a Cloudflare Worker process, you must first create a docker container with its dependencies and [deploy](https://developers.cloudflare.com/containers/guides/deploy/) it to [Cloudflare Containers](https://developers.cloudflare.com/containers/). Start with a Dockerfile like those described in the previous section, but ensure that it's building for the `linux/amd64` configuration that Cloudflare supports:
+
+```dockerfile
+FROM node --platform=linux/amd64
+```
+
 ### AWS Lambda
 
 Skia Canvas depends on libraries that aren't present in the standard Lambda [runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html). You can add these to your function by uploading a ‘[layer](https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html)’ (a zip file containing the required libraries and `node_modules` directory) and configuring your function to use it.
 
+<details>
 
-<details><summary>
-
-**Detailed AWS instructions**
-
-</summary>
+<summary><b>Detailed AWS instructions</b> (click to expand)</summary>
 
 #### Adding the Skia Canvas layer to your AWS account
 
@@ -83,7 +107,7 @@ Skia Canvas depends on libraries that aren't present in the standard Lambda [run
 Alternatively, you can use the [`aws` command line tool](https://github.com/aws/aws-cli) to create the layer. This bash script will fetch the skia-canvas version of your choice and make it available to your Lambda functions.
 ```sh
 #!/usr/bin/env bash
-VERSION=3.0.8 # the skia-canvas version to include
+VERSION=4.0.0 # the skia-canvas version to include
 PLATFORM=arm64 # arm64 or x64
 
 curl -sLO https://github.com/samizdatco/skia-canvas/releases/download/v${VERSION}/aws-lambda-${PLATFORM}.zip
@@ -91,7 +115,7 @@ aws lambda publish-layer-version \
     --layer-name "skia-canvas" \
     --description "Skia Canvas ${VERSION} layer" \
     --zip-file "fileb://aws-lambda-${PLATFORM}.zip" \
-    --compatible-runtimes "nodejs20.x" "nodejs22.x" \
+    --compatible-runtimes "nodejs22.x" "nodejs24.x" \
     --compatible-architectures "${X/#x/x86_}"
 ```
 
@@ -137,7 +161,7 @@ Start by installing:
   5. The [Ninja](https://ninja-build.org) build system
   6. On Linux: Fontconfig and OpenSSL
 
-[Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. The Dockerfiles in the [containers](https://github.com/samizdatco/skia-canvas/tree/main/containers) directory may also be useful for identifying needed dependencies. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
+[Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. The Dockerfiles in the [containers](https://github.com/samizdatco/skia-canvas/tree/main/containers) directory may also be useful for identifying needed dependencies. Once all the necessary compilers and libraries are present, running `npm install` followed by `npm run build` will give you a usable library (after a fairly lengthy compilation process).
 
 ## Global Settings
 
@@ -152,6 +176,29 @@ For example, you can limit your asynchronous processing to two simultaneous task
 SKIA_CANVAS_THREADS=2 node my-canvas-script.js
 ```
 
+### Render Cache
+
+Skia Canvas defers rendering until the canvas is exported in order allow a single canvas to be rendered as both a vector and a bitmap. As a result, it needs to re-execute all the canvas's drawing commands every time a bitmap is requested—even if nothing has changed since it was last rasterized. To avoid this wasted work, rendered bitmaps are cached internally and reused if possible, improving execution speed at the cost of some memory.
+
+By default, the cache is set to a maximum of **128MB** (enough to contain ~32 rasters at 720p resolution), but you can adjust this to fit your use case via the `SKIA_CANVAS_CACHE` environment variable. Caching can be disabled altogether by setting it to `0` or `off`, and a different maximum size can be set by passing a number (representing a number of megabytes):
+
+```bash
+SKIA_CANVAS_CACHE=0 node script.js   # `0`/`off` disable the render cache altogether
+SKIA_CANVAS_CACHE=256 node script.js # set the maximum size to double the default
+```
+
+### Memory Fragmentation
+> Note: this only applies to Linux systems using the `glibc` C Library
+
+The memory allocator used by `glibc` does not return memory to the kernel the moment it's freed. Instead it maintains its own internal cache of reusable memory regions and only releases memory if a *contiguous* empty region sits at the very end of its arena. As a result, this can allow RSS to balloon if empty blocks of memory are punctuated by even a single small allocation.
+
+Since that kind of fragmentation occurs quite frequently with canvas workflows (e.g., large export buffers interleaved with small Color and Path2D allocations), Skia Canvas calls `malloc_trim` intermittently to release unoccupied memory chunks even if they're not at the end of the arena. There is a marginal performance cost in exchange for the lower memory ceiling this maintains so you can tune the behavior to be more or less aggressive via the `SKIA_CANVAS_TRIM` environment variable:
+
+```bash
+SKIA_CANVAS_TRIM=0 node script.js     # `0`/`off` disable the `malloc_trim` calls altogether
+SKIA_CANVAS_TRIM=eager node script.js # `eager` lowers the threshold and runs more frequently
+```
+
 ### Argument Validation
 
 There are a number of situations where the browser API will react to invalid arguments by silently ignoring the method call rather than throwing an error. For example, these lines will simply have no effect:
@@ -161,10 +208,11 @@ ctx.fillRect(0, 0, 100, "october")
 ctx.lineTo(NaN, 0)
 ```
 
+Skia Canvas does its best to emulate these quirks, but allows you to opt into a stricter mode in which it will throw TypeErrors in these situations (which can be useful for debugging). Set `SKIA_CANVAS_STRICT` to `1` or `true` to enable strict mode:
 
-Skia Canvas does its best to emulate these quirks, but allows you to opt into a stricter mode in which it will throw TypeErrors in these situations (which can be useful for debugging).
-
-Set the `SKIA_CANVAS_STRICT` environment variable to `1` or `true` to enable this mode.
+```bash
+SKIA_CANVAS_STRICT=1 node script.js
+```
 
 <!-- references_begin -->
 [canvas]: api/canvas.md

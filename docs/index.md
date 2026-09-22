@@ -12,39 +12,62 @@ sidebar_label: "About"
 
 </div>
 
-Skia Canvas is a Node.js implementation of the HTML Canvas drawing [API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) for both on- and off-screen rendering. Since it uses Google’s [Skia](https://skia.org) graphics engine, its output is very similar to Chrome’s [`<canvas>`](https://html.spec.whatwg.org/multipage/canvas.html) element — though it's also capable of things the browser’s Canvas still can't achieve.
+Skia Canvas is an implementation of the [HTML Canvas](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) drawing API that runs in [Node.js](https://nodejs.org/en) on Mac, Linux, and Windows systems. Depending on your needs, you can use it as:
+  1. **A spec-compliant offscreen canvas:** it accepts the same drawing code you'd write for a browser but can run on servers and in other ‘headless’ contexts to generate image files and buffers.
+  2. **A windowing toolkit:** it can open native [windows][window] on macOS, Windows, and Linux with [display-synced][win_animation] drawing and browser-inspired [event handling][win_events].
+  3. **A JavaScript interface for the Skia graphics library:** it uses familiar web APIs as a front-end to Google’s sophisticated [imaging engine](https://skia.org), rendering with high-performance native code (and optional GPU acceleration).
 
-In particular, Skia Canvas:
 
-  - generates images in vector (PDF & SVG) as well as bitmap (JPEG, PNG, & WEBP) formats
-  - can draw to interactive GUI [windows][window] and provides a browser-like [event][win_bind] framework
-  - can save images to [files][toFile], encode to [dataURL][toURL] strings, and return [Buffers][toBuffer] or [Sharp][sharp] objects
-  - uses native threads in a [user-configurable][multithreading] worker pool for asynchronous rendering and file I/O
-  - can create [multiple ‘pages’][newPage] on a given canvas and then [output][toFile] them as a single, multi-page PDF or an image-sequence saved to multiple files
-  - can [simplify][p2d_simplify], [blunt][p2d_round], [combine][bool-ops], [excerpt][p2d_trim], and [atomize][p2d_points] Bézier paths using [efficient](https://www.youtube.com/watch?v=OmfliNQsk88) boolean operations or point-by-point [interpolation][p2d_interpolate]
-  - provides [3D perspective][createProjection()] transformations in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
-  - can fill shapes with vector-based [Textures][createTexture()] in addition to bitmap-based [Patterns][createPattern()] and supports line-drawing with custom [markers][lineDashMarker]
-  - supports the full set of [CSS filter][filter] image processing operators
-  - offers rich typographic control including:
+
+### A More Capable Canvas
+
+In addition to being a faithful emulation of the [canvas standard](https://html.spec.whatwg.org/multipage/canvas.html), Skia Canvas includes a raft of extensions, adding 2D capabilities that reach well beyond what the browser’s `<canvas>` can do.
+
+In particular, Skia Canvas can:
+
+  - generate images in vector (PDF & SVG) as well as bitmap (JPEG, PNG, WEBP, & RAW) formats
+  - save images to [files][toFile], encode to [dataURL][toURL] strings, and return [Buffers][toBuffer] or [Sharp][sharp] objects
+  - create [multiple ‘pages’][newPage] on a given canvas and [output][toFile] them as a multi-page PDF or an image-sequence saved to multiple files
+  - load [PDFs & SVGs][loadimage] as scalable vector images or open a [multi-page PDF][loadcanvas] as an editable canvas
+  - render in wide-gamut Display P3 color with [CSS Color 4][ctx_colors] syntax support
+  - [slice][p2d_slice] & [sample][p2d_points] Path2D objects, combine them with [boolean operators][bool-ops], and decompose them into [contours][p2d_contours], [verbs][edges], or [points][p2d_positionAt]
+  - transform coordinates using [3D perspective][createProjection()] in addition to [scaling][scale()], [rotation][rotate()], and [translation][translate()]
+  - fill paths with vector-based [Textures][createTexture()] or bitmap [Patterns][createPattern()] and draw strokes with custom [markers][lineDashMarker]
+  - apply the full set of [CSS filter][filter] image processing operators
+  - provide rich typographic control including:
     - multi-line, [word-wrapped][textwrap] text
     - line-by-line [text metrics][c2d_measuretext]
-    - small-caps, ligatures, and other opentype features accessible using standard [font-variant][fontvariant] syntax
+    - small-caps, ligatures, and other [opentype features][fontfeatures] accessible using standard [font-variant][fontvariant] syntax
     - proportional [letter-spacing][letterSpacing], [word-spacing][wordSpacing], and [leading][c2d_font]
-    - support for [variable fonts][VariableFonts] and transparent mapping of weight values
+    - support for [variable fonts][VariableFonts] and automatic use of weight, width, and optical-sizing axes
     - use of non-system fonts [loaded][fontlibrary-use] from local files
-  - can be used for server-side image rendering on standard Linux hosts and ‘serverless’ platforms like Vercel and AWS Lambda
+  - use native threads in a [user-configurable][multithreading] worker pool for asynchronous rendering and file I/O
+  - render images server-side on standard Linux hosts and ‘serverless’ platforms like Vercel, Cloudflare Containers, and AWS Lambda
+
+## Installing Skia Canvas
+
+If you’re running on a supported platform, installation should be as simple as:
+
+```bash
+npm install skia-canvas
+```
+
+For detailed [installation][installation] instructions and runtime [configuration][global_settings] options, take a look at the [Getting Started][getting_started] page.
 
 ## Example Usage
 
+Skia Canvas's classes and extensions to the standard are extensively covered in the [API Documentation][api_docs]. But to give you a sense of  some of things you can achieve with it, here are some real-world examples:
+
 ### Generating image files
 
-```js
+```js view="rainbox.png|assets/examples/generating-image-files@2x.png"
 import {Canvas} from 'skia-canvas'
 
 let canvas = new Canvas(400, 400),
     ctx = canvas.getContext("2d"),
     {width, height} = canvas;
 
+// draw an empty box with a gradient at its edges
 let sweep = ctx.createConicGradient(Math.PI * 1.2, width/2, height/2)
 sweep.addColorStop(0, "red")
 sweep.addColorStop(0.25, "orange")
@@ -55,32 +78,26 @@ ctx.strokeStyle = sweep
 ctx.lineWidth = 100
 ctx.strokeRect(100,100, 200,200)
 
-// render to multiple destinations using a background thread
-async function render(){
-  // save a ‘retina’ image...
-  await canvas.saveAs("rainbox.png", {density:2})
-  // ...or use a shorthand for canvas.toBuffer("png")
-  let pngData = await canvas.png
-  // ...or embed it in a string
-  let pngEmbed = `<img src="${await canvas.toDataURL("png")}">`
-}
-render()
+// render to multiple destinations using a background thread...
+await canvas.toFile("rainbox.png", {density:2}) // save a ‘retina’ image
+let pngData = await canvas.png // use a shorthand for canvas.toBuffer("png")
+let pngEmbed = `<img src="${await canvas.toURL("png")}">` // embed it in a string
 
 // ...or save the file synchronously from the main thread
-canvas.saveAsSync("rainbox.pdf")
+canvas.toFileSync("rainbox.pdf")
 ```
 
 ### Multi-page sequences
 
-```js
-import {Canvas} from 'skia-canvas'
+```js view="all-pages-labeled.pdf|assets/examples/multi-page-sequences.pdf"
+import {Canvas, loadCanvas} from 'skia-canvas'
 
 let canvas = new Canvas(400, 400),
-    ctx = canvas.getContext("2d"),
+    ctx = canvas.getContext("2d"), // leave first page blank
     {width, height} = canvas
 
 for (const color of ['orange', 'yellow', 'green', 'skyblue', 'purple']){
-  ctx = canvas.newPage()
+  ctx = canvas.newPage() // add pages 2–6
   ctx.fillStyle = color
   ctx.fillRect(0,0, width, height)
   ctx.fillStyle = 'white'
@@ -88,19 +105,23 @@ for (const color of ['orange', 'yellow', 'green', 'skyblue', 'purple']){
   ctx.fill()
 }
 
-async function render(){
-  // save to a multi-page PDF file
-  await canvas.saveAs("all-pages.pdf")
+await canvas.toFile("page-{2}.png")  // save to files named `page-01.png`, `page-02.png`, etc.
+await canvas.toFile("all-pages.pdf") // save to a single multi-page PDF file
 
-  // save to files named `page-01.png`, `page-02.png`, etc.
-  await canvas.saveAs("page-{2}.png")
+// the multi-page PDF can be read back in and even drawn upon
+let multipage = await loadCanvas("all-pages.pdf")
+for (let [i, pg] of multipage.pages.entries()){
+  pg.font = 'italic 12px serif'
+  pg.textAlign = 'center'
+  pg.textBaseline = 'middle'
+  pg.fillText(`p. ${i+1}`, multipage.width/2, multipage.height/2)
 }
-render()
+await multipage.toFile("all-pages-labeled.pdf")
 ```
 
 ### Rendering to a window
 
-```js
+```js view="screenshot|assets/examples/rendering-to-a-window@2x.png"
 import {Window} from 'skia-canvas'
 
 let win = new Window(300, 300)
@@ -119,9 +140,51 @@ win.on("draw", e => {
 })
 ```
 
+
+### Wide-gamut colors
+
+```js view="test-pattern.png|assets/examples/wide-gamut-colors@2x.png"
+import {Canvas} from 'skia-canvas'
+
+let pad = 16, size = 64, width = 4*size + 3*pad,
+    canvas = new Canvas(336, 240),
+    ctx = canvas.getContext("2d", {colorSpace:"display-p3"})
+
+// CSS Color 4 syntax is supported everywhere (and colors can exceed the sRGB gamut)
+for (let [p3, srgb] of [
+  ["color(display-p3 1 0 0)", "#ff0000"], ["lch(75% 100 150)", "#00dc51"],
+  ["lch(85% 80 170)", "#00f8b6"], ["color(display-p3 0 1 1)", "#00ffff"]
+]){
+  ctx.fillStyle = p3 // wide gamut color
+  ctx.fillRect(pad, pad, size, size/2)
+  ctx.fillStyle = srgb  // nearest sRGB equivalent
+  ctx.fillRect(pad, pad + size/2, size, size/2)
+  ctx.translate(size + pad, 0)
+}
+ctx.translate(-width, pad + size)
+
+// gradients can select the color space used for interpolation
+for (let {space, from, to, hue} of [
+  {space:"srgb",  from:"navy", to:"gold"}, // perceptual midpoint is off-center
+  {space:"oklab", from:"navy", to:"gold"}, // Oklab stays perceptually uniform
+  {space:"oklch", from:"red",  to:"red", hue:"longer"}, // full 360° from a single hue
+]){
+  let ramp = ctx.createLinearGradient(0, pad, width, pad)
+  if (hue) ramp.hueInterpolationMethod = hue // only applies to angle-based spaces
+  ramp.colorInterpolationMethod = space
+  ramp.addColorStop(0, from)
+  ramp.addColorStop(1, to)
+  ctx.fillStyle = ramp
+  ctx.fillRect(0, pad, width, size/2)
+  ctx.translate(0, pad + size/2)
+}
+
+await canvas.toFile("test-pattern.png")
+```
+
 ### Integrating with [Sharp.js][sharp]
 
-```js
+```js view="sharp exports|assets/examples/integrating-with-sharp@2x.png"
 import sharp from 'sharp'
 import {Canvas, loadImage} from 'skia-canvas'
 
@@ -146,7 +209,7 @@ await imgData.toSharp().grayscale().png().toFile("black-and-white.png")
 let sharpImage = sharp({create:{ width:x, height:y, channels:4, background:"skyblue" }})
 let canvasImage = await loadImage(sharpImage)
 ctx.drawImage(canvasImage, x, 0)
-await canvas.saveAs('mosaic.png')
+await canvas.toFile('mosaic.png')
 ```
 
 ## Benchmarks
@@ -199,26 +262,35 @@ In these benchmarks, Skia Canvas is tested running in two modes: serial and asyn
 | *skia-canvas (async)* [👁️](https://github.com/samizdatco/canvas-benchmarks/blob/main/results/darwin-arm64/2025-09-26/snapshots/text_skia-async.png) | `   4 ms` | ` 819 ms` ![ ](./assets/benchmarks.svg#text_skia-async) |
 
 <!-- references_begin -->
-[bool-ops]: api/path2d.md#complement-difference-intersect-union-and-xor
+[bool-ops]: api/path2d.md#complement-difference-intersect-union-xor
 [c2d_font]: api/context.md#font
 [c2d_measuretext]: api/context.md#measuretext
 [createProjection()]: api/context.md#createprojection
 [createTexture()]: api/context.md#createtexture
+[edges]: api/path2d.md#edges
 [fontlibrary-use]: api/font-library.md#use
 [fontvariant]: api/context.md#fontvariant
+[fontfeatures]: api/context.md#fontfeaturesettings
 [lineDashMarker]: api/context.md#linedashmarker
+[loadimage]: api/image.md#loadimage
 [newPage]: api/canvas.md#newpage
-[p2d_interpolate]: api/path2d.md#interpolate
+[p2d_contours]: api/path2d.md#contours
 [p2d_points]: api/path2d.md#points
-[p2d_round]: api/path2d.md#round
-[p2d_simplify]: api/path2d.md#simplify
-[p2d_trim]: api/path2d.md#trim
+[p2d_positionAt]: api/path2d.md#positionat
+[p2d_slice]: api/path2d.md#slice
 [toFile]: api/canvas.md#tofile
 [textwrap]: api/context.md#textwrap
 [toBuffer]: api/canvas.md#tobuffer
 [toURL]: api/canvas.md#tourl
-[win_bind]: api/window.md#on--off--once
+[win_events]: api/window.md#events
+[win_animation]: api/window.md#events-for-animation
 [window]: api/window.md
+[loadcanvas]: api/canvas.md#loadcanvas
+[ctx_colors]: api/context.md#choosing-colors
+[api_docs]: /api
+[getting_started]: getting-started.md
+[installation]: getting-started.md#installation
+[global_settings]: getting-started.md#global-settings
 [multithreading]: getting-started.md#multithreading
 [sharp]: https://sharp.pixelplumbing.com
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide

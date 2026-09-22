@@ -5,19 +5,35 @@ description: The drawing API for a particular Canvas
 
 > Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
-| Canvas State                           | Drawing                                      | Pattern & Color                                  | Line Style                              | Transform                                         | Bezier Paths                             | Font Style                         | Text Layout                                             | Images                                                       | Compositing & Effects                                    |
-|----------------------------------------|----------------------------------------------|--------------------------------------------------|-----------------------------------------|---------------------------------------------------|------------------------------------------|------------------------------------|---------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------|
-| [**canvas**][canvas_attr] [🧪][canvas] | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**font**][font] [🧪][c2d_font]    | [**direction**][direction]                              | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
-| [beginPath()][beginPath()]             | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                   | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]       | [lineTo()][lineTo()]                     | [**fontHinting** 🧪][fonthinting]  | [**textAlign**][textAlign] / [🧪][c2d_textAlign]         | [**imageSmoothingQuality**][imageSmoothingQuality]           | [**globalAlpha**][globalAlpha]                           |
-| [closePath()][closePath()]             | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()]   | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontStretch**][fontStretch]     | [**textBaseline**][textBaseline]                        | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
-| [isPointInPath()][isPointInPath()]     | [fillText()][fillText()] ⧸[🧪][drawText]     | [createLinearGradient()][createLinearGradient()] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]⧸[🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontVariant** 🧪][fontvariant]  | [**textDecoration** 🧪][textDecoration]                 | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
-| [isPointInStroke()][isPointInStroke()] | [strokeText()][strokeText()] ⧸[🧪][drawText] | [createRadialGradient()][createRadialGradient()] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**letterSpacing**][letterSpacing] | [**textWrap** 🧪][textwrap]                             | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
-| [save()][save()]                       | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**wordSpacing**][wordSpacing]     | [measureText()][measureText()] / [🧪][c2d_measuretext]    | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
-| [restore()][restore()]                 | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           |                                    | [outlineText() 🧪][outlineText()]                       | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
-| [reset()][reset()]                     |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   |                                    |                                                         |                                                              |                                                          |
-| [clip()][clip()]                       |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         |                                    |                                                         |                                                              |                                                          |
-|                                        |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               |                                    |                                                         |                                                              |                                                          |
+| Canvas State                                                       | Drawing                                      | Pattern & Color                                  | Line Style                              | Transform                                         | Bezier Paths                             | Font Style                                     | Text Layout                                             | Images                                                       | Compositing & Effects                                    |
+|--------------------------------------------------------------------|----------------------------------------------|--------------------------------------------------|-----------------------------------------|---------------------------------------------------|------------------------------------------|------------------------------------------------|---------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------|
+| [**canvas**][canvas_attr] [🧪][canvas]                             | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**font**][font] [🧪][c2d_font]                | [**direction**][direction]                              | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
+| [getContextAttributes()][getContextAttributes()] / [🧪][ctx_attrs] | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                   | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]       | [lineTo()][lineTo()]                     | [**fontKerning**][fontKerning]                 | [**textAlign**][textAlign] / [🧪][c2d_textAlign]         | [**imageSmoothingQuality**][imageSmoothingQuality]           | [**globalAlpha**][globalAlpha]                           |
+| [beginPath()][beginPath()]                                         | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()] ⧸[🧪][gradients]   | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontStretch**][fontStretch]                 | [**textBaseline**][textBaseline]                        | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
+| [closePath()][closePath()]                                         | [fillText()][fillText()] ⧸[🧪][drawText]     | [createLinearGradient()][createLinearGradient()] ⧸[🧪][gradients] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]⧸[🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontHinting** 🧪][fonthinting]              | [**textDecoration** 🧪][textDecoration]                 | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
+| [isPointInPath()][isPointInPath()]                                 | [strokeText()][strokeText()] ⧸[🧪][drawText] | [createRadialGradient()][createRadialGradient()] ⧸[🧪][gradients] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**fontSmoothing** 🧪][fontsmoothing]          | [**textWrap** 🧪][textwrap]                             | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
+| [isPointInStroke()][isPointInStroke()]                             | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**fontSynthesis** 🧪][fontsynthesis]          | [measureText()][measureText()] / [🧪][c2d_measuretext]    | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
+| [save()][save()]                                                   | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**fontVariant** 🧪][fontvariant]              | [outlineText() 🧪][outlineText()]                       | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
+| [restore()][restore()]                                             |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**fontFeatureSettings** 🧪][fontfeatures]     |                                                         |                                                              |                                                          |
+| [reset()][reset()]                                                 |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**fontVariationSettings** 🧪][fontvariations] |                                                       |                                                              |                                                          |
+| [clip()][clip()]                                                   |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [**letterSpacing**][letterSpacing]             |                                                         |                                                              |                                                          |
+|                                                                    |                                              |                                                  |                                         |                                                   |                                          | [**wordSpacing**][wordSpacing]                 |                                                         |                                                              |                                                          |
 
+
+## Choosing Colors
+
+A number of Context properties ([`fillStyle`][fillStyle], [`strokeStyle`][strokeStyle], [`shadowColor`][shadowColor], etc.) use CSS color strings to specify colors. Skia Canvas supports both the typical named-color & hex formats as well as a number of functional forms from the [CSS Color 4][css_color_4] spec:
+
+| Form | Examples |
+|---|---|
+| hex (3/4/6/8 digit) | `#f00` `#f00a` `#ff0000` `#ff0000aa` |
+| named color | `red` `skyblue` `GhostWhite` |
+| [`rgb()`][rgb_fn] / [`rgba()`][rgb_fn] | `rgb(255, 0, 0)` `rgb(255 0 0 / 50%)` `rgb(100% 0% 0%)` |
+| [`hsl()`][hsl_fn] / [`hsla()`][hsl_fn] / [`hwb()`][hwb_fn] | `hsl(0deg 100% 50% / .5)` `hwb(0 0% 0%)` |
+| [`lab()`][lab_fn] / [`lch()`][lch_fn] | `lab(50% 40 30)` `lch(50 40 30deg)` |
+| [`oklab()`][oklab_fn] / [`oklch()`][oklch_fn] | `oklch(70% 0.2 200deg / 50%)` |
+| [`color()`][color_fn] in predefined colorspaces | `srgb`, `srgb-linear`, `display-p3`, `a98-rgb`, <br/> `prophoto-rgb`, `rec2020`, `xyz`, `xyz-d50`, `xyz-d65` |
+| `none` for any component | `rgb(none 255 0)` → `#00ff00`; `oklch(0.7 none 200)` |
 
 ## Properties
 
@@ -36,17 +52,39 @@ ctx.font = "24px/1.5 Avenir" // sets the line height to 1.5 ems
 
 By default the canvas disables Skia’s [font hinting](https://en.wikipedia.org/wiki/Font_hinting) when rendering text in order to better match the text rendering produced by browsers. To enable hinting, set the context's `.fontHinting` property to `true`. When enabled the results will likely look heavier than the default, but may appear more smoothly antialiased.
 
+### `.fontSmoothing`
+
+Text is rendered with standard greyscale antialiasing and sub-pixel positioning by default. Setting `.fontSmoothing` to `false` disables AA entirely and aligns each glyph to the pixel grid, producing hard-edged letterforms with no shading.
+
+### `.fontSynthesis`
+
+When the family selected via [`.font`][font] doesn’t include a face matching the requested weight or slant, a synthetic bold or oblique will be generated from the nearest real face. Setting `.fontSynthesis` to `false` will disable this, causing the nearest available face to be used as-is. Note that this now defaults to `true` (matching browser behavior) which is a change from earlier versions of Skia Canvas.
+
 ### `.fontVariant`
 
 The context’s [`.font`][font] property follows the CSS 2.1 standard and allows the selection of only a single font-variant type: `normal` vs `small-caps`. The full range of CSS 3 [font-variant][font-variant] values can be used if assigned to the context’s `.fontVariant` property (presuming the currently selected font supports them). Note that setting `.font` will also update the current `.fontVariant` value, so be sure to set the variant *after* selecting a typeface.
 
+### `.fontFeatureSettings`
+
+Takes a CSS [font-feature-settings][font-feature-settings] string, allowing you to enable or disable individual OpenType features by tag (presuming the currently selected font supports them). This setting takes precedence over [`.fontVariant`][fontvariant] and [`.fontKerning`][fontKerning] if they overlap. Assign `"normal"` to clear it.
+
+```js
+ctx.fontFeatureSettings = '"liga" 0, "tnum" 1, "ss01"' // no ligatures, tabular figures, stylistic set 1
+ctx.fontFeatureSettings = "normal" // back to the font’s defaults
+```
+
+### `.fontVariationSettings`
+
+Takes a CSS [font-variation-settings][font-variation-settings] string, giving you low-level control over the individual axes of a [variable font][VariableFonts]. Assign `"normal"` to clear it.
+
+```js
+ctx.fontVariationSettings = '"wght" 625, "opsz" 48'
+ctx.fontVariationSettings = "normal" // back to the font’s defaults
+```
+
 ### `.textAlign`
 
 In addition to the [standard alignment values][textAlign] you may also specify `"justify"`. When justifying text you *must* provide a `width` argument in your call to [`fillText`][drawText]/[`strokeText`][drawText]/etc. so the typesetter knows how much space it needs to fill. Otherwise it will behave as if you had selected `"start"` alignment.
-
-### ~~`.textTracking`~~
-
-**The textTracking property has been removed** and replaced with the now-standard [`letterSpacing`][letterSpacing] property.
 
 ### `.textDecoration`
 
@@ -60,7 +98,7 @@ The standard canvas has a rather impoverished typesetting system, allowing for o
 
 If a Path2D object is assigned to the context’s `lineDashMarker` property, it will be used instead of the default dash pattern when [`setLineDash`][setLineDash()] has been set to a non-empty value. The marker will be drawn at evenly spaced intervals along the path with the distance controlled by the first number in the `setLineDash` array—any subsequent values are ignored.
 
-The marker should be a Path2D object centered on (0, 0). Points to the right of the origin will run parallel to the path being stroked. If the marker path ends with a [`closePath()`][p2d_closePath], the marker will be filled using the current [`strokeStyle`][strokeStyle]. if the path is not closed, it will be stroked using the current [`lineWidth`][lineWidth]/[`join`][lineJoin]/[`cap`][lineCap], [`miterLimit`][miterLimit], and [`strokeStyle`][strokeStyle].
+The marker should be a Path2D object centered on (0, 0). Points to the right of the origin will run parallel to the path being stroked. If the marker path ends with a [`closePath()`][p2d_closePath], the marker will be filled using the current [`strokeStyle`][strokeStyle]. If the path is not closed, it will be stroked using the current [`lineWidth`][lineWidth]/[`join`][lineJoin]/[`cap`][lineCap], [`miterLimit`][miterLimit], and [`strokeStyle`][strokeStyle].
 
 ```js
 // define marker paths
@@ -114,6 +152,15 @@ The `lineDashFit` attribute can be set to `"move"`, `"turn"`, or `"follow"` and 
 ------
 
 ## Methods
+
+### `getContextAttributes()`
+```js returns="{colorSpace, willReadFrequently, width, height}"
+getContextAttributes()
+```
+
+Returns properties describing the settings the context was created with and its dimensions. The `colorSpace` and `willReadFrequently` values will always be unchanged from when the context was originally created (whether by [`getContext()`][getContext] or [`newPage()`][newPage]).
+
+The `width` and `height` properties reflect the final size of the Canvas while that context was the 'current' page. In general, these dimensions will be redundant to just consulting the parent canvas's size. However, they become important when dealing with multi-page canvases, where the parent canvas's `width` and `height` always refer to the **last** page in the [`pages`][canvas_pages] array. The `getContextAttributes()` fields allow you to see the dimensions of each page *independently*.
 
 ### `conicCurveTo()`
 
@@ -213,6 +260,66 @@ ctx.setTransform({a:-2, b:0, c:0, d:-0.5, e:-20, f:-40}) // matrix-like object
 ctx.setTransform([-2, 0, 0, -0.5, -20, -40]) // array
 ctx.setTransform(-2, 0, 0, -0.5, -20, -40) // numeric arguments
 ```
+
+
+
+### `createLinearGradient()`, `createRadialGradient()`, `createConicGradient()`
+```js returns="CanvasGradient"
+createLinearGradient(x0, y0, x1, y1)
+createRadialGradient(x0, y0, r0, x1, y1, r1)
+createConicGradient(startAngle, x, y)
+```
+
+There are three gradient-construction methods, each returning a **CanvasGradient** object that can be used as a `fillStyle` or `strokeStyle`. The ‘create gradient’ call itself is just concerned with the *geometry* of the gradient, defining its spatial range in the canvas's current coordinate space (incorporating any transforms that have been applied).
+
+
+
+For a [linear gradient][createLinearGradient()] you define the starting and stopping locations as simple coordinates. For a [radial gradient][createRadialGradient()], you define two locations but also a *radius* for each and the gradient will create the pattern from circles interpolated between those endpoints. A [conic gradient][createConicGradient()] only needs a single point (the center point of a 360° sweep) and an angle at which to start/stop.
+
+![linear, radial, and conic gradients](../assets/gradients@2x.png)
+
+#### `CanvasGradient` objects
+
+The gradient's colors are defined through a series of calls to [`addColorStop()`][addColorStop()], each of which provides a color string and an `offset` value between `0` and `1` describing (proportionally) where in the transition that color should occur. For example, the ‘linear’ example above was created with:
+
+```js
+let g = ctx.createLinearGradient(0, 0, 200, 200)
+g.addColorStop(0, 'rebeccapurple')
+g.addColorStop(0.5, 'cyan')
+g.addColorStop(1, 'white')
+ctx.fillStyle = g
+ctx.fillRect(0, 0, 200, 200)
+```
+
+Skia Canvas's `CanvasGradient` objects give you additional control over how the colors between the stops are interpolated. Each gradient object has a `colorInterpolationMethod` property (defining its colorspace), a `hueInterpolationMethod` property (controlling how angle-based values are interpolated), and a `premultipliedAlpha` property (allowing you to opt into the transparency model used by normal CSS gradients):
+
+#### `colorInterpolationMethod`
+
+Selects the color space used for calculating the gradient's colors in between the explicit color stops. Defaults to `"srgb"`.
+
+| Coordinate System | Values |
+|-- | -- |
+| Rectangular | `srgb`, `srgb-linear`, `display-p3`, `a98-rgb`,<br/>`prophoto-rgb`, `rec2020`, `lab`, `oklab` |
+| Polar | `hsl`, `hwb`, `lch`, `oklch` |
+
+#### `hueInterpolationMethod`
+
+Only applies when a **polar** color interpolation method has been chosen and determines which ‘direction’ is chosen around the color wheel when connecting two hues. Defaults to `"shorter"`.
+
+| Direction | Value |
+| -- | -- |
+|whichever is ≤ 180° | `shorter` |
+|whichever is ≥ 180° | `longer` |
+|clockwise around the circle | `increasing` |
+|counter-clockwise around the circle | `decreasing` |
+
+
+#### `premultipliedAlpha`
+
+Whether or not interpolation should include premultiplied alpha. Defaults to `false`, but setting it to `true` can improve gradients that include `transparent` (since the default will cause the color to become washed out as it decreases in opacity).
+
+
+
 ### `createTexture()`
 ```js returns="CanvasTexture"
 createTexture(spacing, {path, color, angle, line, cap="butt", offset=0, outline=false})
@@ -249,7 +356,7 @@ As with `CanvasPattern` objects, textures are positioned globally relative to th
 
 #### `outline`
 
-By default, textures are drawn to the canvas using a using a [clipping path][clip()] to match the shape being filled or stroked. This is quick and gives good results when generating bitmaps. But for exports to PDF or SVG, you may want to ‘flatten’ the texture into plain Bézier paths by setting the `outline` argument to `true`. Enabling this option does some fairly expensive vector math (which will slow down rendering), but yields cleaner vectors in the output file:
+By default, textures are drawn to the canvas using a [clipping path][clip()] to match the shape being filled or stroked. This is quick and gives good results when generating bitmaps. But for exports to PDF or SVG, you may want to ‘flatten’ the texture into plain Bézier paths by setting the `outline` argument to `true`. Enabling this option does some fairly expensive vector math (which will slow down rendering), but yields cleaner vectors in the output file:
 
 ![clipped vs outlined textures](../assets/createTexture-outline@2x.png)
 
@@ -343,12 +450,12 @@ getImageData(sx, sy, sw, sh, {colorType="rgba", colorSpace="srgb", density, matt
 
 These methods behave identically to the standard [createImageData()][createImageData()] and [getImageData()][getImageData()] methods but have been extended to also accept an optional `colorType` value in their settings argument. The `colorType` defines the arrangement of individual color components in the ImageData's pixel array. If omitted, the type will default to `"rgba"`, but any of the [supported color types][imgdata_colortype] can be specified instead.
 
-The `colorSpace` argument is currently unused since non-sRGB colorspaces are not yet supported. You may omit it from your calls to these methods.
+The `colorSpace` argument can be set to `"srgb"` or `"display-p3"` and, if omitted, defaults to the color space the context was created with.
 
 The `getImageData()` method also accepts a handful of rendering options which have the same behaviors and default values as their equivalents in the Canvas [toFile()][toFile] method: [`density`][density], [`matte`][matte], and [`msaa`][msaa].
 
 :::tip
-Calling `getImageData` involves copying bitmaps between the GPU and main memory. If you're invoking it frequently in your code (e.g., within a tight loop), you may get better performance by disabling the [`gpu` property][canvas_gpu] for that canvas to avoid this overhead.
+Calling `getImageData` involves copying bitmaps between the GPU and main memory. If you're invoking it frequently in your code (e.g., within a tight loop), you may get better performance by disabling the [`gpu` property][canvas_gpu] for that canvas to avoid this overhead. Repeated calls can also be sped up by setting `willReadFrequently` when creating the context (so it caches the buffer between calls).
 :::
 
 ### `drawImage()`
@@ -358,7 +465,7 @@ drawImage(img, x, y, width, height)
 drawImage(img, srcX, srcY, srcWidth, srcHeight, x, y, width, height)
 ```
 
-This method behaves identically to the standard [`drawImage()`][drawImage()] function, but accepts ImageData objects as well as Image and Canvas objects as its first argument.
+This method behaves identically to the standard [`drawImage()`][drawImage()] function, but accepts [ImageData][imagedata] and [Context][context] objects (as well as the usual [Image][image] and [Canvas][canvas] objects) as its first argument.
 
 :::info[Note]
 Image objects loaded from SVG files that don't have an [intrinsic size][img_size] have some behavioral quirks to keep in mind when drawing:
@@ -373,7 +480,7 @@ drawCanvas(canvas, x, y, width, height)
 drawCanvas(canvas, srcX, srcY, srcWidth, srcHeight, x, y, width, height)
 ```
 
-This method behaves identically to the standard [`drawImage()`][drawImage()] function with one key difference: if the first argument is a canvas, it will not be converted to a bitmap before being drawn. Instead its contents will be added to the canvas as resolution-independent vector graphics. This is especially useful when scaling or rotating since it preserves the fidelity of text, patterns, and gradients from the source canvas.
+This method behaves identically to the [`drawImage()`][drawImage()] function with one key difference: if the first argument is a [Canvas][canvas] or [Context][context], it will not be converted to a bitmap before being drawn. Instead its contents will be added to the canvas as resolution-independent vector graphics. This is especially useful when scaling or rotating since it preserves the fidelity of text, patterns, and gradients from the source canvas.
 
 ```js
 let src = new Canvas(10, 10),
@@ -805,7 +912,9 @@ for (let i=0; i<8000; i++){
 [c2d_textAlign]: #textalign
 [canvas]: canvas.md
 [canvas_gpu]: canvas.md#gpu
+[canvas_pages]: canvas.md#pages
 [conicCurveTo]: #coniccurveto
+[context]: #
 [createProjection()]: #createprojection
 [createTexture()]: #createtexture
 [drawText]: #filltext--stroketext
@@ -813,12 +922,19 @@ for (let i=0; i<8000; i++){
 [drawimage]: #drawimage
 [fontvariant]: #fontvariant
 [fonthinting]: #fonthinting
+[fontsmoothing]: #fontsmoothing
+[fontsynthesis]: #fontsynthesis
+[fontvariations]: #fontvariationsettings
+[fontfeatures]: #fontfeaturesettings
 [ctx_font]: #font
+[ctx_attrs]: #getcontextattributes
 [lineDashFit]: #linedashfit
 [lineDashMarker]: #linedashmarker
 [newPage]: canvas.md#newpage
 [outlineText()]: #outlinetext
+[image]: image.md
 [img_size]: image.md#width--height
+[imagedata]: imagedata.md
 [imgdata_colortype]: imagedata.md#colortype
 [ctx_imagedata]: #createimagedata--getimagedata
 [p2d_offset]: path2d.md#offset
@@ -830,19 +946,26 @@ for (let i=0; i<8000; i++){
 [matte]: canvas.md#matte
 [density]: canvas.md#density
 [msaa]: canvas.md#msaa
+[gradients]: #createlineargradient-createradialgradient-createconicgradient
+[css_color_4]: https://developer.mozilla.org/en-US/blog/css-color-module-level-4/
+[getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext
 [p2d_closePath]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
 [css_transform]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform
 [css_transform_fns]: https://developer.mozilla.org/en-US/docs/Web/CSS/transform-function
 [TextMetrics]: https://developer.mozilla.org/en-US/docs/Web/API/TextMetrics
+[VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
 [DOMMatrix]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrix
 [lineHeight]: https://developer.mozilla.org/en-US/docs/Web/CSS/line-height
 [font-variant]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant
+[font-variation-settings]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-variation-settings
+[font-feature-settings]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-feature-settings
 [canvas_attr]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/canvas
 [currentTransform]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/currentTransform
 [direction]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/direction
 [fillStyle]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillStyle
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter
 [font]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/font
+[fontKerning]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fontKerning
 [fontStretch]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fontStretch
 [globalAlpha]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalAlpha
 [globalCompositeOperation]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/globalCompositeOperation
@@ -872,6 +995,7 @@ for (let i=0; i<8000; i++){
 [createConicGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createConicGradient
 [createImageData()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createImageData
 [createLinearGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createLinearGradient
+[addColorStop()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasGradient/addColorStop
 [createPattern()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createPattern
 [createRadialGradient()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createRadialGradient
 [drawImage()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
@@ -879,6 +1003,7 @@ for (let i=0; i<8000; i++){
 [fill()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fill
 [fillRect()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillRect
 [fillText()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillText
+[getContextAttributes()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getContextAttributes
 [getImageData()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getImageData
 [getLineDash()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getLineDash
 [getTransform()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/getTransform
@@ -905,4 +1030,12 @@ for (let i=0; i<8000; i++){
 [transform()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/transform
 [translate()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/translate
 [css_textDecoration]: https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration
+[color_fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/color
+[rgb_fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/rgb
+[hsl_fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/hsl
+[hwb_fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/hwb
+[lab_fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/lab
+[lch_fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/lch
+[oklab_fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/oklab
+[oklch_fn]: https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/color_value/oklch
 <!-- references_end -->

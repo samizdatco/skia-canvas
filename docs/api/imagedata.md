@@ -14,15 +14,26 @@ description: Direct pixel access to image and canvas contents
 
 ## Working with `ImageData` objects
 
-Empty ImageData objects can be created either by calling the context's `createImageData()` method or the `new ImageData()` constructor:
+Empty ImageData objects can be created either by calling the context's [`createImageData()`][ctx_imagedata] method or the `new ImageData()` constructor:
 
 ```js
 let id = ctx.createImageData(800, 600)
 ```
-or, equivalently:
+or, alternatively:
 ```js
 let id = new ImageData(800, 600)
 ```
+
+There's one important difference between these invocations: when calling `createImageData()`, the new ImageData will inherit the Context's `colorSpace` by default. The constructor, on the other hand, defaults to `srgb`, so you'll need to opt into wide gamut colors explicitly. For example, these two approaches will create identical P3 ImageData objects:
+
+```js
+let ctx = canvas.getContext("2d", {colorSpace:"display-p3"})
+let p3data = ctx.createImageData(800, 600)
+```
+```js
+let p3data = new ImageData(800, 600, {colorSpace:"display-p3"})
+```
+
 
 ### Choosing a `colorType`
 
@@ -45,10 +56,10 @@ let [r, g, b, a] = firstPixel
 
 // …or write to them, here setting the entire buffer to #F00
 for (let i=0; i<id.data.length; i+=id.bytesPerPixel) {
-  imageData.data[i + 0] = 255 // red
-  imageData.data[i + 1] = 0   // green
-  imageData.data[i + 2] = 0   // blue
-  imageData.data[i + 3] = 255 // alpha
+  id.data[i + 0] = 255 // red
+  id.data[i + 1] = 0   // green
+  id.data[i + 2] = 0   // blue
+  id.data[i + 3] = 255 // alpha
 }
 ```
 
@@ -66,7 +77,7 @@ Skia Canvas, however, allows you to use ImageData and Image objects interchangab
 new ImageData(width, height)
 new ImageData(width, height, {colorType='rgba', colorSpace='srgb'})
 
-// copy an existing buffer into an ImageData container
+// borrow an existing buffer as an ImageData's `data` property
 new ImageData(buffer, width)
 new ImageData(buffer, width, height)
 new ImageData(buffer, width, height, {colorType='rgba', colorSpace='srgb'})
@@ -74,13 +85,11 @@ new ImageData(buffer, width, height, {colorType='rgba', colorSpace='srgb'})
 new ImageData(imageData) // create a copy from another ImageData
 new ImageData(image, {colorType, colorSpace}) // decode the pixels from a bitmap Image
 ```
-:::note
-The optional `colorSpace` value can currently only be set to `"srgb"` (the default value), but this will hopefully change to include wider gamuts like `"display-p3"` in the future. For now you can simply omit it and use the default sRGB colorspace.
-:::
+When creating an empty ImageData you must fully specify the dimensions in order to determine the size of the resulting buffer (in conjunction with the `colorType`). In cases where you already have a `Buffer`, `Uint8ClampedArray`, `Uint8Array`, or `Float16Array` object, you only need to provide the `width` so it knows where to ‘wrap’ the linear buffer. When passing an existing ImageData or Image object to the constructor the dimensions can be omitted.
 
-When creating an empty ImageData you must fully specify the dimensions in order to determine the size of the resulting buffer (in conjunction with the `colorType`). In cases where you already have a Buffer object, you only need to provide the `width` so it knows where to ‘wrap’ the linear buffer. When passing an existing ImageData or Image object to the constructor the dimensions are known, but you can specify a non-default `colorType` you'd like to decode to in the Image case.
+When creating an ImageData from a buffer or another ImageData, the `colorType` needs to be *descriptive* of its existing format. When using an Image as the source, you can specify whatever `colorType` you would like and the pixel format will be reencoded as needed.
 
-
+The optional `colorSpace` value defaults to `"srgb"` but can also be set to `"display-p3"` for a wider color gamut.
 
 
 ## Properties
@@ -91,13 +100,13 @@ The dimensions of the ImageData cannot be changed after it is created. These pro
 
 ### `.colorType`
 
-The `colorType` value describes the layout of bytes within the buffer and how their values map onto the different components of each pixel. The most common formats devote 1 byte to each channel, with each pixel containing 4 channels in various orders. These formats have been given aliases for convenience:
+The `colorType` value describes the layout of bytes within the buffer and how their values map onto the different components of each pixel. The most common formats devote 1 byte to each channel, with each pixel containing 4 channels in various orders.
 
+These formats have been given aliases for convenience:
 ```js
-// aliases for the most common 4-byte formats
-"rgb"  // for RGB888x
-"rgba" // for BGRA8888
-"bgra" // for BGRA8888
+"rgb"  // alias for RGB888x
+"rgba" // alias for RGBA8888
+"bgra" // alias for BGRA8888
 ```
 
 There are many other options with more verbose names (see [this listing][skia_colortype] for descriptions of each):
@@ -110,8 +119,7 @@ There are many other options with more verbose names (see [this listing][skia_co
 
 // 4 bytes per pixel
 "RGB888x", "RGBA8888", "BGRA8888", "BGR101010x", "BGRA1010102",
-"R16G16Float", "R16G16UNorm", "RGB101010x", "RGBA1010102",
-"RGBA8888", "SRGBA8888"
+"R16G16Float", "R16G16UNorm", "RGB101010x", "RGBA1010102", "SRGBA8888"
 
 // 8 bytes per pixel
 "R16G16B16A16UNorm", "RGBAF16", "RGBAF16Norm"
@@ -120,7 +128,7 @@ There are many other options with more verbose names (see [this listing][skia_co
 "RGBAF32"
 ```
 
-Note that not all of them use 4-byte orderings like `rgba` does, so be sure to use the `.bytesPerPixel` field when stepping through them.
+Note that not all of them use 4-byte orderings like `rgba` does, so be sure to use the `.bytesPerPixel` field when stepping through them. Also, be aware that though the floating point types have higher precision, Skia Canvas does not currently render in HDR, so all pixel values will be clamped to the `[0, 1]` range when drawn.
 
 ### `.bytesPerPixel`
 
@@ -133,7 +141,9 @@ console.log(id.data.length == id.width * id.height * id.bytesPerPixel) // → tr
 
 
 ### `.data`
-A writeable buffer with the pixel contents of the image presented as an [array of 8-bit bytes][u8_array]. See the [standard docs][mdn_ImageData_data] for more details.
+A writeable buffer with the pixel contents of the image presented as an array of either [8-bit bytes][u8_array] or [16-bit floats][f16_array]. Float arrays are only supported on Node 23 and later and will be automatically used for the `A16Float`, `R16G16Float`, `RGBAF16`, and `RGBAF16Norm` color types. On earlier Node releases an 8-bit byte array will be used instead.
+
+See the [standard docs][mdn_ImageData_data] for more details.
 
 
 ## Methods
@@ -148,9 +158,9 @@ toSharp()
 The Sharp library is an optional dependency that you must [install separately][sharp_npm]
 :::
 
-The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. See the [`loadImageData()`](#loadimagedata) helper for details on converting the `Sharp` object back into an `ImageData`.
+The contents of the ImageData can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The `ImageData`'s `colorType` will be used when handing off the buffer and its `colorSpace` will be incorporated as an ICC profile.
 
-
+See the [`loadImageData()`](#loadimagedata) helper for details on converting the `Sharp` object back into an `ImageData`.
 
 ## Helpers
 ### `loadImageData()`
@@ -158,7 +168,7 @@ The contents of the canvas can be copied into a [Sharp][sharp] image object, all
 ```js returns="Promise<ImageData>"
 loadImageData(src, width)
 loadImageData(src, width, height)
-loadImageData(src, width, height, {colorType='rgba', …requestOptions})
+loadImageData(src, width, height, {colorType='rgba', colorSpace='srgb', …requestOptions})
 loadImageData(sharpImage)
 ```
 
@@ -197,6 +207,7 @@ Note that in addition to HTTP URLs you may also call `loadImageData()` using Dat
 ```js
 await loadImageData('data:application/octet-stream;base64,//8A////AP///...')
 ```
+
 #### Loading Sharp images
 [Sharp][sharp] images can be loaded without any additional arguments since they already contain their dimensions and encoding. The resulting `colorType` will always be converted to `rgba`, even if the Sharp object was initialized with 3-channel RGB:
 
@@ -221,6 +232,7 @@ await loadImageData(sharpImage)
 [imgdata_bpp]: #bytesperpixel
 [imgdata_tosharp]: #tosharp
 [loadimage_options]: image.md#loading-urls
+[ctx_imagedata]: context.md#createimagedata--getimagedata
 [skia_colortype]: https://rust-skia.github.io/doc/skia_safe/enum.ColorType.html
 [sharp]: https://sharp.pixelplumbing.com
 [sharp_npm]: https://www.npmjs.com/package/sharp
@@ -231,4 +243,5 @@ await loadImageData(sharpImage)
 [drawImage()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/drawImage
 [putImageData()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/putImageData
 [u8_array]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8ClampedArray
+[f16_array]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Float16Array
 <!-- references_end -->
