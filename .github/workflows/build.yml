@@ -3,11 +3,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  preflight:
+    name: Determine what needs to be built
+    runs-on: ubuntu-latest
+    outputs:
+      darwin: ${{ steps.missing.outputs.darwin }}
+      linux: ${{ steps.missing.outputs.linux }}
+      win32: ${{ steps.missing.outputs.win32 }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+
+    - name: Compare the draft release's assets to the full list
+      id: missing
+      shell: bash # the implicit default omits `pipefail`, hiding a failed release lookup behind `tee`
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        node lib/prebuild.mjs missing \
+          | jq -r 'to_entries[] | "\(.key)=\(.value|tojson)"' \
+          | tee -a "$GITHUB_OUTPUT"
+
   mac:
+    needs: preflight
+    if: ${{ needs.preflight.outputs.darwin != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, arm64]
+        include: ${{ fromJSON(needs.preflight.outputs.darwin) }}
     runs-on: ${{ matrix.arch == 'x64' && 'macos-15-intel' || 'macos-15' }}
 
     steps:
@@ -39,10 +68,12 @@ jobs:
         npm test && npm run upload
 
   windows:
+    needs: preflight
+    if: ${{ needs.preflight.outputs.win32 != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, arm64]
+        include: ${{ fromJSON(needs.preflight.outputs.win32) }}
     runs-on: ${{ matrix.arch == 'x64' && 'windows-latest' || 'windows-11-arm' }}
 
     steps:
@@ -77,11 +108,12 @@ jobs:
 
 
   linux:
+    needs: preflight
+    if: ${{ needs.preflight.outputs.linux != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [arm64, x64]
-        libc: [glibc, musl]
+        include: ${{ fromJSON(needs.preflight.outputs.linux) }}
     runs-on: ${{ matrix.arch == 'x64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     container:
       image: ${{ format('ghcr.io/{0}-{1}:latest', github.repository, matrix.libc) }}
@@ -110,13 +142,7 @@ jobs:
     - name: Build module
       run: |
         make -sC skia-canvas with-local-skia
-        cd skia-canvas && make optimized
-
-    - name: Add to release
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        cd skia-canvas && npm test && npm run upload
+        cd skia-canvas && make optimized && npm test
 
     - name: Add AWS layer to release
       if: ${{ matrix.libc == 'glibc' }}
@@ -135,4 +161,37 @@ jobs:
            cp $SRC_DIR/lib/skia.node ./node_modules/skia-canvas/lib
         cd $LAYER_DIR && \
            zip -r9 $LAYER_ZIP nodejs/node_modules
-        gh release -R samizdatco/skia-canvas upload $PKG_VERSION $LAYER_ZIP
+        gh release -R samizdatco/skia-canvas upload $PKG_VERSION $LAYER_ZIP --clobber
+
+    - name: Add module to release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        cd skia-canvas && npm run upload
+
+  verify:
+    name: Verify release assets
+    needs: [mac, windows, linux]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+
+    - name: Install dependencies
+      run: npm ci --ignore-scripts
+
+    # a dry run of publish.yml's first two steps: `packages` names any missing triplet and
+    # exits non-zero, so the draft can't be published with an incomplete set of binaries
+    - name: Collect release assets & assemble platform packages
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        node lib/prebuild.mjs collect assets
+        node lib/prebuild.mjs packages
