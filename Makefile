@@ -64,14 +64,13 @@ release:
 	@if ! gh release view $(PACKAGE_VERSION) > /dev/null 2>&1; then \
 	  gh release create $(PACKAGE_VERSION) $(PRERELEASE_FLAG) --draft --fail-on-no-commits --generate-notes \
 	    --target `jj log --ignore-working-copy --no-graph -r main -T commit_id`; fi
+	@printf "\nBuilding native binaries for $(PACKAGE_VERSION)\n"
 	@gh workflow run build.yml --ref main
-	@printf "\nBuilding native binaries for $(PACKAGE_VERSION)\n  https://github.com/samizdatco/skia-canvas/actions/workflows/build.yml\n"
 	@printf "\nNext: once build is complete, publish the release on github to submit to npm\n"
 
 containers:
 	@gh workflow run containers.yml -f version=$(CONTAINER_VERSION)
-	@printf "\nBuilding containers with version label :$(CONTAINER_VERSION)\n  https://github.com/samizdatco/skia-canvas/actions/workflows/containers.yml\n"
-	@printf "\nNext: update the Linux container URLs in build.yml to match\n"
+	@printf "\nNext: once complete, update the Linux container images in build.yml to 'ghcr.io/{0}-{1}:$(CONTAINER_VERSION)'\n"
 
 # linux-build helpers
 skia-version:
