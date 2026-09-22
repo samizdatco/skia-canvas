@@ -25,8 +25,6 @@ use write_fonts::{
     maxp::Maxp, name::{Name, NameRecord}, os2::{Os2, SelectionFlags}, post::Post,
   },
 };
-
-#[cfg(target_os = "windows")]
 use allsorts::{
   binary::read::ReadScope,
   subset::whole_font,
@@ -524,7 +522,13 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
         return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
       },
       Ok(bytes) => {
-        #[cfg(target_os = "windows")]
+        // TEMPORARY WORKAROUND: decode woff/woff2 to sfnt
+        //
+        // originally only Windows needed this since it's the one platform that lacks built-in
+        // support, but there is a use-after-free bug for woffs in harfbuzz versions <14.4.0
+        // (including the one skia bundles as of m150)
+        //
+        // go back to using #[cfg(target_os = "windows")] when skia's harfbuzz is upgraded
         let bytes = {
           fn decode_woff(bytes:&Vec<u8>) -> Option<Vec<u8>>{
             let woff = ReadScope::new(&bytes).read::<WoffFont>().ok()?;
