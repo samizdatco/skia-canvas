@@ -32,6 +32,7 @@ jobs:
 
     # the platform-specific packages all need to be published before the main skia-canvas package
     - name: Publish @skia-canvas/<platform> packages to NPM
+      shell: bash # for pipefail
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
@@ -47,6 +48,7 @@ jobs:
         done
 
     - name: Publish skia-canvas to NPM
+      shell: bash # for pipefail
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
