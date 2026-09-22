@@ -1,6 +1,8 @@
 # select the base via TARGETARCH
 FROM quay.io/pypa/manylinux_2_28_x86_64 AS base-amd64
+ENV GCC_TRIPLE=x86_64-redhat-linux
 FROM quay.io/pypa/manylinux_2_28_aarch64 AS base-arm64
+ENV GCC_TRIPLE=aarch64-redhat-linux
 FROM base-${TARGETARCH} AS skia-build-env
 ARG TARGETARCH
 
@@ -16,15 +18,10 @@ RUN dnf install -y \
     && dnf clean all
 
 # point clang at the C++20 version of gcc (otherwise it uses base gcc-8)
-RUN GCC_DIR=$(ls -d /opt/rh/gcc-toolset-*/root/usr/lib/gcc/*/* | sort -V | tail -1) \
-    && TS_ENABLE=$(ls -d /opt/rh/gcc-toolset-*/enable | sort -V | tail -1) \
-    && { echo ". $TS_ENABLE"; \
-         echo "export SKIA_GN_ARGS='extra_cflags_cc=[\"--gcc-install-dir=$GCC_DIR\"]'"; \
-         echo "export BINDGEN_EXTRA_CLANG_ARGS=--gcc-install-dir=$GCC_DIR"; \
-       } > /etc/skia-build-env.sh
-
-# add clang setup to BASH_ENV so the CI doesn't need to set the env vars
-ENV BASH_ENV=/etc/skia-build-env.sh
+ARG GCC_TOOLSET=15
+ENV GCC_INSTALL_DIR=/opt/rh/gcc-toolset-${GCC_TOOLSET}/root/usr/lib/gcc/${GCC_TRIPLE}/${GCC_TOOLSET}
+ENV SKIA_GN_ARGS="extra_cflags_cc=[\"--gcc-install-dir=${GCC_INSTALL_DIR}\"]"
+ENV BINDGEN_EXTRA_CLANG_ARGS=--gcc-install-dir=${GCC_INSTALL_DIR}
 
 # install Node
 ARG NODE_MAJOR=20
