@@ -24,7 +24,7 @@ ENV SKIA_GN_ARGS="extra_cflags_cc=[\"--gcc-install-dir=${GCC_INSTALL_DIR}\"]"
 ENV BINDGEN_EXTRA_CLANG_ARGS=--gcc-install-dir=${GCC_INSTALL_DIR}
 
 # install Node
-ARG NODE_MAJOR=20
+ARG NODE_MAJOR=24
 RUN curl -fSL --retry 5 --retry-delay 3 --connect-timeout 30 \
       https://rpm.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
     && dnf install -y nodejs && dnf clean all
