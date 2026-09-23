@@ -8,6 +8,9 @@ jobs:
   publish:
     name: Publish to NPM
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
     - name: Checkout repository
@@ -33,8 +36,6 @@ jobs:
     # the platform-specific packages all need to be published before the main skia-canvas package
     - name: Publish @skia-canvas/<platform> packages to NPM
       shell: bash # for pipefail
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
         VERSION=$(npm pkg get version | tr -d '"')
         if [[ $VERSION == *-* ]]; then TAG_FLAG="--tag next"; else TAG_FLAG=""; fi
@@ -49,8 +50,6 @@ jobs:
 
     - name: Publish skia-canvas to NPM
       shell: bash # for pipefail
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       run: |
         VERSION=$(npm pkg get version | tr -d '"')
         if [[ $VERSION == *-* ]]; then
