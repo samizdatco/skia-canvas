@@ -116,7 +116,7 @@ jobs:
         include: ${{ fromJSON(needs.preflight.outputs.linux) }}
     runs-on: ${{ matrix.arch == 'x64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     container:
-      image: ${{ format('ghcr.io/{0}-{1}:latest', github.repository, matrix.libc) }}
+      image: ${{ format('ghcr.io/{0}-{1}:2026.09', github.repository, matrix.libc) }}
 
     steps:
     - name: Install rust
