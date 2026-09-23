@@ -1,6 +1,8 @@
 # Changelog
 
-## 🥚 ⟩ [Unreleased]
+<!--## 🥚 ⟩ [Unreleased]-->
+
+## 📦 ⟩ [v4.0.0] ⟩ Sep 24, 2026
 
 ### New Features
 
@@ -37,10 +39,10 @@
   - `features`: OpenType features represented as an object with supported feature tags (e.g., `liga`, `smcp`) mapping to `{type, label}` summaries
 
 #### Imagery
-- SVG images now apply CSS rules contained in `<style>` elements and support most CSS selectors (#276). Custom properties have only basic support: `var()` references resolve against `:root` and inline `style` declarations only and chained definitions (`--foo: var(--bar)`) are not currently handled.
 - **Image** objects can now load **PDF** documents (via [`loadImage()`][loadImage()], [new Image()][image_constructor], or the [`src`][Image.src] setter) and render them as resolution-independent vectors.
   - Single pages can be loaded via [`loadImage()`][loadImage()] which now accepts a 1-based `page` number option, so you can draw PDFs to other Canvases.
   - Whole documents can be loaded via [`loadCanvas()`][loadCanvas], which adds each PDF page as a content-sized entry in the Canvas's `pages` attribute allowing you to draw annotations onto them.
+- SVG images now apply CSS rules contained in `<style>` elements and support most CSS selectors (#276). Custom properties have only basic support: `var()` references resolve against `:root` and inline `style` declarations only and chained definitions (`--foo: var(--bar)`) are not currently handled.
 - [**ImageData**][ImageData] now supports `Float16Array` (on Node 23+) for half-float pixel formats and [`getImageData()`][mdn_getImageData] will return one when a float-based `colorType` is requested (#271).
 - When [exporting][Canvas.toFile] in `"raw"` format, you can now include a `premultiplied` option to leave the pixel values in their GPU-native state (and avoid a potentially lossy conversion to un-premultiplied at low alpha).
 
@@ -763,7 +765,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v3.0.8...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v4.0.0...HEAD
+[v4.0.0]: https://github.com/samizdatco/skia-canvas/compare/v3.0.8...v4.0.0
 [v3.0.8]: https://github.com/samizdatco/skia-canvas/compare/v3.0.7...v3.0.8
 [v3.0.7]: https://github.com/samizdatco/skia-canvas/compare/v3.0.6...v3.0.7
 [v3.0.6]: https://github.com/samizdatco/skia-canvas/compare/v3.0.5...v3.0.6

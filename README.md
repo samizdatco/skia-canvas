@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark@2x.png">
-  <img alt="Skia Canvas" src="docs/assets/hero@2x.png">
+  <img alt="Skia Canvas – The fastest, most capabale 2d graphics ‹canvas› for Node.js" src="docs/assets/hero@2x.png">
 </picture>
 
 </a>
@@ -27,13 +27,11 @@
 Skia Canvas is an implementation of the [HTML Canvas](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) drawing API that runs in [Node.js](https://nodejs.org/en) on Mac, Linux, and Windows systems. Depending on your needs, you can use it as:
   1. **A spec-compliant offscreen canvas:** it accepts the same drawing code you'd write for a browser but can run on servers and in other ‘headless’ contexts to generate image files and buffers.
   2. **A windowing toolkit:** it can open native [windows][window] on macOS, Windows, and Linux with [display-synced][win_animation] drawing and browser-inspired [event handling][win_events].
-  3. **A JavaScript interface for the Skia graphics library:** it uses familiar web APIs as a front-end to Google’s sophisticated [imaging engine](https://skia.org), rendering with high-performance native code (and optional GPU acceleration).
-
-
+  3. **A JavaScript interface for the Skia graphics library:** it uses familiar web APIs as a front-end to Google’s sophisticated [imaging engine](https://skia.org), rendering with [high-performance](#benchmarks) native code (and optional GPU acceleration).
 
 ### A More Capable Canvas
 
-In addition to being a faithful emulation of the [canvas standard](https://html.spec.whatwg.org/multipage/canvas.html), Skia Canvas includes a raft of extensions, adding 2D capabilities that reach well beyond what the browser’s `<canvas>` can do.
+In addition to being a faithful emulation of the [canvas standard](https://html.spec.whatwg.org/multipage/canvas.html) with [minimal][npm_dependencies] dependencies, Skia Canvas includes a raft of extensions, adding 2D capabilities that reach well beyond what the browser’s `<canvas>` can do.
 
 In particular, Skia Canvas can:
 
