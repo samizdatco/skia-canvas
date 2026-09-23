@@ -43,12 +43,36 @@ jobs:
     - name: Use Ninja
       uses: seanmiddleditch/gha-setup-ninja@master
 
-    - name: Install fontconfig (Linux only)
+    - name: Prepare Linux build
       if: ${{ startsWith(matrix.os, 'ubuntu') }}
-      run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
+      id: skia
+      run: |
+        sudo apt-get update && sudo apt-get install -y libfontconfig1-dev
+        echo "version=$(make -s skia-version)" >> $GITHUB_OUTPUT
+
+    - name: Restore prebuilt Skia (Linux only)
+      if: ${{ startsWith(matrix.os, 'ubuntu') }}
+      id: skia-cache
+      uses: actions/cache@v6
+      with:
+        path: /tmp/skia-binaries
+        key: skia-crates-${{ runner.os }}-${{ runner.arch }}-${{ steps.skia.outputs.version }}
+
+    - name: Use cached Skia (Linux only)
+      if: ${{ startsWith(matrix.os, 'ubuntu') && steps.skia-cache.outputs.cache-hit == 'true' }}
+      run: echo "SKIA_BINARIES_URL=file:///tmp/skia-binaries/skia.tar.gz" >> $GITHUB_ENV
 
     - name: Build module
       run: make optimized
+
+    - name: Save Skia for later runs (Linux only)
+      if: ${{ startsWith(matrix.os, 'ubuntu') && steps.skia-cache.outputs.cache-hit != 'true' }}
+      run: |
+        out=$(find target/release/build -maxdepth 3 -type d -path '*skia-bindings-*/out/skia' | head -1)
+        [ -n "$out" ] || { echo "no skia build output to cache"; exit 1; }
+        mkdir -p /tmp/pkg/skia-binaries /tmp/skia-binaries
+        cp "$out"/*.a "$out"/bindings.rs /tmp/pkg/skia-binaries/
+        tar czf /tmp/skia-binaries/skia.tar.gz -C /tmp/pkg skia-binaries
 
     - name: Run tests
       run: |

@@ -126,23 +126,51 @@ jobs:
         echo CARGO_TERM_COLOR=always >> $GITHUB_ENV
 
     - name: Checkout skia-canvas
+      id: skia-canvas
       env:
         SERVER: ${{ github.server_url }}
         REPO: ${{ github.repository }}
         REF: ${{ github.ref_name }}
       run: |
         git clone --depth 1 --branch $REF ${SERVER}/${REPO} skia-canvas
+        echo "skia-version=$(make -sC skia-canvas skia-version)" >> $GITHUB_OUTPUT
+
+    - name: Restore compiled Skia
+      id: skia-cache
+      uses: actions/cache@v6
+      with:
+        path: /tmp/skia-binaries
+        key: skia-static-${{ matrix.libc }}-${{ matrix.arch }}-${{ hashFiles('skia-canvas/containers/**') }}-${{ steps.skia-canvas.outputs.skia-version }}
 
     - name: Checkout rust-skia and apply static deps patch
+      env:
+        TAG: ${{ steps.skia-canvas.outputs.skia-version }}
+        CACHED: ${{ steps.skia-cache.outputs.cache-hit }}
       run: |
-        export TAG=$(make -sC skia-canvas skia-version)
-        git clone --depth 1 --branch $TAG --recurse-submodules -j8 https://github.com/rust-skia/rust-skia.git
+        SUBMODULES=""
+        [ "$CACHED" = "true" ] || SUBMODULES="--recurse-submodules -j8"
+        git clone --depth 1 --branch "$TAG" $SUBMODULES https://github.com/rust-skia/rust-skia.git
         patch -d rust-skia -p1 -F10 < ./skia-canvas/containers/use-static-fontconfig.patch
+
+    - name: Use cached Skia
+      if: ${{ steps.skia-cache.outputs.cache-hit == 'true' }}
+      run: |
+        echo "FORCE_SKIA_BINARIES_DOWNLOAD=1" >> $GITHUB_ENV
+        echo "SKIA_BINARIES_URL=file:///tmp/skia-binaries/skia.tar.gz" >> $GITHUB_ENV
 
     - name: Build module
       run: |
         make -sC skia-canvas with-local-skia
         cd skia-canvas && make optimized && npm test
+
+    - name: Save Skia for later runs
+      if: ${{ steps.skia-cache.outputs.cache-hit != 'true' }}
+      run: |
+        out=$(find skia-canvas/target/release/build -maxdepth 3 -type d -path '*skia-bindings-*/out/skia' | head -1)
+        [ -n "$out" ] || { echo "no skia build output to cache"; exit 1; }
+        mkdir -p /tmp/pkg/skia-binaries /tmp/skia-binaries
+        cp "$out"/*.a "$out"/bindings.rs /tmp/pkg/skia-binaries/
+        tar czf /tmp/skia-binaries/skia.tar.gz -C /tmp/pkg skia-binaries
 
     - name: Add AWS layer to release
       if: ${{ matrix.libc == 'glibc' }}
