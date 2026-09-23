@@ -10,7 +10,7 @@ ARG TARGETARCH
 RUN printf 'fastestmirror=1\nmax_parallel_downloads=10\ninstall_weak_deps=False\n' >> /etc/dnf/dnf.conf
 
 RUN dnf install -y \
-      clang llvm ninja-build make gperf pkgconf-pkg-config \
+      clang llvm ninja-build make gperf pkgconf-pkg-config zip \
       expat-devel libpng-devel zlib-devel \
       python3.12 python3.12-pip \
     && ln -sf /usr/bin/python3.12 /usr/local/bin/python3 \
