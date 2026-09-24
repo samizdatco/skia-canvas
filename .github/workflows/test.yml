@@ -40,9 +40,6 @@ jobs:
       with:
         toolchain: stable
 
-    - name: Use Ninja
-      uses: seanmiddleditch/gha-setup-ninja@master
-
     - name: Prepare Linux build
       if: ${{ startsWith(matrix.os, 'ubuntu') }}
       id: skia

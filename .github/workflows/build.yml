@@ -53,9 +53,6 @@ jobs:
       with:
         toolchain: stable
 
-    - name: Use Ninja
-      uses: seanmiddleditch/gha-setup-ninja@master
-
     - name: Build module
       env:
         MACOSX_DEPLOYMENT_TARGET: 10.14
@@ -92,9 +89,6 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: stable
-
-    - name: Install Ninja
-      run: choco install ninja
 
     - name: Build module
       run: make optimized
