@@ -324,6 +324,7 @@ This project is deeply indebted to the work of the [Rust Skia project](https://g
 [installation]: https://skia-canvas.org/getting-started#installation
 [global_settings]: https://skia-canvas.org/getting-started#global-settings
 [multithreading]: https://skia-canvas.org/getting-started#multithreading
+[npm_dependencies]: https://www.npmjs.com/package/skia-canvas?activeTab=dependencies
 [sharp]: https://sharp.pixelplumbing.com
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter

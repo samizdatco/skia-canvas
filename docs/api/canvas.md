@@ -141,6 +141,7 @@ The `.engine` property is a read-only object that provides you with a status rep
   - `api`: either `Metal` or `Vulkan` depending on your platform
   - `device`: the identity of the ‘video card’ that was found during start-up
   - `driver`: the name of the OS's device driver *‹vulkan-only›*
+  - `msaa`: an array with the samples-per-pixel values supported by the GPU for [multisample antialiasing][msaa]
   - `threads`: the number of threads in the worker pool that will be used for asynchronous [`toFile`][toFile], [`toBuffer`][toBuffer], & [`toURL`][toURL] exports. By default this is the same as the number of CPU cores found, but can be overridden by setting the [`SKIA_CANVAS_THREADS`][multithreading] environment variable.
   - `error`: if GPU initialization failed, this property will contain a description of what went wrong. Otherwise it will be undefined.
   - `textContrast`: a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to 0.0)
@@ -205,9 +206,9 @@ toFile(filename, {
   format,
   density=1,
   quality=0.92,
-  msaa=false,
+  msaa=false,         // gpu only
   outline=false,      // svg only
-  downsample=false,   // jpeg only
+  downsample=false,   // jpg only
   colorType='rgba',   // raw only
   premultiplied=false // raw only
 })
@@ -246,7 +247,21 @@ canvas.toFile('image@3x.png') // equivalent to setting the density to 3
 ```
 
 #### msaa
-The `msaa` option allows you to enable multi-scale antialiasing on the GPU and select the number of samples per pixel (common values are `2`, `4`, or `8`). If omitted (or set to `false` or `0`), multisampling is disabled and shader-based AA is used instead, which is typically faster and also a closer match to the results produced by the CPU-based renderer. Text rendering is unaffected by this setting.
+:::warning[GPU rendering only]
+*Default value: __`4`__*
+:::
+The `msaa` option controls whether the GPU uses ‘multisample antialiasing’ rather than shader-based ‘analytic AA’ when rendering the edges of paths. You can assign it an integer to select the number of **samples per pixel**—common values are `2`, `4`, or `8`, but see [`engine.msaa`][engine] for the full list your GPU supports. If omitted, the renderer defaults to 4× MSAA as it produces good results with relatively low overhead.
+
+MSAA allocates an additional buffer that's proportional to the source canvas size (≊268 MB for a 4096×4096 canvas at the default sampling of `4`) and can provide a *substantial* speed increase in exchange for that memory usage. On the other hand, it reduces the smoothness at the edges of paths since it can only account for five degrees of pixel coverage (0, ¼, ½, ¾, 1). Shader-based AA computes the fractions exactly for everything except stroked curves (which are quantized internally to 4×). Increasing the number of MSAA samples will increase the number of coverage levels it can account for, but at the cost of further-increased memory usage.
+
+MSAA has no effect at all on text, gradients, or images, so you get nothing in exchange for its memory usage if that's all your canvas is rendering. As a result, you may want **disable MSAA** by setting `msaa` to `0` or `false` in situations where you:
+- aren't doing heavy path drawing on your canvas (and want to reclaim memory)
+- need the smoothest possible edges on your paths (regardless of speed)
+- are using [`clip()`][clip()] and want to ensure crisp boundaries
+
+The risk of disabling MSAA is that shader-based AA can exceed what Skia's GPU renderers can handle and move onto a much slower CPU rasterization path (and the conditions that trigger that are hard to predict). So be sure to profile if performance matters, since `{msaa:0}` can become expensive when you least expect it.
+
+![msaa and antialiasing quality](../assets/export-msaa.svg)
 
 #### quality
 The `quality` option is a number between 0 and 1.0 that controls the level of compression both when making JPEG or WEBP files directly and when embedding them in a PDF. For lossless PNG exports, the `quality` setting controls the level of zlib compression, so higher values will yield smaller files but take longer to encode. If omitted, quality will default to 0.92.
@@ -308,9 +323,6 @@ This method accepts the same arguments and behaves similarly to [.toBuffer()][to
 ```js returns="Sharp"
 toSharp({page, matte, msaa, density})
 ```
-<!-- ```js returns="Sharp"
-toSharpSync({page, matte, msaa, density})
-``` -->
 
 :::tip[Optional]
 The Sharp library is an optional dependency that you must [install separately][sharp_npm]:
@@ -416,6 +428,7 @@ Use `loadCanvas()` when you want to draw *onto* some existing content and then r
 [shorthands]: #pdf-svg-png-jpg-webp--raw
 [toBuffer]: #tobuffer
 [toURL]: #tourl
+[msaa]: #msaa
 [loadcanvas]: #loadcanvas
 [multithreading]: ../getting-started.md#multithreading
 [Buffer]: https://nodejs.org/api/buffer.html
@@ -428,6 +441,7 @@ Use `loadCanvas()` when you want to draw *onto* some existing content and then r
 [toDataURL_mdn]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
 [Promise]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise
 [CanvasRenderingContext2D]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
+[clip()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/clip
 [await_using]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/await_using
 [using]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using
 <!-- references_end -->

@@ -15,13 +15,11 @@ sidebar_label: "About"
 Skia Canvas is an implementation of the [HTML Canvas](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API) drawing API that runs in [Node.js](https://nodejs.org/en) on Mac, Linux, and Windows systems. Depending on your needs, you can use it as:
   1. **A spec-compliant offscreen canvas:** it accepts the same drawing code you'd write for a browser but can run on servers and in other ‘headless’ contexts to generate image files and buffers.
   2. **A windowing toolkit:** it can open native [windows][window] on macOS, Windows, and Linux with [display-synced][win_animation] drawing and browser-inspired [event handling][win_events].
-  3. **A JavaScript interface for the Skia graphics library:** it uses familiar web APIs as a front-end to Google’s sophisticated [imaging engine](https://skia.org), rendering with high-performance native code (and optional GPU acceleration).
-
-
+  3. **A JavaScript interface for the Skia graphics library:** it uses familiar web APIs as a front-end to Google’s sophisticated [imaging engine](https://skia.org), rendering with [high-performance](#benchmarks) native code (and optional GPU acceleration).
 
 ### A More Capable Canvas
 
-In addition to being a faithful emulation of the [canvas standard](https://html.spec.whatwg.org/multipage/canvas.html), Skia Canvas includes a raft of extensions, adding 2D capabilities that reach well beyond what the browser’s `<canvas>` can do.
+In addition to being a faithful emulation of the [canvas standard](https://html.spec.whatwg.org/multipage/canvas.html) with [minimal][npm_dependencies] dependencies, Skia Canvas includes a raft of extensions, adding 2D capabilities that reach well beyond what the browser’s `<canvas>` can do.
 
 In particular, Skia Canvas can:
 
@@ -292,6 +290,7 @@ In these benchmarks, Skia Canvas is tested running in two modes: serial and asyn
 [installation]: getting-started.md#installation
 [global_settings]: getting-started.md#global-settings
 [multithreading]: getting-started.md#multithreading
+[npm_dependencies]: https://www.npmjs.com/package/skia-canvas?activeTab=dependencies
 [sharp]: https://sharp.pixelplumbing.com
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide
 [filter]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/filter

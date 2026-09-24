@@ -139,7 +139,6 @@
 - The minimum supported Node version is now **18**.
 - [`App.eventLoop`][app_eventLoop] modes have been deprecated. The GUI event loop now always runs in harmony with Node's, allowing timeouts and intervals to fire even while animating
 - The [`fontSynthesis`][fontSynthesis] context property now defaults to `true`, matching browser behavior. Requesting a weight or slant that the selected font family doesn't provide now generates a synthetic bold or oblique. Set it to `false` to fall back to the nearest available real face instead
-- GPU antialiasing now defaults to shader-based AA instead of 4x MSAA. Edges (in particular of thin strokes) now look crisper and closer to CPU-rendered output. Pass a sample count (e.g., `msaa:4`) to `toBuffer()`, `getImageData()`, etc. to restore the old default
 - Drawing or sampling an image that failed to load now throws instead of silently doing nothing
 - [`unwind()`][p2d_unwind] has been deprecated in favor of [`simplify('evenodd')`][p2d_simplify], which selects the same region; it will be removed in a future release
 - Boolean-op and [`simplify()`][p2d_simplify] results now render differently when filled with the default `"nonzero"` rule. Results containing holes (e.g., via `xor` or `difference`) previously filled in solid without an explicit `evenodd`

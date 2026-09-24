@@ -927,7 +927,10 @@ impl ExportOptions{
 
   #[cfg(any(feature = "metal", feature = "vulkan"))] // GPU-only: MSAA sample selection for gpu surfaces
   pub fn msaa_from(&self, valid_msaa:&Vec<usize>) -> Result<usize, String>{
-    let samples = self.msaa.unwrap_or(0); // default to shader-based AA
+    let samples = self.msaa.unwrap_or_else(||
+      if valid_msaa.contains(&4){ 4 } // default to 4x if available
+      else{ *valid_msaa.last().unwrap() }
+    );
     match valid_msaa.contains(&samples){
       true => Ok(samples),
       false => Err(format!("{}x MSAA not supported by GPU (options: {:?})", samples, valid_msaa))
