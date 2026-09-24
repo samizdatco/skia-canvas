@@ -117,6 +117,8 @@ jobs:
     runs-on: ${{ matrix.arch == 'x64' && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     container:
       image: ${{ format('ghcr.io/{0}-{1}:2026.09', github.repository, matrix.libc) }}
+    env:
+      ORAS_VERSION: 1.3.4
 
     steps:
     - name: Install rust
@@ -137,15 +139,27 @@ jobs:
 
     - name: Restore compiled Skia
       id: skia-cache
-      uses: actions/cache@v6
-      with:
-        path: /tmp/skia-binaries
-        key: skia-static-${{ matrix.libc }}-${{ matrix.arch }}-${{ hashFiles('skia-canvas/containers/**') }}-${{ steps.skia-canvas.outputs.skia-version }}
+      env:
+        CACHE_REF: ghcr.io/${{ github.repository }}-cache:${{ matrix.libc }}-${{ matrix.arch }}-${{ steps.skia-canvas.outputs.skia-version }}-${{ hashFiles('skia-canvas/containers/**') }}
+        CR_PAT: ${{ secrets.CR_PAT }}
+      run: |
+        case "${{ matrix.arch }}" in x64) ARCH=amd64 ;; *) ARCH=arm64 ;; esac
+        curl -sSL "https://github.com/oras-project/oras/releases/download/v$ORAS_VERSION/oras_${ORAS_VERSION}_linux_$ARCH.tar.gz" \
+          | tar xz -C /usr/local/bin oras
+        echo "$CR_PAT" | oras login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+        echo "ref=$CACHE_REF" >> $GITHUB_OUTPUT
+
+        mkdir -p /tmp/skia-binaries
+        if oras pull "$CACHE_REF" -o /tmp/skia-binaries; then
+          echo "hit=true" >> $GITHUB_OUTPUT
+        else
+          echo "no cached Skia for $CACHE_REF — building from source"
+        fi
 
     - name: Checkout rust-skia and apply static deps patch
       env:
         TAG: ${{ steps.skia-canvas.outputs.skia-version }}
-        CACHED: ${{ steps.skia-cache.outputs.cache-hit }}
+        CACHED: ${{ steps.skia-cache.outputs.hit }}
       run: |
         SUBMODULES=""
         [ "$CACHED" = "true" ] || SUBMODULES="--recurse-submodules -j8"
@@ -153,7 +167,7 @@ jobs:
         patch -d rust-skia -p1 -F10 < ./skia-canvas/containers/use-static-fontconfig.patch
 
     - name: Use cached Skia
-      if: ${{ steps.skia-cache.outputs.cache-hit == 'true' }}
+      if: ${{ steps.skia-cache.outputs.hit == 'true' }}
       run: |
         echo "FORCE_SKIA_BINARIES_DOWNLOAD=1" >> $GITHUB_ENV
         echo "SKIA_BINARIES_URL=file:///tmp/skia-binaries/skia.tar.gz" >> $GITHUB_ENV
@@ -164,13 +178,16 @@ jobs:
         cd skia-canvas && make optimized && npm test
 
     - name: Save Skia for later runs
-      if: ${{ steps.skia-cache.outputs.cache-hit != 'true' }}
+      if: ${{ steps.skia-cache.outputs.hit != 'true' }}
+      env:
+        CACHE_REF: ${{ steps.skia-cache.outputs.ref }}
       run: |
         out=$(find skia-canvas/target/release/build -maxdepth 3 -type d -path '*skia-bindings-*/out/skia' | head -1)
         [ -n "$out" ] || { echo "no skia build output to cache"; exit 1; }
-        mkdir -p /tmp/pkg/skia-binaries /tmp/skia-binaries
+        mkdir -p /tmp/pkg/skia-binaries
         cp "$out"/*.a "$out"/bindings.rs /tmp/pkg/skia-binaries/
-        tar czf /tmp/skia-binaries/skia.tar.gz -C /tmp/pkg skia-binaries
+        tar czf /tmp/skia.tar.gz -C /tmp/pkg skia-binaries
+        cd /tmp && oras push "$CACHE_REF" skia.tar.gz
 
     - name: Add AWS layer to release
       if: ${{ matrix.libc == 'glibc' }}
