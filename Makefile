@@ -6,7 +6,7 @@ PACKAGE_VERSION = $(shell npm run env | grep npm_package_version | sed -e 's/^.*
 PRERELEASE_FLAG = $(if $(findstring -,$(PACKAGE_VERSION)),--prerelease)
 NPM_VERSION = $(shell npm view skia-canvas version)
 CONTAINER_VERSION ?= $(shell date +%Y.%m)
-.PHONY: optimized dev test debug visual check clean distclean release containers skia-version with-local-skia
+.PHONY: optimized dev test debug visual check clean distclean bump release containers skia-version with-local-skia
 .DEFAULT_GOAL := $(LIB)
 
 $(NPM):
@@ -44,6 +44,15 @@ distclean: clean
 	rm -rf $(NPM)
 	cargo clean
 
+bump:
+	@if [[ -z "$(version)" ]]; then \
+	  printf "Usage: make bump version=<semver>\n       (e.g. make bump version=4.0.0-rc3)\n"; exit 1; fi
+	@/bin/echo -n "Update $(PACKAGE_VERSION:v%=%) -> $(version)? [y/N] "
+	@read line; if [[ $$line != "y" ]]; then exit 1; fi
+	@npm version $(version) --no-git-tag-version
+	@sed -i '' -e '1,/^version = /s/^version = .*/version = "$(version)"/' Cargo.toml
+	@cargo update -p skia-canvas
+
 release:
 	@if [[ `jj diff --from main --to @ package.json` != "" ]]; then \
 	  printf "Commit the package.json change onto main first:\n\n"; \
@@ -66,11 +75,11 @@ release:
 	    --target `jj log --ignore-working-copy --no-graph -r main -T commit_id`; fi
 	@printf "\nBuilding native binaries for $(PACKAGE_VERSION)\n"
 	@gh workflow run build.yml --ref main
-	@printf "\nNext: once build is complete, publish the release on github to submit to npm\n"
+	@printf "\nNext: wait for compilation, then publish the release on github to submit to npm\n"
 
 containers:
 	@gh workflow run containers.yml -f version=$(CONTAINER_VERSION)
-	@printf "\nNext: once complete, update the Linux container images in build.yml to 'ghcr.io/{0}-{1}:$(CONTAINER_VERSION)'\n"
+	@printf "\nNext: wait for images, then update the Linux containers in build.yml to 'ghcr.io/{0}-{1}:$(CONTAINER_VERSION)'\n"
 
 # linux-build helpers
 skia-version:
