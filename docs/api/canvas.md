@@ -201,22 +201,23 @@ The method’s return value is a `CanvasRenderingContext2D` object which you can
 ### `toFile()`
 ```js returns="Promise<void>"
 toFile(filename, {
-  page,
-  matte,
-  format,
-  density=1,
-  quality=0.92,
-  msaa=false,         // gpu only
-  outline=false,      // svg only
-  downsample=false,   // jpg only
-  colorType='rgba',   // raw only
-  premultiplied=false // raw only
+  format,             // target format (overrides filename extension)
+  matte,              // background color
+  density=1,          // pixel-scaling ratio
+  quality=0.92,       // bitmap compression
+  msaa=4,             // GPU: antialiasing
+  page=-1,            // PDF: which page to export
+  outline=false,      // SVG: font embedding
+  downsample=false,   // JPG: edge sharpness
+  filters='none',     // PNG: compression
+  colorType='rgba',   // RAW: pixel format
+  premultiplied=false // RAW: opacity encoding
 })
 ```
 
 ##### Synchronous version
 ```js returns="void"
-toFileSync(filename, {page, matte, format, density, quality, msaa, outline, downsample, colorType, premultiplied})
+toFileSync(filename, {format, matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
 ```
 
 The `toFile` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
@@ -225,20 +226,17 @@ The way multi-page documents are handled depends on the `filename` argument. If 
 
 An integer can optionally be placed between the braces to indicate the number of padding characters to use for numbering. For instance `"page-{}.svg"` will generate files of the form `page-1.svg` whereas `"frame-{4}.png"` will generate files like `frame-0001.png`.
 
-#### page
-The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.toFile("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
-
-#### matte
-The optional `matte` argument accepts a color-string specifying the background that should be drawn *behind* the canvas in the exported image. Any transparent portions of the image will be filled with the matte color.
-
-#### format
+#### `format`
 The image format to generate, specified either as a mime-type string or file extension. The `format` argument will take precedence over the type specified through the `filename` argument’s extension, but is primarily useful when generating a file whose name cannot end with an extension for other reasons.
 
 Supported formats include:
 - Bitmap: `png`, `jpeg`, `webp`, `raw`
 - Vector: `svg`, `pdf`
 
-#### density
+#### `matte`
+The optional `matte` argument accepts a color-string specifying the background that should be drawn *behind* the canvas in the exported image. Any transparent portions of the image will be filled with the matte color.
+
+#### `density`
 By default, the images will be at a 1:1 ratio with the canvas's `width` and `height` dimensions (i.e., a 72 × 72 canvas will yield a 72 pixel × 72 pixel bitmap). But with screens increasingly operating at higher densities, you’ll frequently want to generate images where an on-canvas 'point' may occupy multiple pixels. The optional `density` argument allows you to specify this magnification factor using an integer ≥1. As a shorthand, you can also select a density by choosing a filename using the `@nx` naming convention:
 
 ```js
@@ -246,8 +244,12 @@ canvas.toFile('image.png', {density:2}) // choose the density explicitly
 canvas.toFile('image@3x.png') // equivalent to setting the density to 3
 ```
 
-#### msaa
-:::warning[GPU rendering only]
+#### `quality`
+The `quality` option is a number between 0 and 1.0 that controls the level of compression both when making JPEG or WEBP files directly and when embedding them in a PDF. For lossless PNG exports, the `quality` setting controls the level of zlib compression, so higher values will yield smaller files but take longer to encode. If omitted, quality will default to 0.92.
+
+
+#### `msaa`
+:::format[GPU rendering only]
 *Default value: __`4`__*
 :::
 The `msaa` option controls whether the GPU uses ‘multisample antialiasing’ rather than shader-based ‘analytic AA’ when rendering the edges of paths. You can assign it an integer to select the number of **samples per pixel**—common values are `2`, `4`, or `8`, but see [`engine.msaa`][engine] for the full list your GPU supports. If omitted, the renderer defaults to 4× MSAA as it produces good results with relatively low overhead.
@@ -263,36 +265,47 @@ The risk of disabling MSAA is that shader-based AA can exceed what Skia's GPU re
 
 ![msaa and antialiasing quality](../assets/export-msaa.svg)
 
-#### quality
-The `quality` option is a number between 0 and 1.0 that controls the level of compression both when making JPEG or WEBP files directly and when embedding them in a PDF. For lossless PNG exports, the `quality` setting controls the level of zlib compression, so higher values will yield smaller files but take longer to encode. If omitted, quality will default to 0.92.
+#### `page`
+:::format[PDF format only]
+*Default value: __`-1`__*
+:::
+The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.toFile("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
 
-#### outline
-:::warning[SVG format only]
+#### `outline`
+:::format[SVG format only]
 *Default value: __`false`__*
 :::
 
 When generating SVG output containing text, you have two options for how to handle the fonts that were used. By default, SVG files will contain `<text>` elements that refer to the fonts by name in the embedded stylesheet. This requires that viewers of the SVG have the same fonts available on their system (or accessible as webfonts). Setting the optional `outline` argument to `true` will trace all the letterforms and ‘burn’ them into the file as bézier paths. This will result in a much larger file (and one in which the original text strings will be unrecoverable), but it will be viewable regardless of the specifics of the system it’s displayed on.
 
-#### downsample
-:::warning[JPEG format only]
+#### `downsample`
+:::format[JPEG format only]
 *Default value: __`false`__*
 :::
 
 When exporting to JPEG, you can enable 4:2:0 [chroma subsampling][chroma_subsampling] by setting `downsample` to `true`. Otherwise it will default to 4:4:4 (i.e., no subsampling), resulting in sharper edges but larger files.
 
+#### `filters`
+:::format[PNG format only]
+*Default value: __`"none"`__*
+:::
 
-#### colorType
+By default, PNG exports disable [‘adaptive filtering’][png_adaptive] since that typically produces better compression and faster exports for the kinds of flat graphics that canvas-drawing produces. If your content includes photographic imagery or complex shading, you may be able to get smaller file sizes by setting `filters` to `"all"`. This enables the full set of adaptive filters in exchange for approximately 2.5x the encoding time (and does not *always* yield smaller images).
 
-:::warning[RAW format only]
+The `filters` option can also be set to `"auto"`, a middle-ground that tests the canvas content's compressibility on a subset of its pixels, then uses that measurement to decide between `"all"` or `"none"`. It generally minimizes output file size and avoids the expense of unnecessary `"all"` encodes, but it's only half as fast as the default in the cases where it ultimately selects `"none"` anyway.
+
+#### `colorType`
+
+:::format[RAW format only]
 *Default value: __`"rgba"`__*
 :::
 
 Specifies the color type to use when exporting pixel data in `"raw"` format (for other formats this setting has no effect). If omitted, defaults to `"rgba"`. See the ImageData documentation for a [list of supported `colorType` formats][imgdata_colortype]
 
 
-#### premultiplied
+#### `premultiplied`
 
-:::warning[RAW format only]
+:::format[RAW format only]
 *Default value: __`false`__*
 :::
 
@@ -300,20 +313,20 @@ By default, pixel values in `"raw"` exports will use ‘straight’ (unpremultip
 
 ### `toBuffer()`
 ```js returns="Promise<Buffer>"
-toBuffer(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
+toBuffer(format, {matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
 ```
 ```js returns="Buffer"
-toBufferSync(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
+toBufferSync(format, {matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
 ```
 
 Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
 
 ### `toURL()`
 ```js returns="Promise<String>"
-toURL(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
+toURL(format, {matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
 ```
 ```js returns="String"
-toURLSync(format, {page, matte, density, msaa, quality, outline, downsample, colorType})
+toURLSync(format, {matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
 ```
 
 This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
@@ -321,11 +334,11 @@ This method accepts the same arguments and behaves similarly to [.toBuffer()][to
 
 ### `toSharp()`
 ```js returns="Sharp"
-toSharp({page, matte, msaa, density})
+toSharp({matte, density, msaa, page})
 ```
 
 :::tip[Optional]
-The Sharp library is an optional dependency that you must [install separately][sharp_npm]:
+The Sharp library is an optional dependency that you must [install separately][sharp_npm]
 :::
 
 The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The `colorSpace` chosen upon creating the Canvas's context will be preserved as an ICC profile. The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
@@ -435,6 +448,7 @@ Use `loadCanvas()` when you want to draw *onto* some existing content and then r
 [chroma_subsampling]: https://en.wikipedia.org/wiki/Chroma_subsampling
 [sharp]: https://sharp.pixelplumbing.com
 [sharp_npm]: https://www.npmjs.com/package/sharp
+[png_adaptive]: https://observablehq.com/@smitop/png-filters
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext

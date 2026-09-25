@@ -188,7 +188,9 @@ SKIA_CANVAS_CACHE=256 node script.js # set the maximum size to double the defaul
 ```
 
 ### Memory Fragmentation
-> Note: this only applies to Linux systems using the `glibc` C Library
+:::format[Linux only]
+Only applies to `glibc` systems
+:::
 
 The memory allocator used by `glibc` does not return memory to the kernel the moment it's freed. Instead it maintains its own internal cache of reusable memory regions and only releases memory if a *contiguous* empty region sits at the very end of its arena. As a result, this can allow RSS to balloon if empty blocks of memory are punctuated by even a single small allocation.
 

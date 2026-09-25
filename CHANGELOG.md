@@ -45,6 +45,7 @@
 - SVG images now apply CSS rules contained in `<style>` elements and support most CSS selectors (#276). Custom properties have only basic support: `var()` references resolve against `:root` and inline `style` declarations only and chained definitions (`--foo: var(--bar)`) are not currently handled.
 - [**ImageData**][ImageData] now supports `Float16Array` (on Node 23+) for half-float pixel formats and [`getImageData()`][mdn_getImageData] will return one when a float-based `colorType` is requested (#271).
 - When [exporting][Canvas.toFile] in `"raw"` format, you can now include a `premultiplied` option to leave the pixel values in their GPU-native state (and avoid a potentially lossy conversion to un-premultiplied at low alpha).
+- PNG exports now default to using *no* adaptive filtering while encoding (since this is both faster and produces smaller output files for the types of flat-shaded graphics produced by canvas drawing). You can opt back into using adaptive filtering by setting the [`filters`][filters] export option to `"all"`, or try using `"auto"` which tests your canvas content for compressibility then selects the best mode to minimize file size.
 
 #### Paths
 - **Path2D** objects can now be measured by arc length: the [`length`][p2d_length] property reports the total length of all contours, and [`positionAt()`][p2d_positionAt], [`tangentAt()`][p2d_tangentAt], and [`normalAt()`][p2d_normalAt] return the location (as `{x, y}`) and tangent/normal angles (in radians) at the requested distance along the path.
@@ -186,6 +187,7 @@
 [fontVariationSettings]: /docs/api/context.md#fontvariationsettings
 [fontFeatureSettings]: /docs/api/context.md#fontfeaturesettings
 [fontKerning]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fontKerning
+[filters]: /docs/api/canvas.md#filters
 
 ## 📦 ⟩ [v3.0.8] ⟩ Sep 25, 2025
 
