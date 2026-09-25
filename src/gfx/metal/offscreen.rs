@@ -44,6 +44,7 @@ impl MetalEngine {
                         "renderer": "GPU",
                         "api": "Metal",
                         "device": device_name,
+                        "msaa": context.msaa,
                         "threads": rayon::current_num_threads(),
                     })
                 }
@@ -51,6 +52,7 @@ impl MetalEngine {
                     "renderer": "CPU",
                     "api": "Metal",
                     "device": "CPU-based renderer (Fallback)",
+                    "msaa": [0],
                     "threads": rayon::current_num_threads(),
                     "error": "GPU initialization failed",
                 })
@@ -128,7 +130,7 @@ impl MetalContext{
         autoreleasepool(|_| {
             MTLCreateSystemDefaultDevice().and_then(|device|{
                 let last_use = Instant::now();
-                let msaa:Vec<usize> = [0,2,4,8,16,32].into_iter().filter(|s|{
+                let msaa:Vec<usize> = [0,2,4,8].into_iter().filter(|s|{
                     *s==0 || device.supportsTextureSampleCount(*s as _)
                 }).collect();
                 make_direct_context(&device)

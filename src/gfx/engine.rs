@@ -20,6 +20,7 @@ impl Engine {
         "renderer": "CPU",
         "api": Value::Null,
         "device": "CPU-based renderer (compiled without GPU support)",
+        "msaa": [0],
         "threads": rayon::current_num_threads(),
         "error": Value::Null,
     })}
@@ -88,6 +89,7 @@ impl RenderingEngine{
                 "api": Engine::api(),
                 "device": "CPU-based renderer (GPU manually disabled)",
                 "driver": "N/A",
+                "msaa": [0],
                 "threads": rayon::current_num_threads()
             }),
             false=> Engine::status(),

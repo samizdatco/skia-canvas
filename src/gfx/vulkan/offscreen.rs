@@ -54,6 +54,7 @@ impl VulkanEngine {
                             device_props.driver_id.map(|id| format!("{:?}", id) ).unwrap_or("Unknown Driver".to_string()),
                             device_props.driver_info.as_ref().unwrap_or(&"Unknown Version".to_string()),
                         ),
+                        "msaa": context.msaa,
                         "threads": rayon::current_num_threads(),
                     })
                 },
@@ -63,6 +64,7 @@ impl VulkanEngine {
                     "api": "Vulkan",
                     "device": "CPU-based renderer (Fallback)",
                     "driver": "N/A",
+                    "msaa": [0],
                     "threads": rayon::current_num_threads(),
                     "error": msg,
                 })
@@ -183,7 +185,7 @@ impl VulkanContext{
             // even if the device claims it supports >1 samples, let skia overrule it
             ImageInfo::new_n32_premul((0,0), None).color_type()
         );
-        let mut msaa:Vec<usize> = [1,2,4,8,16,32].into_iter()
+        let mut msaa:Vec<usize> = [2,4,8,16].into_iter()
             .filter(|s| s <= &max_sample_count)
             .filter_map(|s| vulkano::image::SampleCount::try_from(s as u32).ok() )
             .filter(|s| vk_sample_counts.contains_enum(*s) )

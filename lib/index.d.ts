@@ -362,6 +362,8 @@ export interface EngineDetails {
   device: string
   /** The device driver useed by the active graphics adapter */
   driver?: string
+  /** MSAA sample counts supported by this renderer (0 = shader-based AA) */
+  msaa: number[]
   /** Size of the thread pool used for async rendering (set via the SKIA_CANVAS_THREADS env var; defaults to CPU core count) */
   threads: number
   /** Error thrown when attempting to initialize the GPU */
