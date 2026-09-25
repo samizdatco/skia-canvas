@@ -550,6 +550,16 @@ impl FontAxes{
       coords.push(Coordinate{ axis, value:*value });
     }
 
+    // only set coordinates for axes the typeface supports and clamp them to the font's min/max range
+    // (prevents cache fragmentation since the axis values will be part of a skia-internal cache key)
+    coords.retain_mut(|coord|
+      match axes.as_ref().and_then(|params| params.iter().find(|p| p.tag == coord.axis)){
+        Some(axis) => { coord.value = coord.value.clamp(axis.min, axis.max); true }
+        None => false
+      }
+    );
+    if coords.is_empty(){ return }
+
     let args = FontArguments::new()
       .set_variation_design_position(VariationPosition{ coordinates: &coords });
     char_style.set_font_arguments(&args);

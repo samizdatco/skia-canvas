@@ -46,7 +46,7 @@ distclean: clean
 
 bump:
 	@if [[ -z "$(version)" ]]; then \
-	  printf "Usage: make bump version=<semver>\n       (e.g. make bump version=4.0.0-rc3)\n"; exit 1; fi
+	  printf "Usage: make bump version=<semver>\n       (e.g. make bump version=1.2.3-rc4)\n"; exit 1; fi
 	@/bin/echo -n "Update $(PACKAGE_VERSION:v%=%) -> $(version)? [y/N] "
 	@read line; if [[ $$line != "y" ]]; then exit 1; fi
 	@npm version $(version) --no-git-tag-version
