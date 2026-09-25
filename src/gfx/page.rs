@@ -933,7 +933,7 @@ impl ExportOptions{
     );
     match valid_msaa.contains(&samples){
       true => Ok(samples),
-      false => Err(format!("{}x MSAA not supported by GPU (options: {:?})", samples, valid_msaa))
+      false => Err(format!("{}x MSAA not supported by this GPU (options: {:?})", samples, valid_msaa))
     }
   }
 }
