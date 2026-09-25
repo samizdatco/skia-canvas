@@ -316,6 +316,7 @@ export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "raw" | "pdf" | "sv
                            "image/png" | "image/jpeg" | "image/webp" | "application/pdf" | "image/svg+xml" |
                            "application/octet-stream";
 export type FontOptions = "outline" | "device-independent"
+export type PngFilters = "none" | "all" | "auto"
 
 export interface RenderOptions {
   /** Page to export: Defaults to 1 (i.e., first page) */
@@ -332,14 +333,17 @@ export interface RenderOptions {
 }
 
 export interface ExportOptions extends RenderOptions {
-  /** Quality for lossy encodings like JPEG & WEBP (0.0–1.0) */
+  /** Quality for lossy encodings like JPEG & WEBP / gzip effort for PNG (0.0–1.0) */
   quality?: number
 
-  /** Optionally convert text to bézier paths (SVG only) */
+  /** Convert text to bézier paths (SVG only) */
   outline?: boolean
 
-  /** Optionally use 4:2:0 chroma subsampling (JPEG only) */
+  /** Use 4:2:0 chroma subsampling (JPEG only) */
   downsample?: boolean
+
+  /** Select an adaptive filtering mode (PNG only) */
+  filters?: PngFilters
 
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType

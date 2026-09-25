@@ -692,6 +692,43 @@ describe("Canvas", ()=>{
       assert(lo.length < hi.length / 2)
     })
 
+    test("filters", async () => {
+      // filtering is a compression tradeoff, not a rendering one, and 'auto' decides by measuring,
+      // so each case needs content whose two encodings differ by more than the decision margin
+      const MODES = /** @type {const} */ (['none', 'all', 'auto'])
+
+      // tile the fixture over the whole page so empty pixels don't drive the choice
+      let encoded = async src => {
+        let img = await loadImage(src)
+        ctx.reset()
+        for (let y=0; y<HEIGHT; y+=img.height)
+          for (let x=0; x<WIDTH; x+=img.width) ctx.drawImage(img, x, y)
+        let [none, all, auto] = await Promise.all(MODES.map(filters => canvas.toBuffer('png', {filters})))
+        return {none, all, auto}
+      }
+
+      // below a pixel-count floor 'auto' doesn't bother measuring and just stays on 'none'
+      assert(WIDTH * HEIGHT >= 200000, 'page too small for `auto` to measure')
+
+      // photographic shading is what adaptive filtering helps…
+      let photo = await encoded('tests/assets/globe.jpg')
+      assert(photo.all.length < photo.none.length * 0.95)
+
+      // …whereas tiled flat artwork encodes smaller with the rows left alone
+      let flat = await encoded('tests/assets/pentagon.png')
+      assert(flat.none.length < flat.all.length * 0.95)
+
+      // 'auto' emits exactly whichever of the two is smaller for the page at hand
+      assert(photo.auto.equals(photo.all), '`auto` failed to filter a photo')
+      assert(flat.auto.equals(flat.none), '`auto` needlessly filtered flat artwork')
+
+      // every mode still produces a valid PNG
+      for (const mode of MODES) assert.deepEqual(flat[mode].subarray(0, 8), MAGIC.png)
+
+      // @ts-expect-error — only the three named modes are accepted
+      assert.throws(() => canvas.toBuffer('png', {filters:'some'}), TypeError)
+    })
+
     test("outline", async () => {
       FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
       ctx.font = '40px Monoton'

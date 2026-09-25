@@ -9,7 +9,7 @@ use skia_safe::{
   image::BitDepth, images, pdf, BlendMode,
   canvas::SaveLayerRec,
   Canvas as SkCanvas, ClipOp, Color4f, ColorSpace, ColorType, AlphaType, Document, Paint,
-  Image as SkImage, ImageInfo, Matrix, Path, Picture, PictureRecorder, Point, Rect, IRect, Size, ISize,
+  Image as SkImage, ImageInfo, Pixmap, Matrix, Path, Picture, PictureRecorder, Point, Rect, IRect, Size, ISize,
   SurfaceProps, SurfacePropsFlags, PixelGeometry, SamplingOptions, jpeg_encoder, png_encoder, webp_encoder
 };
 use skia_safe::sampling_options::{FilterMode, MipmapMode};
@@ -573,7 +573,7 @@ impl Page{
       return Err("Width and height must be non-zero to generate an image".to_string())
     }
 
-    let ExportOptions{ ref format, quality, density, matte, .. } = options;
+    let ExportOptions{ ref format, quality, density, matte, filters, .. } = options;
     let size = self.bounds.size();
     let img_quality = ((quality*100.0) as u32).clamp(0, 100);
 
@@ -699,7 +699,7 @@ impl Page{
 
           "png" => {
             let mut png_opts = png_encoder::Options::default();
-            png_opts.filter_flags = png_encoder::FilterFlag::NONE;
+            png_opts.filter_flags = filters.flags_for(&image);
             png_opts.z_lib_level = match quality{
               // use `quality` to control zlib 'effort' (defaulting to 6)
               q if q < 0.925 => ((q / 0.92 * 6.0).round() as i32).clamp(1, 6),
@@ -883,6 +883,75 @@ fn pdf_document<'a>(buffer:&'a mut impl std::io::Write, metadata:&'a pdf::Metada
   pdf::new_document(buffer, Some(metadata))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PngFilters{
+  None, // fast: best for flat graphics & text
+  All,  // adaptive: best for photographic shading
+  Auto, // mesaure first: pick the appropriate mode based on content
+}
+
+impl PngFilters{
+  fn flags_for(&self, image:&SkImage) -> png_encoder::FilterFlag{
+    use png_encoder::FilterFlag;
+    match self{
+      PngFilters::All => FilterFlag::ALL,
+      PngFilters::None => FilterFlag::NONE,
+      PngFilters::Auto => {
+        // sample a set of bands then test compressibility under None vs All filtering
+        const MIN_AREA: usize = 200_000; // skip images smaller than ~450×450
+        const BAND_H: usize = 8;         // rows per band
+        const SAMPLE_PCT: usize = 12;    // sample rows proportionally to image size
+        const SAMPLE_MIN: usize = 48;
+        const SAMPLE_MAX: usize = 192;
+        const MAX_PIXELS: usize = 120_000; // limit sampled pixels to rows×width
+        const ZLIB_LEVEL: i32 = 1;         // use minimal effort
+        const THRESHOLD: f32 = 0.05;       // size improvement that makes All worthwhile
+
+        // unpack the image pixels for sampling
+        let Some(pixmap) = image.peek_pixels() else { return FilterFlag::NONE };
+        let info = pixmap.info();
+        let (width, height) = (info.width() as usize, info.height() as usize);
+        if width * height < MIN_AREA { return FilterFlag::NONE }
+        let row_bytes = pixmap.row_bytes();
+        let Some(src) = pixmap.bytes().filter(|b| b.len() >= row_bytes * height) else { return FilterFlag::NONE };
+
+        // collect SAMPLE_PCT of the rows (clamped to the row min/max and pixel budget)
+        let band_h = BAND_H.min(height);
+        let target_rows = ((SAMPLE_PCT * height + 50) / 100)
+          .clamp(SAMPLE_MIN, SAMPLE_MAX)
+          .min(MAX_PIXELS / width.max(1));
+        let bands = ((target_rows + band_h / 2) / band_h).max(3).min(height / band_h);
+
+        // assemble bands from the evenly-spaced rows into one sample image
+        let span = height - band_h;
+        let mut sample = Vec::with_capacity(bands * band_h * row_bytes);
+        for i in 0..bands{
+          let s = i * span / (bands - 1).max(1);
+          sample.extend_from_slice(&src[s * row_bytes .. (s + band_h) * row_bytes]);
+        }
+        let sample_info = ImageInfo::new((width as i32, (bands * band_h) as i32), info.color_type(), info.alpha_type(), info.color_space());
+        let Some(sample_pm) = Pixmap::new(&sample_info, &mut sample, row_bytes) else { return FilterFlag::NONE };
+
+        // do test encodes of the sample image in both modes
+        let sized = |flag:FilterFlag| -> Option<f32> {
+          let mut o = png_encoder::Options::default();
+          (o.filter_flags, o.z_lib_level) = (flag, ZLIB_LEVEL);
+          Some(png_encoder::encode_pixmap(&sample_pm, &o)?.size() as f32)
+        };
+        let (Some(none_sz), Some(all_sz)) = (sized(FilterFlag::NONE), sized(FilterFlag::ALL)) else {
+          return FilterFlag::NONE
+        };
+
+        // pick the 'best' mode (with a small premium on All since it's so expensive)
+        match all_sz < none_sz * (1.0 - THRESHOLD) {
+          true  => FilterFlag::ALL,
+          false => FilterFlag::NONE,
+        }
+      }
+    }
+  }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExportOptions{
   pub format: String,
@@ -896,6 +965,7 @@ pub struct ExportOptions{
   pub text_contrast: f32,
   pub text_gamma: f32,
   pub premultiplied: bool,
+  pub filters: PngFilters,
 }
 
 impl Default for ExportOptions{
@@ -904,6 +974,7 @@ impl Default for ExportOptions{
       format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
       jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
       color_type:ColorType::RGBA8888, outline:true, premultiplied:false,
+      filters:PngFilters::None,
     }
   }
 }

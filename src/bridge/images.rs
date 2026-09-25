@@ -137,7 +137,7 @@ pub fn to_color_type(type_name: &str) -> ColorType {
 // ExportOptions
 //
 
-use crate::gfx::page::ExportOptions;
+use crate::gfx::page::{ExportOptions, PngFilters};
 
 pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<ExportOptions>{
   let opts = opt_object_arg(cx, idx).unwrap();
@@ -154,8 +154,13 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
   let text_contrast = float_for_key(cx, &opts, "textContrast")?;
   let text_gamma = float_for_key(cx, &opts, "textGamma")?;
   let outline = bool_for_key(cx, &opts, "outline")?;
+  let filters = match opt_string_for_key(cx, &opts, "filters").as_deref(){
+    Some("all") => PngFilters::All,
+    Some("auto") => PngFilters::Auto,
+    _ => PngFilters::None,
+  };
 
   Ok(ExportOptions{
-    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma, premultiplied
+    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma, premultiplied, filters
   })
 }
