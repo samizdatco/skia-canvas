@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 use core::ops::Range;
-use neon::prelude::*;
 use std::collections::HashMap;
 use allsorts::binary::read::ReadScope;
 use allsorts::tables::NameTable;
