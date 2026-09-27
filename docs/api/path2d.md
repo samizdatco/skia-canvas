@@ -89,7 +89,7 @@ The array is not a verbatim transcript of the drawing commands that have been ca
 
 ### `.length`
 
-Returns the total length of the line(s) drawn by the path. It measures the distance along each of its contours, tracing curves rather than jumping straight from vertex to vertex. If the path contains multiple contours, `length` is the *sum* of their individual lengths. 
+Returns the total length of the line(s) drawn by the path. It measures the distance along each of its contours, tracing curves rather than jumping straight from vertex to vertex. If the path contains multiple contours, `length` is the *sum* of their individual lengths.
 
 The measurements are in ‘path units’, using the native coordinates from each of the line-drawing commands. The [`slice()`][p2d_slice], [`points()`][p2d_points], [`jitter()`][p2d_jitter], [`positionAt()`][p2d_positionAt], [`tangentAt()`][p2d_tangentAt], and [`normalAt()`][p2d_normalAt] methods accept arguments in the same units, so you may find `length` useful as a denominator when calling them.
 
@@ -222,7 +222,7 @@ function dotAtLocation(path, distance, color){
   ctx.fillStyle = color
   ctx.beginPath()
   ctx.arc(x, y, 4, 0, 2*Math.PI)
-  ctx.fill()    
+  ctx.fill()
 }
 
 let curve = new Path2D("M 20 85 Q 57 35 93 85 Q 111 110 130 110")
@@ -313,9 +313,13 @@ let snake = spikes.round(80)
 simplify(rule="nonzero")
 ```
 
-Paths that contain multiple contours use a ‘winding rule’ to decide whether overlapping regions should be filled or knocked out. You can make this decision at draw-time by passing a rule argument to [`ctx.fill()`][fill()] (either `evenodd` or its default: `nonzero`).
+Paths that contain multiple contours use a ‘winding rule’ to decide whether overlapping regions should be filled or ‘knocked out’. You can make this decision at draw-time by passing a rule argument to [`ctx.fill()`][fill()] (either `evenodd` or the default: `nonzero`). The `simplify()` method lets you make this decision ahead of time by constructing a new Path2D that has had all of its overlapping regions removed (so there's no ambiguity to be resolved when drawn).
 
-The `simplify()` method lets you make this decision ahead of time by constructing a new Path2D that has had all of its overlapping regions removed (so there's no ambiguity to be resolved when drawn). When called with the default `nonzero` rule, any contours whose points wind in the same direction (i.e., both clockwise or both counter-clockwise) will be flattened into un-layered contours enclosing them all. Contours that wind in opposing directions will create a hole.
+:::info[Note]
+In this context ‘simplify’ refers only to the shape’s structure, not its level of detail: the method *removes crossings* rather than reducing the number of points. In fact, splitting an intersection into separate contours frequently *increases* both the contour and point counts.
+:::
+
+When called with the default `nonzero` rule, any contours whose points wind in the same direction (i.e., both clockwise or both counter-clockwise) will be flattened into un-layered contours enclosing them all. Contours that wind in opposing directions will create a hole.
 
 Alternatively, the `evenodd` rule will create holes in all the regions where an *even* number of contours are layered atop one another (similar to the [`xor()`][bool-ops] operation), regardless of the clockwise-ness of the points.
 
@@ -337,9 +341,6 @@ ctx.fill(original, "evenodd")
 ```
 ![different combinations](../assets/effect-simplify@2x.png)
 
-:::info[Note]
-In this context ‘simplify’ refers only to the shape’s structure, not its level of detail: the method removes crossings rather than reducing the number of points. In fact, splitting an intersection into separate contours frequently *increases* both the contour and point counts.
-:::
 
 ### `transform()`
 ```js returns="Path2D"
@@ -398,7 +399,7 @@ let middle = orig.trim(.25, .75),
 unwind()
 ```
 
-**The unwind() method has been deprecated** and will be removed in a future release. You should now use [`simplify('evenodd')`][p2d_simplify] to convert `evenodd` paths to a form that can be filled using the default `nonzero` winding rule instead. 
+**The unwind() method has been deprecated** and will be removed in a future release. You should now use [`simplify('evenodd')`][p2d_simplify] to convert `evenodd` paths to a form that can be filled using the default `nonzero` winding rule instead.
 
 :::info[Note]
 Previously the main use for `unwind()` was dealing with the values returned by `difference()`, `xor()`, and the other [boolean operations][bool-ops] (all of which returned paths that expected to be filled with an `evenodd` rule). As of version 4, those methods all return pre-simlpified paths that will render correctly using the default `nonzero` winding rule.
