@@ -102,7 +102,7 @@ impl Default for State {
       .set_font_families(&font_spec.families)
       .set_font_style(font_spec.style());
     let FontSpec{ canonical: font, variant: font_variant, width, oblique, .. } = font_spec;
-    
+
     State {
       clip: None,
       matrix: Matrix::new_identity(),
@@ -639,6 +639,7 @@ impl Context2D{
       // record the source page and its position + clip for placement on the destination
       let (bounds, clip) = self.page_region(dst_rect);
       let page = page.clone();
+      let clip = clip.map(|clip| std::sync::Arc::new(std::sync::Mutex::new(clip)));
       self.with_recorder(|mut rec| rec.push_page(PageRef{ page, bounds, clip, matrix }));
     }else{
       // otherwise flatten to a Picture + transparency layer (which svg drops) and draw it immediately

@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::Path as FilePath;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use rayon::prelude::*;
 use neon::prelude::*;
@@ -34,11 +34,12 @@ pub enum Layer{
 // a reference to another page, along with the geometry placing it in the destination
 #[derive(Debug, Clone)]
 pub struct PageRef{
-  pub page: Page,         // the source, snapshotted at the moment it was drawn
-  pub bounds: Rect,       // its frame-rect in the destination, with the draw-time CTM applied
-  pub clip: Option<Path>, // set only when the CTM rotates/skews or a clip is live — i.e. when
-                          // `bounds` alone can't describe the region (see `page_region`)
-  pub matrix: Matrix,     // the CTM at draw-time (plus placement/scaling from the draw call's coords/dims)
+  pub page: Page,   // the source, snapshotted at the moment it was drawn
+  pub bounds: Rect, // its frame-rect in the destination, with the draw-time CTM applied
+  pub matrix: Matrix, // the CTM at draw-time (plus placement/scaling from the draw call's coords/dims)
+  pub clip: Option<Arc<Mutex<Path>>>, // set only when the CTM rotates/skews or a clip is live — i.e. when
+                                      // `bounds` alone can't describe the region (see `page_region`).
+                                      // mutex-wrapped so Layer can be Send+Sync for refcount cloning
 }
 
 impl PageRef{
@@ -51,10 +52,14 @@ impl PageRef{
   // narrow a canvas to the region (bounds + clip) this reference occupies
   fn clip_to(&self, canvas:&SkCanvas, matrix:Option<&Matrix>){
     match &self.clip{
-      Some(clip) => match matrix{
-        Some(matrix) => { canvas.clip_path(&clip.with_transform(matrix), ClipOp::Intersect, true); },
-        None => { canvas.clip_path(clip, ClipOp::Intersect, true); },
-      },
+      Some(clip) => {
+        // resume from poisoned locks (harmless since we're only ever reading)
+        let clip = clip.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        match matrix{
+          Some(matrix) => { canvas.clip_path(&clip.with_transform(matrix), ClipOp::Intersect, true); },
+          None => { canvas.clip_path(&clip, ClipOp::Intersect, true); },
+        }
+      }
       None => { canvas.clip_rect(self.bounds_in(matrix), ClipOp::Intersect, true); },
     }
   }
@@ -121,7 +126,7 @@ impl PostedEviction{
 
 pub struct PageRecorder{
   current: Option<PictureRecorder>,
-  layers: Vec<Layer>,
+  layers: Arc<Vec<Layer>>, // Arc-wrapped so Page snapshots can share refs rather than copying
   bounds: Rect,
   matrix: Matrix,
   clip: Option<Path>,
@@ -146,7 +151,7 @@ impl PageRecorder{
     let id = COUNTER.fetch_add(1, Ordering::Relaxed);
 
     PageRecorder{
-      current:None, layers:vec![], changed:false, disposed:false,
+      current:None, layers:Arc::new(vec![]), changed:false, disposed:false,
       matrix:Matrix::default(), clip:None, bounds, id, epoch:0, color_space, props,
       eviction:PostedEviction::default(),
       approx_ops:0,
@@ -173,7 +178,7 @@ impl PageRecorder{
       wrapper.begin_recording(self.bounds, true).draw_drawable(&mut drawable, None);
       if let Some(pict) = wrapper.finish_recording_as_picture(None){
         self.footprint.grow(pict.approximate_bytes_used() as i64); // update v8's accounting
-        self.layers.push(Layer::Ops(pict));
+        Arc::make_mut(&mut self.layers).push(Layer::Ops(pict));
       }
       self.approx_ops = 0;
     }
@@ -190,7 +195,7 @@ impl PageRecorder{
     if self.disposed { return }
     self.flush();
     self.has_pages = true;
-    self.layers.push(Layer::Page(Box::new(page_ref)));
+    Arc::make_mut(&mut self.layers).push(Layer::Page(Box::new(page_ref)));
   }
 
   pub fn append<F>(&mut self, f:F)
@@ -296,7 +301,7 @@ impl PageRecorder{
     self.flush();
 
     Page{
-      layers: self.layers.clone(),
+      layers: Arc::clone(&self.layers),
       bounds: self.bounds,
       id: self.id,
       epoch: self.epoch,
@@ -352,7 +357,7 @@ impl PageRecorder{
     self.footprint.clear(); // credit the display-list charge back to V8
     self.current = None;
     self.last_image = None; // drop before the layers (since it references them)
-    self.layers.clear();
+    self.layers = Arc::new(vec![]); // drop our handle; any live snapshot keeps its own
 
     let id = self.id;
     let cache = Cache::shared();
@@ -383,7 +388,7 @@ impl Drop for PageRecorder{
 pub struct Page{
   pub id: usize,
   pub bounds: Rect,
-  layers: Vec<Layer>,
+  layers: Arc<Vec<Layer>>,
   epoch: u32, // bounds revision under this id
   pub color_space: ColorSpace, // inherited from the context that recorded the page
   pub dependent_ops: bool, // contains ops that clear, blit, or use a non-SrcOver blend
@@ -399,7 +404,7 @@ impl PartialEq for Page {
 
 impl Default for Page {
   fn default() -> Self {
-    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:vec![], epoch:0,
+    Self{ id:0, bounds: skia_safe::Rect::new_empty(), layers:Arc::new(vec![]), epoch:0,
           color_space: ColorSpace::new_srgb(), dependent_ops:false, has_pages:false,
           eviction: PostedEviction::default() }
   }
@@ -414,7 +419,7 @@ impl Page{
     Self{
       id: Self::picture_id(pict),
       bounds: Rect::from_size(size),
-      layers: vec![Layer::Ops(pict.clone())],
+      layers: Arc::new(vec![Layer::Ops(pict.clone())]),
       color_space,
       ..Default::default() // epoch 0, no dependent ops, no page refs
     }
