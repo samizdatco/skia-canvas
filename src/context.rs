@@ -455,7 +455,10 @@ impl Context2D{
       self.state.fill_style.is_opaque() &&
       self.state.global_alpha == 1.0 &&
       self.state.clip.is_none() &&
-      path.conservatively_contains_rect(self.bounds)
+      // the path is in user space, so map it through the CTM before comparing it to the canvas
+      // (checking the cheap bounding-box test first to avoid transforming every path)
+      self.state.matrix.map_rect(path.bounds()).0.contains(self.bounds) &&
+      path.with_transform(&self.state.matrix).conservatively_contains_rect(self.bounds)
     {
       // ...erase existing vector content layers (but preserve CTM & clip path)
       self.with_recorder(|mut recorder|{

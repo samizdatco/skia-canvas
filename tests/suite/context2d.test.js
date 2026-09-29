@@ -1042,6 +1042,29 @@ describe("Context2D", ()=>{
       assert.deepEqual(pixel(1, 1), BLACK)
     })
 
+    test("fill() with a transform", () => {
+      // with this scale, the untransformed rects below are larger than the canvas even
+      // though each one only covers half of it once drawn
+      ctx.scale(0.5, 1)
+      let fills = {
+        fillRect: () => ctx.fillRect(0, 0, WIDTH, HEIGHT),
+        fill: () => { ctx.beginPath(); ctx.rect(0, 0, WIDTH, HEIGHT); ctx.fill() },
+        'fill(Path2D)': () => { let p = new Path2D(); p.rect(0, 0, WIDTH, HEIGHT); ctx.fill(p) },
+      }
+
+      _each(fills, (drawLeftHalf) => {
+        ctx.clearRect(0, 0, WIDTH * 2, HEIGHT)
+        ctx.fillStyle = 'white'
+        ctx.fillRect(WIDTH, 0, WIDTH, HEIGHT)
+        ctx.fillStyle = 'black'
+        drawLeftHalf()
+
+        // painting the left half must not erase the right half
+        assert.deepEqual(pixel(WIDTH / 4, HEIGHT / 2), BLACK)
+        assert.deepEqual(pixel(WIDTH * 3/4, HEIGHT / 2), WHITE)
+      })
+    })
+
     test("fillText()", () => {
       /** @type {[args: any[], shouldDraw: boolean][]} */
       let argsets = [
