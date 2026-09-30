@@ -12,37 +12,36 @@
 
 #### GUI
 - [**Window**][window] objects now support [**PointerEvent**][pointerevent] event [types][pointerevent_types] and provide [`requestAnimationFrame()`][raf] and [`cancelAnimationFrame()`][caf] methods for scheduling updates synced to display refresh
-- Rendering now always uses the *current* monitor's pixel density, so dragging a window between screens with different scale factors should stay sharp
+- Rendering now always uses the *current* monitor’s pixel density, so dragging a window between screens with different scale factors should stay sharp
 
 #### Wide-gamut Color
-- The canvas's color space can now be selected via `getContext('2d', {colorSpace})` and set to either `"srgb"` (the default) or `"display-p3"`. The setting will be inherited by any subsequent pages but can be overridden by passing a `colorSpace` option to [`newPage()`][newPage].
-- The [`getImageData()`][mdn_getImageData] function also takes a `colorSpace` option, selecting how the raw pixels it returns will be clamped (by default it uses the context's color space setting). Likewise, the [**ImageData**][ImageData] constructor and [`createImageData()`][mdn_createImageData] now also take an optional `colorSpace` arg.
-- Bitmap exports (and [toSharp()][imgdata_tosharp]) will use the context's color space and embed a matching ICC profile, PDFs will do the same for *images* drawn onto the canvas but not path drawing, and SVGs have no wide-gamut support.
+- The canvas’s color space can now be selected via `getContext("2d", {colorSpace})` and set to either `"srgb"` (the default) or `"display-p3"`. The setting will be inherited by any subsequent pages but can be overridden by passing a `colorSpace` option to [`newPage()`][newPage].
+- The [`getImageData()`][mdn_getImageData] function also takes a `colorSpace` option, selecting how the raw pixels it returns will be clamped (by default it uses the context’s color space setting). Likewise, the [**ImageData**][ImageData] constructor and [`createImageData()`][mdn_createImageData] now also take an optional `colorSpace` arg.
+- Bitmap exports (and [`toSharp()`][imgdata_tosharp]) will use the context’s color space and embed a matching ICC profile, PDFs will do the same for *images* drawn onto the canvas but not path drawing, and SVGs have no wide-gamut support.
 - Color strings can now use full [CSS Color 4][css_color4] syntax everywhere a color is accepted (`fillStyle`, `strokeStyle`, `shadowColor`, gradient stops, [`matte`][matte], and `drop-shadow()` filters). This includes support for `oklch()`, `oklab()`, `lab()`, `lch()`, and `color(display-p3 …)`, but relative color syntax like `rgb(from …)` is not currently supported.
 - [**CanvasGradient**][CanvasGradient] objects now have [`colorInterpolationMethod`][colorInterpolationMethod], [`hueInterpolationMethod`][hueInterpolationMethod], and [`premultipliedAlpha`][premultipliedAlpha] properties controlling how colors are blended between stops
-- Windows on macOS now use Display P3. Vulkan windows remain sRGB (no tested driver advertised P3 support), though this may change in the future
+- Windows on macOS now use Display P3. Vulkan windows remain sRGB, though this may change in the future
 
 #### Typography
-- Text in PDF exports is now selectable and searchable (thanks to @Mythie's PR #295 for the proof of concept)
+- Text in PDF exports is now selectable and searchable (thanks to @Mythie’s PR #295 for the proof of concept)
 - The new [`fontSmoothing`][fontSmoothing] property can be set to `false` to render un-antialiased text that is aligned to the pixel grid. By default, fonts use greyscale AA and are sub-pixel positioned
 - The [`fontSynthesis`][fontSynthesis] property allows you to control whether a fake bold and oblique should be generated when a font family lacks a real one. Note that this now defaults to **true**, matching browser behavior but breaking from previous Skia Canvas defaults
 - The [`fontKerning`][fontKerning] property controls whether the OpenType `kern` feature is enabled: `"auto"`/`"normal"` (the default) leaves it on, `"none"` turns it off.
 - The [`letterSpacing`][letterSpacing] and [`wordSpacing`][wordSpacing] properties now accept `em` and `rem` units. `em` is relative to the current font size and `rem` uses a 16px root size.
-- Variable fonts that support optical sizing (the `opsz` axis) are now automatically sized to the current `font` site (matching browser behavior).
-- The `font` setting can now include an oblique angle (e.g., `"oblique 14deg 24px Times"`) for variable fonts that support the `slnt` axis.
-- The new [`fontVariationSettings`][fontVariationSettings] property takes a CSS `font-variation-settings` string (e.g. `'"wght" 625, "opsz" 48'`) for low-level control over arbitrary variable-font axes. Set it to `"normal"` to clear.
-- The new [`fontFeatureSettings`][fontFeatureSettings] property takes a CSS `font-feature-settings` string (e.g. `'"liga" 0, "tnum" 1, "ss01"'`) for directly enabling or disabling OpenType features by tag. On conflicting tags it overrides `fontVariant` and `fontKerning`. Set it to `"normal"` to clear.
-- The `font` attribute now accepts an explicit oblique angle (e.g. `"oblique 14deg 24px Times"`), clamped to CSS's ±90° range. When an oblique angle is selected, the font's real italic (`ital`) axis is disabled so you get slanted roman letterforms rather than true italics.
-- The **FontLibrary**’s `use()` and `family()` methods now include additional fields describing the capabilities of user-loaded or system-installed fonts:
+- Variable fonts that support optical sizing (the `opsz` axis) are now automatically sized to the current `font` size (matching browser behavior).
+- The `font` attribute now accepts an oblique angle (e.g., `"oblique 14deg 24px Recursive"`) and will set the `slnt` axis (and suppress italic letterforms) for variable fonts that support it.
+- The new [`fontVariationSettings`][fontVariationSettings] property takes a CSS [`font-variation-settings`][mdn_fontvariation] string (e.g., `'"wght" 625, "opsz" 48'`) for low-level control over arbitrary variable-font axes. Set it to `"normal"` to clear.
+- The new [`fontFeatureSettings`][fontFeatureSettings] property takes a CSS [`font-feature-settings`][mdn_fontfeature] string (e.g., `'"liga" 0, "tnum" 1, "ss01"'`) for directly enabling or disabling OpenType features by tag. On conflicting tags it overrides `fontVariant` and `fontKerning`. Set it to `"normal"` to clear.
+- The **FontLibrary**’s [`use()`][FontLibrary.use] and [`family()`][FontLibrary.family] methods now include additional fields describing the capabilities of user-loaded or system-installed fonts:
   - `variable`: A boolean flag identifying that this is a variable font
-  - `variations`: Variable font axes represented an object with supported axis tags (e.g., `wdth`, `slnt`) mapping to `{min, max, default, label}` summaries
+  - `variations`: Variable font axes represented as an object with supported axis tags (e.g., `wdth`, `slnt`) mapping to `{min, max, default, label}` summaries
   - `features`: OpenType features represented as an object with supported feature tags (e.g., `liga`, `smcp`) mapping to `{type, label}` summaries
 
 #### Imagery
 - **Image** objects can now load **PDF** documents (via [`loadImage()`][loadImage()], [new Image()][image_constructor], or the [`src`][Image.src] setter) and render them as resolution-independent vectors.
   - Single pages can be loaded via [`loadImage()`][loadImage()] which now accepts a 1-based `page` number option, so you can draw PDFs to other Canvases.
-  - Whole documents can be loaded via [`loadCanvas()`][loadCanvas], which adds each PDF page as a content-sized entry in the Canvas's `pages` attribute allowing you to draw annotations onto them.
-- SVG images now apply CSS rules contained in `<style>` elements and support most CSS selectors (#276). Custom properties have only basic support: `var()` references resolve against `:root` and inline `style` declarations only and chained definitions (`--foo: var(--bar)`) are not currently handled.
+  - Whole documents can be loaded via [`loadCanvas()`][loadCanvas], which adds each PDF page as a content-sized entry in the Canvas’s `pages` attribute allowing you to draw annotations onto them.
+- SVG images now apply CSS rules contained in `<style>` elements and support most CSS selectors (#276). Custom properties have only basic support: `var()` references only resolve against `:root` or inline `style` declarations, and chained definitions like `--foo: var(--bar)` are not currently handled.
 - [**ImageData**][ImageData] now supports `Float16Array` (on Node 23+) for half-float pixel formats and [`getImageData()`][mdn_getImageData] will return one when a float-based `colorType` is requested (#271).
 - When [exporting][Canvas.toFile] in `"raw"` format, you can now include a `premultiplied` option to leave the pixel values in their GPU-native state (and avoid a potentially lossy conversion to un-premultiplied at low alpha).
 - PNG exports now default to using *no* adaptive filtering while encoding (since this is both faster and produces smaller output files for the types of flat-shaded graphics produced by canvas drawing). You can opt back into using adaptive filtering by setting the [`filters`][filters] export option to `"all"`, or try using `"auto"` which tests your canvas content for compressibility then selects the best mode to minimize file size.
@@ -55,34 +54,33 @@
 ### Performance Optimizations
 
 #### Drawing throughput
-- Vector drawing operations are now queued on the JS side in a binary "drawlist" and sent to Rust in batches rather than making one bridged call per verb. In addition, paths are now constructed lazily via Skia's `PathBuilder`, leading to substantially faster rendering on verb-heavy workloads
+- Vector drawing operations are now queued on the JS side in a binary “drawlist” and sent to Rust in batches rather than making one bridged call per verb. In addition, paths are now constructed lazily via Skia’s `PathBuilder`, leading to substantially faster rendering on verb-heavy workloads
 - [`measureText()`][measureText()] results are now memoized, so repeatedly measuring the same strings no longer requires a full layout pass on each call.
 
 #### GPU rendering & exports
 - All GPU work (offscreen exports as well as windows) now shares a dedicated render thread instead of giving every worker thread its own GPU context. This removes an unnecessary GPU⇄CPU roundtrip and duplicated per-thread resource caches, making exports meaningfully faster and lowering peak memory
-- By default, GPU antialiasing now uses shader-based AA (rather than the previous default of 4× MSAA). It benchmarks faster and produces crisper text and thin strokes, more closely matching CPU-rendered output
 - Text drawn with a shadow is now rasterized once into a `Picture` and blurred as a unit. Previously, each run of multiple lines, fallback fonts, or decorations triggered redundant blur passes.
 - PNG encoding is now faster due to disabling adaptive row filters and can be further tuned by lowering the `quality` argument to scale zlib compression effort
 - [`getImageData()`][mdn_getImageData] now writes directly into the returned buffer instead of allocating an intermediate copy.
 
 #### Memory & resource consumption
-- Native and GPU memory held by live **Canvas** and **Image** references are now reported to V8, so garbage collection has an accurate picture of memory pressure (instead of viewing these objects as effectively 'free'). As a result, memory growth in canvas-creating loops is now bounded (fixes #284), though you'll still get an even smaller footprint with explicit disposal via `using` / `.dispose()` especially within **synchronous** allocation loops
-- Adding a missing autorelease pool in the Metal exporter removed a native-buffer memory leak on macOS, and all platforms now have a background process that reclaims GPU memory on idle
+- Native and GPU memory held by live **Canvas** and **Image** references are now reported to V8, so garbage collection has an accurate picture of memory pressure (instead of viewing these objects as effectively ‘free’). As a result, memory growth in canvas-creating loops is now bounded (fixes #284), though you’ll still get an even smaller footprint with explicit disposal via `using` / `.dispose()` especially within **synchronous** allocation loops
+- Adding a missing autorelease pool in the Metal exporter removed a native-buffer memory leak on macOS, and all platforms now have a background thread that reclaims GPU memory on idle
 - GPU resources are now evicted based on actual last-use time rather than on a fixed interval regardless of activity.
 - On Linux/glibc, a background thread now calls `malloc_trim` to return freed heap pages to the OS after an idle period (tunable via the [`SKIA_CANVAS_TRIM`][skia_canvas_trim] environment variable)
 
 #### Frame pacing
-- On-screen animations now run at a stable frame rate locked to the display's refresh by syncing to a hardware vblank (using CVDisplayLink on macOS, DwmFlush on Windows, DRM vblank on X11, and redraw callbacks on Wayland). In addition, non-animated windows (i.e., no `frame` or `draw` listener) will consume near-zero CPU as they are only redrawn in response to UI events.
+- On-screen animations now run at a stable frame rate locked to the display’s refresh by syncing to a hardware vblank (using CVDisplayLink on macOS, DwmFlush on Windows, DRM vblank on X11, and redraw callbacks on Wayland). In addition, non-animated windows (i.e., no `frame` or `draw` listener) will consume near-zero CPU as they are only redrawn in response to UI events.
 - Pointer and mouse input is now coalesced to one sample per display refresh, so windows no longer redraw on every raw input event (most relevant to X11 and Wayland which report mouse events at whatever speed the mouse samples at; potentially hundreds of Hz)
 
 #### Render caching
-- Drawing a **Canvas** or vector **Image** onto a canvas now reuses a cached raster of the source rather than re-rendering on every call (stored at destination scale so it's still as crisp as the vector replay would be). The cached rasters are released when the source object is garbage collected (or `dispose()` is called on it).
+- Drawing a **Canvas** or vector **Image** onto a canvas now reuses a cached raster of the source rather than re-rendering on every call (but only when the canvas is exported to a bitmap).
 - Repeatedly exporting a canvas (with accumulated/layered drawing in between) now uses a cached snapshot so only the newly added drawing layers need to be rendered each time.
-- The cached rasters share a single 128 MB budget which can be overridden by setting the `SKIA_CANVAS_CACHE` environment variable to a number of MBs.
+- The cached rasters share a single 128 MB budget which can be overridden by setting the [`SKIA_CANVAS_CACHE`][rendercache] environment variable to a number of MBs.
 
 ### Misc. Improvements
 - The postinstall script for downloading precompiled native binaries has been replaced by platform-specific `optionalDependencies` in the `@skia-canvas/*` namespace. Installs now work with `--ignore-scripts` enabled (#275) and behind firewalls that only mirror the npm registry (#287). As a fallback, the binaries can still be downloaded from the GitHub release via an explicit `npm run build` or `npm run download`.
-- [`getContextAttributes()`][getContextAttributes] now also includes the **Context**'s `width` & `height`, which is the only way to get page-specifc dimensions in a multi-page canvas (since the Canvas's size corresponds to the *final* page).
+- [`getContextAttributes()`][getContextAttributes] now also includes the **Context**’s `width` & `height`, which is the only way to get page-specific dimensions in a multi-page canvas (since the Canvas’s size corresponds to the *final* page).
 - The [`points()`][p2d_points] method now takes a sampling `mode` argument: the default `"even"` fits the step to each contour so both endpoints are present, while the new `"exact"` mode samples at precise multiples of the requested step.
 - [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] now take a `timeout` [request option][request_opts], rejecting the Promise if the request stalls. See also: the [`AbortSignal.timeout()`][mdn_abortTimeout] `signal` option.
 - Upgraded Skia to [milestone 150](https://github.com/rust-skia/rust-skia/releases/tag/0.99.0) (via `skia-safe` 0.99.0) and `winit` to 0.30.13
@@ -92,12 +90,12 @@
 
 #### Canvas
 - The **Canvas** constructor no longer ignores the `{gpu:false}` option
-- The **App** singleton now initializes lazily, no longer keeping the node event loop alive and causing spurious "open handle" warnings in test runners (#286)
+- The **App** singleton now initializes lazily, no longer keeping the node event loop alive and causing spurious “open handle” warnings in test runners (#286)
 - The [`canvas.engine`][canvas_engine] property now reports the thread-count on CPU- as well as GPU-backed canvases
 
 #### Text
-- Variable font instancing now uses Skia's font-argument path, fixing missing or blank glyphs, weights that drifted from glyph to glyph within a single string, and the weight axis being ignored entirely on Linux (#272, #280, #294)
-- `textDecoration` is now drawn behind the text (unless it's `line-through`) and underlines now leave gaps for descenders
+- Variable font instancing now uses Skia’s font-argument path, fixing missing or blank glyphs, weights that drifted from glyph to glyph within a single string, and the weight axis being ignored entirely on Linux (#272, #280, #294)
+- [`textDecoration`][textDecoration] is now drawn behind the text (unless it’s `line-through`) and underlines now leave gaps for descenders
 - Text is now positioned with subpixel precision rather than having its baseline snapped to the pixel grid
 - [`measureText()`][measureText()] now reports browser-like `width` and `actualBoundingBox*` values when [`letterSpacing`][letterSpacing] is non-zero: `width` includes a trailing letter-space and `actualBoundingBoxLeft`/`Right` now use the ink bounds
 - Fixed [`textBaseline`][textBaseline] being applied incorrectly when drawing with the default font
@@ -108,11 +106,11 @@
   - [`fontVariant`][fontVariant] parsing has been corrected
 
 #### GPU
-- Fixed window flickering at the canvas's edges when sizing to [`fit`][window_fit] (#285)
+- Fixed window flickering at the canvas’s edges when sizing to [`fit`][window_fit] (#285)
 - A GPU disappearing (after a device reset or an eGPU being unplugged) is now recoverable
-- Vulkan device-selection and CPU-fallback:
+- Vulkan device-selection:
   - verifies candidate GPUs can actually build a working context before selection
-  - uses the device's preferred `api_version`, fixing crashes on some Intel drivers (#274)
+  - uses the device’s preferred `api_version`, fixing crashes on some Intel drivers (#274)
   - falls back to CPU when no usable Vulkan device is available (#289)
   - shuts down GPU cleanly on exit (preventing a crash on some Intel GPUs)
 
@@ -120,31 +118,31 @@
 - Fixed [`clip()`][mdn_clip] and [`putImageData()`][mdn_putImageData] corrupting saved graphics state through a missing internal `save()`, which could break later `restore()` calls (#273)
 - [`clip()`][mdn_clip], [`fill()`][mdn_fill], and [`isPointInPath()`][isPointInPath()] now treat an `undefined` fill-rule argument as the default (`"nonzero"`) rather than throwing (#282)
 - The **Path2D** boolean operators ([`union()`][bool-ops], [`difference()`][bool-ops], [`intersect()`][bool-ops], [`xor()`][bool-ops], [`complement()`][bool-ops], and [`simplify()`][p2d_simplify]) now return paths that can be drawn with the default `nonzero` winding rule
-- Now that [`simplify()`][p2d_simplify] correctly honors the fill rule passed to it, [`unwind()`][p2d_unwind] has been deprecated (since it's now equivalent to calling `simplify("even-odd")`)
+- Now that [`simplify()`][p2d_simplify] correctly honors the fill rule passed to it, [`unwind()`][p2d_unwind] has been deprecated (since it’s now equivalent to calling `simplify("evenodd")`)
 
 #### Imagery
-- [`drawImage()`][mdn_drawImage], [`getImageData()`][mdn_getImageData], [`putImageData()`][mdn_putImageData] and **DOMRect** now handle rectangles with negative widths or heights as the spec dictates (#283), and their coordinates are now truncated toward zero rather than floored (matching browser behavior).
-- [`drawImage()`][mdn_drawImage] and [`drawCanvas()`][drawcanvas] now clip the source rectangle to the image's actual bounds and skip the draw entirely when the crop doesn't overlap it. Previously a zero-overlap crop with a composite mode like `copy` or `destination-in` could erase the whole canvas.
+- [`drawImage()`][mdn_drawImage], [`getImageData()`][mdn_getImageData], [`putImageData()`][mdn_putImageData], and **DOMRect** now handle rectangles with negative widths or heights as the spec dictates (#283), and their coordinates are now truncated toward zero rather than floored (matching browser behavior).
+- [`drawImage()`][mdn_drawImage] and [`drawCanvas()`][drawcanvas] now clip the source rectangle to the image’s actual bounds and skip the draw entirely when the crop doesn’t overlap it. Previously a zero-overlap crop with a composite mode like `copy` or `destination-in` could erase the whole canvas.
 - A failed **Image** load without an `error` handler no longer terminates the process.
 - SVG exports no longer double-draw bitmaps added to the canvas via `putImageData`.
-- The [toSharp()][imgdata_tosharp] method now produces correct pixel values for *all* supported color types, not just the 8-bit formats.
+- The [`toSharp()`][imgdata_tosharp] method now produces correct pixel values for *all* supported color types, not just the 8-bit formats.
 
 #### Compositing
-- Drawing one canvas onto another (via [`drawImage()`][mdn_drawImage] or [`drawCanvas()`][drawcanvas]) now isolates the source's compositing from the destination. Previously, if the drawn canvas used a non-`source-over` blend mode, called `clearRect()`, or blitted an ImageData it would blend against (or erase) the destination canvas's content.
+- Drawing one canvas onto another (via [`drawImage()`][mdn_drawImage] or [`drawCanvas()`][drawcanvas]) now isolates the source’s compositing from the destination. Previously, if the drawn canvas used a non-`source-over` blend mode, called `clearRect()`, or blitted an ImageData it would blend against (or erase) the destination canvas’s content.
 - The `matte` is now composited *underneath* the finished page rather than painted first, preventing a canvas that uses region-affecting composite operations from erasing it.
 
 #### Geometry
-- [`DOMPoint`][DOMPoint]'s [`matrixTransform()`][matrixTransform()] and [`DOMMatrix`][DOMMatrix]'s [`transformPoint()`][transformPoint()] now accept a plain init dictionary and fill in omitted members according to the spec. Previously, omitting values would lead to unexpected `NaN`s.
+- [`DOMPoint`][DOMPoint]’s [`matrixTransform()`][matrixTransform()] and [`DOMMatrix`][DOMMatrix]’s [`transformPoint()`][transformPoint()] now accept a plain init dictionary and fill in omitted members according to the spec. Previously, omitting values would lead to unexpected `NaN`s.
 
 ### Breaking Changes
 - The minimum supported Node version is now **18**.
-- [`App.eventLoop`][app_eventLoop] modes have been deprecated. The GUI event loop now always runs in harmony with Node's, allowing timeouts and intervals to fire even while animating
-- The [`fontSynthesis`][fontSynthesis] context property now defaults to `true`, matching browser behavior. Requesting a weight or slant that the selected font family doesn't provide now generates a synthetic bold or oblique. Set it to `false` to fall back to the nearest available real face instead
-- Drawing or sampling an image that failed to load now throws instead of silently doing nothing
-- [`unwind()`][p2d_unwind] has been deprecated in favor of [`simplify('evenodd')`][p2d_simplify], which selects the same region; it will be removed in a future release
-- Boolean-op and [`simplify()`][p2d_simplify] results now render differently when filled with the default `"nonzero"` rule. Results containing holes (e.g., via `xor` or `difference`) previously filled in solid without an explicit `evenodd`
-- SVG **Image**s lacking an explicit `width` and `height` now use the CSS default sizing algorithm (a 300×150 default object size) to establish a default intrinsic size. An SVG with only one concrete dimension plus a `viewBox` ratio now resolves to a fully-determined intrinsic size. This changes both the reported `width`/`height` of such images and how they scale when drawn without explicit size arguments (including when used as fill/stroke-pattern tiles).
-- An **ImageData** created from a Node `Buffer` object now *shares* the buffer's memory rather than copying it.
+- [`App.eventLoop`][app_eventLoop] modes have been deprecated. The GUI event loop now always runs in harmony with Node’s, allowing timeouts and intervals to fire even while animating.
+- The [`fontSynthesis`][fontSynthesis] context property now defaults to `true`, matching browser behavior. Requesting a weight or slant that the selected font family doesn’t provide now generates a synthetic bold or oblique. Set it to `false` to fall back to the nearest available real face instead.
+- Drawing or sampling an image that failed to load now throws instead of silently doing nothing.
+- [`unwind()`][p2d_unwind] has been deprecated in favor of [`simplify("evenodd")`][p2d_simplify], which selects the same region; it will be removed in a future release.
+- Boolean-op and [`simplify()`][p2d_simplify] results now render differently when filled with the default `"nonzero"` rule. Results containing holes (e.g., via `xor` or `difference`) previously filled in solid without an explicit `"evenodd"`.
+- SVG **Image**s lacking an explicit `width` and `height` now use the CSS [default sizing algorithm][default_sizing_algo] (with a 300×150 [default object size][default_size]) to establish a default intrinsic size. An SVG with only one concrete dimension plus a `viewBox` ratio now resolves to a fully-determined intrinsic size. This changes both the reported `width`/`height` of such images and how they scale when drawn without explicit size arguments (including when used as fill/stroke-pattern tiles).
+- An **ImageData** created from a Node `Buffer` object now *shares* the buffer’s memory rather than copying it.
 
 [pointerevent]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent
 [pointerevent_types]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent#pointer_event_types
@@ -167,7 +165,7 @@
 [textBaseline]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/textBaseline
 [mdn_fill]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fill
 [canvas_engine]: /docs/api/canvas.md#engine
-[skia_canvas_trim]: /docs/getting-started.md#environment-variables
+[skia_canvas_trim]: /docs/getting-started.md#memory-fragmentation
 [bool-ops]: /docs/api/path2d.md#complement-difference-intersect-union-xor
 [p2d_simplify]: /docs/api/path2d.md#simplify
 [p2d_points]: /docs/api/path2d.md#points
@@ -178,7 +176,7 @@
 [p2d_slice]: /docs/api/path2d.md#slice
 [p2d_contours]: /docs/api/path2d.md#contours
 [loadCanvas]: /docs/api/canvas.md#loadcanvas
-[imgdata_toSharp]: /docs/api/imagedata.md#tosharp
+[imgdata_tosharp]: /docs/api/imagedata.md#tosharp
 [DOMPoint]: https://developer.mozilla.org/en-US/docs/Web/API/DOMPoint
 [matrixTransform()]: https://developer.mozilla.org/en-US/docs/Web/API/DOMPointReadOnly/matrixTransform
 [transformPoint()]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrixReadOnly/transformPoint
@@ -188,6 +186,12 @@
 [fontFeatureSettings]: /docs/api/context.md#fontfeaturesettings
 [fontKerning]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fontKerning
 [filters]: /docs/api/canvas.md#filters
+[mdn_fontvariation]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-variation-settings
+[mdn_fontfeature]: https://developer.mozilla.org/en-US/docs/Web/CSS/font-feature-settings
+[FontLibrary.family]: /docs/api/font-library.md#family
+[rendercache]: /docs/getting-started.md#render-cache
+[default_sizing_algo]: https://www.w3.org/TR/css-images-3/#default-sizing
+[default_size]: https://www.w3.org/TR/CSS22/visudet.html#inline-replaced-width
 
 ## 📦 ⟩ [v3.0.8] ⟩ Sep 25, 2025
 
@@ -264,7 +268,7 @@
 
 #### Imagery
 - The [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] helpers now use `node-fetch` to handle web requests and can accept a [fetch options][fetch_opts] object as the final argument.
-- `Image` objects can now be created by passing a Buffer or dataURL-containing string as a [constructor argument][image_constructor] and will be immeditately drawable (no asynchronous loading required).
+- `Image` objects can now be created by passing a Buffer or dataURL-containing string as a [constructor argument][image_constructor] and will be immediately drawable (no asynchronous loading required).
 - Added support for integrating the [Sharp][sharp] image processor into canvas workflows (if the `sharp` npm module has been installed):
   - The new Canvas[.toSharp()][canvas_toSharp] & ImageData[.toSharp()][id_toSharp] convenience methods convert their contents to a Sharp bitmap object
   - `loadImage()` & `loadImageData()` can now be called with a Sharp object as their sole argument
@@ -320,7 +324,7 @@
 - Angles passed to [`createConicGradient()`][createConicGradient()] are no longer incorrectly offset by 90°
 - Calling `lineTo` on an empty Path2D no longer adds a line from the origin to the specified coordinates: it now acts as if it were a `moveTo`
 - [`measureText()`][measureText()] now correctly calculates widths when letterSpacing has been set
-- `startRange` and `endRange` in TextMetrics.lines[] now correspond to character indices in the string passed to measureText(), not byte indices into the UTF-8 buffer backing it
+- `startIndex` and `endIndex` in TextMetrics.lines[] now correspond to character indices in the string passed to measureText(), not byte indices into the UTF-8 buffer backing it
 
 [App.launch()]: /docs/api/app.md#launch
 [app_eventLoop]: /docs/api/app.md#eventloop
@@ -350,7 +354,6 @@
 [createTexture_outline]: /docs/api/context.md#outline
 [ctx_font]: /docs/api/context.md#font
 [measureText.runs]: /docs/api/context.md#per-font-metrics
-[Canvas.toFile]: /docs/api/canvas.md#tofile
 [toDataURL]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL
 [toURL]: /docs/api/canvas.md#tourl
 [gpu_opt]: /docs/api/canvas.md#choosing-a-rendering-engine
@@ -446,7 +449,7 @@
 - Updated `winit` and replaced the end-of-life’d [skulpin](https://github.com/aclysma/skulpin)-based Vulkan renderer with a new implementation using Vulkano for window-drawing on Windows and Linux.
   > It’s a fairly direct adaptation of Vulkano [sample code][vulkano_demo] for device setup with skia-specific rendering routines inspired by [@pragmatrix](https://github.com/pragmatrix)’s renderer for [emergent][pragmatrix_emergent]. All of which is to say, if you understand this better than I do I'd love some suggestions for improving the rendering setup.
 - The GPU is now initialized only when it is needed, not at startup. As a result, setting that **Canvas**'s [`.gpu`][canvas_gpu] property to `false` immediately after creation will prevent any GPU-related resource acquisition from occurring (though rendering speed will be predictably slower).
-- The sample-count used by the GPU for multiscale antialiasing can now be configured through the optional [`msaa`][msaa] export argument. If omitted, defaults to 4x MSAA.
+- The sample-count used by the GPU for multisample antialiasing can now be configured through the optional [`msaa`][msaa] export argument. If omitted, defaults to 4x MSAA.
 - Added support for non-default imports (e.g., `import {Image} from "skia-canvas"`) when used as an ES Module.
 - The [getImageData()][mdn_getImageData] method now makes use of the GPU (if enabled) and caches data between calls, greatly improving performance for sequential queries
 
@@ -493,7 +496,7 @@
 
 ### Bugfixes
 - If an offscreen buffer can't be allocated using the Vulkan renderer, CPU rendering is used as a fallback
-- The `drawCanvas()` routine now works even when the destination canvas is later saved as an SVG (previously, the source canvas would be missing from the output). Caveat: this only works if the destination canvas is using the default `source-over` blend mode, has its `globalAlpha` set to 1, and is not using shadows or the `effect` property. If any of those defaults have been changed, the drawn canvas will not appear in the saved SVG. Bitmap and PDF exports do not have this restriction.
+- The `drawCanvas()` routine now works even when the destination canvas is later saved as an SVG (previously, the source canvas would be missing from the output). Caveat: this only works if the destination canvas is using the default `source-over` blend mode, has its `globalAlpha` set to 1, and is not using shadows or the `filter` property. If any of those defaults have been changed, the drawn canvas will not appear in the saved SVG. Bitmap and PDF exports do not have this restriction.
 
 ### Misc. Improvements
 - Added a `fullscreen` event to the `Window` class to flag changes into and out of full-screen mode.
@@ -528,7 +531,7 @@
 ## 📦 ⟩ [v0.9.30] ⟩ Jun 7, 2022
 
 ### New Features
-- Enhacements to the shared **FontLibrary** object:
+- Enhancements to the shared **FontLibrary** object:
   - Added a [`reset()`][FontLibrary.reset] method to FontLibrary which uninstalls any fonts that had been dynamically installed via `FontLibrary.use()`
   - The [`use()`][FontLibrary.use] method now checks for previously installed fonts with the same family name (or alias) and will replace them with the newly added font
 - Added pre-compiled binaries for Alpine Linux on arm64
@@ -720,7 +723,7 @@
 
 ### Bugfixes
 
-- `measureText` was reporting zero when asked to measure a string that was entirely made of whitespace. This is still the case for ‘blank‘ lines when `textWrap` is set to `true` but in the default, single-line mode the metrics will now report the width of the whitespace.
+- `measureText` was reporting zero when asked to measure a string that was entirely made of whitespace. This is still the case for ‘blank’ lines when `textWrap` is set to `true` but in the default, single-line mode the metrics will now report the width of the whitespace.
 -  Changed the way text rendering was staged so that SVG exports didn’t *entirely omit(!)* text from their output. As a result, `Context2D`s now use an external `Typesetter` struct to manage layout and rendering.
 
 [density]: /docs/api/canvas.md#density
