@@ -908,9 +908,9 @@ impl PngFilters{
         const SAMPLE_PCT: usize = 12;    // sample rows proportionally to image size
         const SAMPLE_MIN: usize = 48;
         const SAMPLE_MAX: usize = 192;
-        const MAX_PIXELS: usize = 120_000; // limit sampled pixels to rows×width
+        const MAX_PIXELS: usize = 32_768;  // limit sampled pixels to rows×width
         const ZLIB_LEVEL: i32 = 1;         // use minimal effort
-        const THRESHOLD: f32 = 0.05;       // size improvement that makes All worthwhile
+        const THRESHOLD: f32 = 0.12;       // size improvement that makes All worthwhile
 
         // unpack the image pixels for sampling
         let Some(pixmap) = image.peek_pixels() else { return FilterFlag::NONE };
