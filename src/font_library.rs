@@ -62,6 +62,11 @@ impl FontLibrary{
           }
         }
 
+        // skia's glyph cache is purged when either the strike-count or max-bytes limit are reached, and the
+        // defaults are low enough to be easily hit in a single canvas (2 MB / 2048 strikes), so raise them
+        skia_safe::graphics::set_font_cache_limit(16 * 1024 * 1024);
+        skia_safe::graphics::set_font_cache_count_limit(8192);
+
         RefCell::new(FontLibrary{
           mgr:FontMgr::default(), fonts:vec![], collection:None, collection_attrs:RenderAttrs::default(), generics_cache:vec![]
         })
