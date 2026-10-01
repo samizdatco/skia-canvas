@@ -58,5 +58,6 @@ jobs:
           npm publish
           # try to keep `next` pointing at the newest published version even for stable releases
           # (OIDC will prevent this until npm/cli#8547 so it will just log a warning for now)
-          npm dist-tag add "skia-canvas@$VERSION" next || echo "::warning::dist-tag add failed for skia-canvas@$VERSION (npm/cli#8547) — re-point next manually"
+          npm dist-tag add "skia-canvas@$VERSION" next \
+            || echo "::warning::Could not re-point the 'next' dist-tag (npm/cli#8547). Run locally to fix:%0A%0A    npm dist-tag add skia-canvas@$VERSION next"
         fi
