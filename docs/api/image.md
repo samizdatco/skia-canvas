@@ -57,7 +57,7 @@ ctx.drawImage(img, 100, 100)
 
 ### Cleaning Up
 
-Each `Image` objects holds references to native resources (raw image bytes, cache buffers, etc.) that won't be released until the object is reclaimed by the garbage collector. Since the collector only runs in between ticks of the Node event loop this means that collection will be deferred even if your code is asychronous, and will not happen *at all* if you're loading and rendering images within a sychronous loop. The best way to handle these situations is to use explicit resource management (see also the [Canvas object's support][canvas_cleanup] for this).
+Each `Image` object holds references to native resources (raw image bytes, cache buffers, etc.) that won't be released until the object is reclaimed by the garbage collector. Since the collector only runs in between ticks of the Node event loop this means that collection will be deferred even if your code is asynchronous, and will not happen *at all* if you're loading and rendering images within a synchronous loop. The best way to handle these situations is to use explicit resource management (see also the [Canvas object's support][canvas_cleanup] for this).
 
 On Node versions 24 and later, the `using` and `await using` keywords will allow you to mark an Image object for disposal as soon as it goes out of the scope in which it was created. On Node 22 and earlier you can achieve the same effect by using the [`dispose()`](#dispose) and [`release()`](#release) methods.
 
@@ -80,7 +80,7 @@ With asynchronous code, use the `await using` keyword:
 for (let url of imageURLs){
   await using img = await loadImage(url)
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-  await canvas.toFile(path.replace(/\.\w+$/, '-thumb.png'))
+  await canvas.toFile(url.replace(/\.\w+$/, '-thumb.png'))
 } // ← calls img.release() at the end of each loop iteration
 ```
 
@@ -133,7 +133,7 @@ Note that the image will be [`complete`][img_complete] immediately if a Buffer o
 In the browser these are writable properties that can control the display size of the image within the HTML page. But the context's [`drawImage`][drawImage()] method ignores them in favor of the image's intrinsic size. As a result, Skia Canvas doesn't let you overwrite the `width` and `height` properties (since it would have no effect anyway) and provides them as read-only values derived from the image data.
 
 :::info[Note]
-When loading an image from an SVG file, the intrinsic size may not be defined since the root `<svg>` element is not required to have a defined `width` and `height`. In these cases, the Image will use a default size of 300×100. If the SVG lacks an intrinsic size but *does* contain a `viewBox` attribute, its aspect ratio will be preserved and its size will be scaled to fit within the default 300×100 frame. Note that in *any* case where the default size is used, the image will be re-scaled when passed to [`drawImage`][drawImage()] so that it is contained by the canvas's dimensions (mimicking Chrome's behavior).
+When loading an image from an SVG file, the intrinsic size may not be defined since the root `<svg>` element is not required to have a defined `width` and `height`. In these cases, the Image will use a default size of 300×150. If the SVG lacks an intrinsic size but *does* contain a `viewBox` attribute, its aspect ratio will be preserved and its size will be scaled to fit within the default 300×150 frame. Note that in *any* case where the default size is used, the image will be re-scaled when passed to [`drawImage`][drawImage()] so that it is contained by the canvas's dimensions (mimicking Chrome's behavior).
 :::
 
 
@@ -143,7 +143,7 @@ A boolean that is `true` once the `src` data has been fetched and parsed. It doe
 
 ### `.onload` & `.onerror`
 
-For compatibility with browser conventions, event handlers can be set up by assigning functions to the **Image**'s `.onload` and `.onerror` properties. For a more modern-feeling approach, try using [`.on("load", …)`][img_bind] and [`.on("error", …)`][img_bind] instead
+For compatibility with browser conventions, event handlers can be set up by assigning functions to the **Image**'s `.onload` and `.onerror` properties. For a more modern-feeling approach, try using [`.on("load", …)`][img_bind] and [`.on("error", …)`][img_bind] instead.
 
 The `.onload` function will be passed a reference to the **Image** as its argument, and the `this` of its function context will also refer to the same **Image** object (presuming it is not defined as an arrow function).
 
@@ -221,11 +221,11 @@ for (let path of imagePaths){
 release()
 ```
 
-Synchronously frees all resources associated with the Image and marks it as [`disposed`](#disposed), then asychronously yields to the event loop (which has the side effect of running any deferred finalizers for *other* objects as well). This is the method called by the [`await using`][await_using] keyword when the Image reference goes out of scope.
+Synchronously frees all resources associated with the Image and marks it as [`disposed`](#disposed), then asynchronously yields to the event loop (which has the side effect of running any deferred finalizers for *other* objects as well). This is the method called by the [`await using`][await_using] keyword when the Image reference goes out of scope.
 
 ```js
 for (let path of imagePaths){
-  let img = await loadImage(url)
+  let img = await loadImage(path)
   try{
     ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
     await canvas.toFile(path.replace(/\.\w+$/, '-thumb.png'))
@@ -296,7 +296,7 @@ The supported options include:
 - `body`: a string or buffer to be sent to the server if the method is set to `POST` or `PUT`
 - `auth`: a string with credentials for Basic Auth in the format `"user:password"` which will be used to construct the `Authorization` header (if not supplied)
 - `timeout`: the amount of socket inactivity to tolerate before cancelling the request (note that this is *not* total request time: it resets on every redirect and whenever a new byte arrives)
-- `signal`: an [AbortSignal][AbortSignal] to allow the request to be manually cancelled or [timed out](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static) after total request time exceeds the threshhold
+- `signal`: an [AbortSignal][AbortSignal] to allow the request to be manually cancelled or [timed out](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static) after total request time exceeds the threshold
 - `agent`: an [http.Agent][http_agent] used to customize the connection or `false` to disable the [default agent](https://www.npmjs.com/package/https-proxy-agent) which uses the url in the `HTTP_PROXY` environment variable (if defined) as a proxy server
 - any other option supported by Node’s [http.request][http_request] call
 

@@ -18,7 +18,7 @@ Working around this requires different approaches based on your package manager 
 
 ### `npm`
 
-The default `npm` package manager installs whichever optional depenency matches the *current* machine's OS & architecture by default. But you can also create a `node_modules` folder that's directly shippable to your target platform by specifying its configuration explicitly:
+The default `npm` package manager installs whichever optional dependency matches the *current* machine's OS & architecture by default. But you can also create a `node_modules` folder that's directly shippable to your target platform by specifying its configuration explicitly:
 
 ```bash
 npm ci --os=linux --cpu=x64 --libc=glibc # (or --libc=musl)
@@ -101,7 +101,7 @@ Skia Canvas depends on libraries that aren't present in the standard Lambda [run
   - **Name**: `skia-canvas` (or whatever you want)
   - **Description**: you might want to note the Skia Canvas version here
   - **Compatible architectures**: select **x86_64** or **arm64** depending on which zip you chose
-  - **Compatible runtimes**: select **Node.js 22.x** (and/or 20.x)
+  - **Compatible runtimes**: select **Node.js 22.x** (and/or 24.x)
 3. Click the **Choose file** button and select the zip file you downloaded in Step 1, then click **Create**
 
 Alternatively, you can use the [`aws` command line tool](https://github.com/aws/aws-cli) to create the layer. This bash script will fetch the skia-canvas version of your choice and make it available to your Lambda functions.
@@ -116,7 +116,7 @@ aws lambda publish-layer-version \
     --description "Skia Canvas ${VERSION} layer" \
     --zip-file "fileb://aws-lambda-${PLATFORM}.zip" \
     --compatible-runtimes "nodejs22.x" "nodejs24.x" \
-    --compatible-architectures "${X/#x/x86_}"
+    --compatible-architectures "${PLATFORM/#x/x86_}"
 ```
 
 #### Using the layer in a Lambda function
@@ -178,7 +178,7 @@ SKIA_CANVAS_THREADS=2 node my-canvas-script.js
 
 ### Render Cache
 
-Skia Canvas defers rendering until the canvas is exported in order allow a single canvas to be rendered as both a vector and a bitmap. As a result, it needs to re-execute all the canvas's drawing commands every time a bitmap is requested—even if nothing has changed since it was last rasterized. To avoid this wasted work, rendered bitmaps are cached internally and reused if possible, improving execution speed at the cost of some memory.
+Skia Canvas defers rendering until the canvas is exported in order to allow a single canvas to be rendered as both a vector and a bitmap. As a result, it needs to re-execute all the canvas's drawing commands every time a bitmap is requested—even if nothing has changed since it was last rasterized. To avoid this wasted work, rendered bitmaps are cached internally and reused if possible, improving execution speed at the cost of some memory.
 
 By default, the cache is set to a maximum of **128MB** (enough to contain ~32 rasters at 720p resolution), but you can adjust this to fit your use case via the `SKIA_CANVAS_CACHE` environment variable. Caching can be disabled altogether by setting it to `0` or `off`, and a different maximum size can be set by passing a number (representing a number of megabytes):
 

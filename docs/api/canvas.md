@@ -13,7 +13,7 @@ description: An emulation of the HTML <canvas> element
 | [**pages**][canvas_pages] 🧪  | [toBuffer()][toBuffer] / [toBufferSync()][toBuffer] 🧪                  |                                | [release() 🧪](#release)
 | [getContext()][getContext]    | [toURL()][toURL] / [toURLSync()][toURL] 🧪                              |                                |
 | [newPage()][newPage] 🧪       | [toSharp()][canvas_tosharp] 🧪                                          |                                |
-| | [toDataURL][toDataURL_mdn] |
+|                               | [toDataURL][toDataURL_mdn] |
 ## Creating new `Canvas` objects
 
 Rather than calling a DOM method to create a new canvas, you can simply call the `Canvas` constructor with the width and height (in pixels) of the image you’d like to begin drawing.
@@ -53,7 +53,7 @@ As a result you’ll generally want to deal with the canvas from within an `asyn
   - [`toFile()`][toFile]
   - [`toBuffer()`][toBuffer]
   - [`toURL()`][toURL]
-  - [`.pdf`, `.svg`, `.jpg`, `.webp`, `.png`, & `raw`][shorthands]
+  - [`.pdf`, `.svg`, `.jpg`, `.webp`, `.png`, & `.raw`][shorthands]
 
 
 In cases where this is not the desired behavior, you can use the synchronous equivalents for the primary export functions. They accept identical arguments to their async versions but block execution and return their values synchronously rather than wrapped in Promises:
@@ -205,8 +205,8 @@ toFile(filename, {
   matte,              // background color
   density=1,          // pixel-scaling ratio
   quality=0.92,       // bitmap compression
+  page=-1,            // which page to export
   msaa=4,             // GPU: antialiasing
-  page=-1,            // PDF: which page to export
   outline=false,      // SVG: font embedding
   downsample=false,   // JPG: edge sharpness
   filters='none',     // PNG: compression
@@ -217,12 +217,12 @@ toFile(filename, {
 
 ##### Synchronous version
 ```js returns="void"
-toFileSync(filename, {format, matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
+toFileSync(filename, {format, matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
 ```
 
 The `toFile` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
 
-The way multi-page documents are handled depends on the `filename` argument. If the filename contains the string `"{}"`, it will be used as template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formats it will contain only the most recently added page.
+The way multi-page documents are handled depends on the `filename` argument. If the filename contains the string `"{}"`, it will be used as a template for generating a numbered sequence of files—one per page. If no curly braces are found in the filename, only a single file will be saved. That single file will be multi-page in the case of PDF output but for other formats it will contain only the most recently added page.
 
 An integer can optionally be placed between the braces to indicate the number of padding characters to use for numbering. For instance `"page-{}.svg"` will generate files of the form `page-1.svg` whereas `"frame-{4}.png"` will generate files like `frame-0001.png`.
 
@@ -247,6 +247,8 @@ canvas.toFile('image@3x.png') // equivalent to setting the density to 3
 #### `quality`
 The `quality` option is a number between 0 and 1.0 that controls the level of compression both when making JPEG or WEBP files directly and when embedding them in a PDF. For lossless PNG exports, the `quality` setting controls the level of zlib compression, so higher values will yield smaller files but take longer to encode. If omitted, quality will default to 0.92.
 
+#### `page`
+The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.toFile("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
 
 #### `msaa`
 :::format[GPU rendering only]
@@ -256,7 +258,7 @@ The `msaa` option controls whether the GPU uses ‘multisample antialiasing’ r
 
 MSAA allocates an additional buffer that's proportional to the source canvas size (≊268 MB for a 4096×4096 canvas at the default sampling of `4`) and can provide a *substantial* speed increase in exchange for that memory usage. On the other hand, it reduces the smoothness at the edges of paths since it can only account for five degrees of pixel coverage (0, ¼, ½, ¾, 1). Shader-based AA computes the fractions exactly for everything except stroked curves (which are quantized internally to 4×). Increasing the number of MSAA samples will increase the number of coverage levels it can account for, but at the cost of further-increased memory usage.
 
-MSAA has no effect at all on text, gradients, or images, so you get nothing in exchange for its memory usage if that's all your canvas is rendering. As a result, you may want **disable MSAA** by setting `msaa` to `0` or `false` in situations where you:
+MSAA has no effect at all on text, gradients, or images, so you get nothing in exchange for its memory usage if that's all your canvas is rendering. As a result, you may want to **disable MSAA** by setting `msaa` to `0` or `false` in situations where you:
 - aren't doing heavy path drawing on your canvas (and want to reclaim memory)
 - need the smoothest possible edges on your paths (regardless of speed)
 - are using [`clip()`][clip()] and want to ensure crisp boundaries
@@ -264,12 +266,6 @@ MSAA has no effect at all on text, gradients, or images, so you get nothing in e
 The risk of disabling MSAA is that shader-based AA can exceed what Skia's GPU renderers can handle and move onto a much slower CPU rasterization path (and the conditions that trigger that are hard to predict). So be sure to profile if performance matters, since `{msaa:0}` can become expensive when you least expect it.
 
 ![msaa and antialiasing quality](../assets/export-msaa.svg)
-
-#### `page`
-:::format[PDF format only]
-*Default value: __`-1`__*
-:::
-The optional `page` argument accepts an integer that allows for the individual selection of pages in a multi-page canvas. Note that page indexing starts with page 1 **not** 0. The page value can also be negative, counting from the end of the canvas’s `.pages` array. For instance, `.toFile("currentPage.png", {page:-1})` is equivalent to omitting `page` since they both yield the canvas’s most recently added page.
 
 #### `outline`
 :::format[SVG format only]
@@ -292,7 +288,7 @@ When exporting to JPEG, you can enable 4:2:0 [chroma subsampling][chroma_subsamp
 
 By default, PNG exports disable [‘adaptive filtering’][png_adaptive] since that typically produces better compression and faster exports for the kinds of flat graphics that canvas-drawing produces. If your content includes photographic imagery or complex shading, you may be able to get smaller file sizes by setting `filters` to `"all"`. This enables the full set of adaptive filters in exchange for approximately 2.5x the encoding time (and does not *always* yield smaller images).
 
-The `filters` option can also be set to `"auto"`, a middle-ground that tests the canvas content's compressibility on a subset of its pixels, then uses that measurement to decide between `"all"` or `"none"`. It generally minimizes output file size and avoids the expense of unnecessary `"all"` encodes, but it's only half as fast as the default in the cases where it ultimately selects `"none"` anyway.
+The `filters` option can also be set to `"auto"`, a middle-ground that tests the canvas content's compressibility on a subset of its pixels, then uses that measurement to decide between `"all"` or `"none"`. It generally minimizes output file size and avoids the expense of unnecessary `"all"` encodes, but it's a few milliseconds slower than the default in the cases where it ultimately selects `"none"` anyway.
 
 #### `colorType`
 
@@ -300,7 +296,7 @@ The `filters` option can also be set to `"auto"`, a middle-ground that tests the
 *Default value: __`"rgba"`__*
 :::
 
-Specifies the color type to use when exporting pixel data in `"raw"` format (for other formats this setting has no effect). If omitted, defaults to `"rgba"`. See the ImageData documentation for a [list of supported `colorType` formats][imgdata_colortype]
+Specifies the color type to use when exporting pixel data in `"raw"` format (for other formats this setting has no effect). If omitted, defaults to `"rgba"`. See the ImageData documentation for a [list of supported `colorType` formats][imgdata_colortype].
 
 
 #### `premultiplied`
@@ -313,20 +309,20 @@ By default, pixel values in `"raw"` exports will use ‘straight’ (unpremultip
 
 ### `toBuffer()`
 ```js returns="Promise<Buffer>"
-toBuffer(format, {matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
+toBuffer(format, {matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
 ```
 ```js returns="Buffer"
-toBufferSync(format, {matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
+toBufferSync(format, {matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
 ```
 
 Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
 
 ### `toURL()`
 ```js returns="Promise<String>"
-toURL(format, {matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
+toURL(format, {matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
 ```
 ```js returns="String"
-toURLSync(format, {matte, density, quality, msaa, page, outline, downsample, filters, colorType, premultiplied})
+toURLSync(format, {matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
 ```
 
 This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
@@ -381,7 +377,7 @@ for (let i=0; i<9999; i++) {
 release()
 ```
 
-Synchronously frees all resources associated with the Canvas and marks it as [`disposed`](#disposed), then asychronously yields to the event loop (which has the side effect of running any deferred finalizers for *other* objects as well). This is the method called by the [`await using`][await_using] keyword when the canvas reference goes out of scope.
+Synchronously frees all resources associated with the Canvas and marks it as [`disposed`](#disposed), then asynchronously yields to the event loop (which has the side effect of running any deferred finalizers for *other* objects as well). This is the method called by the [`await using`][await_using] keyword when the canvas reference goes out of scope.
 
 ```js
 for (let i=0; i<9999; i++) {

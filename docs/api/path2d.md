@@ -32,7 +32,20 @@ p3.rect(10, 10, 100, 100)
 
 A canvas’s context always contains an implicit ‘current’ bézier path which is updated by commands like [lineTo()][lineTo()] and [arcTo()][arcTo()] and is drawn to the canvas by calling [fill()][fill()], [stroke()][stroke()], or [clip()][clip()] without any arguments (aside from an optional [winding][nonzero] [rule][evenodd]). If you start creating a second path by calling [beginPath()][beginPath()] the context discards the prior path, forcing you to recreate it by hand if you need it again later.
 
-You can then use these objects by passing them as the first argument to the context’s `fill()`, `stroke()`, and `clip()` methods (along with an optional second argument specifying the winding rule).
+The `Path2D` class allows you to create paths independent of the context to be drawn (and potentially reused) later on. You can render a Path2D by passing it as the first argument to [`fill()`][fill()], [`stroke()`][stroke()], or [`clip()`][clip()], optionally including a second argument specifying the winding rule.
+
+For instance, both of these snippets draw the same black square:
+```js
+// using the context's implicit path
+ctx.beginPath()
+ctx.rect(100, 100, 50, 50)
+ctx.fill()
+
+// using an independent Path2D object
+let p = new Path2D()
+p.rect(100, 100, 50, 50)
+ctx.fill(p)
+```
 
 -----------
 
@@ -53,7 +66,7 @@ The sequence of drawing operations in a path can be grouped into one or more ‘
 
 ### `.d`
 
-Contains a string describing the path’s edges using [SVG syntax][SVG_path_commands]. This property is both readable and writeable (and can be appended to using the `+=` operator).
+Contains a string describing the path’s edges using [SVG syntax][SVG_path_commands]. This property is both readable and writable (and can be appended to using the `+=` operator).
 
 ### `.edges`
 
@@ -347,7 +360,7 @@ ctx.fill(original, "evenodd")
 transform(...matrix)
 ```
 
-Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix can be passed as a [DOMMatrix][DOMMatrix] object, a [CSS transform][css_transform] string (e.g, `"rotate(20deg)"`), or 6 individual numbers (see the Context's [setTransform()][transforms] documentation for details). The original path remains unmodified.
+Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix can be passed as a [DOMMatrix][DOMMatrix] object, a [CSS transform][css_transform] string (e.g., `"rotate(20deg)"`), or 6 individual numbers (see the Context's [setTransform()][transforms] documentation for details). The original path remains unmodified.
 
 ### `slice()`
 ```js returns="Path2D"
@@ -358,7 +371,7 @@ slice() // clone the full path
 
 The `slice()` method is analogous to the [Array method][array.slice] of the same name: it allows you to create a new path that contains a subset of the points in the original. The `start` and `end` arguments correspond to **distances** along the path and their magnitude can range from `0` to the path's [`length`][p2d_length]. Positive values measure from the path's initial point and negative values from its final point. If the `inverted` argument is set to `true`, the new path will contain everything from the original *except* the region between the specified endpoints.
 
-Passing a single number (either positive or negative) set the starting position and selects the region from there to the end of the path.
+Passing a single number (either positive or negative) sets the starting position and selects the region from there to the end of the path.
 
 ```js
 let orig = new Path2D()
@@ -402,7 +415,7 @@ unwind()
 **The unwind() method has been deprecated** and will be removed in a future release. You should now use [`simplify('evenodd')`][p2d_simplify] to convert `evenodd` paths to a form that can be filled using the default `nonzero` winding rule instead.
 
 :::info[Note]
-Previously the main use for `unwind()` was dealing with the values returned by `difference()`, `xor()`, and the other [boolean operations][bool-ops] (all of which returned paths that expected to be filled with an `evenodd` rule). As of version 4, those methods all return pre-simlpified paths that will render correctly using the default `nonzero` winding rule.
+Previously the main use for `unwind()` was dealing with the values returned by `difference()`, `xor()`, and the other [boolean operations][bool-ops] (all of which returned paths that expected to be filled with an `evenodd` rule). As of version 4, those methods all return pre-simplified paths that will render correctly using the default `nonzero` winding rule.
 :::
 
 <!-- references_begin -->

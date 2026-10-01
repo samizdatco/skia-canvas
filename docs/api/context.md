@@ -32,7 +32,7 @@ A number of Context properties ([`fillStyle`][fillStyle], [`strokeStyle`][stroke
 | [`hsl()`][hsl_fn] / [`hsla()`][hsl_fn] / [`hwb()`][hwb_fn] | `hsl(0deg 100% 50% / .5)` `hwb(0 0% 0%)` |
 | [`lab()`][lab_fn] / [`lch()`][lch_fn] | `lab(50% 40 30)` `lch(50 40 30deg)` |
 | [`oklab()`][oklab_fn] / [`oklch()`][oklch_fn] | `oklch(70% 0.2 200deg / 50%)` |
-| [`color()`][color_fn] in predefined colorspaces | `srgb`, `srgb-linear`, `display-p3`, `a98-rgb`, <br/> `prophoto-rgb`, `rec2020`, `xyz`, `xyz-d50`, `xyz-d65` |
+| [`color()`][color_fn] in predefined color spaces | `srgb`, `srgb-linear`, `display-p3`, `a98-rgb`, <br/> `prophoto-rgb`, `rec2020`, `xyz`, `xyz-d50`, `xyz-d65` |
 | `none` for any component | `rgb(none 255 0)` → `#00ff00`; `oklch(0.7 none 200)` |
 
 ## Properties
@@ -92,7 +92,7 @@ The `.textDecoration` property can be assigned a string using the same syntax as
 
 ### `.textWrap`
 
-The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()`
+The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()` methods.
 
 ### `.lineDashMarker`
 
@@ -175,7 +175,7 @@ Adds a line segment connecting the current point to (*x, y*) but curving toward 
 createProjection(quad, [basis])
 ```
 
-This method returns a [DOMMatrix][DOMMatrix] object which can be used to simulate perspective effects or other distortions in which the four corners of the canvas are mapped to an arbitrary quadrilateral (four sided polygon). The matrix must be passed to the context's [setTransform][setTransform()] method for it take effect.
+This method returns a [DOMMatrix][DOMMatrix] object which can be used to simulate perspective effects or other distortions in which the four corners of the canvas are mapped to an arbitrary quadrilateral (four sided polygon). The matrix must be passed to the context's [setTransform][setTransform()] method for it to take effect.
 
 #### `quad`
 
@@ -578,7 +578,7 @@ async function metricsDemo(){
   let m = ctx.measureText(msg, maxWidth)
   console.log(m)
 
-  // set the origin point for the drawing the text to screen
+  // set the origin point for drawing the text to screen
   ctx.translate(x, y)
 
   // use the `actualBoundingBox` to draw a white rectangle behind the entire multi-line run
@@ -812,7 +812,7 @@ async function lineMetricsDemo(){
   ctx.font = '56px/2 Avenir'
   ctx.textWrap = true
 
-  // set the origin point for the drawing the text to screen
+  // set the origin point for drawing the text to screen
   ctx.translate(x, y)
 
   // obtain the font metrics we'll be using to draw boxes
@@ -888,7 +888,7 @@ lineMetricsDemo()
 outlineText(str, [width])
 ```
 
-The `outlineText()` method typesets a string and returns a Path2D containing the shapes of its character glyphs. It will use the context’s current typography settings (e.g., [`.font`][font],[`.textWrap`][textwrap], [`.textAlign`][textAlign] [`.textBaseline`][textBaseline], etc.) to style the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods or Path2D’s [`offset()`][p2d_offset] and [`transform()`][p2d_transform] to position the path before drawing it to the canvas.
+The `outlineText()` method typesets a string and returns a Path2D containing the shapes of its character glyphs. It will use the context’s current typography settings (e.g., [`.font`][font], [`.textWrap`][textwrap], [`.textAlign`][textAlign], [`.textBaseline`][textBaseline], etc.) to style the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods or Path2D’s [`offset()`][p2d_offset] and [`transform()`][p2d_transform] to position the path before drawing it to the canvas.
 
 As with the [`fillText()`][drawText] and [`strokeText()`][drawText] methods, `outlineText()` will produce a single line of text unless `.textWrap` is enabled and will use the optional `width` argument to determine the maximum line width. If a `width` is specified but `.textWrap` is *not* enabled, any text that doesn't fit within that measure will be omitted from the path.
 

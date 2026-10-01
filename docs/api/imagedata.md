@@ -4,7 +4,7 @@ description: Direct pixel access to image and canvas contents
 
 # ImageData
 
-> The `ImageData` object offers a convenient container that bundles raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard **ImageData**][ImageData]'s structure and behavior, but extends it in a few ways.
+> The `ImageData` object offers a convenient container that bundles raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard **ImageData**][mdn_imagedata]'s structure and behavior, but extends it in a few ways.
 
 | Dimensions                 | Format                                     | Pixel Data                    |
 | --                         | --                                         | --                            |
@@ -67,7 +67,7 @@ for (let i=0; i<id.data.length; i+=id.bytesPerPixel) {
 
 According to the standard, the only way to draw ImageData to a canvas is through the [putImageData()][putImageData()] method, which copies either the entire ImageData or a rectangle within it to the canvas, pixel-for-pixel. Since this is *copying* rather than *drawing*, the operation ignores the current context state, including any transformations, filters, or global opacity options that have been set.
 
-Skia Canvas, however, allows you to use ImageData and Image objects interchangably when dealing with the canvas. If you pass an ImageData to the [drawImage()][drawImage()] method, its contents will be drawn to the canvas while honoring the context settings that are ignored by `putImageData()`. You may also pass ImageData objects to the [createPattern()][createPattern()] method.
+Skia Canvas, however, allows you to use ImageData and Image objects interchangeably when dealing with the canvas. If you pass an ImageData to the [drawImage()][drawImage()] method, its contents will be drawn to the canvas while honoring the context settings that are ignored by `putImageData()`. You may also pass ImageData objects to the [createPattern()][createPattern()] method.
 
 
 ## Constructor
@@ -141,7 +141,7 @@ console.log(id.data.length == id.width * id.height * id.bytesPerPixel) // → tr
 
 
 ### `.data`
-A writeable buffer with the pixel contents of the image presented as an array of either [8-bit bytes][u8_array] or [16-bit floats][f16_array]. Float arrays are only supported on Node 23 and later and will be automatically used for the `A16Float`, `R16G16Float`, `RGBAF16`, and `RGBAF16Norm` color types. On earlier Node releases an 8-bit byte array will be used instead.
+A writable buffer with the pixel contents of the image presented as an array of either [8-bit bytes][u8_array] or [16-bit floats][f16_array]. Float arrays are only supported on Node 23 and later and will be automatically used for the `A16Float`, `R16G16Float`, `RGBAF16`, and `RGBAF16Norm` color types. On earlier Node releases an 8-bit byte array will be used instead.
 
 See the [standard docs][mdn_ImageData_data] for more details.
 
@@ -236,7 +236,7 @@ await loadImageData(sharpImage)
 [skia_colortype]: https://rust-skia.github.io/doc/skia_safe/enum.ColorType.html
 [sharp]: https://sharp.pixelplumbing.com
 [sharp_npm]: https://www.npmjs.com/package/sharp
-[ImageData]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData
+[mdn_imagedata]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData
 [mdn_ImageData_data]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData/data
 [mdn_ImageData_colorspace]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData/colorSpace
 [createPattern()]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/createPattern

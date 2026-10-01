@@ -112,13 +112,9 @@ win.on('keydown', e => {
 
 ##  Responding to Events
 
-Once you've created a `Window` object, Node will wait for your current function to end and then switch over to an OS-controlled event loop for the rest of your program’s runtime. This means it can actively redraw your canvas when you resize the window or update its contents, but also means the Node interpreter will be frozen for the duration.
+Once you've created a `Window` object, Node will wait for your current function to end and then open the window and begin dispatching events. You can still use standard Node methods for scheduling callbacks (`setTimeout`, `setImmediate`, `setInterval`, etc.), but you will find it much more natural to use event handlers attached to the `Window` object instead.
 
-As a result, you cannot rely upon Node's traditional asynchronous behavior for structuring your program. In particular, the usual methods for scheduling callbacks like `setTimeout`, `setImmediate`, and `setInterval` **will not work**.
-
-Instead, you must use event handlers attached to the `Window` object. By calling the window’s `.on()`, `.off()`, and `.once()` methods, you can respond to [user interface events][win_bind] like mouse and keyboard input, the window being dragged or resized, a new window becoming active, etc.
-
-Any changes you make in an event handler (whether to the window's canvas or its attributes) will become visible in the next pass through the event loop. For example, you can let the user scribble to the canvas with the mouse and clear it via the escape key with:
+By calling the window’s `.on()`, `.off()`, and `.once()` methods, you can respond to [user interface events][win_bind] like mouse and keyboard input, the window being dragged or resized, a new window becoming active, etc. Any changes you make in an event handler (whether to the window's canvas or its attributes) will become visible in the next pass through the event loop. For example, you can let the user scribble to the canvas with the mouse and clear it via the escape key with:
 
 ```js
 let win = new Window(400, 300, {background:'rgba(16, 16, 16, 0.35)'}),
@@ -174,7 +170,7 @@ But another common case is creating animations in which you redraw the canvas at
   - [`draw`][draw] fires immediately after `frame` and **clears the canvas** of any window that has event handlers for it
 
 
-To create a ‘flipbook’ animation (in which the screen is fully redrawn in each pass), your best choice is set up an event handler for the `draw` event. Since `draw` automatically erases the canvas before your code begins to run, you can presume a clean slate each time. The event object passed as an argument to your handler contains a property called `frame` which will increment by one each time you draw (making it handy for advancing the ‘state’ of your animation):
+To create a ‘flipbook’ animation (in which the screen is fully redrawn in each pass), your best choice is to set up an event handler for the `draw` event. Since `draw` automatically erases the canvas before your code begins to run, you can presume a clean slate each time. The event object passed as an argument to your handler contains a property called `frame` which will increment by one each time you draw (making it handy for advancing the ‘state’ of your animation):
 
 ```js
 let win = new Window(300, 300, {background:'red'}),
@@ -258,7 +254,7 @@ A boolean flag determining whether the window should expand to fill the screen.
 
 ###  `close()`
 
-Removes the window from the screen and prepares it to be garbage collected (once any references to it in your code leave scope). Note that the `Window` object **will** remain valid after it is closed and its `.canvas` can still be used to export images to file, be inserted into other windows, etc. It can also be re-opened by calling [`open()`][open]
+Removes the window from the screen and prepares it to be garbage collected (once any references to it in your code leave scope). Note that the `Window` object **will** remain valid after it is closed and its `.canvas` can still be used to export images to file, be inserted into other windows, etc. It can also be re-opened by calling [`open()`][open].
 
 ### `open()`
 
