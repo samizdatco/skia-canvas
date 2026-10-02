@@ -556,7 +556,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
         }.unwrap_or(bytes);
 
         FontLibrary::with_shared(|lib|
-          lib.mgr.new_from_data(&bytes, None)
+          lib.mgr.new_from_bytes(&bytes, None)
         )
       }
     };

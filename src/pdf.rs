@@ -318,7 +318,7 @@ impl<'a> PictureDevice<'a, '_>{
         })
         .and_then(|data|{
           fonts.size.set(fonts.size.get() + (*data).as_ref().len());
-          FONT_MGR.with(|mgr| mgr.new_from_data((*data).as_ref(), None))
+          FONT_MGR.with(|mgr| mgr.new_from_bytes((*data).as_ref(), None))
         })
     ).clone()?;
     fonts.verify_glyph(font_key, &typeface, glyph).then_some(typeface)
