@@ -68,7 +68,7 @@ release:
 	@echo "Latest Release:    $(LATEST_RELEASE)"
 	@echo "Package Version:   $(PACKAGE_VERSION)"
 	@echo
-	@/bin/echo -n "Release $(PACKAGE_VERSION)? [y/N] "
+	@printf "Release \033[1m%s\033[0m? [y/N] " "$(PACKAGE_VERSION)"
 	@read line; if [[ $$line != "y" ]]; then exit 1; fi
 	@if ! gh release view $(PACKAGE_VERSION) > /dev/null 2>&1; then \
 	  gh release create $(PACKAGE_VERSION) $(PRERELEASE_FLAG) --draft --fail-on-no-commits --generate-notes \
