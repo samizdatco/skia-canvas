@@ -249,7 +249,13 @@ fn make_direct_context(device:&Arc<Device>, queue:&Arc<Queue>) -> Option<DirectC
             ),
             &get_proc,
             Some(max_api_version),
-        ).build();
+        )
+        .with_extensions(&[], match device.enabled_extensions().khr_swapchain{
+            // tell skia whether the swapchain is active so it will actually set the layout to Present
+            true => &["VK_KHR_swapchain"],
+            false => &[],
+        })
+        .build();
         direct_contexts::make_vulkan(&backend_context, None)
     }
 }
