@@ -1,0 +1,69 @@
+name: Portable fonts
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libclang-dev ninja-build libfontconfig1-dev
+      - name: Install macOS build tools
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - run: npm ci --ignore-scripts
+      - name: Build CPU-only portable fonts
+        run: npm run build -- custom portable-fonts --release
+      - name: Capture and check locales and drawing changes
+        shell: bash
+        run: |
+          LANG=en_US.UTF-8 node tests/portable-fonts/capture.mjs artifacts/baseline
+          LANG=ko_KR.UTF-8 node tests/portable-fonts/capture.mjs artifacts/locale
+          node tests/portable-fonts/compare.mjs artifacts/baseline artifacts/locale
+          LANG=en_US.UTF-8 node tests/portable-fonts/capture.mjs artifacts/label --changed-label
+          LANG=en_US.UTF-8 node tests/portable-fonts/capture.mjs artifacts/line --removed-line
+          node tests/portable-fonts/compare.mjs artifacts/baseline artifacts/label --expect-pixel-difference
+          node tests/portable-fonts/compare.mjs artifacts/baseline artifacts/line --expect-pixel-difference
+      - name: Verify npm packaging
+        run: node tests/packaging.mjs
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: portable-${{ runner.os }}
+          path: artifacts
+          retention-days: 14
+
+  compare:
+    name: Compare macOS and Linux
+    needs: capture
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: portable-*
+          path: artifacts
+      - run: node tests/portable-fonts/compare.mjs artifacts/portable-macOS/baseline artifacts/portable-Linux/baseline

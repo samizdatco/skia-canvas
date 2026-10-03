@@ -61,6 +61,9 @@ npm install skia-canvas
 
 For detailed [installation][installation] instructions and runtime [configuration][global_settings] options, take a look at the [Getting Started][getting_started] page.
 
+For an optional source build that uses bundled FreeType for macOS and Linux
+image snapshot tests, see [Portable font rendering](docs/testing/portable-fonts.md).
+
 ## Example Usage
 
 Skia Canvas's classes and extensions to the standard are extensively covered in the [API Documentation][api_docs]. But to give you a sense of some of the things you can achieve with it, here are some real-world examples:
