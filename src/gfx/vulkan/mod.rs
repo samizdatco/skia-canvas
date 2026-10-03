@@ -133,7 +133,10 @@ impl VulkanShared {
         let mut offscreen_candidates:Vec<_> = instance
             .enumerate_physical_devices()
             .or(Err("Vulkan: No physical devices found"))?
-            .filter(|p| p.api_version() >= SKIA_MIN_VULKAN)
+            .filter(|p|
+                p.api_version() >= SKIA_MIN_VULKAN && // skip devices that don't support skia's minimum vulkan version (1.1)
+                p.properties().device_type != PhysicalDeviceType::Cpu // omit software GPUs (the CPU rasterizer is faster)
+            )
             .filter_map(|p| {
                 // find a graphics-capable queue family, skipping devices that lack one
                 p.queue_family_properties()
