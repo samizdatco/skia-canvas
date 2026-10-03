@@ -25,6 +25,10 @@ use context::api as ctx;
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
+  // install skia's CPU-specific dispatch (AVX2/SSE4.1 raster pipeline, blits, memset, swizzle); without
+  // this call skia stays on its baseline SSE2 code paths
+  skia_safe::graphics::init();
+
   // initialize thread pool w/ non-default size if requested
   if let Ok(value) = std::env::var("SKIA_CANVAS_THREADS"){
     if let Ok(num) = value.parse::<usize>(){
