@@ -117,7 +117,7 @@ pub enum RenderOutcome {
 }
 
 // the single thread that serializes jobs bound for the GPU (and its one, shared Context)
-mod render_thread{
+pub(crate) mod render_thread{
     use std::cell::{Cell, OnceCell};
     use std::panic::{catch_unwind, AssertUnwindSafe};
     use std::sync::{mpsc, OnceLock};

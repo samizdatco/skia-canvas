@@ -7,7 +7,7 @@ use skia_safe::{ImageInfo, Surface};
 use skia_safe::gpu::{ surfaces, Budgeted, DirectContext, SurfaceOrigin };
 use serde_json::{json, Value};
 
-use crate::gfx::page::ExportOptions;
+use crate::gfx::{page::ExportOptions, engine::render_thread};
 use super::make_direct_context;
 
 thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
@@ -30,33 +30,34 @@ impl MetalEngine {
 
     pub fn status() -> Value {
         MTL_STATUS.get_or_init(||{
-            // test whether a context can be created and do some one-time init if so
-            match MetalContext::new(){
-                Some(context) => {
-                    let device_name = format!("{} ({})", match context.device.location(){
-                        MTLDeviceLocation::BuiltIn => "Integrated GPU",
-                        MTLDeviceLocation::Slot => "Discrete GPU",
-                        MTLDeviceLocation::External => "External GPU",
-                        _ => "Other GPU"
-                    }, context.device.name());
+            render_thread::run(|_| {
+                // if a context can be created successfully, collect info about the GPU
+                let context = MetalContext::new().ok_or("GPU initialization failed".to_string())?;
+                let device_name = format!("{} ({})", match context.device.location(){
+                    MTLDeviceLocation::BuiltIn => "Integrated GPU",
+                    MTLDeviceLocation::Slot => "Discrete GPU",
+                    MTLDeviceLocation::External => "External GPU",
+                    _ => "Other GPU"
+                }, context.device.name());
 
-                    json!({
-                        "renderer": "GPU",
-                        "api": "Metal",
-                        "device": device_name,
-                        "msaa": context.msaa,
-                        "threads": rayon::current_num_threads(),
-                    })
-                }
-                None => json!({
-                    "renderer": "CPU",
+                let status = json!({
+                    "renderer": "GPU",
                     "api": "Metal",
-                    "device": "CPU-based renderer (Fallback)",
-                    "msaa": [0],
+                    "device": device_name,
+                    "msaa": context.msaa,
                     "threads": rayon::current_num_threads(),
-                    "error": "GPU initialization failed",
-                })
-            }
+                });
+                MTL_CONTEXT.set(Some(context));
+                Ok(status)
+            })
+            .unwrap_or_else(|msg| json!({
+                "renderer": "CPU",
+                "api": "Metal",
+                "device": "CPU-based renderer (Fallback)",
+                "msaa": [0],
+                "threads": rayon::current_num_threads(),
+                "error": msg,
+            }))
         }).clone()
     }
 

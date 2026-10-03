@@ -13,7 +13,7 @@ use skia_safe::{
     ColorSpace, ISize, ImageInfo, Surface,
 };
 
-use crate::gfx::page::ExportOptions;
+use crate::gfx::{page::ExportOptions, engine::render_thread};
 use super::{VulkanShared, make_direct_context};
 
 thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );
@@ -33,42 +33,41 @@ impl VulkanEngine {
 
     pub fn status() -> Value {
         VK_STATUS.get_or_init(||{
-            match VulkanContext::new() {
-                // if a context can successfully be created, collect info about the GPU
-                Ok(context) => {
-                    let device_props = context.physical_device.properties();
-                    let gpu_type = match device_props.device_type {
-                        PhysicalDeviceType::IntegratedGpu => Some("Integrated GPU"),
-                        PhysicalDeviceType::DiscreteGpu => Some("Discrete GPU"),
-                        PhysicalDeviceType::VirtualGpu => Some("Virtual GPU"),
-                        _ => Some("Software Rasterizer")
-                    };
+            render_thread::run(|_| VulkanContext::new().map(|context| {
+                // if a context can be created successfully, collect info about the GPU
+                let device_props = context.physical_device.properties();
+                let gpu_type = match device_props.device_type {
+                    PhysicalDeviceType::IntegratedGpu => Some("Integrated GPU"),
+                    PhysicalDeviceType::DiscreteGpu => Some("Discrete GPU"),
+                    PhysicalDeviceType::VirtualGpu => Some("Virtual GPU"),
+                    _ => Some("Other GPU")
+                };
 
-                    json!({
-                        "renderer": "GPU",
-                        "api": "Vulkan",
-                        "device": gpu_type.map(|t| format!("{} ({})",
-                            t, device_props.device_name)
-                        ),
-                        "driver":format!("{} ({})",
-                            device_props.driver_id.map(|id| format!("{:?}", id) ).unwrap_or("Unknown Driver".to_string()),
-                            device_props.driver_info.as_ref().unwrap_or(&"Unknown Version".to_string()),
-                        ),
-                        "msaa": context.msaa,
-                        "threads": rayon::current_num_threads(),
-                    })
-                },
-                // if no working GPUs are available, report the error received
-                Err(msg) => json!({
-                    "renderer": "CPU",
+                let status = json!({
+                    "renderer": "GPU",
                     "api": "Vulkan",
-                    "device": "CPU-based renderer (Fallback)",
-                    "driver": "N/A",
-                    "msaa": [0],
+                    "device": gpu_type.map(|t| format!("{} ({})",
+                        t, device_props.device_name)
+                    ),
+                    "driver":format!("{} ({})",
+                        device_props.driver_id.map(|id| format!("{:?}", id) ).unwrap_or("Unknown Driver".to_string()),
+                        device_props.driver_info.as_ref().unwrap_or(&"Unknown Version".to_string()),
+                    ),
+                    "msaa": context.msaa,
                     "threads": rayon::current_num_threads(),
-                    "error": msg,
-                })
-            }
+                });
+                VK_CONTEXT.set(Some(context));
+                status
+            }))
+            .unwrap_or_else(|msg| json!({
+                "renderer": "CPU",
+                "api": "Vulkan",
+                "device": "CPU-based renderer (Fallback)",
+                "driver": "N/A",
+                "msaa": [0],
+                "threads": rayon::current_num_threads(),
+                "error": msg,
+            }))
         }).clone()
     }
 
