@@ -146,7 +146,7 @@ impl MetalContext{
             if budgeted { Budgeted::Yes } else { Budgeted::No },
             image_info,
             Some(opts.msaa_from(&self.msaa)?),
-            SurfaceOrigin::BottomLeft,
+            SurfaceOrigin::TopLeft,
             Some(&opts.surface_props()),
             false,
             None
