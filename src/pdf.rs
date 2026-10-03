@@ -673,7 +673,7 @@ impl DocumentFonts{
 //
 
 // share one FontMgr per thread to amortize its expensive (~30ms) setup time
-thread_local!(static FONT_MGR: FontMgr = FontMgr::new());
+thread_local!(static FONT_MGR: FontMgr = crate::font_library::font_manager());
 
 // set of glyphs sharing a font, size, paint, and text-space transform (to be converted to a TextBlob)
 struct GlyphRun<'a>{

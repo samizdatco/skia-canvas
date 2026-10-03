@@ -68,7 +68,7 @@ impl FontLibrary{
         skia_safe::graphics::set_font_cache_count_limit(8192);
 
         RefCell::new(FontLibrary{
-          mgr:FontMgr::default(), fonts:vec![], collection:None, collection_attrs:RenderAttrs::default(), generics_cache:vec![]
+          mgr:font_manager(), fonts:vec![], collection:None, collection_attrs:RenderAttrs::default(), generics_cache:vec![]
         })
       });
 
@@ -406,6 +406,18 @@ impl OutlinePen for Glyphs{
     if !self.outline.elements().is_empty(){ self.outline.curve_to((cx0 as f64, cy0 as f64), (cx1 as f64, cy1 as f64), (x as f64, y as f64)) }
   }
   fn close(&mut self){ if !self.outline.elements().is_empty(){ self.outline.close_path() } }
+}
+
+// This build accepts only explicit fonts. FreeType handles both measurement and
+// drawing, with no system font discovery or platform fallback.
+#[cfg(feature = "portable-fonts")]
+pub(crate) fn font_manager() -> FontMgr {
+  FontMgr::custom_empty().expect("portable-fonts requires the FreeType custom empty font manager")
+}
+
+#[cfg(not(feature = "portable-fonts"))]
+pub(crate) fn font_manager() -> FontMgr {
+  FontMgr::default()
 }
 
 #[derive(Clone, Copy, PartialEq)]
