@@ -20,7 +20,7 @@ use crate::bridge::*;
 use crate::font_library::{FontLibrary, MetricsKey, cached_metrics};
 use crate::path::Path2D;
 use crate::drawlist::{Pen, Plotter};
-use crate::typography::{Typesetter, Baseline, DecorationStyle};
+use crate::typography::{Typesetter, Baseline, DecorationStyle, BaselineMetrics};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
@@ -155,9 +155,17 @@ impl State{
       char_style = FontLibrary::with_shared(|lib| lib.update_style(&char_style, &FontSpec::default()))
         .unwrap_or(char_style);
     }
+
+    // apply OpenType features in order: fontVariant, fontKerning, then fontFeatureSettings (last setting wins)
+    self.font_features.apply(&mut char_style, self.font_kerning == "none");
+
+    // set the variable-font axes (`wght`/`wdth`/`ital`/`slnt` + fontVariationSettings) for instancing
+    // (this must precede setting the baseline since the axes affect the baseline metrics)
+    self.font_axes.apply(&mut char_style, self.font_stretch, self.font_oblique);
+
+    char_style.set_baseline_shift(BaselineMetrics::for_style(&char_style).get_offset(self.text_baseline));
     char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
     char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));
-    char_style.set_baseline_shift(self.text_baseline.get_offset(&char_style));
 
     let mut graf_style = self.graf_style.clone(); // inherit align & ltr/rtl settings
     let font_families = char_style.font_families(); // consult proper metrics for height & leading defaults
@@ -197,13 +205,6 @@ impl State{
     char_style.set_font_hinting(hinting);
     char_style.set_font_edging(edging);
     char_style.set_subpixel(subpixel);
-
-    // assemble the OpenType features low-to-high: fontVariant, then fontKerning's `kern` toggle
-    // (`none` disables it), then the explicit fontFeatureSettings — which win last
-    self.font_features.apply(&mut char_style, self.font_kerning == "none");
-
-    // set the variable-font axes (`wght`/`wdth`/`ital`/`slnt` + fontVariationSettings) for instancing
-    self.font_axes.apply(&mut char_style, self.font_stretch, self.font_oblique);
 
     ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap )
   }

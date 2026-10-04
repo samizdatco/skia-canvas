@@ -2,12 +2,13 @@ use std::iter::zip;
 use std::sync::Once;
 use std::collections::BTreeSet;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
+use skia_safe::{FontMetrics, FourByteTag, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
 use skia_safe::paint::{Style as PaintStyle, Cap as PaintCap};
 use skia_safe::textlayout::{
   FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
   TextAlign, TextDecorationStyle, TextDirection, TextStyle,
 };
+use read_fonts::{FontData, FontRead, types::{Tag, Fixed, F2Dot14}, tables::{hhea::Hhea, os2::{Os2, SelectionFlags}, base::Base, fvar::Fvar, avar::Avar, mvar::{Mvar, tags::{HASC, HDSC}}}};
 use crate::font_library::{FontLibrary, RenderAttrs, cached_glyph_bounds};
 use crate::bridge::*;
 use crate::context::State;
@@ -149,9 +150,10 @@ impl Typesetter{
 
     // calculate baseline offsets (relative to line_metrics.baseline which reflects ctx.textBaseline setting)
     let shift = self.char_style.baseline_shift();
-    let hang = Baseline::Hanging.get_offset(&self.char_style) - shift;
-    let norm = Baseline::Alphabetic.get_offset(&self.char_style) - shift;
-    let ideo = Baseline::Ideographic.get_offset(&self.char_style) - shift;
+    let relative = BaselineMetrics::for_style(&self.char_style).relative_to(shift);
+    let hang = relative.get_offset(Baseline::Hanging);
+    let norm = relative.get_offset(Baseline::Alphabetic);
+    let ideo = relative.get_offset(Baseline::Ideographic);
 
     // calculate bounds for each single-font block of glyphs on each line (and gather font info)
     struct RunMetrics{ line: usize, family: String, font: FontMetrics, bounds: Rect }
@@ -196,8 +198,8 @@ impl Typesetter{
 
       // calculate this line's vertical offsets relative to the typesetting origin
       let line_metrics = line_info.get(ln)?;
-      let alpha = origin.y + line_origins.get(ln)? + shift; // the alphabetic baseline position (the font-metric origin)
-      let baseline = alpha + norm; // the textBaseline-selected origin
+      let alpha = origin.y + line_origins.get(ln)? + shift; // the font's design origin (the alphabetic baseline unless BASE sets romn)
+      let baseline = alpha - shift; // the textBaseline-selected origin
       let line_ascent = baseline - line_metrics.ascent as f32;
       let line_descent = baseline + line_metrics.descent as f32;
 
@@ -227,7 +229,7 @@ impl Typesetter{
         "height": ink.height(),
         "baseline": baseline, // corresponds to the ctx.textBaseline selection
         "hangingBaseline": baseline - hang,
-        "alphabeticBaseline": alpha,
+        "alphabeticBaseline": baseline - norm,
         "ideographicBaseline": baseline - ideo,
         "ascent": line_ascent,
         "descent": line_descent,
@@ -256,14 +258,8 @@ impl Typesetter{
     let ink_bounds = lines.iter().map(|l| l.ink).reduce(Rect::join2).unwrap_or(Rect::new_empty());
     let lines = lines.into_iter().map(|l| l.json).collect::<Vec<Value>>();
 
-    // use line metrics to find maximal ascent/descent of all fonts on first line
-    let (ascent, descent) = line_info.first().map(|line|
-      (norm + line.ascent as f32, line.descent as f32 - norm)
-    ).unwrap_or_else(||{
-      // or fall back to the first-matched font's metrics if measuring empty string
-      let FontMetrics{ascent, descent, ..} = self.char_style.font_metrics();
-      (norm - ascent, descent - norm)
-    });
+    // the font box & em square from the matched font, measured from the active textBaseline
+    let BaselineMetrics{font: (ascent, descent), em: (em_ascent, em_descent), ..} = relative;
 
     json!({
       "width": advance_bounds.width(),
@@ -273,8 +269,8 @@ impl Typesetter{
       "actualBoundingBoxDescent": ink_bounds.bottom,
       "fontBoundingBoxAscent": ascent,
       "fontBoundingBoxDescent": descent,
-      "emHeightAscent": ascent,
-      "emHeightDescent": descent,
+      "emHeightAscent": em_ascent,
+      "emHeightDescent": em_descent,
       "hangingBaseline": hang,
       "alphabeticBaseline": norm,
       "ideographicBaseline": ideo,
@@ -596,21 +592,120 @@ impl Decorations{
 #[derive(Copy, Clone, Debug)]
 pub enum Baseline{ Top, Hanging, Middle, Alphabetic, Ideographic, Bottom }
 
-impl Baseline{
-  pub fn get_offset(&self, style:&TextStyle) -> f32 {
-    let FontMetrics{mut ascent, mut descent, ..} = style.font_metrics();
-    ascent -= style.baseline_shift();  // offsets are defined relative to the alphabetic baseline, so
-    descent -= style.baseline_shift(); // compensate for any other textBaseline setting
+#[derive(Clone, Copy)]
+pub struct BaselineMetrics{
+  pub font: (f64, f64),  // font box ascent & descent (from `hhea` or `OS/2` if `USE_TYPO_METRICS`)
+  pub em: (f64, f64),    // em square ascent & descent (from `OS/2`)
+  pub romn: Option<f64>, // alphabetic offset (from `BASE`)
+  pub hang: Option<f64>, // hanging offset (from `BASE`)
+  pub ideo: Option<f64>, // ideographic offset (from `BASE`)
+}
 
-    // see TextMetrics::GetFontBaseline from Chromium for reference:
-    // https://github.com/chromium/chromium/blob/main/third_party/blink/renderer/core/html/canvas/text_metrics.cc#L34
-    match self {
-      Baseline::Top => -ascent,
-      Baseline::Hanging => -ascent * 0.8,
-      Baseline::Middle => -(ascent + descent) / 2.0,
-      Baseline::Alphabetic => 0.0,
-      Baseline::Bottom | Baseline::Ideographic => -descent,
+impl BaselineMetrics{
+  pub fn for_style(style:&TextStyle) -> Self{
+    let size = style.font_size() as f64;
+    let typeface = style.typeface();
+    let upm = typeface.as_ref().and_then(|face| face.units_per_em()).filter(|&upm| upm > 0).unwrap_or(0) as f64;
+    let table = |tag:&[u8; 4]| typeface.as_ref().filter(|_| upm > 0.0)?.copy_table_data(u32::from_be_bytes(*tag));
+    let px = |units:f64| units * size / upm;
+
+    // variable fonts may have `hasc` and `hdsc` deltas that apply to their ascender & descender lengths
+    let (hasc, hdsc) = (|| {
+      let mvar_data = table(b"MVAR")?;
+      let instance = style.font_arguments()?.clone_typeface(typeface.clone()?)?;
+      let position = instance.variation_design_position()?;
+      let fvar_data = table(b"fvar")?;
+      let axes = Fvar::read(FontData::new(&fvar_data)).ok()?.axes().ok()?;
+      let avar_data = table(b"avar");
+      let avar = avar_data.as_deref().and_then(|data| Avar::read(FontData::new(data)).ok());
+      let coords:Vec<F2Dot14> = axes.iter().enumerate().map(|(i, axis)| {
+        let tag = FourByteTag::from(u32::from_be_bytes(axis.axis_tag().to_be_bytes()));
+        let value = match position.iter().find(|coord| coord.axis == tag) {
+          Some(coord) => Fixed::from_f64(coord.value as f64),
+          None => axis.default_value(),
+        };
+        let coord = axis.normalize(value);
+        match avar.as_ref().and_then(|avar| avar.axis_segment_maps().get(i)?.ok()) {
+          Some(map) => map.apply(coord).to_f2dot14(),
+          None => coord.to_f2dot14(),
+        }
+      }).collect();
+      let mvar = Mvar::read(FontData::new(&mvar_data)).ok()?;
+      let delta = |tag| mvar.metric_delta(tag, &coords).map_or(0.0, |delta| delta.to_f64());
+      Some((delta(HASC), delta(HDSC)))
+    })().unwrap_or_default();
+
+    // extract the em square and font box measurements
+    let hhea = (|| {
+      let data = table(b"hhea")?;
+      let hhea = Hhea::read(FontData::new(&data)).ok()?;
+      Some((px(hhea.ascender().to_i16() as f64 + hasc), -px(hhea.descender().to_i16() as f64 + hdsc)))
+    })();
+    let os2 = (|| {
+      let data = table(b"OS/2")?;
+      let os2 = Os2::read(FontData::new(&data)).ok()?;
+      let typo = (px(os2.s_typo_ascender() as f64 + hasc), -px(os2.s_typo_descender() as f64 + hdsc));
+      Some((typo, os2.fs_selection().contains(SelectionFlags::USE_TYPO_METRICS)))
+    })().filter(|_| hhea.is_some());
+    let typo = os2.map(|(typo, _)| typo);
+    let font = match (hhea.filter(|&hhea| hhea != (0.0, 0.0)), os2) {
+      (Some(_), Some((typo, true))) => typo,
+      (Some(hhea), _) => hhea,
+      (None, _) => {
+        // compensate for the extra half-leading and baseline shift SkParagraph adds into these metrics
+        let FontMetrics{ascent, descent, leading, ..} = style.font_metrics();
+        let shift = style.baseline_shift();
+        ((shift - ascent - leading / 2.0) as f64, (descent - shift - leading / 2.0) as f64)
+      }
+    };
+    let (ascent, descent) = typo.filter(|(a, d)| *a > 0.0 && a + d > 0.0).unwrap_or(font);
+    let em = if ascent + descent > 0.0 { (size * ascent / (ascent + descent), size * descent / (ascent + descent)) } else { (size, 0.0) };
+
+    // extract any additional baseline offsets defined in the BASE table for the `DFLT` script
+    let [romn, hang, ideo] = (|| {
+      let base_data = table(b"BASE")?;
+      let axis = Base::read(FontData::new(&base_data)).ok()?.horiz_axis()?.ok()?;
+      let (tags, scripts) = (axis.base_tag_list()?.ok()?, axis.base_script_list().ok()?);
+      let values = scripts.base_script_records().iter()
+        .find(|record| record.base_script_tag() == Tag::new(b"DFLT"))?
+        .base_script(scripts.offset_data()).ok()?
+        .base_values()?.ok()?;
+      let coord = |tag:&[u8; 4]| {
+        let index = tags.baseline_tags().iter().position(|t| t.get() == Tag::new(tag))?;
+        Some(px(values.base_coords().get(index).ok()?.coordinate() as f64))
+      };
+      Some([coord(b"romn"), coord(b"hang"), coord(b"ideo")])
+    })().unwrap_or_default();
+
+    BaselineMetrics{font, em, romn, hang, ideo}
+  }
+
+  // the same metrics measured from a baseline `shift` above the design origin (synthesized baselines are resolved first)
+  pub fn relative_to(&self, shift:f32) -> Self{
+    let shift = f64::from(shift);
+    let offset = |baseline| Some(f64::from(self.get_offset(baseline)) - shift);
+    BaselineMetrics{
+      font: (self.font.0 - shift, self.font.1 + shift),
+      em: (self.em.0 - shift, self.em.1 + shift),
+      romn: offset(Baseline::Alphabetic),
+      hang: offset(Baseline::Hanging),
+      ideo: offset(Baseline::Ideographic),
     }
+  }
+
+  // the given baseline's offset above the alphabetic baseline
+  pub fn get_offset(&self, baseline:Baseline) -> f32 {
+    let BaselineMetrics{font: (ascent, descent), em: (em_ascent, em_descent), romn, hang, ideo} = *self;
+    (match baseline {
+      // from the em square
+      Baseline::Top => em_ascent,
+      Baseline::Middle => (em_ascent - em_descent) / 2.0,
+      Baseline::Bottom => -em_descent,
+      // from the font's declared baselines (w/ Chrome's formulas as fallbacks)
+      Baseline::Alphabetic => romn.unwrap_or(0.0),
+      Baseline::Hanging => hang.unwrap_or(ascent * 0.8),
+      Baseline::Ideographic => ideo.unwrap_or(-descent),
+    }) as f32
   }
 }
 

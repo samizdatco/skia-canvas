@@ -1606,6 +1606,100 @@ describe("Context2D", ()=>{
         }
       })
 
+      test("font & em boxes relative to textBaseline", () => {
+        FontLibrary.use('BaselineFace', [`tests/assets/fonts/montserrat-latin/montserrat-v30-latin-regular.woff2`])
+        ctx.font = '48px BaselineFace'
+        ctx.textBaseline = 'alphabetic'
+        let alpha = ctx.measureText('Hgjy'),
+            fontHeight = alpha.fontBoundingBoxAscent + alpha.fontBoundingBoxDescent
+        assert.nearEqual(alpha.emHeightAscent + alpha.emHeightDescent, 48)
+
+        for (const baseline of /** @type {const} */ (['top', 'hanging', 'middle', 'alphabetic', 'ideographic', 'bottom'])){
+          ctx.textBaseline = baseline
+          let m = ctx.measureText('Hgjy'), offset = m.alphabeticBaseline // < 0 when this baseline is above the alphabetic
+          // the boxes keep their size and move by exactly the distance between the two baselines
+          assert.nearEqual(m.fontBoundingBoxAscent + m.fontBoundingBoxDescent, fontHeight, 0.01)
+          assert.nearEqual(m.emHeightAscent + m.emHeightDescent, 48, 0.01)
+          assert.nearEqual(m.fontBoundingBoxAscent, alpha.fontBoundingBoxAscent + offset, 0.01)
+          assert.nearEqual(m.emHeightAscent, alpha.emHeightAscent + offset, 0.01)
+        }
+
+        // top/middle/bottom are the em square's edges & midpoint
+        ctx.textBaseline = 'top'
+        assert.nearEqual(ctx.measureText('Hgjy').emHeightAscent, 0, 0.01)
+        ctx.textBaseline = 'bottom'
+        assert.nearEqual(ctx.measureText('Hgjy').emHeightDescent, 0, 0.01)
+        ctx.textBaseline = 'middle'
+        let middle = ctx.measureText('Hgjy')
+        assert.nearEqual(middle.emHeightAscent, 24, 0.01)
+        assert.nearEqual(middle.emHeightDescent, 24, 0.01)
+      })
+
+      test("em square vs. font box", () => {
+        // Amstelvar: unitsPerEm 2000, hhea 1900/-500 but OS/2 typo 1500/-500 (and USE_TYPO_METRICS unset)
+        FontLibrary.use('TypoFace', [`tests/assets/fonts/AmstelvarAlpha-VF.ttf`])
+        ctx.font = '100px TypoFace'
+        ctx.textBaseline = 'alphabetic'
+        let m = ctx.measureText('Hgjy')
+        assert.strictEqual(m.emHeightAscent, 75)
+        assert.strictEqual(m.emHeightDescent, 25)
+        assert.strictEqual(m.fontBoundingBoxAscent, 95)
+        assert.strictEqual(m.fontBoundingBoxDescent, 25)
+
+        // so `top` sits on the em square, 20px below the font box's top
+        ctx.textBaseline = 'top'
+        let top = ctx.measureText('Hgjy')
+        assert.nearEqual(top.alphabeticBaseline, -75, 0.01)
+        assert.nearEqual(top.emHeightAscent, 0, 0.01)
+        assert.nearEqual(top.fontBoundingBoxAscent, 20, 0.01)
+      })
+
+      test("font & em boxes from metrics tables", () => {
+        // Oswald: unitsPerEm 1000, hhea ascender 1193 / descender -289, no line gap
+        FontLibrary.use('TableFace', [`tests/assets/fonts/Oswald-Medium.ttf`])
+        ctx.font = '100px TableFace'
+        ctx.textBaseline = 'alphabetic'
+        let m = ctx.measureText('Hgjy'),
+            ascent = 1193 * 100 / 1000,
+            descent = 289 * 100 / 1000
+        assert.strictEqual(m.fontBoundingBoxAscent, ascent)
+        assert.strictEqual(m.fontBoundingBoxDescent, descent)
+        assert.strictEqual(m.emHeightAscent, 100 * ascent / (ascent + descent))
+        assert.strictEqual(m.emHeightDescent, 100 * descent / (ascent + descent))
+        assert.nearEqual(m.hangingBaseline, ascent * 0.8, 0.001)
+      })
+
+      test("variable font MVAR deltas", () => {
+        // Geomini: unitsPerEm 1000, typo (= hhea) metrics 1055/-145 at wght 200 and 1033/-167 at wght 800
+        FontLibrary.use('VariableFace', [`tests/assets/fonts/Geomini-VF.ttf`])
+        ctx.textBaseline = 'alphabetic'
+        for (const [weight, ascender, descender] of [[200, 1055, 145], [800, 1033, 167]]){
+          ctx.font = `${weight} 100px VariableFace`
+          let m = ctx.measureText('Hgjy')
+          assert.nearEqual(m.fontBoundingBoxAscent, ascender / 10, 0.01)
+          assert.nearEqual(m.fontBoundingBoxDescent, descender / 10, 0.01)
+          assert.nearEqual(m.emHeightAscent, 100 * ascender / 1200, 0.01)
+          assert.nearEqual(m.emHeightDescent, 100 * descender / 1200, 0.01)
+        }
+      })
+
+      test("BASE table baselines", () => {
+        // CanvasTest: unitsPerEm 1024, typo 768/-256, BASE (DFLT) hang 512, ideo 128, romn 0
+        FontLibrary.use('BaseFace', [`tests/assets/fonts/CanvasTest.ttf`])
+        ctx.font = '128px BaseFace'
+        ctx.textBaseline = 'alphabetic'
+        let m = ctx.measureText('A')
+        assert.nearEqual(m.alphabeticBaseline, 0, 0.001)
+        assert.nearEqual(m.hangingBaseline, 64, 0.001)
+        assert.nearEqual(m.ideographicBaseline, 16, 0.001)
+
+        // the textBaseline offsets use the same positions
+        ctx.textBaseline = 'hanging'
+        assert.nearEqual(ctx.measureText('A').alphabeticBaseline, -64, 0.001)
+        ctx.textBaseline = 'ideographic'
+        assert.nearEqual(ctx.measureText('A').alphabeticBaseline, -16, 0.001)
+      })
+
       test("ink bounds from glyph outlines", () => {
         FontLibrary.use('TableFace', [`tests/assets/fonts/Oswald-Medium.ttf`])
         ctx.font = '48px TableFace'
