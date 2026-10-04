@@ -324,6 +324,20 @@ describe("Path2D", ()=>{
         assert.ok(Math.hypot(f32x - x, f32y - y) > 25,
           `f32-narrowed angle ${a} would misplace the arc start by tens of px`)
       }
+
+      // sweeps within ~1.5e-5° of 360° round to exactly 360 as f32, which skia treats as an empty arc,
+      // so they need to be drawn as full circles rather than vanishing
+      ctx.fillStyle = 'black'
+      for (const deg of [1.5e-5, 1e-5, 1e-6, 2e-7]){
+        const sweep = TAU - deg * Math.PI / 180
+        for (const ccw of [false, true]){
+          scrub()
+          p = new Path2D()
+          p.arc(150, 150, 75, 0, ccw ? -sweep : sweep, ccw)
+          ctx.fill(p)
+          assert.deepEqual(pixel(150, 150), BLACK, `${ccw ? 'ccw' : 'cw'} arc ${deg}° short of 360° drew nothing`)
+        }
+      }
     })
 
     test("ellipse", () => {
@@ -367,6 +381,18 @@ describe("Path2D", ()=>{
       assert.deepEqual(pixel(130, 60), BLACK)
       assert.deepEqual(pixel(163, 100), BLACK)
 
+      // sweeps that round to 360° as f32 must still draw a full ellipse (see the matching arc test)
+      ctx.fillStyle = 'black'
+      for (const deg of [1.5e-5, 1e-5, 1e-6, 2e-7]){
+        const sweep = TAU - deg * Math.PI / 180
+        for (const ccw of [false, true]){
+          scrub()
+          p = new Path2D()
+          p.ellipse(100, 100, 100, 50, .25*Math.PI, 1, ccw ? 1 - sweep : 1 + sweep, ccw)
+          ctx.fill(p)
+          assert.deepEqual(pixel(100, 100), BLACK, `${ccw ? 'ccw' : 'cw'} ellipse ${deg}° short of 360° drew nothing`)
+        }
+      }
     })
   })
 

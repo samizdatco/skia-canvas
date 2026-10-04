@@ -3,7 +3,6 @@
 #![allow(unused_variables)]
 #![allow(non_snake_case)]
 use std::cell::{Ref, RefCell};
-use std::f32::EPSILON;
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 use neon::prelude::*;
 use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, PathOp, StrokeRec};
@@ -151,22 +150,19 @@ impl Path2D{
 
     // build the arc independently then *extend* the path (drawing a connecting line from the prior point)
     let mut arc = PathBuilder::new();
-    {
-      let sweep_deg = (end_angle - start_angle).to_degrees();
-      let start_deg = start_angle.to_degrees() % 360.0;
+    let sweep = (end_angle - start_angle).to_degrees() as f32;
+    let start = (start_angle.to_degrees() % 360.0) as f32;
 
+    if sweep.abs() >= 360.0 {
       // draw 360° ellipses in two 180° segments; trying to draw the full ellipse at once draws nothing
-      if sweep_deg >= 360.0 - EPSILON as f64 {
-        arc.arc_to(oval, start_deg as f32, 180.0, false);
-        arc.arc_to(oval, ((start_deg + 180.0) % 360.0) as f32, 180.0, false);
-      }else if sweep_deg <= -360.0 + EPSILON as f64 {
-        arc.arc_to(oval, start_deg as f32, -180.0, false);
-        arc.arc_to(oval, ((start_deg - 180.0) % 360.0) as f32, -180.0, false);
-      }else{
-        // Draw <360° ellipses in a single arc
-        arc.arc_to(oval, start_deg as f32, sweep_deg as f32, false);
-      }
+      let half = 180.0_f32.copysign(sweep);
+      arc.arc_to(oval, start, half, false);
+      arc.arc_to(oval, (start + half) % 360.0, half, false);
+    }else{
+      // Draw <360° ellipses in a single arc
+      arc.arc_to(oval, start, sweep, false);
     }
+
     self.extend_path(&arc.detach(), &rotated);
   }
 }
