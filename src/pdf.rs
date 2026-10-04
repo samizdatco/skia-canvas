@@ -1071,7 +1071,7 @@ fn stroke_paint(paint:&mut SkPaint, props:&StrokeProps){
   if props.dash_array.iter().any(|gap| *gap > 0.0){
     // skia requires an even number of intervals; pdf allows odd-length arrays, which repeat
     let mut intervals = props.dash_array.to_vec();
-    if intervals.len() % 2 != 0{
+    if !intervals.len().is_multiple_of(2){
       intervals.extend_from_slice(&props.dash_array);
     }
     if let Some(effect) = dash_path_effect::new(&intervals, props.dash_offset){

@@ -9,13 +9,7 @@ use super::arg_num;
 //
 
 pub fn opt_object_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize) -> Option<Handle<'a, JsObject>>{
-  match cx.argument_opt(idx) {
-    Some(arg) => match arg.downcast::<JsObject, _>(cx) {
-      Ok(obj) => Some(obj),
-      Err(_e) => None
-    },
-    None => None
-  }
+  cx.argument_opt(idx).and_then(|arg| arg.downcast::<JsObject, _>(cx).ok())
 }
 
 pub fn object_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize, attr:&str) -> NeonResult<Handle<'a, JsObject>>{
@@ -26,7 +20,7 @@ pub fn object_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize, attr:&str) -> Neo
 }
 
 pub fn opt_object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsObject>, attr:&str) -> Option<Handle<'a, JsObject>>{
-  if let Some(val) = obj.get::<JsValue, _, _>(cx, attr).ok(){
+  if let Ok(val) = obj.get::<JsValue, _, _>(cx, attr){
     return val.downcast::<JsObject, _>(cx).ok()
   }
   None
@@ -246,13 +240,13 @@ pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default:f32) -> f32{
 
 pub fn float_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<f32>{
   _float_args_at(cx, idx, &[attr], false)
-    .map(|vec| vec.into_iter().nth(0).unwrap())
+    .map(|vec| vec.into_iter().next().unwrap())
 }
 
 
 pub fn float_arg_or_bail(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<f32>{
   _float_args_at(cx, idx, &[attr], true)
-    .map(|vec| vec.into_iter().nth(0).unwrap())
+    .map(|vec| vec.into_iter().next().unwrap())
 }
 
 pub fn floats_to_array<'a>(cx: &mut FunctionContext<'a>, nums: &[f32]) -> JsResult<'a, JsValue> {

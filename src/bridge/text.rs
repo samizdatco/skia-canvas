@@ -71,7 +71,7 @@ pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontS
   let feat_obj:Handle<JsObject> = font_desc.get(cx, "features")?;
   let features = font_features(cx, &feat_obj)?;
 
-  Ok(match families[0] == ""{
+  Ok(match families[0].is_empty(){
     true => None, // silently fail if a family name was omitted (e.g., "bold 50px")
     false => Some(FontSpec{ families, size, line_height, weight, slant, oblique, width, features, variant, canonical})
   })

@@ -128,17 +128,11 @@ impl Content{
   }
 
   pub fn is_complete(&self) -> bool {
-    match &self{
-      Content::Loading => false,
-      _ => true
-    }
+    !matches!(self, Content::Loading)
   }
 
   pub fn is_drawable(&self) -> bool {
-    match &self{
-      Content::Loading | Content::Broken => false,
-      _ => true
-    }
+    !matches!(self, Content::Loading | Content::Broken)
   }
 
   // shrink the src crop to just its overlap with the actual bounds and adjust dst to match
@@ -287,7 +281,7 @@ impl<'a, 'input> StyleNode<'a, 'input> {
         (r.start, r.end, decls)
       }
       None => {
-        let at = self.0.attributes().last()
+        let at = self.0.attributes().next_back()
           .map(|a| a.range().end)
           .unwrap_or_else(|| self.tag_name_end());
         (at, at, format!(" style=\"{}\"", decls))
@@ -321,7 +315,7 @@ impl simplecss::Element for StyleNode<'_, '_> {
     self.0.tag_name().name()
   }
   fn attribute_matches(&self, local_name: &str, operator: simplecss::AttributeOperator) -> bool {
-    self.0.attribute(local_name).map_or(false, |v| operator.matches(v))
+    self.0.attribute(local_name).is_some_and(|v| operator.matches(v))
   }
   fn pseudo_class_matches(&self, _class: simplecss::PseudoClass) -> bool {
     false // ignore :hover/:focus/:target/etc.

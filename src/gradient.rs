@@ -214,7 +214,7 @@ pub fn addColorStop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
 
   let offset = float_arg(&mut cx, 1, "offset")?;
-  if offset < 0.0 || offset > 1.0{
+  if !(0.0..=1.0).contains(&offset){
     return cx.throw_range_error("Color stop offsets must be between 0.0 and 1.0");
   }
 

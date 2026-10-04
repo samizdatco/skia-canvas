@@ -1,5 +1,5 @@
 #![allow(unused_braces)]
-#![allow(clippy::unnecessary_wraps)]
+#![allow(clippy::neg_cmp_op_on_partial_ord)] // `!(x > 0.0)` deliberately rejects NaN too
 use neon::prelude::*;
 
 mod canvas;
