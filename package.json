@@ -1,6 +1,6 @@
 {
   "name": "skia-canvas",
-  "version": "4.0.0-rc8",
+  "version": "4.0.0-rc9",
   "description": "A uniquely capable, unusually fast Canvas API for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
