@@ -218,7 +218,7 @@ pub fn stroke(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let path = opt_skpath_arg(&mut cx, 1);
 
   if path.is_none() && cx.len() >= 2{
-    return cx.throw_type_error(format!("Expected a Path2D for 1st arg"))
+    return cx.throw_type_error("Expected a Path2D for 1st arg")
   }
 
   this.borrow_mut().draw_path(path, PaintStyle::Stroke, None);
@@ -465,7 +465,7 @@ fn _layout_rects(cx: &mut FunctionContext, intrinsic:Size, nums:&[f32]) -> NeonR
 
 pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
-  let argc = cx.len() as usize;
+  let argc = cx.len();
   let source = cx.argument::<JsValue>(1)?;
   let arg_names = ["srcX", "srcY", "srcWidth", "srcHeight", "dstX", "dstY", "dstWidth", "dstHeight"];
   let nums = float_args_or_bail_at(&mut cx, 2, &arg_names[..argc-2])?;
@@ -487,7 +487,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     let (src, dst) = _layout_rects(&mut cx, bounds_size, &nums)?;
 
     if let Some((src, dst)) = Content::drawable_rects(content.size(), src, dst){
-      this.borrow_mut().draw_image(&img, &src, &dst);
+      this.borrow_mut().draw_image(img, &src, &dst);
     }
   } else if let Content::Vector(pict, pict_size, space) = &content {
     let fit_to_canvas = source.downcast::<BoxedImage, _>(&mut cx)
@@ -521,7 +521,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 }
 
 pub fn drawCanvas(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let argc = cx.len() as usize;
+  let argc = cx.len();
   let this = cx.argument::<BoxedContext2D>(0)?;
   let context = cx.argument::<BoxedContext2D>(1)?;
   let arg_names = ["srcX", "srcY", "srcWidth", "srcHeight", "dstX", "dstY", "dstWidth", "dstHeight"];

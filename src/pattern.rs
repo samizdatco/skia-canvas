@@ -103,7 +103,7 @@ pub fn from_image_data(mut cx: FunctionContext) -> JsResult<BoxedCanvasPattern> 
   let src = image_data_arg(&mut cx, 1)?;
   let repeat = repetition_arg(&mut cx, 2)?;
   let content = Content::from_image_data(src);
-  let dims:Size = content.size().into();
+  let dims:Size = content.size();
   let matrix = Matrix::new_identity();
 
   let stamp = Stamp::new(content, dims, repeat, matrix);

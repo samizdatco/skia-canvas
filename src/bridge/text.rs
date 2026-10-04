@@ -190,7 +190,7 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
     // inherit the fill color unless textDecoration specifies a css color to use
     let color = match string_for_key(cx, &deco, "color")?.as_str(){
       "currentColor" => None,
-      color_str => match CssColor::parse(&color_str){
+      color_str => match CssColor::parse(color_str){
         Some(color) => Some(color),
         None => return cx.throw_type_error(format!("⚠️Invalid text decoration: {:?}", css)),
       }
@@ -651,9 +651,9 @@ impl Default for Spacing{
 
 impl Spacing{
   pub fn from_obj(cx: &mut FunctionContext, spacing:&Handle<JsObject>) -> NeonResult<Option<Self>>{
-    let raw_size = float_for_key(cx, &spacing, "size")?;
-    let unit = string_for_key(cx, &spacing, "unit")?;
-    let px_size = float_for_key(cx, &spacing, "px")?;
+    let raw_size = float_for_key(cx, spacing, "size")?;
+    let unit = string_for_key(cx, spacing, "unit")?;
+    let px_size = float_for_key(cx, spacing, "px")?;
     Ok(Self::parse(raw_size, unit, px_size))
   }
 

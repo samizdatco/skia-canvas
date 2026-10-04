@@ -138,7 +138,7 @@ pub fn bool_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str)
   let key = cx.string(attr);
   let val:Handle<JsValue> = obj.get(cx, key)?;
   match val.downcast::<JsBoolean, _>(cx){
-    Ok(v) => Ok(v.value(cx) as bool),
+    Ok(v) => Ok(v.value(cx)),
     Err(_e) => cx.throw_type_error(format!("Exptected a boolean value for \"{}\"", attr))
   }
 }
@@ -151,7 +151,7 @@ pub fn bool_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str)
 fn _as_double(cx: &mut FunctionContext, val:&Handle<JsValue>) -> Option<f64>{
   // emulate (some of) javascript's wildly permissive type coercion <https://www.w3schools.com/js/js_type_conversion.asp>
   val.downcast::<JsNumber, _>(cx).ok().map(|num|{
-    num.value(cx) as f64
+    num.value(cx)
   }).or_else(||{
     // strings
     val.downcast::<JsString, _>(cx).ok().and_then(|txt|{
@@ -226,7 +226,7 @@ pub fn opt_float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:
 }
 
 pub fn float_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<f32>{
-  match opt_float_for_key(cx, &obj, attr) {
+  match opt_float_for_key(cx, obj, attr) {
     Some(num) => Ok(num),
     None => cx.throw_type_error(format!("Exptected a numerical value for \"{}\"", attr))
   }
@@ -269,7 +269,7 @@ pub fn floats_to_array<'a>(cx: &mut FunctionContext<'a>, nums: &[f32]) -> JsResu
 //
 
 pub fn opt_float_args(cx: &mut FunctionContext, rng: Range<usize>) -> Vec<f32>{
-  let end = cmp::min(rng.end, cx.len() as usize);
+  let end = cmp::min(rng.end, cx.len());
   let rng = rng.start..end;
 
   let mut args:Vec<f32> = Vec::new();

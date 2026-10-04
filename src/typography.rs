@@ -449,7 +449,7 @@ impl Decorations{
       TextDecorationStyle::Double => {
         // draw double-underscores with a space between them equal to the stroke thickness and calculate gaps independently
         let style = TextDecorationStyle::Solid;
-        self.append_rule(out, run, &Rule{x0, x1, pos:pos,                 thickness, style, skip, graze_floor});
+        self.append_rule(out, run, &Rule{x0, x1, pos,                     thickness, style, skip, graze_floor});
         self.append_rule(out, run, &Rule{x0, x1, pos:pos + thickness*2.0, thickness, style, skip, graze_floor});
       }
       style => self.append_rule(out, run, &Rule{ x0, x1, pos, thickness, style, skip, graze_floor }),

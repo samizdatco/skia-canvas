@@ -44,24 +44,20 @@ impl Drop for Image{
   }
 }
 
+#[derive(Default)]
 pub enum Content{
   Bitmap(SkImage), // embeds its own intrinsic size and colorspace
   Vector(Picture, Size, ColorSpace), // needs to record them separately
+  #[default]
   Loading,
   Broken,
-}
-
-impl Default for Content{
-  fn default() -> Self {
-      Content::Loading
-  }
 }
 
 impl Clone for Content{
   fn clone(&self) -> Self {
       match self{
         Content::Bitmap(img) => Content::Bitmap(img.clone()),
-        Content::Vector(pict, size, space) => Content::Vector(pict.clone(), size.clone(), space.clone()),
+        Content::Vector(pict, size, space) => Content::Vector(pict.clone(), *size, space.clone()),
         _ => Content::default()
       }
   }
@@ -70,7 +66,7 @@ impl Clone for Content{
 impl Content{
   // snapshot the context as a bitmap, already clamped to its own gamut
   pub fn raster_from_context(ctx:&mut Context2D) -> Self{
-    ctx.get_image().map(|i| Content::Bitmap(i)).unwrap_or_default()
+    ctx.get_image().map(Content::Bitmap).unwrap_or_default()
   }
 
   // flatten the context into a Picture, tagged with the gamut its colors were authored in
@@ -82,7 +78,7 @@ impl Content{
   pub fn from_image_data(image_data:ImageData) -> Self{
     let info = image_data.image_info();
     images::raster_from_data(&info, &image_data.buffer, info.min_row_bytes())
-      .map(|image| Content::Bitmap(image) )
+      .map(Content::Bitmap)
       .unwrap_or_default()
   }
 

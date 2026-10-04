@@ -1147,7 +1147,7 @@ pub fn open(mut cx: FunctionContext) -> JsResult<JsValue> {
     }
     Ok(array.upcast())
   }else{
-    return Ok(cx.undefined().upcast()) // undefined = not a pdf
+    Ok(cx.undefined().upcast()) // undefined = not a pdf
   }
 }
 

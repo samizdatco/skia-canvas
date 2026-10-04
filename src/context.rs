@@ -613,7 +613,7 @@ impl Context2D{
       let paint = match Self::is_pass_through(paint){ true => None, false => Some(paint) };
       canvas.save();
       canvas.clip_rect(dst_rect, ClipOp::Intersect, true);
-      canvas.draw_picture(&picture, Some(&matrix), paint);
+      canvas.draw_picture(picture, Some(&matrix), paint);
       canvas.restore();
     });
   }
@@ -845,12 +845,12 @@ impl Context2D{
         if almost_zero(scale.width) {
           sigma.x = 0.0;
         } else {
-          sigma.x /= scale.width as f32;
+          sigma.x /= scale.width;
         }
         if almost_zero(scale.height) {
           sigma.y = 0.0;
         } else {
-          sigma.y /= scale.height as f32;
+          sigma.y /= scale.height;
         }
       }
     }

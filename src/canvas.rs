@@ -57,7 +57,7 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
   }
 
   let gpu_enabled = bool_for_key(&mut cx, &opts, "gpu")?;
-  let this = RefCell::new(Canvas::new(text_contrast as f64, text_gamma as f64, !gpu_enabled));
+  let this = RefCell::new(Canvas::new(text_contrast, text_gamma, !gpu_enabled));
   Ok(cx.boxed(this))
 }
 

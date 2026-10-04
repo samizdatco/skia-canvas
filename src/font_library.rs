@@ -536,13 +536,13 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
         // go back to using #[cfg(target_os = "windows")] when skia's harfbuzz is upgraded
         let bytes = {
           fn decode_woff(bytes:&Vec<u8>) -> Option<Vec<u8>>{
-            let woff = ReadScope::new(&bytes).read::<WoffFont>().ok()?;
+            let woff = ReadScope::new(bytes).read::<WoffFont>().ok()?;
             let tags = woff.table_tags()?;
             whole_font(&woff, &tags).ok()
           }
 
           fn decode_woff2(bytes:&Vec<u8>) -> Option<Vec<u8>>{
-            let woff2 = ReadScope::new(&bytes).read::<Woff2Font>().ok()?;
+            let woff2 = ReadScope::new(bytes).read::<Woff2Font>().ok()?;
             let tables = woff2.table_provider(0).ok()?;
             let tags = tables.table_tags()?;
             whole_font(&tables, &tags).ok()

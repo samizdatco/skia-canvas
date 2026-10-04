@@ -14,17 +14,12 @@ use super::budget::{charge, credit, worst_in, Entry, Rank};
 // The surface `getImageData` rasterizes into then reads back from
 //
 
+#[derive(Default)]
 pub struct ReadbackSurface{
   surface: Option<Surface>,
   version: PageVersion, // identify the page layers already included in the surface's raster
   gpu: Option<bool>,
   config: RasterConfig,
-}
-
-impl Default for ReadbackSurface{
-  fn default() -> Self {
-    Self{surface:None, version:PageVersion::default(), gpu:None, config:RasterConfig::default()}
-  }
 }
 
 impl ReadbackSurface{
@@ -45,7 +40,7 @@ impl ReadbackSurface{
 
     // check whether the existing surface raster is still valid as a base for new layering
     let reconfigure = self.config != config;
-    let recreate = self.is_surface_stale(&page, &opts, &engine);
+    let recreate = self.is_surface_stale(page, opts, engine);
     let restart = reconfigure || recreate || !self.version.extends(&page.version());
 
     // start from scratch if invalidated
@@ -59,7 +54,7 @@ impl ReadbackSurface{
         let page_size = page.scaled_dimensions(opts.density);
         let img_info = ImageInfo::new_n32_premul(page_size, color_space.clone());
         let budgeted = false; // the readback cache owns this, so keep it out of skia's glyph/texture/scratch budget
-        self.surface = engine.make_surface(&img_info, &opts, budgeted).ok();
+        self.surface = engine.make_surface(&img_info, opts, budgeted).ok();
       }
     }
 
