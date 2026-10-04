@@ -107,13 +107,12 @@ pub fn get_engine(mut cx: FunctionContext) -> JsResult<JsString> {
 
 pub fn set_engine(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedCanvas>(0)?;
-  if let Some(engine_name) = opt_string_arg(&mut cx, 1){
-    if let Some(new_engine) = to_engine(&engine_name){
-      if new_engine.selectable() {
-        this.borrow_mut().gpu_disabled = matches!(new_engine, gfx::RenderingEngine::CPU);
-        this.borrow_mut().engine = Some(new_engine)
-      }
-    }
+  if let Some(engine_name) = opt_string_arg(&mut cx, 1)
+    && let Some(new_engine) = to_engine(&engine_name)
+    && new_engine.selectable()
+  {
+    this.borrow_mut().gpu_disabled = matches!(new_engine, gfx::RenderingEngine::CPU);
+    this.borrow_mut().engine = Some(new_engine)
   }
 
   Ok(cx.undefined())

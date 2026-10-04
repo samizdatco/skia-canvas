@@ -35,10 +35,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   }
 
   // initialize thread pool w/ non-default size if requested
-  if let Ok(value) = std::env::var("SKIA_CANVAS_THREADS"){
-    if let Ok(num) = value.parse::<usize>(){
-      rayon::ThreadPoolBuilder::new().num_threads(num).build_global().unwrap();
-    }
+  if let Ok(value) = std::env::var("SKIA_CANVAS_THREADS") && let Ok(num) = value.parse::<usize>(){
+    rayon::ThreadPoolBuilder::new().num_threads(num).build_global().unwrap();
   }
 
   // retire the GPU context cleanly at process (so its destructor runs while the driver is still alive)

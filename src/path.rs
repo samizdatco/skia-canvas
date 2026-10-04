@@ -430,10 +430,10 @@ pub fn round(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let bounds = *path.bounds();
   let stroke_rec = StrokeRec::new_hairline();
 
-  if let Some(rounder) = PathEffect::corner_path(radius){
-    if let Some((rounded, _)) = rounder.filter_path(&path, &stroke_rec, bounds){
-      return Ok(cx.boxed(RefCell::new(Path2D::from(rounded))))
-    }
+  if let Some(rounder) = PathEffect::corner_path(radius)
+    && let Some((rounded, _)) = rounder.filter_path(&path, &stroke_rec, bounds)
+  {
+    return Ok(cx.boxed(RefCell::new(Path2D::from(rounded))))
   }
 
   Ok(cx.boxed(RefCell::new(Path2D::from(path))))
@@ -452,10 +452,10 @@ pub fn trim(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let stroke_rec = StrokeRec::new_hairline();
   let mode = if invert{ trim_path_effect::Mode::Inverted }else{ trim_path_effect::Mode::Normal };
 
-  if let Some(trimmer) = PathEffect::trim(start, end, mode){
-    if let Some((trimmed, _)) = trimmer.filter_path(&path, &stroke_rec, bounds){
-      return Ok(cx.boxed(RefCell::new(Path2D::from(trimmed))))
-    }
+  if let Some(trimmer) = PathEffect::trim(start, end, mode)
+    && let Some((trimmed, _)) = trimmer.filter_path(&path, &stroke_rec, bounds)
+  {
+    return Ok(cx.boxed(RefCell::new(Path2D::from(trimmed))))
   }
 
   Ok(cx.boxed(RefCell::new(Path2D::from(path))))
@@ -473,10 +473,10 @@ pub fn jitter(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let bounds = *path.bounds();
   let stroke_rec = StrokeRec::new_hairline();
 
-  if let Some(trimmer) = PathEffect::discrete(seg_len, std_dev, Some(seed)){
-    if let Some((jittered, _)) = trimmer.filter_path(&path, &stroke_rec, bounds){
-      return Ok(cx.boxed(RefCell::new(Path2D::from(jittered))))
-    }
+  if let Some(trimmer) = PathEffect::discrete(seg_len, std_dev, Some(seed))
+    && let Some((jittered, _)) = trimmer.filter_path(&path, &stroke_rec, bounds)
+  {
+    return Ok(cx.boxed(RefCell::new(Path2D::from(jittered))))
   }
 
   Ok(cx.boxed(RefCell::new(Path2D::from(path))))

@@ -317,8 +317,8 @@ impl PageRecorder{
 
     // reuse the last image unless the canvas has been drawn into or resized since it was made
     let version = PageVersion{ id:self.id, epoch:self.epoch, depth:self.layers.len() };
-    if let Some((cached, image)) = &self.last_image{
-      if *cached == version{ return Some(image.clone()) }
+    if let Some((cached, image)) = &self.last_image && *cached == version{
+      return Some(image.clone())
     }
 
     let size = self.bounds.size().to_floor();
@@ -632,12 +632,10 @@ impl Page{
           page.playback_from(canvas, first, None, Replay::Raster(cache));
 
           // cache the raster as the backdrop for the next export of the same page
-          if keep{
-            if let Some(image) = surface.image_snapshot_with_bounds(img_info.bounds()){
-              let bytes = img_info.compute_min_byte_size() as u64;
-              cache.export(&page, &opts, &color_space,
-                |snap, config| snap.store(Some(image), &page, config, bytes));
-            }
+          if keep && let Some(image) = surface.image_snapshot_with_bounds(img_info.bounds()){
+            let bytes = img_info.compute_min_byte_size() as u64;
+            cache.export(&page, &opts, &color_space,
+              |snap, config| snap.store(Some(image), &page, config, bytes));
           }
 
           // draw the matte underneath as a final pass so the page's content has a transparent background

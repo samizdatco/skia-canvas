@@ -411,11 +411,9 @@ pub fn get_lineWidth(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn set_lineWidth(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(num) = opt_float_arg(&mut cx, 1){
-    if num > 0.0 {
-      this.state.paint.set_stroke_width(num);
-      this.state.stroke_width = num;
-    }
+  if let Some(num) = opt_float_arg(&mut cx, 1) && num > 0.0{
+    this.state.paint.set_stroke_width(num);
+    this.state.stroke_width = num;
   }
   Ok(cx.undefined())
 }
@@ -431,10 +429,8 @@ pub fn get_miterLimit(mut cx: FunctionContext) -> JsResult<JsNumber> {
 pub fn set_miterLimit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  if let Some(num) = opt_float_arg(&mut cx, 1){
-    if num > 0.0 {
-      this.state.paint.set_stroke_miter(num);
-    }
+  if let Some(num) = opt_float_arg(&mut cx, 1) && num > 0.0{
+    this.state.paint.set_stroke_miter(num);
   }
   Ok(cx.undefined())
 }

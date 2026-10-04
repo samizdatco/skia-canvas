@@ -61,13 +61,12 @@ pub fn to_matrix(t:&[f32]) -> Option<Matrix>{
 // }
 
 pub fn opt_matrix_arg(cx: &mut FunctionContext, idx: usize) -> Option<Matrix>{
-  if let Some(arg) = cx.argument_opt(idx) {
-    if let Ok(array) = arg.downcast::<JsArray, _>(cx) {
-      if let Ok(vals) = array.to_vec(cx){
-        let terms = floats_in(cx, &vals);
-        return to_matrix(&terms)
-      }
-    }
+  if let Some(arg) = cx.argument_opt(idx)
+    && let Ok(array) = arg.downcast::<JsArray, _>(cx)
+    && let Ok(vals) = array.to_vec(cx)
+  {
+    let terms = floats_in(cx, &vals);
+    return to_matrix(&terms)
   }
   None
 }
@@ -85,12 +84,11 @@ pub fn matrix_arg(cx: &mut FunctionContext, idx:usize) -> NeonResult<Matrix> {
 
 pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Vec<Point>>{
   let mut nums:Vec<f32> = vec![];
-  if let Some(arg) = cx.argument_opt(idx) {
-    if let Ok(array) = arg.downcast::<JsArray, _>(cx) {
-      if let Ok(vals) = array.to_vec(cx){
-        nums = floats_in(cx, &vals);
-      }
-    }
+  if let Some(arg) = cx.argument_opt(idx)
+    && let Ok(array) = arg.downcast::<JsArray, _>(cx)
+    && let Ok(vals) = array.to_vec(cx)
+  {
+    nums = floats_in(cx, &vals);
   }
 
   if nums.len() % 2 == 1{
@@ -115,11 +113,9 @@ pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Vec<Point>
 use crate::path::{BoxedPath2D};
 
 pub fn opt_skpath_arg(cx: &mut FunctionContext, idx:usize) -> Option<Path> {
-  if let Some(arg) = cx.argument_opt(idx){
-    if let Ok(arg) = arg.downcast::<BoxedPath2D, _>(cx){
-      let arg = arg.borrow();
-      return Some(arg.path())
-    }
+  if let Some(arg) = cx.argument_opt(idx) && let Ok(arg) = arg.downcast::<BoxedPath2D, _>(cx){
+    let arg = arg.borrow();
+    return Some(arg.path())
   }
   None
 }
