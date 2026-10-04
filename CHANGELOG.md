@@ -143,6 +143,7 @@
 - Boolean-op and [`simplify()`][p2d_simplify] results now render differently when filled with the default `"nonzero"` rule. Results containing holes (e.g., via `xor` or `difference`) previously filled in solid without an explicit `"evenodd"`.
 - SVG **Image**s lacking an explicit `width` and `height` now use the CSS [default sizing algorithm][default_sizing_algo] (with a 300×150 [default object size][default_size]) to establish a default intrinsic size. An SVG with only one concrete dimension plus a `viewBox` ratio now resolves to a fully-determined intrinsic size. This changes both the reported `width`/`height` of such images and how they scale when drawn without explicit size arguments (including when used as fill/stroke-pattern tiles).
 - An **ImageData** created from a Node `Buffer` object now *shares* the buffer’s memory rather than copying it.
+- The `window` Cargo feature is no longer independently configurable (it is now automatically enabled by a `metal` or `vulkan` feature being present).
 
 [pointerevent]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent
 [pointerevent_types]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent#pointer_event_types

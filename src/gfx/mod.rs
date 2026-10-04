@@ -1,6 +1,6 @@
-// reject `window` without a backend also being selected
+// `window` is enabled implicitly by the gpu backends
 #[cfg(all(feature = "window", not(any(feature = "metal", feature = "vulkan"))))]
-compile_error!("the `window` feature requires enabling `metal` or `vulkan`");
+compile_error!("the `window` feature is enabled automatically by `metal` or `vulkan` and can't be used by itself");
 
 #[cfg(feature = "metal")]
 mod metal;
