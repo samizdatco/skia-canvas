@@ -269,6 +269,7 @@ impl Window {
         self.resize(size);
     }
 
+    #[cfg(target_os = "macos")] // only called by the WindowEvent::Occluded handler
     pub fn set_redrawing_suspended(&mut self, suspended:bool){
         self.suspended = suspended;
         if suspended{

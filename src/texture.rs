@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::f32::consts::PI;

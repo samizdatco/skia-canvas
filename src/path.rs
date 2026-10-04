@@ -1,5 +1,4 @@
-#![allow(unused_mut)]
-#![allow(unused_variables)]
+#![allow(clippy::neg_cmp_op_on_partial_ord)] // `!(x > 0.0)` deliberately rejects NaN too
 #![allow(non_snake_case)]
 use std::cell::{Ref, RefCell};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};

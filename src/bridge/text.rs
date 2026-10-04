@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 use core::ops::Range;
 use std::collections::HashMap;
 use allsorts::binary::read::ReadScope;

@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 use std::iter::zip;
 use std::sync::Once;
 use std::collections::BTreeSet;
@@ -225,8 +224,8 @@ impl Typesetter{
             "descent": alpha + font.descent,
             "capHeight": alpha - font.cap_height,
             "xHeight": alpha - font.x_height,
-            "underline": font.underline_position().map(|ulH| alpha + ulH ),
-            "strikethrough": font.strikeout_position().map(|stH| alpha + stH ),
+            "underline": font.underline_position().map(|pos| alpha + pos ),
+            "strikethrough": font.strikeout_position().map(|pos| alpha + pos ),
           })
         }).collect::<Vec<Value>>()
       }) })

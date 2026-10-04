@@ -106,7 +106,8 @@ mod vblank {
     use crate::gui::event::AppEvent;
     use crate::gui::window_mgr::WindowManager;
 
-    // The frame heartbeat: a per-platform source that fires a Tick at each display vblank.
+    // The frame heartbeat: a per-platform source that fires a Tick at each display vblank
+    #[allow(dead_code)]
     pub enum Source{
         #[cfg(target_os = "macos")]
         Callback(mac::DisplayLink), // the CoreVideo vblank callback trigger
