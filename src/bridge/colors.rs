@@ -30,7 +30,7 @@ impl CssColor{
     })
   }
 
-  pub fn to_css(&self) -> String{
+  pub fn to_css(self) -> String{
     // return canonical string (use legacy format for hex/rgba(), CSS Color 4 syntax for everything else)
     if self.parsed.flags.named()
       && matches!(self.parsed.cs, ColorSpaceTag::Srgb | ColorSpaceTag::Hsl | ColorSpaceTag::Hwb)

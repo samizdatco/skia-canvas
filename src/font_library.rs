@@ -282,9 +282,9 @@ impl FontLibrary{
     if matches!(data.get(..4), Some(b"OTTO" | b"true" | b"ttcf" | [0, 1, 0, 0])){
       Some(Cow::Borrowed(data)) // already an sfnt
     }else if data.first() == Some(&1) && data.get(2).is_some_and(|hdr_size| *hdr_size >= 4){
-      Glyphs::from_cff(data)?.to_ttf().map(Cow::Owned)
+      Glyphs::from_cff(data)?.into_ttf().map(Cow::Owned)
     }else if data.starts_with(b"%!") || data.starts_with(&[0x80, 1]){
-      Glyphs::from_type1(data)?.to_ttf().map(Cow::Owned)
+      Glyphs::from_type1(data)?.into_ttf().map(Cow::Owned)
     }else{
       None
     }
@@ -331,7 +331,7 @@ impl Glyphs{
     Some(glyphs)
   }
 
-  fn to_ttf(self) -> Option<Vec<u8>>{
+  fn into_ttf(self) -> Option<Vec<u8>>{
     let ps_name = self.ps_name.as_str();
     let mut glyf = GlyfLocaBuilder::new();
     let (mut metrics, mut bbox, mut max_points, mut max_contours) = (vec![], [0i16; 4], 0, 0);
