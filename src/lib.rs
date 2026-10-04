@@ -7,6 +7,7 @@ mod context;
 mod path;
 mod drawlist;
 mod image;
+mod svg;
 mod pdf;
 mod filter;
 mod gradient;
