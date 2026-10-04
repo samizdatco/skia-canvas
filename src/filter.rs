@@ -1,10 +1,9 @@
 #![allow(unused_mut)]
-#![allow(unused_imports)]
 #![allow(unused_variables)]
 use std::fmt;
-use skia_safe::{Paint, Matrix, Point, Color, Color4f, MaskFilter, ImageFilter as SkImageFilter,
+use skia_safe::{Paint, Matrix, Point, Color4f, MaskFilter, ImageFilter as SkImageFilter,
                 BlurStyle, FilterMode, MipmapMode, SamplingOptions, TileMode, ColorSpace,
-                image_filters, color_filters, table_color_filter};
+                image_filters, color_filters};
 
 use crate::bridge::*;
 

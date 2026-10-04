@@ -4,7 +4,6 @@ use serde_json::{Map, Value};
 use winit::{
     dpi::{LogicalSize, LogicalPosition},
     event_loop::ActiveEventLoop,
-    event::WindowEvent,
     monitor::MonitorHandle,
     window::WindowId,
 };

@@ -1,13 +1,12 @@
-#![allow(unused_imports)]
 use std::cell::RefCell;
-use std::io::{Cursor, Write, Seek};
+use std::io::Cursor;
 use std::sync::OnceLock;
 use tiff::encoder::TiffEncoder;
 use tiff::tags::Tag as TiffTag;
 use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{
-  Image as SkImage, ImageInfo, ISize, ColorType, ColorSpace, AlphaType, Data, Size,
-  FontMgr, Matrix, Picture, Pixmap, Rect,
+  Image as SkImage, ImageInfo, ColorType, ColorSpace, AlphaType, Data, Size,
+  Matrix, Picture, Pixmap, Rect,
   matrix::ScaleToFit,
   image::{images, CachingHint},
   webp_encoder,

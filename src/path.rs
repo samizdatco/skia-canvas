@@ -1,11 +1,10 @@
 #![allow(unused_mut)]
-#![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(non_snake_case)]
 use std::cell::{Ref, RefCell};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 use neon::prelude::*;
-use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, PathOp, StrokeRec};
+use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, StrokeRec};
 use skia_safe::{PathEffect, trim_path_effect, ContourMeasure, ContourMeasureIter};
 use skia_safe::path::{self, AddPathMode, Verb};
 

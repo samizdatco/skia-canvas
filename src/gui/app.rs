@@ -1,7 +1,5 @@
 use neon::prelude::*;
-use serde_json::Value;
 use std::{
-    sync::atomic::{AtomicBool, Ordering},
     iter::zip,
     cell::RefCell,
     time::{Duration, Instant},
