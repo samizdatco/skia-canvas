@@ -7,10 +7,9 @@ use tiff::tags::Tag as TiffTag;
 use neon::{prelude::*, types::buffer::TypedArray};
 use skia_safe::{
   Image as SkImage, ImageInfo, ISize, ColorType, ColorSpace, AlphaType, Data, Size,
-  FontMgr, Matrix, Picture, PictureRecorder, Pixmap, Rect,
+  FontMgr, Matrix, Picture, Pixmap, Rect,
   matrix::ScaleToFit,
   image::{images, CachingHint},
-  svg::{self, Length, LengthUnit},
   webp_encoder,
 };
 use crate::bridge::*;
@@ -19,7 +18,7 @@ use crate::context::Context2D;
 use crate::gfx::cache::Cache;
 use crate::gfx::page::Page;
 use crate::mem;
-use crate::svg::StyledSvg;
+use crate::svg;
 
 pub type BoxedImage = JsBox<RefCell<Image>>;
 impl Finalize for Image {}
@@ -242,55 +241,10 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
       Some((picture, size)) => Content::Vector(picture, size, ColorSpace::new_srgb()), // hayro only supports sRGB
       None => Content::Broken
     }
-  }else if let Ok(mut dom) = svg::Dom::try_from(StyledSvg::from_data(&data)){
-    // Finally, try parsing as SVG (resolving any <style> CSS first, since Skia's SVG DOM ignores it)
-    let root = dom.root();
-
-    let mut size = root.intrinsic_size();
-
-    // handle files without explicit width/height dimensions
-    if size.is_empty(){
-      this.autosized = true;
-
-      let Length{ value:width, unit:w_unit } = root.width();
-      let Length{ value:height, unit:h_unit } = root.height();
-
-      size = match root.view_box().filter(|_| fit_view_box){
-        Some(view_box) => {
-          // `loadCanvas` prefers the viewBox dimensions since there isn't an opportunity to resize on draw
-          this.autosized = false;
-          (view_box.width(), view_box.height()).into()
-        }
-        None => {
-          // follow the CSS default sizing algorithm with a default object size of 300×150
-          let axis = |value:&f32, unit:&LengthUnit| matches!(unit, LengthUnit::Number).then_some(*value);
-          let (w, h) = (axis(width, w_unit), axis(height, h_unit));
-          let ratio = root.view_box().map(|vb| vb.width() / vb.height());
-          match ((w, h), ratio){
-            // one concrete axis plus a ratio fully determines an intrinsic size
-            ((Some(w), None), Some(r)) => { this.autosized = false; (w, w / r).into() }
-            ((None, Some(h)), Some(r)) => { this.autosized = false; (h * r, h).into() }
-            // otherwise at least one axis falls back to the default object size, so `autosized`
-            // stays set and the draw/pattern calls scale the whole box to fit the canvas
-            ((Some(w), None), None)    => (w, 150.0).into(),
-            ((None, Some(h)), None)    => (300.0, h).into(),
-            ((None, None),    Some(r)) => if r > 2.0 { (300.0, 300.0 / r) } else { (150.0 * r, 150.0) }.into(),
-            _                          => (300.0, 150.0).into(),
-          }
-        }
-      };
-    };
-
-    // Save the SVG contents as a Picture (to be drawn later)
-    let bounds = Rect::from_size(size);
-    let mut compositor = PictureRecorder::new();
-    dom.set_container_size(bounds.size());
-    dom.render(compositor.begin_recording(bounds, true));
-    match compositor.finish_recording_as_picture(None){
-      // skia's SVG parser only emits 8-bit sRGB (as of m150), so hardcode sRGB until that changes
-      Some(picture) => Content::Vector(picture, size, ColorSpace::new_srgb()),
-      None => Content::Broken
-    }
+  }else if let Some((picture, size, autosized)) = svg::read_image(&data, fit_view_box){
+    // Finally, try parsing as SVG
+    this.autosized = autosized;
+    Content::Vector(picture, size, ColorSpace::new_srgb()) // skia only parses sRGB
   }else{
     Content::Broken
   };

@@ -1,6 +1,59 @@
 use std::borrow::Cow;
-use skia_safe::{Data, svg};
+use skia_safe::{Data, Picture, PictureRecorder, Rect, Size, svg::{self, Length, LengthUnit}};
 use crate::font_library::FontLibrary;
+
+// parse svg data and return it as a Picture along with its dimensions and an autosized flag
+// (fit_view_box=true will use the viewBox dimensions verbatim rather than autosizing)
+pub fn read_image(data:&Data, fit_view_box:bool) -> Option<(Picture, Size, bool)>{
+  // resolve any <style> CSS first, since Skia's SVG DOM ignores it
+  let mut dom = svg::Dom::try_from(StyledSvg::from_data(data)).ok()?;
+  let root = dom.root();
+
+  let mut size = root.intrinsic_size();
+  let mut autosized = false;
+
+  // handle files without explicit width/height dimensions
+  if size.is_empty(){
+    autosized = true;
+
+    let Length{ value:width, unit:w_unit } = root.width();
+    let Length{ value:height, unit:h_unit } = root.height();
+
+    size = match root.view_box().filter(|_| fit_view_box){
+      Some(view_box) => {
+        // `loadCanvas` prefers the viewBox dimensions since there isn't an opportunity to resize on draw
+        autosized = false;
+        (view_box.width(), view_box.height()).into()
+      }
+      None => {
+        // follow the CSS default sizing algorithm with a default object size of 300×150
+        let axis = |value:&f32, unit:&LengthUnit| matches!(unit, LengthUnit::Number).then_some(*value);
+        let (w, h) = (axis(width, w_unit), axis(height, h_unit));
+        let ratio = root.view_box().map(|vb| vb.width() / vb.height());
+        match ((w, h), ratio){
+          // one concrete axis plus a ratio fully determines an intrinsic size
+          ((Some(w), None), Some(r)) => { autosized = false; (w, w / r).into() }
+          ((None, Some(h)), Some(r)) => { autosized = false; (h * r, h).into() }
+          // otherwise at least one axis falls back to the default object size, so `autosized`
+          // stays set and the draw/pattern calls scale the whole box to fit the canvas
+          ((Some(w), None), None)    => (w, 150.0).into(),
+          ((None, Some(h)), None)    => (300.0, h).into(),
+          ((None, None),    Some(r)) => if r > 2.0 { (300.0, 300.0 / r) } else { (150.0 * r, 150.0) }.into(),
+          _                          => (300.0, 150.0).into(),
+        }
+      }
+    };
+  };
+
+  // record the SVG contents to a Picture
+  let bounds = Rect::from_size(size);
+  let mut recorder = PictureRecorder::new();
+  dom.set_container_size(bounds.size());
+  dom.render(recorder.begin_recording(bounds, true));
+  let picture = recorder.finish_recording_as_picture(None)?;
+
+  Some((picture, size, autosized))
+}
 
 //
 // SVG <style> tag handling
@@ -15,10 +68,10 @@ use crate::font_library::FontLibrary;
 // definitions (`--a: var(--b)`) aren't supported. also, shorthand vs. longhand (font vs. font-size)
 // don't cascade against each other.
 
-pub struct StyledSvg<'a>(Cow<'a, [u8]>);
+struct StyledSvg<'a>(Cow<'a, [u8]>);
 
 impl<'a> StyledSvg<'a> {
-  pub fn from_data(data: &'a Data) -> Self {
+  fn from_data(data: &'a Data) -> Self {
     let svg = data.as_bytes();
     if !svg.windows(6).any(|w| w == b"<style") {
       return Self(Cow::Borrowed(svg)); // bail out early if there are no <style> tags
