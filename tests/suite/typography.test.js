@@ -197,6 +197,29 @@ describe("Typography", () => {
     assert.equal(ctx.fontKerning, "none")
   })
   
+  test("textBaseline", async () => {
+    FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+    // the line's y-origin used to be rounded in user space (as skparagraph's painter does), which left
+    // the glyphs a fraction of a pixel off the anchor and a whole device pixel off at higher densities
+    const SIZE = 60, X = 8, text = "H"
+    for (const px of [13, 18, 24])
+      for (const y of [30, 30.25, 30.75])
+        for (const density of [1, 2, 3]){
+          const canvas = new Canvas(SIZE, SIZE), ctx = canvas.getContext("2d")
+          Object.assign(ctx, {font: `${px}px TestFace`, fontSmoothing: false})
+          ctx.fillText(text, X, y)
+          assert.nearEqual(ctx.measureText(text).lines[0].alphabeticBaseline, 0, 1e-3)
+
+          // aliased 'H' sits flat on the baseline, so its last painted device row is the row above it
+          const data = await canvas.toBuffer("raw", {density}), w = SIZE * density
+          let bottom = null
+          for (let row = 0; row < SIZE * density; row++)
+            for (let x = 0; x < w; x++) if (data[(row * w + x) * 4 + 3] > 128){ bottom = row; break }
+          const baseline = Math.floor(y * density + 0.5)
+          assert.equal(bottom, baseline - 1, `${px}px at y=${y} ×${density}: glyphs end on row ${bottom}, expected ${baseline - 1}`)
+        }
+  })
+
   describe("fontVariationSettings", () => {
     let opaque = () => ctx.getImageData(0, 0, WIDTH, HEIGHT).data.filter((v, i) => i % 4 == 3 && v > 10).length
     let ink = () => { ctx.clearRect(0, 0, WIDTH, HEIGHT); ctx.fillText("Hamburg", 20, 100); return opaque() }
@@ -782,6 +805,101 @@ describe("Typography", () => {
     })
   })
 
+  describe("textWrap", () => {
+    const W = 600, H = 400, X = 100, Y = 60, MEASURE = 200, TEXT = "one two three four five six seven eight nine ten"
+
+    beforeEach(() => {
+      FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+    })
+
+    test("blank line fonts", () => {
+      ctx.font = "24px TestFace"
+      ctx.textWrap = true
+      let family = ctx.measureText("x").lines[0].runs[0].family
+      for (const [text, count] of /** @type {const} */ ([["x\n", 2], ["\n", 2], ["a\n\nb", 3], ["a\n  \nb", 3]])){
+        let {lines} = ctx.measureText(text, MEASURE)
+        assert.equal(lines.length, count, `${JSON.stringify(text)} line count`)
+        lines.forEach((line, i) => {
+          assert.equal(line.runs.length, 1, `${JSON.stringify(text)} line ${i} should have one run`)
+          assert.equal(line.runs[0].family, family)
+        })
+      }
+    })
+
+    test("rtl hard breaks", () => {
+      // wrapped lines mixing RTL characters with newlines used to bring down the whole process
+      ctx.font = "24px TestFace"
+      ctx.textWrap = true
+      for (const direction of /** @type {const} */ (["ltr", "rtl"])){
+        ctx.direction = direction
+        for (const text of ["x\n", "a\n\nb", "abc שלום\nمرحبا def", "‮.‍\n"]){
+          ctx.fillText(text, X, Y, MEASURE)
+          assert(ctx.measureText(text, MEASURE).lines.length >= 2)
+        }
+      }
+    })
+
+    test("justify", () => {
+      ctx.font = "24px TestFace"
+      ctx.textWrap = true
+      ctx.textAlign = "justify"
+      let {lines} = ctx.measureText(TEXT, MEASURE)
+      assert(lines.length > 2, "the text should wrap onto several lines")
+      // every line but the last is stretched to span the measure (allowing for glyph side-bearings)
+      for (const line of lines.slice(0, -1)){
+        assert.nearEqual(line.x, 0, 3)
+        assert.nearEqual(line.x + line.width, MEASURE, 3)
+      }
+      assert(lines[lines.length - 1].width < MEASURE - 20, "the final line keeps its natural width")
+    })
+
+    test("line baselines", () => {
+      // skparagraph rounds its line heights to whole pixels, so line metrics put the baseline up to
+      // half a pixel away from where the glyphs are actually drawn
+      const TEXT = "HHH ".repeat(12).trim()
+      for (const size of [18, 31])
+        for (const dy of [0, 0.25, 0.5, 0.75])
+          for (const textBaseline of /** @type {const} */ (["alphabetic", "top"])){
+            // aliased glyphs land on whole pixels, and 'H' sits flat on the baseline, so each line's
+            // last painted row is the row above its alphabetic baseline
+            const canvas = new Canvas(W, H), ctx = canvas.getContext("2d")
+            Object.assign(ctx, {font: `${size}px/1.25 TestFace`, textWrap: true, textBaseline, fontSmoothing: false})
+            const y = Y + dy
+            ctx.fillText(TEXT, X, y, MEASURE)
+            const {data} = ctx.getImageData(0, 0, W, H),
+                  {lines} = ctx.measureText(TEXT, MEASURE)
+            assert(lines.length > 2, "the text should wrap onto several lines")
+            for (const [i, line] of lines.entries()){
+              let baseline = Math.round(y + line.alphabeticBaseline), bottom = null
+              for (let row = baseline - 2; row <= baseline + 2; row++)
+                for (let x = 0; x < W; x++) if (data[(row * W + x) * 4 + 3] > 128){ bottom = row; break }
+              assert.equal(bottom, baseline - 1,
+                `${size}px ${textBaseline} at y+${dy}, line ${i}: glyphs end on row ${bottom}, expected ${baseline - 1}`)
+            }
+          }
+    })
+
+    test("decorations", () => {
+      for (const textAlign of /** @type {const} */ (["left", "center", "right"])){
+        // draw only the decoration (transparent glyphs) with lines spaced far enough apart that
+        // each one's underline stays within its own band
+        const canvas = new Canvas(W, H), ctx = canvas.getContext("2d")
+        Object.assign(ctx, {font: "24px/3 TestFace", textWrap: true, textAlign, textDecoration: "underline black", fillStyle: "rgba(0,0,0,0)"})
+        ctx.fillText(TEXT, X + MEASURE, Y, MEASURE)
+        let {data} = ctx.getImageData(0, 0, W, H),
+            {lines} = ctx.measureText(TEXT, MEASURE)
+        assert(lines.length > 2, "the text should wrap onto several lines")
+        for (const [i, line] of lines.entries()){
+          let y0 = Math.round(Y + line.alphabeticBaseline), xs = []
+          for (let y = y0; y < y0 + 12; y++) for (let x = 0; x < W; x++) if (data[(y * W + x) * 4 + 3] > 128) xs.push(x)
+          assert(xs.length, `line ${i} should be underlined`)
+          assert.nearEqual(Math.min(...xs), X + MEASURE + line.x, 3)
+          assert.nearEqual(Math.max(...xs) + 1, X + MEASURE + line.x + line.width, 3)
+        }
+      }
+    })
+  })
+
   describe("PDF export produces selectable text", {skip: hasPdftotext ? false : "pdftotext (poppler) not installed"}, () => {
     // pdftotext wraps RTL/bidi segments in Unicode bidi control characters (LRM/RLM,
     // LRE…RLO, isolates); strip them and collapse whitespace so we compare plain text.
@@ -799,14 +917,14 @@ describe("Typography", () => {
     let counter = 0
     /**
      * @param {string} str
-     * @param {{font?: string, width?: number, setup?: (ctx: import('../../lib').CanvasRenderingContext2D) => void}} [opts]
+     * @param {{font?: string, width?: number, height?: number, maxWidth?: number, setup?: (ctx: import('../../lib').CanvasRenderingContext2D) => void}} [opts]
      */
-    function pdfText(str, {font = "48px TestFace", width = 600, setup} = {}){
-      const canvas = new Canvas(width, 120)
+    function pdfText(str, {font = "48px TestFace", width = 600, height = 120, maxWidth, setup} = {}){
+      const canvas = new Canvas(width, height)
       const ctx = canvas.getContext('2d')
       ctx.font = font
       if (setup) setup(ctx)
-      ctx.fillText(str, 20, 70)
+      ctx.fillText(str, 20, 70, maxWidth)
 
       const file = path.join(os.tmpdir(), `skia-canvas-pdf-${process.pid}-${counter++}.pdf`)
       fs.writeFileSync(file, canvas.toBufferSync('pdf'))
@@ -847,6 +965,27 @@ describe("Typography", () => {
       for (const part of ["abc", "مرحبا", "123"]) {
         assert(got.includes(part), `expected ${JSON.stringify(part)} in ${JSON.stringify(got)}`)
       }
+    })
+
+    test("hard line breaks round-trip", () => {
+      // a single shaped run split across lines must map each line's glyphs to that line's text
+      // (not the run's first clusters, as Skia's extendedVisit reports for every line)
+      assert.equal(pdfText("first line\nsecond line\nthird", {
+        font: "24px TestFace", height: 200, setup: ctx => { ctx.textWrap = true }
+      }), "first line second line third")
+    })
+
+    test("soft wraps round-trip", () => {
+      assert.equal(pdfText("alpha beta gamma delta epsilon zeta", {
+        font: "24px TestFace", height: 300, maxWidth: 150, setup: ctx => { ctx.textWrap = true }
+      }), "alpha beta gamma delta epsilon zeta")
+    })
+
+    test("wrapped rtl round-trips", () => {
+      const got = pdfText("שלום עולם שלום עולם שלום עולם", {
+        font: "24px TestFace", height: 300, maxWidth: 150, setup: ctx => { ctx.textWrap = true }
+      })
+      assert.equal(got.replace(/\s+/g, ""), "שלוםעולםשלוםעולםשלוםעולם")
     })
 
     test("textured text stays selectable", () => {

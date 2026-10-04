@@ -56,7 +56,7 @@ impl Typesetter{
   }
 
   // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`) and
-  // provide a y-axis offset from the requested origin to the alphabetic baseline
+  // the left edge of the text block (shifted from the origin by the current text alignment)
   fn shape_text(&self) -> (Paragraph, Point) {
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
     paragraph_builder.push_style(&self.char_style);
@@ -65,12 +65,7 @@ impl Typesetter{
     let mut paragraph = paragraph_builder.build();
     paragraph.layout(self.width);
 
-    let offset = Point::new(
-      self.alignment_offset(),
-      -paragraph.alphabetic_baseline(),
-    );
-
-    (paragraph, offset)
+    (paragraph, Point::new(self.alignment_offset(), 0.0))
   }
 
   // construct a `Layout` composed of text decorations (if any) and the shaped paragraph's sequence
@@ -80,30 +75,37 @@ impl Typesetter{
     let (mut paragraph, offset) = self.shape_text();
     let base = offset + point.into();
     let text = self.text.as_str();
-    let shift = self.char_style.baseline_shift(); // `textBaseline`'s offset from the alphabetic baseline
 
     // collect GlyphRuns (character geometry) and run_clusters (start-indicies as utf-8 character offsets)
+    let shift = self.char_style.baseline_shift(); // textBaseline's offset from the alphabetic baseline
+    let line_info = line_info(&paragraph);
+    let line_origins = Self::line_origins(&line_info);
+    let line_lefts:Vec<f32> = line_info.iter().map(|line| line.left as f32).collect();
+    let mut left_edge = None;
     let mut runs:Vec<GlyphRun> = vec![];
     let mut run_clusters:Vec<Vec<u32>> = vec![];
-    paragraph.extended_visit(|_line, visit|{
-      if let Some(info) = visit {
-        let count = info.glyphs().len();
-        if count == 0 { return }
-        let origin = Point::new(
-          info.origin().x + base.x,
-          base.y + info.origin().y + shift, // use the subpixel position (don't snap-to-integer like Paragraph.paint())
-        );
+    paragraph.visit(|line, visit|{
+      let Some(info) = visit else { left_edge = None; return }; // end of line
+      let x0 = left_edge.unwrap_or(line_lefts[line]); // inherit the starting edge
+      let x1 = info.advance_x(); // the right edge of the run's layout box
+      left_edge = Some(x1); // the next run will start where this one ends
 
-        run_clusters.push(info.utf8_starts()[..count].to_vec()); // index relative to full `text` string
-        runs.push(GlyphRun{
-          font: info.font().clone(),
-          origin,
-          advance: info.advance().width,
-          glyphs: info.glyphs().to_vec(),
-          positions: info.positions().to_vec(),
-          blob: None,
-        });
-      }
+      let count = info.count();
+      if count == 0 { return }
+      let origin = Point::new(
+        info.origin().x + base.x,
+        base.y + line_origins[line] + shift,
+      );
+
+      run_clusters.push(info.utf8_starts()[..count].to_vec()); // index relative to full `text` string
+      runs.push(GlyphRun{
+        font: info.font().clone(),
+        origin,
+        edges: (x0 + base.x, x1 + base.x),
+        glyphs: info.glyphs().to_vec(),
+        positions: info.positions().to_vec(),
+        blob: None,
+      });
     });
 
     // find the utf-8 offset range that corresponds to each run. `run_clusters` counts in glyph order
@@ -150,20 +152,42 @@ impl Typesetter{
     // calculate bounds for each single-font block of glyphs on each line (and gather font info)
     struct RunMetrics{ line: usize, family: String, font: FontMetrics, bounds: Rect }
     let mut text_runs:Vec<RunMetrics> = vec![];
-    paragraph.extended_visit(|line, visit|{
+    let line_info = line_info(&paragraph);
+    let line_origins = Self::line_origins(&line_info);
+    paragraph.visit(|line, visit|{
       if let Some(info) = visit{
+        // use SkParagraph's x, but not its y (since it's rounded to the nearest whole pixel)
+        let run_offset = Point::new(info.origin().x, line_origins[line] + shift);
+        let mut glyph_bounds = vec![Rect::new_empty(); info.count()];
+        info.font().get_bounds(info.glyphs(), &mut glyph_bounds, None);
         text_runs.push(RunMetrics{
           line,
           family: info.font().typeface().family_name(),
           font: info.font().metrics().1,
-          bounds: zip(info.positions(), info.bounds())
+          bounds: zip(info.positions(), &glyph_bounds)
             .filter(|(_, rect)| !rect.is_empty())
-            .map(|(pt, rect)| rect.with_offset(*pt + info.origin() + origin - Point::new(0.0, norm)))
+            .map(|(pt, rect)| rect.with_offset(*pt + run_offset + origin))
             .reduce(Rect::join2)
             .unwrap_or(Rect::new_empty())
         });
       }
     });
+
+    // fill in the blank (or whitespace only) lines that visit() skips over
+    if !self.text.is_empty(){
+      for ln in 0..line_info.len(){
+        if text_runs.iter().any(|run| run.line == ln){ continue }
+        let start = paragraph.get_actual_text_range(ln, true).start; // byte offsets, not utf-16 indices
+        let font = paragraph.get_font_at(start.min(self.text.len() - 1));
+        let corner = origin + Point::new(line_info[ln].left as f32, line_origins[ln] + shift);
+        text_runs.push(RunMetrics{
+          line: ln,
+          family: font.typeface().family_name(),
+          font: font.metrics().1,
+          bounds: Rect::from_xywh(corner.x, corner.y, 0.0, 0.0),
+        });
+      }
+    }
 
     // measure each line: its glyph-ink bounds (the tight `actualBoundingBox*` edges) and its
     // advance-based layout rect (which feeds the top-level `width`), plus the per-line JSON
@@ -174,10 +198,9 @@ impl Typesetter{
       let char_range = utf16_range(&self.text, &text_range);
 
       // calculate this line's vertical offsets relative to the typesetting origin
-      let line_metrics = paragraph.get_line_metrics_at(ln)?;
-      let half_leading = self.graf_style.strut_style().leading().max(0.0) * self.char_style.font_size() / 2.0;
-      let baseline = line_metrics.baseline as f32 + origin.y - half_leading; // the textBaseline-selected origin
-      let alpha = baseline - norm; // the line's alphabetic baseline (the font-metric origin)
+      let line_metrics = line_info.get(ln)?;
+      let alpha = origin.y + line_origins.get(ln)? + shift; // the alphabetic baseline position (the font-metric origin)
+      let baseline = alpha + norm; // the textBaseline-selected origin
       let line_ascent = baseline - line_metrics.ascent as f32;
       let line_descent = baseline + line_metrics.descent as f32;
 
@@ -237,7 +260,7 @@ impl Typesetter{
     let lines = lines.into_iter().map(|l| l.json).collect::<Vec<Value>>();
 
     // use line metrics to find maximal ascent/descent of all fonts on first line
-    let (ascent, descent) = paragraph.get_line_metrics_at(0).map(|line|
+    let (ascent, descent) = line_info.first().map(|line|
       (norm + line.ascent as f32, line.descent as f32 - norm)
     ).unwrap_or_else(||{
       // or fall back to the first-matched font's metrics if measuring empty string
@@ -267,6 +290,11 @@ impl Typesetter{
     self.layout(point).to_path()
   }
 
+  // get each line's precise glyph baseline (since SkParagraph's baselines are rounded to whole-pixel values)
+  fn line_origins(lines:&[LineInfo]) -> Vec<f32>{
+    lines.iter().scan(0.0, |top, lm|{ let y = *top; *top += lm.height as f32; Some(y) }).collect()
+  }
+
   fn alignment_offset(&self) -> f32{
     // convert start/end to left/right depending on writing system
     let gravity = match (self.graf_style.text_direction(), self.graf_style.text_align()){
@@ -286,6 +314,15 @@ impl Typesetter{
 
     alignment_factor * self.width + spacing_step * self.char_style.letter_spacing()
   }
+}
+
+// a copy-able subset of LineMetrics (so the paragraph doesn't need to be borrowed)
+struct LineInfo{ ascent:f64, descent:f64, height:f64, left:f64 }
+
+fn line_info(paragraph:&Paragraph) -> Vec<LineInfo>{
+  paragraph.get_line_metrics().iter().map(|lm| LineInfo{
+    ascent: lm.ascent, descent: lm.descent, height: lm.height, left: lm.left,
+  }).collect()
 }
 
 pub struct Layout{
@@ -346,7 +383,7 @@ impl Layout{
 pub struct GlyphRun{
   font: Font,             // used for converting glyphs to paths and its font_metrics field
   origin: Point,          // the baseline-left paragraph origin
-  advance: f32,           // full horizontal extent (for decoration line length)
+  edges: (f32, f32),      // left & right of the run's layout box
   glyphs: Vec<GlyphId>,   // per-glyph outline IDs
   positions: Vec<Point>,  // per-glyph x-positions
   blob: Option<TextBlob>, // drawable blob (including text for selectable PDF)
@@ -434,8 +471,7 @@ impl Decorations{
   // add the underline/overline/line-through geometry for a single run to the mutable path
   fn trace_run(&self, out:&mut PathBuilder, run:&GlyphRun){
     let (_, metrics) = run.font.metrics();
-    let x0 = run.origin.x;
-    let x1 = run.origin.x + run.advance;
+    let (x0, x1) = run.edges;
     let (thick_metric, pos) = self.line.kind.placement(&metrics);
     let graze_floor = pos; // check for descenders reaching the (topmost) underline's position
     let thickness = self.size.as_ref()

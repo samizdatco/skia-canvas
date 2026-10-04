@@ -1508,6 +1508,35 @@ describe("Context2D", ()=>{
         assert.equal(text.substring(startIndex, endIndex), text)
       })
 
+      test("blank line rects", () => {
+        ctx.font = '16px sans-serif'
+        ctx.textWrap = true
+        ctx.textBaseline = 'top'
+        for (const textAlign of /** @type {const} */ (['left', 'center', 'right'])){
+          ctx.textAlign = textAlign
+          let [first, blank, last] = ctx.measureText('abc\n\nabc', 200).lines
+          // empty, at the line's start (the anchor's x for every alignment) and on its alphabetic baseline
+          assert.equal(blank.width, 0, textAlign)
+          assert.equal(blank.height, 0, textAlign)
+          assert.nearEqual(blank.x, 0, 0.001)
+          assert.nearEqual(blank.y, blank.alphabeticBaseline, 0.001)
+          assert(first.y < blank.y && blank.y < last.y, textAlign)
+          assert.deepEqual([blank.runs[0].x, blank.runs[0].y], [blank.x, blank.y])
+        }
+      })
+
+      test("blank lines after multi-byte text", () => {
+        FontLibrary.use("LatinOnly", [`tests/assets/fonts/montserrat-latin/montserrat-v30-latin-regular.woff2`])
+        FontLibrary.use("CyrillicToo", [`tests/assets/fonts/Oswald-Medium.ttf`])
+        ctx.font = '16px LatinOnly, CyrillicToo'
+        ctx.textWrap = true
+
+        // the multi-byte Cyrillic (set in the second face) precedes the blank line's start in the text
+        let [first, blank, last] = ctx.measureText('ЖЖЖЖЖЖab\n\nabc', 500).lines
+        assert.equal(first.runs[0].family, 'Oswald')
+        assert.equal(blank.runs[0].family, last.runs[0].family)
+      })
+
 
       // measurements are cached as serialized strings keyed on a hash of the typography state, with
       // the memo dropped outright whenever the font set changes, so these pin the two ways it could
@@ -1554,6 +1583,27 @@ describe("Context2D", ()=>{
         // Monoton's display letterforms are far wider than any sans fallback, so an unchanged
         // width means the pre-load measurement was served from the cache
         assert.ok(Math.abs(loaded - fallback) > 1, `expected re-measure after use() (${fallback} vs ${loaded})`)
+      })
+
+      test("ink bounds for every textBaseline", () => {
+        // fillText() and measureText() each have to account for the textBaseline shift exactly
+        // once, so the drawn ink should be centered on the actualBoundingBox for every setting
+        // (compare centers since the glyph-outline bounds run slightly past the antialiased ink)
+        FontLibrary.use('BaselineFace', [`tests/assets/fonts/montserrat-latin/montserrat-v30-latin-regular.woff2`])
+        let [x, y, text] = [20, 200, 'Hgjy']
+        for (const baseline of /** @type {const} */ (['top', 'hanging', 'middle', 'alphabetic', 'ideographic', 'bottom'])){
+          ctx.clearRect(0, 0, WIDTH, HEIGHT)
+          ctx.font = '48px BaselineFace'
+          ctx.textBaseline = baseline
+          ctx.fillText(text, x, y)
+
+          let {data} = ctx.getImageData(0, 0, WIDTH, HEIGHT),
+              rows = [...Array(HEIGHT).keys()].filter(r => data.subarray(r * WIDTH * 4, (r + 1) * WIDTH * 4).some((v, i) => i % 4 == 3 && v > 0)),
+              inkCenter = (rows[0] + rows[rows.length - 1] + 1) / 2,
+              m = ctx.measureText(text),
+              boxCenter = y + (m.actualBoundingBoxDescent - m.actualBoundingBoxAscent) / 2
+          assert.nearEqual(inkCenter, boxCenter, 1)
+        }
       })
     })
 
