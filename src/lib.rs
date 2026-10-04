@@ -25,6 +25,15 @@ use context::api as ctx;
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
+  #[cfg(windows)]{
+    // keep `skia.node` mapped until the process exits (since the thread pool will outlive the node environment)
+    unsafe extern "system" { fn GetModuleHandleExW(flags:u32, addr:*const u16, module:*mut *mut std::ffi::c_void) -> i32; }
+    const PIN:u32 = 0x1; const FROM_ADDRESS:u32 = 0x4;
+    if unsafe{ GetModuleHandleExW(PIN | FROM_ADDRESS, main as *const u16, &mut std::ptr::null_mut()) } == 0 {
+      eprintln!("skia-canvas: couldn't pin module: {}", std::io::Error::last_os_error())
+    }
+  }
+
   // initialize thread pool w/ non-default size if requested
   if let Ok(value) = std::env::var("SKIA_CANVAS_THREADS"){
     if let Ok(num) = value.parse::<usize>(){
