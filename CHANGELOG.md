@@ -2,7 +2,7 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
-## 📦 ⟩ [v4.0.0] ⟩ Oct 1, 2026
+## 📦 ⟩ [v4.0.0] ⟩ Oct 4, 2026
 
 ### New Features
 
@@ -83,7 +83,7 @@
 - [`getContextAttributes()`][getContextAttributes] now also includes the **Context**’s `width` & `height`, which is the only way to get page-specific dimensions in a multi-page canvas (since the Canvas’s size corresponds to the *final* page).
 - The [`points()`][p2d_points] method now takes a sampling `mode` argument: the default `"even"` fits the step to each contour so both endpoints are present, while the new `"exact"` mode samples at precise multiples of the requested step.
 - [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] now take a `timeout` [request option][request_opts], rejecting the Promise if the request stalls. See also: the [`AbortSignal.timeout()`][mdn_abortTimeout] `signal` option.
-- Upgraded Skia to [milestone 150](https://github.com/rust-skia/rust-skia/releases/tag/0.99.0) (via `skia-safe` 0.99.0) and `winit` to 0.30.13
+- Upgraded Skia to [milestone 153](https://github.com/rust-skia/rust-skia/releases/tag/0.153.2) (via `skia-safe` 0.99.0) and `winit` to 0.30.13
 - Dropped the `string-split-by` runtime dependency, reducing the total number of direct and transitive dependencies to 6.
 
 ### Bugfixes

@@ -25,7 +25,7 @@ export PATH="/opt/venv/bin:$PATH"
 pip install meson
 
 # compile a dummy freetype lib (version-matched and configured to mirror the api surface of
-# skia m150's embedded copy via the custom freetype.cfg)
+# skia m153's embedded copy via the custom freetype.cfg)
 FREETYPE=freetype-2.14.2
 FREETYPE_URL=https://download.savannah.gnu.org/releases/freetype/${FREETYPE}.tar.xz
 FREETYPE_URL_ALT=https://downloads.sourceforge.net/project/freetype/freetype2/${FREETYPE#freetype-}/${FREETYPE}.tar.xz

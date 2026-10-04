@@ -531,7 +531,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
         //
         // originally only Windows needed this since it's the one platform that lacks built-in
         // support, but there is a use-after-free bug for woffs in harfbuzz versions <14.4.0
-        // (including the one skia bundles as of m150)
+        // (including the one skia bundles as of m153)
         //
         // go back to using #[cfg(target_os = "windows")] when skia's harfbuzz is upgraded
         let bytes = {
