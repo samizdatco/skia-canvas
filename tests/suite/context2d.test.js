@@ -1713,6 +1713,30 @@ describe("Context2D", ()=>{
           assert.nearEqual(m.actualBoundingBoxDescent, bottom, 0.01)
         }
       })
+
+      test("whitespace normalization", () => {
+        FontLibrary.use('TableFace', [`tests/assets/fonts/Oswald-Medium.ttf`])
+        ctx.font = '20px TableFace'
+        ctx.textWrap = false
+        let {width, actualBoundingBoxRight} = ctx.measureText('A B')
+        for (const ws of ['\t', '\n', '\f', '\r', '\v', '\u2028', '\u2029']){
+          let m = ctx.measureText(`A${ws}B`)
+          assert.equal(m.width, width, JSON.stringify(ws))
+          assert.equal(m.actualBoundingBoxRight, actualBoundingBoxRight, JSON.stringify(ws))
+          // a leading form feed used to leave nothing to measure
+          assert.ok(ctx.measureText(`${ws}A`).actualBoundingBoxRight > 0, JSON.stringify(ws))
+        }
+
+        // when wrapping, only newlines (and the line & paragraph separators) break lines
+        ctx.textWrap = true
+        for (const br of ['\n', '\u2028', '\u2029']){
+          assert.equal(ctx.measureText(`A${br}B`, 200).lines.length, 2, JSON.stringify(br))
+        }
+        for (const ws of ['\t', '\f', '\r', '\v']){
+          assert.equal(ctx.measureText(`A${ws}B`, 200).lines.length, 1, JSON.stringify(ws))
+        }
+        ctx.textWrap = false
+      })
     })
 
     describe('drawImage()', () => {

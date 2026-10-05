@@ -37,6 +37,13 @@ impl Typesetter{
     let text_align = graf_style.text_align();
     if width.is_none(){ graf_style.set_text_align(TextAlign::Left); }
 
+    // normalize all whitespace as plain spaces (except line breaks in textWrap mode)
+    let text = text.chars().map(|c| match c{
+      '\t' | '\r' | '\x0c' | '\x0b' => ' ',
+      '\n' | '\u{2028}' | '\u{2029}' if !text_wrap => ' ', // newline, line separator & paragraph separator
+      c => c
+    }).collect::<String>();
+
     let typefaces = FontLibrary::with_shared(|lib|
       lib
         .set_render_attrs(RenderAttrs{
@@ -52,11 +59,6 @@ impl Typesetter{
     FONT_CHECK.call_once(|| if FontLibrary::is_empty(){
       eprintln!("Warning: Cannot render text because no fonts are installed on this system.")
     });
-
-    let text = match text_wrap{
-      true => text.to_string(),
-      false => text.replace("\n", " ")
-    };
 
     Typesetter{text, width, text_align, typefaces, char_style, graf_style, text_decoration, text_wrap}
   }
