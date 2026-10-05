@@ -18,7 +18,8 @@ use crate::context::State;
 
 pub struct Typesetter{
   text: String,
-  width: f32,
+  width: Option<f32>,
+  text_align: TextAlign,
   typefaces: FontCollection,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
@@ -28,7 +29,11 @@ pub struct Typesetter{
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
-    let (char_style, graf_style, text_decoration, text_wrap) = state.typography();
+    let (char_style, mut graf_style, text_decoration, text_wrap) = state.typography();
+
+    // if width is undefined, typeset w/ left alignment then shift later based on actual alignment
+    let text_align = graf_style.text_align();
+    if width.is_none(){ graf_style.set_text_align(TextAlign::Left); }
 
     let typefaces = FontLibrary::with_shared(|lib|
       lib
@@ -46,39 +51,36 @@ impl Typesetter{
       eprintln!("Warning: Cannot render text because no fonts are installed on this system.")
     });
 
-    let width = width.unwrap_or(100_000.0); // if not wrapping, pick an effectively infinite width
     let text = match text_wrap{
       true => text.to_string(),
       false => text.replace("\n", " ")
     };
 
-    Typesetter{text, width, typefaces, char_style, graf_style, text_decoration, text_wrap}
+    Typesetter{text, width, text_align, typefaces, char_style, graf_style, text_decoration, text_wrap}
   }
 
-  // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`) and
-  // the left edge of the text block (shifted from the origin by the current text alignment)
-  fn shape_text(&self) -> (Paragraph, Point) {
+  // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`)
+  fn shape_text(&self) -> Paragraph {
     let mut paragraph_builder = ParagraphBuilder::new(&self.graf_style, &self.typefaces);
     paragraph_builder.push_style(&self.char_style);
     paragraph_builder.add_text(&self.text);
 
     let mut paragraph = paragraph_builder.build();
-    paragraph.layout(self.width);
-
-    (paragraph, Point::new(self.alignment_offset(), 0.0))
+    paragraph.layout(self.width.unwrap_or(100_000.0)); // make sure non-wrapped text fits in one line
+    paragraph
   }
 
   // construct a `Layout` composed of text decorations (if any) and the shaped paragraph's sequence
   // of `GlyphRun`s, each containing the geometry, text, and font information needed to typeset a
   // contiguous run of characters (or generate a path outline of them).
   pub fn layout(&self, point:impl Into<Point>) -> Layout {
-    let (mut paragraph, offset) = self.shape_text();
-    let base = offset + point.into();
+    let mut paragraph = self.shape_text();
+    let line_info = line_info(&paragraph);
+    let base = Point::new(self.alignment_offset(&paragraph, &line_info), 0.0) + point.into();
     let text = self.text.as_str();
 
     // collect GlyphRuns (character geometry) and run_clusters (start-indicies as utf-8 character offsets)
     let shift = self.char_style.baseline_shift(); // textBaseline's offset from the alphabetic baseline
-    let line_info = line_info(&paragraph);
     let line_origins = Self::line_origins(&line_info);
     let line_lefts:Vec<f32> = line_info.iter().map(|line| line.left as f32).collect();
     let mut left_edge = None;
@@ -141,7 +143,9 @@ impl Typesetter{
   }
 
   pub fn metrics(&self) -> Value {
-    let (mut paragraph, origin) = self.shape_text();
+    let mut paragraph = self.shape_text();
+    let line_info = line_info(&paragraph);
+    let origin = Point::new(self.alignment_offset(&paragraph, &line_info), 0.0);
 
     // calculate baseline offsets (relative to line_metrics.baseline which reflects ctx.textBaseline setting)
     let shift = self.char_style.baseline_shift();
@@ -152,7 +156,6 @@ impl Typesetter{
     // calculate bounds for each single-font block of glyphs on each line (and gather font info)
     struct RunMetrics{ line: usize, family: String, font: FontMetrics, bounds: Rect }
     let mut text_runs:Vec<RunMetrics> = vec![];
-    let line_info = line_info(&paragraph);
     let line_origins = Self::line_origins(&line_info);
     paragraph.visit(|line, visit|{
       if let Some(info) = visit{
@@ -295,9 +298,10 @@ impl Typesetter{
     lines.iter().scan(0.0, |top, lm|{ let y = *top; *top += lm.height as f32; Some(y) }).collect()
   }
 
-  fn alignment_offset(&self) -> f32{
+  // get the paragraph's left edge relative to the baseline origin
+  fn alignment_offset(&self, paragraph:&Paragraph, lines:&[LineInfo]) -> f32{
     // convert start/end to left/right depending on writing system
-    let gravity = match (self.graf_style.text_direction(), self.graf_style.text_align()){
+    let gravity = match (self.graf_style.text_direction(), self.text_align){
       (TextDirection::LTR, TextAlign::Start) | (TextDirection::RTL, TextAlign::End) => TextAlign::Left,
       (TextDirection::LTR, TextAlign::End) | (TextDirection::RTL, TextAlign::Start) => TextAlign::Right,
       (_, alignment) => alignment,
@@ -312,16 +316,24 @@ impl Typesetter{
       _ => (0.0, 0.0) // start & end have already been remapped
     };
 
-    alignment_factor * self.width + spacing_step * self.char_style.letter_spacing()
+    let letter_spacing = self.char_style.letter_spacing();
+    match self.width{
+      Some(box_width) => alignment_factor * box_width + spacing_step * letter_spacing,
+      None => {
+        // width-less lines are shaped with left-alignment so shift it based on its (unrounded) measured width
+        let advance = if lines.first().is_some_and(|line| line.width > 0.0) { paragraph.longest_line() } else { 0.0 };
+        alignment_factor * (advance - letter_spacing) - 0.5 * letter_spacing
+      }
+    }
   }
 }
 
 // a copy-able subset of LineMetrics (so the paragraph doesn't need to be borrowed)
-struct LineInfo{ ascent:f64, descent:f64, height:f64, left:f64 }
+struct LineInfo{ ascent:f64, descent:f64, height:f64, left:f64, width:f64 }
 
 fn line_info(paragraph:&Paragraph) -> Vec<LineInfo>{
   paragraph.get_line_metrics().iter().map(|lm| LineInfo{
-    ascent: lm.ascent, descent: lm.descent, height: lm.height, left: lm.left,
+    ascent: lm.ascent, descent: lm.descent, height: lm.height, left: lm.left, width: lm.width,
   }).collect()
 }
 
