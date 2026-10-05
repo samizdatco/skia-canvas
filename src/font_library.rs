@@ -10,7 +10,8 @@ use std::path::Path;
 use std::collections::HashMap;
 use neon::prelude::*;
 
-use skia_safe::{font::Edging, FontHinting, FontMgr, Typeface};
+use std::hash::Hash;
+use skia_safe::{font::Edging, FontHinting, FontMgr, Rect, Typeface};
 use skia_safe::font_style::FontStyle;
 use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
 use skia_safe::utils::OrderedFontMgr;
@@ -247,9 +248,10 @@ impl FontLibrary{
   }
 
   fn invalidate(&mut self){
-    // the font collection and metrics cache always need to be invalidated in tandem
+    // the font collection and memo caches always need to be invalidated in tandem
     self.collection = None;
-    METRICS_CACHE.with_borrow_mut(|cache| *cache = MetricsCache::default());
+    METRICS_CACHE.with_borrow_mut(|cache| cache.clear());
+    OUTLINE_CACHE.with_borrow_mut(|cache| cache.clear());
   }
 
   pub fn update_style(&mut self, orig_style:&TextStyle, spec: &FontSpec) -> Option<TextStyle>{
@@ -423,49 +425,75 @@ impl Default for RenderAttrs{
 }
 
 //
-// Text metrics cache (saves repeated multi-line measurement and serialization)
+// Memoization
 //
 
-const METRICS_CAP: usize = 2048;
-
-pub type MetricsKey = (u64, String, Option<u32>); // (state hash, text, maxWidth bits)
-
-#[derive(Default)]
-struct MetricsCache{
-  hot: HashMap<MetricsKey, String>,
-  cold: HashMap<MetricsKey, String>,
+// two-generation cache: when a generation fills up, the prior one is evicted and a new one is added
+// (hashed with ahash: the keys are small & hashed per glyph, where std's SipHash dominated the lookup cost)
+struct GenCache<K, V>{
+  hot: HashMap<K, V, ahash::RandomState>,
+  cold: HashMap<K, V, ahash::RandomState>,
+  cap: usize, // max size: 2×cap
 }
 
-impl MetricsCache{
-  fn get(&mut self, key:&MetricsKey) -> Option<String>{
-    if let Some(json) = self.hot.get(key){ return Some(json.clone()) }
-    let json = self.cold.remove(key)?;
-    self.put(key.clone(), json.clone()); // a cold hit is re-promoted into the current generation
-    Some(json)
+impl<K:Eq + Hash + Clone, V:Clone> GenCache<K, V>{
+  fn new(cap:usize) -> Self{
+    GenCache{hot: HashMap::default(), cold: HashMap::default(), cap}
   }
 
-  fn put(&mut self, key:MetricsKey, json:String){
-    if self.hot.len() >= METRICS_CAP{
+  fn clear(&mut self){
+    self.hot.clear();
+    self.cold.clear();
+  }
+
+  fn get(&mut self, key:&K) -> Option<V>{
+    if let Some(val) = self.hot.get(key){ return Some(val.clone()) }
+    let val = self.cold.remove(key)?;
+    self.put(key.clone(), val.clone()); // a cold hit is re-promoted into the current generation
+    Some(val)
+  }
+
+  fn put(&mut self, key:K, val:V){
+    if self.hot.len() >= self.cap{
       self.cold = std::mem::take(&mut self.hot); // demote; the old cold generation drops here
     }
-    self.hot.insert(key, json);
+    self.hot.insert(key, val);
   }
 }
 
+// text metrics cache (memoizes repeated measureText calls)
+pub type MetricsKey = (u64, String, Option<u32>); // (state hash, text, maxWidth bits)
+const METRICS_CAP: usize = 2048;
+
+// glyph bounds cache (memoizes glyph outline -> bounds extraction)
+pub type OutlineKey = (u32, skia_safe::GlyphId, u32, bool); // (typeface id, glyph, font size bits, fake bold)
+const OUTLINE_CAP: usize = 16384;
+
 thread_local!(
-  static METRICS_CACHE: RefCell<MetricsCache> = RefCell::default();
+  static METRICS_CACHE: RefCell<GenCache<MetricsKey, String>> = RefCell::new(GenCache::new(METRICS_CAP));
+  static OUTLINE_CACHE: RefCell<GenCache<OutlineKey, Option<Rect>>> = RefCell::new(GenCache::new(OUTLINE_CAP));
 );
 
-// look up a measurement, or compute-and-store it. the borrow is *not* held across `compute`
-// (house rule: never hold a store while doing real work — and here re-entry is a certainty, since
-// `compute` typesets, which borrows the library)
+// retrieve (or compute) the full multi-line metrics for a given typesetting run
 pub fn cached_metrics(key:MetricsKey, compute:impl FnOnce() -> String) -> String{
   if let Some(json) = METRICS_CACHE.with_borrow_mut(|cache| cache.get(&key)){
     return json
   }
-  let json = compute();
+  let json = compute(); // release the cache borrow to prevent reentrant deadlocks
   METRICS_CACHE.with_borrow_mut(|cache| cache.put(key, json.clone()));
   json
+}
+
+// retrieve (or compute) a glyph's precise bounds (`None` for glyphs without outlines)
+pub fn cached_glyph_bounds(face:u32, size:f32, fake_bold:bool, glyphs:&[skia_safe::GlyphId], mut compute:impl FnMut(skia_safe::GlyphId) -> Option<Rect>) -> Vec<Option<Rect>>{
+  OUTLINE_CACHE.with_borrow_mut(|cache| glyphs.iter().map(|&glyph| {
+    let key = (face, glyph, size.to_bits(), fake_bold);
+    cache.get(&key).unwrap_or_else(|| {
+      let bounds = compute(glyph);
+      cache.put(key, bounds);
+      bounds
+    })
+  }).collect())
 }
 
 

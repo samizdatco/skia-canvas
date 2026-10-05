@@ -1605,6 +1605,20 @@ describe("Context2D", ()=>{
           assert.nearEqual(inkCenter, boxCenter, 1)
         }
       })
+
+      test("ink bounds from glyph outlines", () => {
+        FontLibrary.use('TableFace', [`tests/assets/fonts/Oswald-Medium.ttf`])
+        ctx.font = '48px TableFace'
+        ctx.textBaseline = 'alphabetic'
+        for (const text of ['Hgjy', 'label-42', 'OOO', 'ÀÇÉ']){
+          let m = ctx.measureText(text),
+              {left, right, top, bottom} = ctx.outlineText(text).bounds
+          assert.nearEqual(m.actualBoundingBoxLeft, -left, 0.01)
+          assert.nearEqual(m.actualBoundingBoxRight, right, 0.01)
+          assert.nearEqual(m.actualBoundingBoxAscent, -top, 0.01)
+          assert.nearEqual(m.actualBoundingBoxDescent, bottom, 0.01)
+        }
+      })
     })
 
     describe('drawImage()', () => {

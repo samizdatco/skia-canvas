@@ -8,7 +8,7 @@ use skia_safe::textlayout::{
   FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
   TextAlign, TextDecorationStyle, TextDirection, TextStyle,
 };
-use crate::font_library::{FontLibrary, RenderAttrs};
+use crate::font_library::{FontLibrary, RenderAttrs, cached_glyph_bounds};
 use crate::bridge::*;
 use crate::context::State;
 
@@ -160,18 +160,12 @@ impl Typesetter{
     paragraph.visit(|line, visit|{
       if let Some(info) = visit{
         // use SkParagraph's x, but not its y (since it's rounded to the nearest whole pixel)
-        let run_offset = Point::new(info.origin().x, line_origins[line] + shift);
-        let mut glyph_bounds = vec![Rect::new_empty(); info.count()];
-        info.font().get_bounds(info.glyphs(), &mut glyph_bounds, None);
+        let run_origin = Point::new(info.origin().x, line_origins[line] + shift) + origin;
         text_runs.push(RunMetrics{
           line,
           family: info.font().typeface().family_name(),
           font: info.font().metrics().1,
-          bounds: zip(info.positions(), &glyph_bounds)
-            .filter(|(_, rect)| !rect.is_empty())
-            .map(|(pt, rect)| rect.with_offset(*pt + run_offset + origin))
-            .reduce(Rect::join2)
-            .unwrap_or(Rect::new_empty())
+          bounds: Self::ink_bounds(info.font(), info.glyphs(), info.positions(), run_origin),
         });
       }
     });
@@ -296,6 +290,29 @@ impl Typesetter{
   // get each line's precise glyph baseline (since SkParagraph's baselines are rounded to whole-pixel values)
   fn line_origins(lines:&[LineInfo]) -> Vec<f32>{
     lines.iter().scan(0.0, |top, lm|{ let y = *top; *top += lm.height as f32; Some(y) }).collect()
+  }
+
+  // bounds of all the actual glyph outlines (at Skia's canonical 64px size) in a run
+  fn ink_bounds(font:&Font, glyphs:&[GlyphId], positions:&[Point], origin:Point) -> Rect {
+    let (face, fake_bold) = (font.typeface().unique_id(), font.is_embolden());
+    let size = if fake_bold { font.size() } else { 64.0 }; // fake bold is size-dependent
+    let scale = font.size() / size;
+
+    // get each glyph's outline bounds (empty for blank glyphs like spaces, None for glyphs without an outline)
+    let outlines = cached_glyph_bounds(face, size, fake_bold, glyphs, |glyph| {
+      let font = font.with_size(size)?;
+      font.get_path(glyph).map(|path| path.compute_tight_bounds())
+        .or_else(|| font.measure_text([glyph].as_slice(), None).1.is_empty().then(Rect::new_empty))
+    });
+
+    // use font's bounds rects for glyphs lacking outlines (like emoji and whitespace)
+    zip(glyphs, zip(outlines, positions)).filter_map(|(glyph, (outline, pt))| {
+      let rect = match outline{
+        Some(b) => Rect::new(b.left * scale, b.top * scale, b.right * scale, b.bottom * scale),
+        None => font.measure_text([*glyph].as_slice(), None).1,
+      };
+      if !rect.is_empty(){ Some(rect.with_offset(*pt + origin)) }else{ None } // blank glyphs (like spaces) have no ink
+    }).reduce(Rect::join2).unwrap_or(Rect::new_empty())
   }
 
   // get the paragraph's left edge relative to the baseline origin
