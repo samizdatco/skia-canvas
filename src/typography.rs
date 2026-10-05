@@ -320,6 +320,7 @@ impl Typesetter{
     let gravity = match (self.graf_style.text_direction(), self.text_align){
       (TextDirection::LTR, TextAlign::Start) | (TextDirection::RTL, TextAlign::End) => TextAlign::Left,
       (TextDirection::LTR, TextAlign::End) | (TextDirection::RTL, TextAlign::Start) => TextAlign::Right,
+      (TextDirection::RTL, TextAlign::Justify) => TextAlign::Right, // use anchor as `start` for justified
       (_, alignment) => alignment,
     };
 

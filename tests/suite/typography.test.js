@@ -877,6 +877,30 @@ describe("Typography", () => {
       assert(lines[lines.length - 1].width < MEASURE - 20, "the final line keeps its natural width")
     })
 
+    test("justify in rtl", () => {
+      ctx.font = "24px TestFace"
+      ctx.textWrap = true
+      ctx.textAlign = "justify"
+      ctx.direction = "rtl"
+      let {lines} = ctx.measureText(TEXT, MEASURE)
+      assert(lines.length > 2, "the text should wrap onto several lines")
+      // in rtl the measure sits to the left of the anchor, as it does for right-aligned text…
+      for (const line of lines.slice(0, -1)){
+        assert.nearEqual(line.x, -MEASURE, 3)
+        assert.nearEqual(line.x + line.width, 0, 3)
+      }
+      // …and the final, unjustified line ends at the anchor
+      let last = lines[lines.length - 1]
+      assert(last.width < MEASURE - 20, "the final line keeps its natural width")
+      assert.nearEqual(last.x + last.width, 0, 3)
+
+      // as does a single line that isn't wrapping at all
+      ctx.textWrap = false
+      let single = ctx.measureText("short line").lines[0]
+      assert.nearEqual(single.x + single.width, 0, 3)
+      ctx.direction = "ltr"
+    })
+
     test("line baselines", () => {
       // skparagraph rounds its line heights to whole pixels, so line metrics put the baseline up to
       // half a pixel away from where the glyphs are actually drawn
