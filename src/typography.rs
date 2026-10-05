@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use serde_json::{json, Value};
 use skia_safe::{FontMetrics, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
 use skia_safe::paint::{Style as PaintStyle, Cap as PaintCap};
+use skia_safe::font::Edging;
 use skia_safe::textlayout::{
   FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
   TextAlign, TextDecorationStyle, TextDirection, TextStyle,
@@ -451,6 +452,7 @@ struct Decorations{
   size: Option<Spacing>,   // explicit thickness override, else the font metric
   color: Option<CssColor>, // explicit color, else `currentColor` (the fill color)
   font_size: f32,          // for the default `fontSize/14` thickness and dash/wave scaling
+  antialias: bool,         // use the same smoothing rule as the text being underlined
 }
 
 // each distinct line gets a Rule record (i.e., normally there's one but double-underline has two)
@@ -464,6 +466,7 @@ impl Decorations{
       size: style.size.clone(),
       color: style.color,
       font_size: char_style.font_size(),
+      antialias: char_style.font_edging() != Edging::Alias,
     })
   }
 
@@ -484,7 +487,7 @@ impl Decorations{
   fn fill_paint(&self, base:&Paint) -> Paint {
     let mut paint = base.clone();
     paint.set_path_effect(None);
-    paint.set_anti_alias(true);
+    paint.set_anti_alias(self.antialias);
     paint.set_style(PaintStyle::Fill);
     if let Some(css) = self.color {
       paint.set_shader(None);

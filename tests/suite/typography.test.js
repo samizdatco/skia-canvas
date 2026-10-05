@@ -713,6 +713,30 @@ describe("Typography", () => {
         assert(struck > plain, "expected line-through to add ink across the gaps")
       })
 
+      test("follows fontSmoothing", () => {
+        // draw only the rule (transparent glyphs, explicit decoration color) at a fractional baseline
+        // so an antialiased rule has to split its coverage between two rows
+        function partialPixels(fontSmoothing){
+          const canvas = new Canvas(W, H)
+          canvas.gpu = false // GPU surfaces default to 4x MSAA, which softens every edge regardless
+          const ctx = canvas.getContext('2d')
+          Object.assign(ctx, {font: FONT, textDecoration: "underline black", fillStyle: "rgba(0,0,0,0)", fontSmoothing})
+          ctx.fillText("mmmm", 20, BASELINE + 0.4)
+          const {data} = ctx.getImageData(0, 0, W, H)
+          let partial = 0, opaque = 0
+          for (let i = 3; i < data.length; i += 4){
+            if (data[i] > 0 && data[i] < 255) partial++
+            else if (data[i] === 255) opaque++
+          }
+          return {partial, opaque}
+        }
+
+        const smoothed = partialPixels(true), aliased = partialPixels(false)
+        assert(smoothed.partial > 0, "an antialiased underline should have partially-covered pixels")
+        assert.equal(aliased.partial, 0, "an aliased underline should not be antialiased")
+        assert(aliased.opaque > 0, "the aliased underline should still be drawn")
+      })
+
       describe("inherits the text's fill", () => {
         const Y0 = BASELINE + 2, Y1 = BASELINE + 14   // underline band (below the m's, no descenders)
 
