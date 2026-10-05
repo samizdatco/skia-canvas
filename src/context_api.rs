@@ -675,10 +675,7 @@ pub fn outlineText(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = this.borrow_mut();
 
   let text = string_arg(&mut cx, 1, "text")?;
-  let width = match cx.len(){
-    3 => Some(float_arg_or_bail(&mut cx, 2, "width")?),
-    _ => None
-  };
+  let width = opt_float_arg(&mut cx, 2);
   let path = this.outline_text(&text, width);
   Ok(cx.boxed(RefCell::new(Path2D::from(path))).upcast())
 }
