@@ -1508,6 +1508,23 @@ describe("Context2D", ()=>{
         assert.equal(text.substring(startIndex, endIndex), text)
       })
 
+      test("blank line ranges", () => {
+        ctx.font = '16px sans-serif'
+        ctx.textWrap = true
+        for (let text of ['abcdef\n\ncd', '石石\n\ncd', 'abc\n   \ncd']){
+          let blank = ctx.measureText(text, 500).lines[1],
+              start = text.indexOf('\n') + 1
+          assert.equal(blank.startIndex, start, JSON.stringify(text))
+          assert.equal(blank.endIndex, start, JSON.stringify(text))
+        }
+
+        // the empty line after a final newline starts (and ends) just past it
+        for (let text of ['x\n', '\n', '\n\n', '石\n']){
+          let last = ctx.measureText(text, 500).lines.at(-1)
+          assert.deepEqual([last.startIndex, last.endIndex], [text.length, text.length], JSON.stringify(text))
+        }
+      })
+
       test("blank line rects", () => {
         ctx.font = '16px sans-serif'
         ctx.textWrap = true

@@ -708,18 +708,10 @@ pub fn opt_spacing_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize) -> NeonResul
 //
 
 pub fn utf16_range(text:&str, byte_range:&Range<usize>) -> Range<usize>{
-  let chars:Vec<(usize, usize)> = text.char_indices()
-    .map(|(idx, c)| (idx, c.len_utf16()))
-    .collect::<Vec<(usize, usize)>>();
-
-  // find the char indices corresponding to the byte range endpoints
-  let start = chars.iter().position(|(i, _)| *i >= byte_range.start).unwrap_or(0);
-  let end = chars.iter().rposition(|(i, _)| *i < byte_range.end).map(|i| i + 1).unwrap_or(start);
-
-  // sum up the number of utf-16 code units needed for all chars in the range
-  let sum = |a,b|{a+b};
-  let len = |&(_, len)|{len};
-  let head = chars.iter().take(start).map(len).reduce(sum).unwrap_or(0);
-  let tail = chars.iter().skip(start).take(end-start).map(len).reduce(sum).unwrap_or(head);
-  head..head+tail
+  let utf16_offset = |byte:usize| text
+    .char_indices()
+    .take_while(|(i, _)| *i < byte)
+    .map(|(_, c)| c.len_utf16())
+    .sum();
+  utf16_offset(byte_range.start)..utf16_offset(byte_range.end)
 }

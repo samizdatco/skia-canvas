@@ -210,7 +210,11 @@ impl Typesetter{
     struct LineMeasure{ ink: Rect, advance: Rect, json: Value }
     let lines = (0..paragraph.line_number()).filter_map(|ln|{
       // find the range of byte & char indices that are on this line (includes trailing whitespace if not wrapping)
-      let text_range = paragraph.get_actual_text_range(ln, !self.text_wrap);
+      let mut text_range = paragraph.get_actual_text_range(ln, !self.text_wrap);
+      if self.text.get(text_range.clone()) == Some("\n"){
+        // treat trailing newlines like any other blank line
+        text_range = text_range.end..text_range.end;
+      }
       let char_range = utf16_range(&self.text, &text_range);
 
       // calculate this line's vertical offsets relative to the typesetting origin
