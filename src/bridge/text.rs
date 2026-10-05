@@ -10,7 +10,7 @@ use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinat
 use skia_safe::textlayout::{TextAlign, TextDecorationStyle, TextStyle};
 
 use super::*;
-use crate::typography::{Baseline, DecorationKind, DecorationLine, DecorationStyle};
+use crate::typography::{Baseline, DecorationKind, DecorationLine, DecorationStyle, TextRendering};
 
 //
 // Font argument packing & unpacking
@@ -180,6 +180,26 @@ pub fn from_text_baseline(mode:Baseline) -> String{
     Baseline::Alphabetic => "alphabetic",
     Baseline::Ideographic => "ideographic",
     Baseline::Bottom => "bottom",
+  }.to_string()
+}
+
+pub fn to_text_rendering(mode_name:&str) -> Option<TextRendering>{
+  let mode = match mode_name.to_lowercase().as_str(){
+    "auto" => TextRendering::Auto,
+    "optimizespeed" => TextRendering::OptimizeSpeed,
+    "optimizelegibility" => TextRendering::OptimizeLegibility,
+    "geometricprecision" => TextRendering::GeometricPrecision,
+    _ => return None
+  };
+  Some(mode)
+}
+
+pub fn from_text_rendering(mode:TextRendering) -> String{
+  match mode{
+    TextRendering::Auto => "auto",
+    TextRendering::OptimizeSpeed => "optimizeSpeed",
+    TextRendering::OptimizeLegibility => "optimizeLegibility",
+    TextRendering::GeometricPrecision => "geometricPrecision",
   }.to_string()
 }
 

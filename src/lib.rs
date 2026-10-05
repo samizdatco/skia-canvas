@@ -217,6 +217,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_textAlign", ctx::set_textAlign)?;
   cx.export_function("CanvasRenderingContext2D_get_textBaseline", ctx::get_textBaseline)?;
   cx.export_function("CanvasRenderingContext2D_set_textBaseline", ctx::set_textBaseline)?;
+  cx.export_function("CanvasRenderingContext2D_get_textRendering", ctx::get_textRendering)?;
+  cx.export_function("CanvasRenderingContext2D_set_textRendering", ctx::set_textRendering)?;
   cx.export_function("CanvasRenderingContext2D_get_direction", ctx::get_direction)?;
   cx.export_function("CanvasRenderingContext2D_set_direction", ctx::set_direction)?;
   cx.export_function("CanvasRenderingContext2D_get_letterSpacing", ctx::get_letterSpacing)?;

@@ -414,13 +414,12 @@ impl OutlinePen for Glyphs{
 pub struct RenderAttrs{
   pub hinting: FontHinting,
   pub edging: Edging,
-  pub subpixel: bool,
   pub synthesize: bool,
 }
 
 impl Default for RenderAttrs{
   fn default() -> Self{
-    Self{hinting:FontHinting::None, edging:Edging::AntiAlias, subpixel:true, synthesize:true}
+    Self{hinting:FontHinting::None, edging:Edging::AntiAlias, synthesize:true}
   }
 }
 

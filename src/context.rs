@@ -20,7 +20,7 @@ use crate::bridge::*;
 use crate::font_library::{FontLibrary, MetricsKey, cached_metrics};
 use crate::path::Path2D;
 use crate::drawlist::{Pen, Plotter};
-use crate::typography::{Typesetter, Baseline, DecorationStyle, BaselineMetrics};
+use crate::typography::{Typesetter, Baseline, DecorationStyle, TextRendering, BaselineMetrics};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
@@ -76,10 +76,11 @@ pub struct State{
   char_style: TextStyle,
   graf_style: ParagraphStyle,
   text_baseline: Baseline,
-  letter_spacing: Spacing,
-  word_spacing: Spacing,
+  text_rendering: TextRendering,
   text_decoration: DecorationStyle,
   text_wrap: bool,
+  letter_spacing: Spacing,
+  word_spacing: Spacing,
   line_height: Option<f32>,
 }
 
@@ -137,11 +138,12 @@ impl Default for State {
       font_synthesis: true,
       char_style,
       graf_style,
+      text_rendering: TextRendering::Auto,
       text_baseline: Baseline::Alphabetic,
-      letter_spacing: Spacing::default(),
-      word_spacing: Spacing::default(),
       text_decoration: DecorationStyle::default(),
       text_wrap: false,
+      letter_spacing: Spacing::default(),
+      word_spacing: Spacing::default(),
       line_height: None,
     }
   }
@@ -149,7 +151,7 @@ impl Default for State {
 
 impl State{
   // styling config for use by Typesetter
-  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, bool) {
+  pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, TextRendering, bool) {
     let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
     if char_style.typeface().is_none() { // if still using the implicit default font, resolve it now
       char_style = FontLibrary::with_shared(|lib| lib.update_style(&char_style, &FontSpec::default()))
@@ -198,15 +200,16 @@ impl State{
       graf_style.set_max_lines(Some(1));
     }
 
-    // reflect context's `fontSynthesis`, `fontHinting`, `fontSmoothing`, & `fontKerning` settings
+    // reflect context's `fontSynthesis`, `fontHinting`, `fontSmoothing`, `textRendering` & `fontKerning` settings.
+    // (macOS doesn't ever apply hinting and uses the flag to enable a totally unrelated 'smoothing' mode instead)
     graf_style.set_fake_missing_font_styles(self.font_synthesis);
     let (edging, subpixel) = if self.font_smoothing{ (Edging::AntiAlias, true) }else{ (Edging::Alias, false) };
-    let hinting = if self.font_hinting{ FontHinting::Normal }else{ FontHinting::None };
-    char_style.set_font_hinting(hinting);
+    let hinted = self.font_hinting && self.text_rendering != TextRendering::GeometricPrecision;
+    char_style.set_font_hinting(if hinted && !cfg!(target_os = "macos"){ FontHinting::Normal }else{ FontHinting::None });
     char_style.set_font_edging(edging);
     char_style.set_subpixel(subpixel);
 
-    ( char_style, graf_style, self.text_decoration.clone(), self.text_wrap )
+    ( char_style, graf_style, self.text_decoration.clone(), self.text_rendering, self.text_wrap )
   }
 
   // font settings that cached measureText responses depend on
@@ -225,7 +228,7 @@ impl State{
       self.graf_style.text_direction() as i32,
       self.text_wrap,
       self.line_height.map(f32::to_bits),
-      (self.font_hinting, self.font_smoothing, self.font_synthesis),
+      (self.font_hinting, self.font_smoothing, self.font_synthesis, self.text_rendering),
     ).hash(&mut h);
 
     (h.finish(), text.to_string(), width.map(f32::to_bits))

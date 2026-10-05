@@ -2,7 +2,7 @@ use std::iter::zip;
 use std::sync::Once;
 use std::collections::BTreeSet;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
+use skia_safe::{FontMetrics, FontHinting, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
 use skia_safe::paint::{Style as PaintStyle, Cap as PaintCap};
 use skia_safe::font::Edging;
 use skia_safe::textlayout::{
@@ -26,12 +26,13 @@ pub struct Typesetter{
   char_style: TextStyle,
   graf_style: ParagraphStyle,
   text_decoration: DecorationStyle,
+  text_rendering: TextRendering,
   text_wrap: bool,
 }
 
 impl Typesetter{
   pub fn new(state:&State, text: &str, width:Option<f32>) -> Self {
-    let (char_style, mut graf_style, text_decoration, text_wrap) = state.typography();
+    let (char_style, mut graf_style, text_decoration, text_rendering, text_wrap) = state.typography();
 
     // if width is undefined, typeset w/ left alignment then shift later based on actual alignment
     let text_align = graf_style.text_align();
@@ -49,7 +50,6 @@ impl Typesetter{
         .set_render_attrs(RenderAttrs{
           hinting: char_style.font_hinting(),
           edging: char_style.font_edging(),
-          subpixel: char_style.subpixel(),
           synthesize: graf_style.fake_missing_font_styles(),
         })
         .font_collection()
@@ -60,7 +60,7 @@ impl Typesetter{
       eprintln!("Warning: Cannot render text because no fonts are installed on this system.")
     });
 
-    Typesetter{text, width, text_align, typefaces, char_style, graf_style, text_decoration, text_wrap}
+    Typesetter{text, width, text_align, typefaces, char_style, graf_style, text_decoration, text_rendering, text_wrap}
   }
 
   // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`)
@@ -102,10 +102,24 @@ impl Typesetter{
         info.origin().x + base.x,
         base.y + line_origins[line] + shift,
       );
-
       run_clusters.push(info.utf8_starts()[..count].to_vec()); // index relative to full `text` string
+
+      // text rasterization settings (applied to Font not TextStyle so layout caching survives mode-switches)
+      // - `auto`: snap to ¼px steps horizontally and whole pixels vertically
+      // - `optimizeSpeed`: snap both axes to whole pixels (so the same glyph always reuses the same atlas entry)
+      // - `geometricPrecision`: snap to ¼px on both axes (unless `fontSmoothing` disabled)
+      // - `optimizeLegibility`: enable CoreText's font smoothing, DirectWrite's grid fitting, and FreeType's light autohinting
+      let mode = self.text_rendering;
+      let mut font = info.font().clone();
+      font.set_subpixel(font.is_subpixel() && mode != TextRendering::OptimizeSpeed);
+      font.set_baseline_snap(mode != TextRendering::GeometricPrecision);
+      if mode == TextRendering::OptimizeLegibility && font.hinting() == FontHinting::None {
+        let freetype = !cfg!(any(target_os = "macos", target_os = "windows"));
+        font.set_hinting(if freetype{ FontHinting::Slight }else{ FontHinting::Normal });
+      }
+
       runs.push(GlyphRun{
-        font: info.font().clone(),
+        font,
         origin,
         edges: (x0 + base.x, x1 + base.x),
         glyphs: info.glyphs().to_vec(),
@@ -594,6 +608,9 @@ impl Decorations{
     }
   }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum TextRendering{ Auto, OptimizeSpeed, OptimizeLegibility, GeometricPrecision }
 
 #[derive(Copy, Clone, Debug)]
 pub enum Baseline{ Top, Hanging, Middle, Alphabetic, Ideographic, Bottom }

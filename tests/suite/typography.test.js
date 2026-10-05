@@ -99,11 +99,15 @@ describe("Typography", () => {
     ctx.fontHinting = 'yes'
     assert.equal(ctx.fontHinting, true)
 
-    // hinted vs unhinted rasterization must differ at text sizes (DirectWrite
-    // quantization is unverified, hence the win32 escape hatch)
+    // hinted vs unhinted rasterization must differ at text sizes (DirectWrite quantization is
+    // unverified, hence the win32 escape hatch) — except on macOS, where CoreText never grid-fits and
+    // the property is a no-op (its old side effect, CoreGraphics font smoothing, is now
+    // `textRendering: "optimizeLegibility"`)
     let unhinted = render(false)
     let hinted = render(true)
-    if (os.platform() != 'win32'){
+    if (os.platform() == 'darwin'){
+      assert(!differs(hinted, unhinted))
+    }else if (os.platform() != 'win32'){
       assert(differs(hinted, unhinted))
     }
 
@@ -826,6 +830,113 @@ describe("Typography", () => {
           assert(c.r > 40 || c.b > 40, "the strike should carry the fill's color, not be solid black")
         })
       })
+    })
+  })
+
+  describe("textRendering", () => {
+    const MODES = /** @type {const} */ (["auto", "optimizeSpeed", "optimizeLegibility", "geometricPrecision"])
+    const same = (a, b) => a.length == b.length && a.every((v, i) => v == b[i])
+
+    beforeEach(() => {
+      FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+    })
+
+    /** @param {number} x @param {number} y @param {string} [text] */
+    const render = (x, y, text = "H") => {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      ctx.font = '11px TestFace'
+      ctx.fillText(text, x, y)
+      return ctx.getImageData(0, 0, WIDTH, HEIGHT).data
+    }
+    // an axis is snapped when every quarter-pixel nudge of a glyph renders like either the un-nudged glyph or
+    // the glyph nudged by a whole pixel; otherwise the nudges produce their own glyph images (a single glyph,
+    // since in a string each glyph rounds its own fractional position)
+    const snappedX = () => { const [b0, b1] = [render(10, 24), render(11, 24)]; return [1, 2, 3].every(k => { const b = render(10 + k/4, 24); return same(b, b0) || same(b, b1) }) }
+    const snappedY = () => { const [b0, b1] = [render(10, 24), render(10, 25)]; return [1, 2, 3].every(k => { const b = render(10, 24 + k/4); return same(b, b0) || same(b, b1) }) }
+
+    test("enum values", () => {
+      assert.equal(ctx.textRendering, "auto")
+      for (const mode of MODES){
+        ctx.textRendering = mode
+        assert.equal(ctx.textRendering, mode)
+      }
+      // @ts-expect-error — deliberately invalid: enum attributes ignore unknown values
+      ctx.textRendering = "crisp"
+      assert.equal(ctx.textRendering, "geometricPrecision")
+
+      ctx.save()
+      ctx.textRendering = "optimizeSpeed"
+      ctx.restore()
+      assert.equal(ctx.textRendering, "geometricPrecision")
+    })
+
+    test("auto", () => {
+      ctx.textRendering = "auto"
+      assert(!snappedX(), "horizontal nudges should produce distinct glyph images")
+      assert(snappedY(), "vertical nudges should snap to whole pixels")
+    })
+
+    test("optimizeSpeed", () => {
+      ctx.textRendering = "optimizeSpeed"
+      assert(snappedX())
+      assert(snappedY())
+      const TEXT = "Illegible waveforms 10x"
+      let data = render(10.5, 24.5, TEXT), partial = 0
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 0 && data[i] < 255) partial++
+      assert(partial > 0, "glyph edges should still be antialiased")
+
+      // aliased text is whole-pixel in every mode, so switching modes can't change it
+      ctx.fontSmoothing = false
+      let aliased = render(10.5, 24.5, TEXT)
+      ctx.textRendering = "auto"
+      assert(same(render(10.5, 24.5, TEXT), aliased))
+      ctx.fontSmoothing = true
+    })
+
+    test("optimizeLegibility", () => {
+      // CoreGraphics font smoothing on macOS, light autohinting on FreeType (DirectWrite grid fitting is
+      // unverified, hence the win32 escape hatch); layout is untouched either way (see the next test)
+      const TEXT = "Illegible waveforms 10x"
+      ctx.textRendering = "auto"
+      let plain = render(10, 24, TEXT)
+      ctx.textRendering = "optimizeLegibility"
+      if (os.platform() != 'win32'){
+        assert(!same(render(10, 24, TEXT), plain))
+      }
+      ctx.textRendering = "auto"
+      assert(same(render(10, 24, TEXT), plain))
+    })
+
+    test("geometricPrecision", () => {
+      ctx.textRendering = "geometricPrecision"
+      assert(!snappedX())
+      assert(!snappedY(), "vertical nudges should produce distinct glyph images")
+    })
+
+    test("layout is unaffected", () => {
+      // the modes are applied to each run's font just before drawing, so shaping, metrics, outlines
+      // and vector output are identical across all of them (and switching modes needn't flush the layout caches)
+      const TEXT = "Illegible waveforms 10x, fluffy fjords"
+      /** @param {typeof MODES[number]} mode */
+      const snapshot = (mode) => {
+        const canvas = new Canvas(400, 100), ctx = canvas.getContext("2d")
+        Object.assign(ctx, {font: '23px TestFace', textRendering: mode})
+        ctx.fillText(TEXT, 20, 60)
+        const pdf = hasPdftotext ? (() => {
+          const file = path.join(os.tmpdir(), `skia-canvas-tr-${process.pid}-${mode}.pdf`)
+          fs.writeFileSync(file, canvas.toBufferSync('pdf'))
+          try { return execFileSync('pdftotext', ['-bbox', file, '-']).toString() }
+          finally { try { fs.unlinkSync(file) } catch {} }
+        })() : ""
+        return {metrics: ctx.measureText(TEXT), outline: ctx.outlineText(TEXT).d, pdf}
+      }
+      const auto = snapshot("auto")
+      for (const mode of MODES){
+        const other = snapshot(mode)
+        assert.deepEqual(other.metrics, auto.metrics, `${mode}: measureText`)
+        assert.equal(other.outline, auto.outline, `${mode}: outlineText`)
+        assert.equal(other.pdf, auto.pdf, `${mode}: pdf text & positions`)
+      }
     })
   })
 

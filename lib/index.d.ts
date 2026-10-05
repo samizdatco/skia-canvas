@@ -560,7 +560,7 @@ type CanvasLineCap = "butt" | "round" | "square";
 type CanvasLineJoin = "bevel" | "miter" | "round";
 type CanvasFontKerning = "auto" | "none" | "normal";
 // type CanvasFontVariantCaps = "all-petite-caps" | "all-small-caps" | "normal" | "petite-caps" | "small-caps" | "titling-caps" | "unicase";
-// type CanvasTextRendering = "auto" | "geometricPrecision" | "optimizeLegibility" | "optimizeSpeed";
+type CanvasTextRendering = "auto" | "geometricPrecision" | "optimizeLegibility" | "optimizeSpeed";
 
 type Offset = [x: number, y: number] | number
 type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:number, x4:number, y4:number] |
@@ -824,10 +824,17 @@ interface CanvasTextDrawingStyles {
      * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/wordSpacing)
      */
     wordSpacing: string;
+    /**
+     * What to optimize about text when rasterizing. `"auto"` (the default) emulates browser behavior,
+     * `"optimizeSpeed"` aligns glyphs to the pixel grid, `"optimizeLegibility"` applies font smoothing
+     * on macOS and light hinting on other platforms, `"geometricPrecision"` uses sub-pixel glyph
+     * positioning and disables hinting (so glyphs line up exactly with `outlineText()`)
+     *
+     * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textRendering)
+     */
+    textRendering: CanvasTextRendering;
 
     // UNIMPLEMENTED
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textRendering) */
-    // textRendering: CanvasTextRendering;
     /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontVariantCaps) */
     // fontVariantCaps: CanvasFontVariantCaps;
 }

@@ -764,6 +764,24 @@ pub fn set_textBaseline(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
+pub fn get_textRendering(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow_mut();
+  let mode = from_text_rendering(this.state.text_rendering);
+  Ok(cx.string(mode))
+}
+
+pub fn set_textRendering(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  let name = string_arg(&mut cx, 1, "textRendering")?;
+
+  if let Some(mode) = to_text_rendering(&name){
+    this.state.text_rendering = mode;
+  }
+  Ok(cx.undefined())
+}
+
 pub fn get_direction(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();
