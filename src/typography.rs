@@ -136,6 +136,13 @@ impl Typesetter{
       });
     });
 
+    // include trailing whitespace in the run's edge measurements when underlining non-wrapped text
+    if !self.text_wrap && let Some(&Some(Rect{left, right, ..})) = line_boxes.first(){
+      let dx = base.x + line_offsets[0];
+      if let Some(run) = runs.iter_mut().min_by(|a, b| a.edges.0.total_cmp(&b.edges.0)){ run.edges.0 = run.edges.0.min(left + dx) }
+      if let Some(run) = runs.iter_mut().max_by(|a, b| a.edges.1.total_cmp(&b.edges.1)){ run.edges.1 = run.edges.1.max(right + dx) }
+    }
+
     // find the utf-8 offset range that corresponds to each run. `run_clusters` counts in glyph order
     // (either LTR or RTL) while `bounds` is sorted (so we can easily find the 'next' cluster)
     let mut bounds:BTreeSet<u32> = run_clusters.iter().flatten().copied().collect();

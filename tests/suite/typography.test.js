@@ -741,6 +741,35 @@ describe("Typography", () => {
         assert(aliased.opaque > 0, "the aliased underline should still be drawn")
       })
 
+      test("spans trailing whitespace unless wrapping", () => {
+        // draw only the rule (transparent glyphs) and find its horizontal extent relative to the anchor
+        function ruleExtent(text, opts){
+          const canvas = new Canvas(W, H)
+          canvas.gpu = false
+          const ctx = canvas.getContext('2d')
+          Object.assign(ctx, {font: "20px TestFace", textDecoration: "underline black", fillStyle: "rgba(0,0,0,0)", ...opts})
+          ctx.fillText(text, 150, BASELINE, opts.maxWidth)
+          const {data} = ctx.getImageData(0, 0, W, H)
+          let left = W, right = 0
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+            if (data[(y*W + x) * 4 + 3] > 127){ left = Math.min(left, x); right = Math.max(right, x + 1) }
+          ctx.textWrap = false
+          return {left: left - 150, right: right - 150, width: ctx.measureText(text).width}
+        }
+
+        for (const textAlign of /** @type {const} */ (["left", "right"]))
+        for (const direction of /** @type {const} */ (["ltr", "rtl"]))
+        for (const letterSpacing of ["0px", "3px"]){
+          // a single line's trailing spaces count toward its width, so they're underlined too
+          const spaced = ruleExtent("Quick fox  ", {textAlign, direction, letterSpacing})
+          assert.nearEqual(spaced.right - spaced.left, spaced.width, 1.5)
+          // in wrapped text they hang past the end of the line instead, and stay bare
+          const wrapped = ruleExtent("Quick fox  ", {textAlign, direction, letterSpacing, textWrap: true, maxWidth: 250})
+          const trimmed = ruleExtent("Quick fox", {textAlign, direction, letterSpacing})
+          assert.nearEqual(wrapped.right - wrapped.left, trimmed.right - trimmed.left, 1)
+        }
+      })
+
       describe("inherits the text's fill", () => {
         const Y0 = BASELINE + 2, Y1 = BASELINE + 14   // underline band (below the m's, no descenders)
 
