@@ -200,7 +200,7 @@ describe("Typography", () => {
     ctx.font = "40px serif"
     assert.equal(ctx.fontKerning, "none")
   })
-  
+
   test("textBaseline", async () => {
     FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
     // the line's y-origin used to be rounded in user space (as skparagraph's painter does), which left
@@ -441,7 +441,7 @@ describe("Typography", () => {
       assert(width(text) > kernOn)             // settings (kern off) also in effect
     })
   })
-  
+
   describe("fontStretch", () => {
     test("defaults to normal", () => {
       assert.equal(ctx.fontStretch, "normal")
@@ -478,7 +478,7 @@ describe("Typography", () => {
       let narrow = ctx.measureText("Hamburg").width
       assert(narrow < wide) // condensing the width axis shrinks the advance
     })
-    
+
     test("ignores invalid values", () => {
       ctx.fontStretch = "condensed"
       assert.doesNotThrow(() => {
@@ -830,6 +830,79 @@ describe("Typography", () => {
           assert(c.r > 40 || c.b > 40, "the strike should carry the fill's color, not be solid black")
         })
       })
+    })
+  })
+
+  describe("textAlign", () => {
+    test("handles edge whitespace", () => {
+      FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      ctx.font = "20px TestFace"
+      for (const direction of /** @type {const} */ (["ltr", "rtl"])){
+        ctx.direction = direction
+        for (const text of ["Quick fox", " Quick fox ", "Quick fox  ", "  Quick fox"]){
+          const left = (ctx.textAlign = "left", ctx.outlineText(text).bounds.left),
+                right = (ctx.textAlign = "right", ctx.outlineText(text).bounds.left),
+                center = (ctx.textAlign = "center", ctx.outlineText(text).bounds.left),
+                {width} = ctx.measureText(text)
+          // like Chrome: the box from `x` to `x ± width` is what's aligned, whitespace and all
+          assert.nearEqual(left - right, width, 1e-4)
+          assert.nearEqual(left - center, width / 2, 1e-4)
+        }
+      }
+    })
+
+    test("includes letterspacing", () => {
+      FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      ctx.font = "20px TestFace"
+      const inkLeft = (text, ls, textAlign) => {
+        Object.assign(ctx, {letterSpacing: ls, textAlign})
+        return ctx.outlineText(text).bounds.left
+      }
+      for (const direction of /** @type {const} */ (["ltr", "rtl"])){
+        ctx.direction = direction
+        for (const ls of ["3px", "-1px", "0.5em"]){
+          for (const text of ["H", "Quick fox"]){
+            // spacing follows every glyph, so the first one stays on the anchor…
+            assert.nearEqual(inkLeft(text, ls, "left"), inkLeft(text, "0px", "left"), 1e-4)
+            // …and right/center alignment move the text by its full (spaced) width
+            ctx.letterSpacing = ls
+            const {width} = ctx.measureText(text)
+            assert.nearEqual(inkLeft(text, ls, "left") - inkLeft(text, ls, "right"), width, 1e-4)
+            assert.nearEqual(inkLeft(text, ls, "left") - inkLeft(text, ls, "center"), width / 2, 1e-4)
+          }
+        }
+      }
+    })
+
+    test("uses full-precision widths", () => {
+      FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      ctx.font = "17.3px TestFace"
+      // skparagraph's rounding hack would snap every width to a multiple of 0.01px
+      const widths = ["Quick fox", "Hgjy", "The lazy dog"].map(t => ctx.measureText(t).width)
+      assert(widths.some(w => Math.abs(w * 100 - Math.round(w * 100)) > 1e-3), `widths ${widths} all look rounded`)
+    })
+
+    test("aligns each line on its own", () => {
+      FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
+      // the Arabic line has no non-cursive cluster, so skparagraph doesn't nudge it by half a letter-space
+      // like the others; every line should still land exactly where it would if drawn by itself
+      const lines = ["Hgjy fox", "abc", "مرحبا"], text = lines.join("\n")
+      const inkX = m => [m.actualBoundingBoxLeft, m.actualBoundingBoxRight]
+      for (const direction of /** @type {const} */ (["ltr", "rtl"]))
+      for (const textAlign of /** @type {const} */ (["left", "right", "center"]))
+      for (const letterSpacing of ["0px", "3px"]){
+        Object.assign(ctx, {font: "20px TestFace", direction, textAlign, letterSpacing})
+        ctx.textWrap = false
+        const alone = lines.map(line => ctx.measureText(line))
+        ctx.textWrap = true
+        for (const maxWidth of [undefined, 500]){
+          ctx.measureText(text, maxWidth).lines.forEach((line, i) => {
+            const [left, right] = inkX(alone[i])
+            assert.nearEqual(line.x, -left, 1e-3)
+            assert.nearEqual(line.x + line.width, right, 1e-3)
+          })
+        }
+      }
     })
   })
 

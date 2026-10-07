@@ -28,6 +28,7 @@ pub struct Typesetter{
   text_decoration: DecorationStyle,
   text_rendering: TextRendering,
   text_wrap: bool,
+  utf16: Utf16Offsets, // for converting skparagraph's byte ranges to js string indices
 }
 
 impl Typesetter{
@@ -37,6 +38,9 @@ impl Typesetter{
     // if width is undefined, typeset w/ left alignment then shift later based on actual alignment
     let text_align = graf_style.text_align();
     if width.is_none(){ graf_style.set_text_align(TextAlign::Left); }
+
+    // disable the flutter-compatibility hack that floors the maxWidth and rounds off line widths & rects
+    graf_style.set_apply_rounding_hack(false);
 
     // normalize all whitespace as plain spaces (except line breaks in textWrap mode)
     let text = text.chars().map(|c| match c{
@@ -60,7 +64,8 @@ impl Typesetter{
       eprintln!("Warning: Cannot render text because no fonts are installed on this system.")
     });
 
-    Typesetter{text, width, text_align, typefaces, char_style, graf_style, text_decoration, text_rendering, text_wrap}
+    let utf16 = Utf16Offsets::new(&text);
+    Typesetter{text, width, text_align, typefaces, char_style, graf_style, text_decoration, text_rendering, text_wrap, utf16}
   }
 
   // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`)
@@ -80,7 +85,9 @@ impl Typesetter{
   pub fn layout(&self, point:impl Into<Point>) -> Layout {
     let mut paragraph = self.shape_text();
     let line_info = line_info(&paragraph);
-    let base = Point::new(self.alignment_offset(&paragraph, &line_info), 0.0) + point.into();
+    let line_boxes = self.line_boxes(&paragraph, &line_info);
+    let line_offsets = self.line_offsets(&line_boxes, &line_info);
+    let base = point.into();
     let text = self.text.as_str();
 
     // collect GlyphRuns (character geometry) and run_clusters (start-indicies as utf-8 character offsets)
@@ -98,8 +105,9 @@ impl Typesetter{
 
       let count = info.count();
       if count == 0 { return }
+      let dx = base.x + line_offsets[line];
       let origin = Point::new(
-        info.origin().x + base.x,
+        info.origin().x + dx,
         base.y + line_origins[line] + shift,
       );
       run_clusters.push(info.utf8_starts()[..count].to_vec()); // index relative to full `text` string
@@ -121,7 +129,7 @@ impl Typesetter{
       runs.push(GlyphRun{
         font,
         origin,
-        edges: (x0 + base.x, x1 + base.x),
+        edges: (x0 + dx, x1 + dx),
         glyphs: info.glyphs().to_vec(),
         positions: info.positions().to_vec(),
         blob: None,
@@ -163,7 +171,8 @@ impl Typesetter{
   pub fn metrics(&self) -> Value {
     let mut paragraph = self.shape_text();
     let line_info = line_info(&paragraph);
-    let origin = Point::new(self.alignment_offset(&paragraph, &line_info), 0.0);
+    let line_boxes = self.line_boxes(&paragraph, &line_info);
+    let line_offsets = self.line_offsets(&line_boxes, &line_info);
 
     // calculate baseline offsets (relative to line_metrics.baseline which reflects ctx.textBaseline setting)
     let shift = self.char_style.baseline_shift();
@@ -179,7 +188,7 @@ impl Typesetter{
     paragraph.visit(|line, visit|{
       if let Some(info) = visit{
         // use SkParagraph's x, but not its y (since it's rounded to the nearest whole pixel)
-        let run_origin = Point::new(info.origin().x, line_origins[line] + shift) + origin;
+        let run_origin = Point::new(info.origin().x + line_offsets[line], line_origins[line] + shift);
         text_runs.push(RunMetrics{
           line,
           family: info.font().typeface().family_name(),
@@ -195,7 +204,7 @@ impl Typesetter{
         if text_runs.iter().any(|run| run.line == ln){ continue }
         let start = paragraph.get_actual_text_range(ln, true).start; // byte offsets, not utf-16 indices
         let font = paragraph.get_font_at(start.min(self.text.len() - 1));
-        let corner = origin + Point::new(line_info[ln].left as f32, line_origins[ln] + shift);
+        let corner = Point::new(line_offsets[ln] + line_info[ln].left as f32, line_origins[ln] + shift);
         text_runs.push(RunMetrics{
           line: ln,
           family: font.typeface().family_name(),
@@ -215,11 +224,11 @@ impl Typesetter{
         // treat trailing newlines like any other blank line
         text_range = text_range.end..text_range.end;
       }
-      let char_range = utf16_range(&self.text, &text_range);
+      let char_range = self.utf16.range(&text_range);
 
       // calculate this line's vertical offsets relative to the typesetting origin
       let line_metrics = line_info.get(ln)?;
-      let alpha = origin.y + line_origins.get(ln)? + shift; // the font's design origin (the alphabetic baseline unless BASE sets romn)
+      let alpha = line_origins.get(ln)? + shift; // the font's design origin (the alphabetic baseline unless BASE sets romn)
       let baseline = alpha - shift; // the textBaseline-selected origin
       let line_ascent = baseline - line_metrics.ascent as f32;
       let line_descent = baseline + line_metrics.descent as f32;
@@ -233,15 +242,9 @@ impl Typesetter{
 
       // the advance-based layout rect gives the top-level `width`; keep its full advance
       // (including any trailing letter-space) so `width` matches Chrome/Safari
-      let advance = paragraph
-        .get_rects_for_range(char_range.clone(), RectHeightStyle::Tight, RectWidthStyle::Tight).iter()
-        .map(|tb| {
-          let Rect{top, bottom, ..} = ink;
-          let Rect{left, right, ..} = tb.rect.with_offset(origin);
-          Rect::new(left, top, right, bottom)
-        })
-        .reduce(Rect::join2)
-        .unwrap_or(ink);
+      let advance = line_boxes[ln].map_or(ink, |Rect{left, right, ..}|
+        Rect::new(left + line_offsets[ln], ink.top, right + line_offsets[ln], ink.bottom)
+      );
 
       Some(LineMeasure{ ink, advance, json: json!({
         "x": ink.left,
@@ -332,8 +335,8 @@ impl Typesetter{
     }).reduce(Rect::join2).unwrap_or(Rect::new_empty())
   }
 
-  // get the paragraph's left edge relative to the baseline origin
-  fn alignment_offset(&self, paragraph:&Paragraph, lines:&[LineInfo]) -> f32{
+  // get each line's aligned left edge relative to the anchor point (resolving directional the start/end mapping)
+  fn line_offsets(&self, boxes:&[Option<Rect>], lines:&[LineInfo]) -> Vec<f32>{
     // convert start/end to left/right depending on writing system
     let gravity = match (self.graf_style.text_direction(), self.text_align){
       (TextDirection::LTR, TextAlign::Start) | (TextDirection::RTL, TextAlign::End) => TextAlign::Left,
@@ -341,25 +344,32 @@ impl Typesetter{
       (TextDirection::RTL, TextAlign::Justify) => TextAlign::Right, // use anchor as `start` for justified
       (_, alignment) => alignment,
     };
-
-    // `alignment_factor` shifts the entire line to left/right/center align it
-    // `spacing_step` compensates for the letterspacing Paragraph adds before the line's first character
-    let (alignment_factor, spacing_step) = match gravity{
-      TextAlign::Left | TextAlign::Justify => (0.0, -0.5),
-      TextAlign::Center => (-0.5, 0.5),
-      TextAlign::Right => (-1.0, 1.0),
-      _ => (0.0, 0.0) // start & end have already been remapped
+    let alignment_factor = match gravity{
+      TextAlign::Center => -0.5,
+      TextAlign::Right => -1.0,
+      _ => 0.0 // left & justify
     };
 
-    let letter_spacing = self.char_style.letter_spacing();
-    match self.width{
-      Some(box_width) => alignment_factor * box_width + spacing_step * letter_spacing,
-      None => {
-        // width-less lines are shaped with left-alignment so shift it based on its (unrounded) measured width
-        let advance = if lines.first().is_some_and(|line| line.width > 0.0) { paragraph.longest_line() } else { 0.0 };
-        alignment_factor * (advance - letter_spacing) - 0.5 * letter_spacing
-      }
+    boxes.iter().zip(lines).map(|(bounds, line)|
+      bounds.map_or(-line.left as f32, |Rect{left, right, ..}| -left + alignment_factor * (right - left)) // blank lines sit on the anchor
+    ).collect()
+  }
+
+  // get each line's SkParagraph layout box (incorporating trailing whitespace if not wrapping)
+  fn line_boxes(&self, paragraph:&Paragraph, lines:&[LineInfo]) -> Vec<Option<Rect>>{
+    if self.text_wrap {
+      // wrapped lines' boxes don't require rects (since whitespace is excluded)
+      return lines.iter().map(|line| (line.width > 0.0).then(||
+        Rect::new(line.left as f32, 0.0, (line.left + line.width) as f32, 0.0)
+      )).collect()
     }
+    (0..paragraph.line_number()).map(|ln|{
+      let range = self.utf16.range(&paragraph.get_actual_text_range(ln, true)); // trailing whitespace included
+      paragraph
+        .get_rects_for_range(range, RectHeightStyle::Tight, RectWidthStyle::Tight).iter()
+        .map(|tb| tb.rect)
+        .reduce(Rect::join2)
+    }).collect()
   }
 }
 

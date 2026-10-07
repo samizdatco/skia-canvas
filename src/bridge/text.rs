@@ -707,11 +707,24 @@ pub fn opt_spacing_arg<'a>(cx: &mut FunctionContext<'a>, idx:usize) -> NeonResul
 // Convert utf-8 byte indices -> utf-16 codepoint indices
 //
 
-pub fn utf16_range(text:&str, byte_range:&Range<usize>) -> Range<usize>{
-  let utf16_offset = |byte:usize| text
-    .char_indices()
-    .take_while(|(i, _)| *i < byte)
-    .map(|(_, c)| c.len_utf16())
-    .sum();
-  utf16_offset(byte_range.start)..utf16_offset(byte_range.end)
+pub struct Utf16Offsets(Vec<u32>); // u32 halves the table and still indexes any string a JS engine can hold
+
+impl Utf16Offsets{
+  pub fn new(text:&str) -> Self{
+    let mut table = Vec::with_capacity(text.len() + 1);
+    let mut offset = 0u32;
+    for c in text.chars(){
+      table.push(offset);
+      offset += c.len_utf16() as u32;
+      // bytes inside a multi-byte char round up to the following index
+      table.extend(std::iter::repeat(offset).take(c.len_utf8() - 1));
+    }
+    table.push(offset);
+    Utf16Offsets(table)
+  }
+
+  pub fn range(&self, byte_range:&Range<usize>) -> Range<usize>{
+    let at = |byte:usize| self.0[byte.min(self.0.len() - 1)] as usize;
+    at(byte_range.start)..at(byte_range.end)
+  }
 }
