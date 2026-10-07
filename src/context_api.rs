@@ -661,13 +661,23 @@ fn _draw_text(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsUndefined
 }
 
 
-pub fn measureText(mut cx: FunctionContext) -> JsResult<JsString> {
+pub fn measureText(mut cx: FunctionContext) -> JsResult<JsArray> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow();
   let text = string_arg(&mut cx, 1, "text")?;
   let width = opt_float_arg(&mut cx, 2);
-  let text_metrics = this.measure_text(&text, width);
-  Ok(cx.string(text_metrics))
+  let metrics = this.measure_text(&text, width);
+
+  let metrics_nums = JsFloat64Array::from_slice(&mut cx, &metrics.graf)?;
+  let line_nums = JsFloat64Array::from_slice(&mut cx, &metrics.lines)?;
+  let run_nums = JsFloat64Array::from_slice(&mut cx, &metrics.runs)?;
+  let families = strings_to_array(&mut cx, &metrics.families)?;
+  let result = cx.empty_array();
+  result.set(&mut cx, 0, metrics_nums)?;
+  result.set(&mut cx, 1, line_nums)?;
+  result.set(&mut cx, 2, run_nums)?;
+  result.set(&mut cx, 3, families)?;
+  Ok(result)
 }
 
 pub fn outlineText(mut cx: FunctionContext) -> JsResult<JsValue> {

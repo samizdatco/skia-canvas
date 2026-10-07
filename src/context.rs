@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::rc::Rc;
 use neon::prelude::*;
 use skia_safe::{
   Canvas as SkCanvas, Paint, Path, PathBuilder, PathOp, Image, ImageInfo, Contains,
@@ -20,7 +21,7 @@ use crate::bridge::*;
 use crate::font_library::{FontLibrary, MetricsKey, cached_metrics};
 use crate::path::Path2D;
 use crate::drawlist::{Pen, Plotter};
-use crate::typography::{Typesetter, Baseline, DecorationStyle, TextRendering, BaselineMetrics};
+use crate::typography::{Typesetter, TextMetrics, Baseline, DecorationStyle, TextRendering, BaselineMetrics};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};
@@ -775,10 +776,10 @@ impl Context2D{
     }
   }
 
-  pub fn measure_text(&self, text: &str, width:Option<f32>) -> String{
+  pub fn measure_text(&self, text: &str, width:Option<f32>) -> Rc<TextMetrics>{
     // memoized text metrics (invalidated if the font state changes)
     cached_metrics(self.state.metrics_key(text, width), ||
-      Typesetter::new(&self.state, text, width).metrics().to_string()
+      Typesetter::new(&self.state, text, width).metrics()
     )
   }
 

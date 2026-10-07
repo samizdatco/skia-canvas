@@ -5,6 +5,7 @@
 use std::sync::{OnceLock};
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
@@ -17,6 +18,7 @@ use skia_safe::textlayout::{FontCollection, TypefaceFontProvider, TextStyle};
 use skia_safe::utils::OrderedFontMgr;
 
 use crate::bridge::*;
+use crate::typography::TextMetrics;
 use kurbo::{BezPath, CubicBez, PathEl, Point};
 use read_fonts::{model::pen::OutlinePen, types::GlyphId, ps::{cff::CffFontRef, type1::Type1Font}};
 use write_fonts::{
@@ -469,18 +471,18 @@ pub type OutlineKey = (u32, skia_safe::GlyphId, u32, bool); // (typeface id, gly
 const OUTLINE_CAP: usize = 16384;
 
 thread_local!(
-  static METRICS_CACHE: RefCell<GenCache<MetricsKey, String>> = RefCell::new(GenCache::new(METRICS_CAP));
+  static METRICS_CACHE: RefCell<GenCache<MetricsKey, Rc<TextMetrics>>> = RefCell::new(GenCache::new(METRICS_CAP));
   static OUTLINE_CACHE: RefCell<GenCache<OutlineKey, Option<Rect>>> = RefCell::new(GenCache::new(OUTLINE_CAP));
 );
 
 // retrieve (or compute) the full multi-line metrics for a given typesetting run
-pub fn cached_metrics(key:MetricsKey, compute:impl FnOnce() -> String) -> String{
-  if let Some(json) = METRICS_CACHE.with_borrow_mut(|cache| cache.get(&key)){
-    return json
+pub fn cached_metrics(key:MetricsKey, compute:impl FnOnce() -> TextMetrics) -> Rc<TextMetrics>{
+  if let Some(metrics) = METRICS_CACHE.with_borrow_mut(|cache| cache.get(&key)){
+    return metrics
   }
-  let json = compute(); // release the cache borrow to prevent reentrant deadlocks
-  METRICS_CACHE.with_borrow_mut(|cache| cache.put(key, json.clone()));
-  json
+  let metrics = Rc::new(compute()); // release the cache borrow to prevent reentrant deadlocks
+  METRICS_CACHE.with_borrow_mut(|cache| cache.put(key, metrics.clone()));
+  metrics
 }
 
 // retrieve (or compute) a glyph's precise bounds (`None` for glyphs without outlines)

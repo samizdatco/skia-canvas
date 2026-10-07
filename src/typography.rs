@@ -1,7 +1,7 @@
 use std::iter::zip;
 use std::sync::Once;
 use std::collections::BTreeSet;
-use serde_json::{json, Value};
+use std::ops::Range;
 use skia_safe::{FontMetrics, FontHinting, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
 use skia_safe::paint::{Style as PaintStyle, Cap as PaintCap};
 use skia_safe::font::Edging;
@@ -94,7 +94,7 @@ impl Typesetter{
     let text = self.text.as_str();
 
     // collect GlyphRuns (character geometry) and run_clusters (start-indicies as utf-8 character offsets)
-    let shift = self.char_style.baseline_shift(); // textBaseline's offset from the alphabetic baseline
+    let shift = self.char_style.baseline_shift(); // textBaseline's offset from the font's design origin
     let line_origins = Self::line_origins(&line_info);
     let line_lefts:Vec<f32> = line_info.iter().map(|line| line.left as f32).collect();
     let mut left_edge = None;
@@ -178,18 +178,15 @@ impl Typesetter{
     Layout{ runs, decorations }
   }
 
-  pub fn metrics(&self) -> Value {
+  pub fn metrics(&self) -> TextMetrics {
     let mut paragraph = self.shape_text();
     let line_info = line_info(&paragraph);
     let line_boxes = self.line_boxes(&paragraph, &line_info);
     let line_offsets = self.line_offsets(&line_boxes, &line_info);
 
-    // calculate baseline offsets (relative to line_metrics.baseline which reflects ctx.textBaseline setting)
+    // the textBaseline's offset from the font's design origin, & the font's baseline metrics relative to it
     let shift = self.char_style.baseline_shift();
-    let relative = BaselineMetrics::for_style(&self.char_style).relative_to(shift);
-    let hang = relative.get_offset(Baseline::Hanging);
-    let norm = relative.get_offset(Baseline::Alphabetic);
-    let ideo = relative.get_offset(Baseline::Ideographic);
+    let baselines = BaselineMetrics::for_style(&self.char_style);
 
     // calculate bounds for each single-font block of glyphs on each line (and gather font info)
     struct RunMetrics{ line: usize, family: String, font: FontMetrics, bounds: Rect }
@@ -224,10 +221,10 @@ impl Typesetter{
       }
     }
 
-    // measure each line: its glyph-ink bounds (the tight `actualBoundingBox*` edges) and its
-    // advance-based layout rect (which feeds the top-level `width`), plus the per-line JSON
-    struct LineMeasure{ ink: Rect, advance: Rect, json: Value }
-    let lines = (0..paragraph.line_number()).filter_map(|ln|{
+
+    // collect line- and run-metrics, glyph-ink rects (for `actualBoundingBox*`), and horizontal extent (for `width`)
+    let mut metrics = TextMetrics::new(&baselines);
+    let bounds = (0..paragraph.line_number()).filter_map(|ln|{
       // find the range of byte & char indices that are on this line (includes trailing whitespace if not wrapping)
       let mut text_range = paragraph.get_actual_text_range(ln, !self.text_wrap);
       if self.text.get(text_range.clone()) == Some("\n"){
@@ -256,60 +253,18 @@ impl Typesetter{
         Rect::new(left + line_offsets[ln], ink.top, right + line_offsets[ln], ink.bottom)
       );
 
-      Some(LineMeasure{ ink, advance, json: json!({
-        "x": ink.left,
-        "y": ink.top,
-        "width": ink.width(),
-        "height": ink.height(),
-        "baseline": baseline, // corresponds to the ctx.textBaseline selection
-        "hangingBaseline": baseline - hang,
-        "alphabeticBaseline": baseline - norm,
-        "ideographicBaseline": baseline - ideo,
-        "ascent": line_ascent,
-        "descent": line_descent,
-        "startIndex": char_range.start,
-        "endIndex": char_range.end,
-        "runs": font_runs.iter().map(|RunMetrics{family, font, bounds, ..}| {
-          json!({
-            "x": bounds.left,
-            "y": bounds.top,
-            "width": bounds.width(),
-            "height": bounds.height(),
-            "family": family,
-            "ascent": alpha + font.ascent,
-            "descent": alpha + font.descent,
-            "capHeight": alpha - font.cap_height,
-            "xHeight": alpha - font.x_height,
-            "underline": font.underline_position().map(|pos| alpha + pos ),
-            "strikethrough": font.strikeout_position().map(|pos| alpha + pos ),
-          })
-        }).collect::<Vec<Value>>()
-      }) })
-    }).collect::<Vec<LineMeasure>>();
+      for RunMetrics{family, font, bounds, ..} in &font_runs{
+        metrics.add_run(family, font, *bounds, alpha);
+      }
+      metrics.add_line(ink, baseline, (line_ascent, line_descent), char_range);
+      Some((ink, advance))
+    }).collect::<Vec<(Rect, Rect)>>();
 
     // use `advance_bounds` to set `width` & `ink_bounds` for the tight `actualBoundingBox*` edges
-    let advance_bounds = lines.iter().map(|l| l.advance).reduce(Rect::join2).unwrap_or(Rect::new_empty());
-    let ink_bounds = lines.iter().map(|l| l.ink).reduce(Rect::join2).unwrap_or(Rect::new_empty());
-    let lines = lines.into_iter().map(|l| l.json).collect::<Vec<Value>>();
-
-    // the font box & em square from the matched font, measured from the active textBaseline
-    let BaselineMetrics{font: (ascent, descent), em: (em_ascent, em_descent), ..} = relative;
-
-    json!({
-      "width": advance_bounds.width(),
-      "actualBoundingBoxLeft": -ink_bounds.left,
-      "actualBoundingBoxRight": ink_bounds.right,
-      "actualBoundingBoxAscent": -ink_bounds.top,
-      "actualBoundingBoxDescent": ink_bounds.bottom,
-      "fontBoundingBoxAscent": ascent,
-      "fontBoundingBoxDescent": descent,
-      "emHeightAscent": em_ascent,
-      "emHeightDescent": em_descent,
-      "hangingBaseline": hang,
-      "alphabeticBaseline": norm,
-      "ideographicBaseline": ideo,
-      "lines": lines,
-    })
+    let advance_bounds = bounds.iter().map(|(_, advance)| *advance).reduce(Rect::join2).unwrap_or(Rect::new_empty());
+    let ink_bounds = bounds.iter().map(|(ink, _)| *ink).reduce(Rect::join2).unwrap_or(Rect::new_empty());
+    metrics.set_bounds(advance_bounds, ink_bounds);
+    metrics
   }
 
   // outline the text as a single path
@@ -390,6 +345,65 @@ fn line_info(paragraph:&Paragraph) -> Vec<LineInfo>{
   paragraph.get_line_metrics().iter().map(|lm| LineInfo{
     ascent: lm.ascent, descent: lm.descent, height: lm.height, left: lm.left, width: lm.width,
   }).collect()
+}
+
+// measureText()'s results, flattened into the arrays the JS TextMetrics class unpacks
+#[derive(Default)]
+pub struct TextMetrics{
+  pub graf: [f64; 12],       // width, actualBoundingBox{Left,Right,Ascent,Descent}, fontBoundingBox{Ascent,Descent},
+                             // emHeight{Ascent,Descent}, {hanging,alphabetic,ideographic}Baseline
+  pub lines: Vec<f64>,       // per line: x, y, width, height, baseline, {hanging,alphabetic,ideographic}Baseline,
+                             // ascent, descent, startIndex, endIndex, & the index just past its last run
+  pub runs: Vec<f64>,        // per run: x, y, width, height, ascent, descent, capHeight, xHeight, underline, strikethrough (NaN if absent)
+  pub families: Vec<String>, // per run
+  offsets: (f32, f32, f32),  // the hanging, alphabetic & ideographic baselines' offsets from the textBaseline
+}
+
+impl TextMetrics{
+  fn new(baselines:&BaselineMetrics) -> Self{
+    let BaselineMetrics{font: (ascent, descent), em: (em_ascent, em_descent), ..} = *baselines;
+    let [hang, norm, ideo] = [Baseline::Hanging, Baseline::Alphabetic, Baseline::Ideographic].map(|b| baselines.get_offset(b));
+    TextMetrics{
+      graf: [
+        0.0, 0.0, 0.0, 0.0, 0.0, // width & actualBoundingBox* (set later, after all the lines are measured)
+        ascent, descent, em_ascent, em_descent, // font box & em square, relative to the textBaseline
+        hang as f64, norm as f64, ideo as f64, // `BASE`-table defined baselines, relative to the textBaseline
+      ],
+      offsets: (hang, norm, ideo),
+      ..Default::default()
+    }
+  }
+
+  // add one of the single-font runs on the next line (each line's runs must be added before the line itself)
+  fn add_run(&mut self, family:&str, font:&FontMetrics, bounds:Rect, alpha:f32){
+    self.runs.extend([
+      bounds.left, bounds.top, bounds.width(), bounds.height(),
+      alpha + font.ascent, alpha + font.descent, alpha - font.cap_height, alpha - font.x_height,
+      font.underline_position().map_or(f32::NAN, |pos| alpha + pos),
+      font.strikeout_position().map_or(f32::NAN, |pos| alpha + pos),
+    ].map(f64::from));
+    self.families.push(family.to_string());
+  }
+
+  // add a line, claiming all the runs added since the previous one
+  fn add_line(&mut self, ink:Rect, baseline:f32, (ascent, descent):(f32, f32), chars:Range<usize>){
+    let (hang, norm, ideo) = self.offsets;
+    self.lines.extend([
+      ink.left, ink.top, ink.width(), ink.height(),
+      baseline, // corresponds to the ctx.textBaseline selection
+      baseline - hang, baseline - norm, baseline - ideo,
+      ascent, descent,
+    ].map(f64::from));
+    self.lines.extend([chars.start, chars.end, self.families.len()].map(|n| n as f64));
+  }
+
+  // set `width` & `actualBoundingBox*` from the combined bounds of all the lines
+  fn set_bounds(&mut self, advance:Rect, ink:Rect){
+    self.graf[..5].copy_from_slice(&[
+      advance.width(),
+      -ink.left, ink.right, -ink.top, ink.bottom,
+    ].map(f64::from));
+  }
 }
 
 pub struct Layout{
@@ -650,7 +664,9 @@ pub struct BaselineMetrics{
 
 impl BaselineMetrics{
   pub fn for_style(style:&TextStyle) -> Self{
+    // the font's baseline metrics, measured from the style's baseline shift (i.e., its textBaseline)
     let size = style.font_size() as f64;
+    let shift = style.baseline_shift();
     let typeface = style.typeface();
     let upm = typeface.as_ref().and_then(|face| face.units_per_em()).unwrap_or(0) as f64;
     let tables = &FontTables::metrics(typeface.as_ref());
@@ -691,7 +707,6 @@ impl BaselineMetrics{
       (None, _) => {
         // compensate for the extra half-leading and baseline shift SkParagraph adds into these metrics
         let FontMetrics{ascent, descent, leading, ..} = style.font_metrics();
-        let shift = style.baseline_shift();
         ((shift - ascent - leading / 2.0) as f64, (descent - shift - leading / 2.0) as f64)
       }
     };
@@ -713,16 +728,13 @@ impl BaselineMetrics{
       Some([coord(b"romn"), coord(b"hang"), coord(b"ideo")])
     })().unwrap_or_default();
 
-    BaselineMetrics{font, em, romn, hang, ideo}
-  }
-
-  // the same metrics measured from a baseline `shift` above the design origin (synthesized baselines are resolved first)
-  pub fn relative_to(&self, shift:f32) -> Self{
+    // measure everything against the shifted baseline (resolving any synthesized baselines first)
+    let unshifted = BaselineMetrics{font, em, romn, hang, ideo};
     let shift = f64::from(shift);
-    let offset = |baseline| Some(f64::from(self.get_offset(baseline)) - shift);
+    let offset = |baseline| Some(f64::from(unshifted.get_offset(baseline)) - shift);
     BaselineMetrics{
-      font: (self.font.0 - shift, self.font.1 + shift),
-      em: (self.em.0 - shift, self.em.1 + shift),
+      font: (font.0 - shift, font.1 + shift),
+      em: (em.0 - shift, em.1 + shift),
       romn: offset(Baseline::Alphabetic),
       hang: offset(Baseline::Hanging),
       ideo: offset(Baseline::Ideographic),
