@@ -42,6 +42,9 @@ impl Typesetter{
     // disable the flutter-compatibility hack that floors the maxWidth and rounds off line widths & rects
     graf_style.set_apply_rounding_hack(false);
 
+    // apply letter-spacing to the spaces within cursive (e.g., Arabic) runs, like browsers do
+    graf_style.set_letter_spacing_by_css_spec(true);
+
     // normalize all whitespace as plain spaces (except line breaks in textWrap mode)
     let text = text.chars().map(|c| match c{
       '\t' | '\r' | '\x0c' | '\x0b' => ' ',
