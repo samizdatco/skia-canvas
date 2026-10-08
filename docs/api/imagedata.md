@@ -4,7 +4,7 @@ description: Direct pixel access to image and canvas contents
 
 # ImageData
 
-> The `ImageData` object offers a convenient container that bundles raw pixel data with metadata helpful for working with it. Skia Canvas's implementation of the class mirrors the [standard **ImageData**][mdn_imagedata]'s structure and behavior, but extends it in a few ways.
+> The `ImageData` object offers a convenient container that bundles raw pixel data with metadata helpful for working with it. Skia Canvas’s implementation of the class mirrors the [standard **ImageData**][mdn_imagedata]’s structure and behavior, but extends it in a few ways.
 
 | Dimensions                 | Format                                     | Pixel Data                    |
 | --                         | --                                         | --                            |
@@ -14,7 +14,7 @@ description: Direct pixel access to image and canvas contents
 
 ## Working with `ImageData` objects
 
-Empty ImageData objects can be created either by calling the context's [`createImageData()`][ctx_imagedata] method or the `new ImageData()` constructor:
+Empty ImageData objects can be created either by calling the context’s [`createImageData()`][ctx_imagedata] method or the `new ImageData()` constructor:
 
 ```js
 let id = ctx.createImageData(800, 600)
@@ -24,7 +24,7 @@ or, alternatively:
 let id = new ImageData(800, 600)
 ```
 
-There's one important difference between these invocations: when calling `createImageData()`, the new ImageData will inherit the Context's `colorSpace` by default. The constructor, on the other hand, defaults to `srgb`, so you'll need to opt into wide gamut colors explicitly. For example, these two approaches will create identical P3 ImageData objects:
+There’s one important difference between these invocations: when calling `createImageData()`, the new ImageData will inherit the Context’s `colorSpace` by default. The constructor, on the other hand, defaults to `srgb`, so you’ll need to opt into wide gamut colors explicitly. For example, these two approaches will create identical P3 ImageData objects:
 
 ```js
 let ctx = canvas.getContext("2d", {colorSpace:"display-p3"})
@@ -47,7 +47,7 @@ See below for a list of supported [`colorType` formats][imgdata_colortype].
 
 ### Manipulating pixels
 
-Once you've created an ImageData you can access its buffer through its [`data`][imgdata_data] attribute (here using the default `rgba` color type):
+Once you’ve created an ImageData you can access its buffer through its [`data`][imgdata_data] attribute (here using the default `rgba` color type):
 
 ```js
 // you can read pixel values out…
@@ -132,7 +132,7 @@ Note that not all of them use 4-byte orderings like `rgba` does, so be sure to u
 
 ### `.bytesPerPixel`
 
-An integer describing the byte-size of the **ImageData**'s pixels given its `colorType`.
+An integer describing the byte-size of the **ImageData**’s pixels given its `colorType`.
 
 ```js
 let id = new ImageData(10, 10)
@@ -158,7 +158,7 @@ toSharp()
 The Sharp library is an optional dependency that you must [install separately][sharp_npm]
 :::
 
-The contents of the ImageData can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The `ImageData`'s `colorType` will be used when handing off the buffer and its `colorSpace` will be incorporated as an ICC profile.
+The contents of the ImageData can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The `ImageData`’s `colorType` will be used when handing off the buffer and its `colorSpace` will be incorporated as an ICC profile.
 
 See the [`loadImageData()`](#loadimagedata) helper for details on converting the `Sharp` object back into an `ImageData`.
 
@@ -176,7 +176,7 @@ Similar to the [loadImage()][loadimage] utility, `loadImageData()` will asynchro
 
 
 #### Loading files
-If the file you are loading is stored in `rgba` format, you need only specify the row-width of the image. But if it uses a non-standard color type you'll need to fully specify the dimensions and include a `colorType`:
+If the file you are loading is stored in `rgba` format, you need only specify the row-width of the image. But if it uses a non-standard color type you’ll need to fully specify the dimensions and include a `colorType`:
 
 ```js
 import {loadImageData} from 'skia-canvas'

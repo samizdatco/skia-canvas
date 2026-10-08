@@ -207,7 +207,7 @@ Returns a copy of the path whose points have been shifted horizontally by `dx` a
 points(step=1, mode="even")
 ```
 
-The `points()` method breaks a path into evenly-sized steps and returns the (*x, y*) positions of the resulting vertices. The `step` argument specifies the desired amount of distance between neighboring points and defaults to 1 px if omitted. If `step` doesn't divide evenly into the contour length, it will be expanded/contracted as needed to fit the contour. You can disable this fitting by passing `"exact"` as the `mode` arg, in which case the distance between points will be precisely the `step` length (but beware: the final points in closed contours may look uneven, and there's no guarantee the endpoint of a contour will be included).
+The `points()` method breaks a path into evenly-sized steps and returns the (*x, y*) positions of the resulting vertices. The `step` argument specifies the desired amount of distance between neighboring points and defaults to 1 px if omitted. If `step` doesn’t divide evenly into the contour length, it will be expanded/contracted as needed to fit the contour. You can disable this fitting by passing `"exact"` as the `mode` arg, in which case the distance between points will be precisely the `step` length (but beware: the final points in closed contours may look uneven, and there’s no guarantee the endpoint of a contour will be included).
 
 
 ```js
@@ -227,7 +227,7 @@ for (const [x, y] of path.points(10)){
 positionAt(distance)
 ```
 
-The `positionAt()` method takes a distance (in [path units][p2d_length]) and returns an x/y coordinate pair locating the corresponding point on the path. Positive `distance` values are measured relative to the path's start and negative relative to its end.
+The `positionAt()` method takes a distance (in [path units][p2d_length]) and returns an x/y coordinate pair locating the corresponding point on the path. Positive `distance` values are measured relative to the path’s start and negative relative to its end.
 
 ```js
 function dotAtLocation(path, distance, color){
@@ -268,7 +268,7 @@ tangentAt(distance)
 normalAt(distance)
 ```
 
-The `tangentAt()` method complements [`positionAt()`][p2d_positionAt] by returning the *angle* of the path's curve at a `distance` measured in [path units][p2d_length]. Positive distances are measured from the beginning of the path and negative distances from its end. The tangent angle is returned in radians and can be passed directly to [`rotate()`][rotate()] to align with the path's curve (see below). The `normalAt()` convenience method returns an angle that is perpendicular to the tangent and will always be on the ‘left hand’ side of the curve being followed.
+The `tangentAt()` method complements [`positionAt()`][p2d_positionAt] by returning the *angle* of the path’s curve at a `distance` measured in [path units][p2d_length]. Positive distances are measured from the beginning of the path and negative distances from its end. The tangent angle is returned in radians and can be passed directly to [`rotate()`][rotate()] to align with the path’s curve (see below). The `normalAt()` convenience method returns an angle that is perpendicular to the tangent and will always be on the ‘left hand’ side of the curve being followed.
 
 ```js
 let path = new Path2D("M 20 85 Q 57 35 93 85 Q 111 110 130 110")
@@ -326,7 +326,7 @@ let snake = spikes.round(80)
 simplify(rule="nonzero")
 ```
 
-Paths that contain multiple contours use a ‘winding rule’ to decide whether overlapping regions should be filled or ‘knocked out’. You can make this decision at draw-time by passing a rule argument to [`ctx.fill()`][fill()] (either `evenodd` or the default: `nonzero`). The `simplify()` method lets you make this decision ahead of time by constructing a new Path2D that has had all of its overlapping regions removed (so there's no ambiguity to be resolved when drawn).
+Paths that contain multiple contours use a ‘winding rule’ to decide whether overlapping regions should be filled or ‘knocked out’. You can make this decision at draw-time by passing a rule argument to [`ctx.fill()`][fill()] (either `evenodd` or the default: `nonzero`). The `simplify()` method lets you make this decision ahead of time by constructing a new Path2D that has had all of its overlapping regions removed (so there’s no ambiguity to be resolved when drawn).
 
 :::info[Note]
 In this context ‘simplify’ refers only to the shape’s structure, not its level of detail: the method *removes crossings* rather than reducing the number of points. In fact, splitting an intersection into separate contours frequently *increases* both the contour and point counts.
@@ -360,7 +360,7 @@ ctx.fill(original, "evenodd")
 transform(...matrix)
 ```
 
-Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix can be passed as a [DOMMatrix][DOMMatrix] object, a [CSS transform][css_transform] string (e.g., `"rotate(20deg)"`), or 6 individual numbers (see the Context's [setTransform()][transforms] documentation for details). The original path remains unmodified.
+Returns a new copy of the path whose points have been modified by the specified transform matrix. The matrix can be passed as a [DOMMatrix][DOMMatrix] object, a [CSS transform][css_transform] string (e.g., `"rotate(20deg)"`), or 6 individual numbers (see the Context’s [setTransform()][transforms] documentation for details). The original path remains unmodified.
 
 ### `slice()`
 ```js returns="Path2D"
@@ -369,7 +369,7 @@ slice(start) // copy from the starting position to the end of the path
 slice() // clone the full path
 ```
 
-The `slice()` method is analogous to the [Array method][array.slice] of the same name: it allows you to create a new path that contains a subset of the points in the original. The `start` and `end` arguments correspond to **distances** along the path and their magnitude can range from `0` to the path's [`length`][p2d_length]. Positive values measure from the path's initial point and negative values from its final point. If the `inverted` argument is set to `true`, the new path will contain everything from the original *except* the region between the specified endpoints.
+The `slice()` method is analogous to the [Array method][array.slice] of the same name: it allows you to create a new path that contains a subset of the points in the original. The `start` and `end` arguments correspond to **distances** along the path and their magnitude can range from `0` to the path’s [`length`][p2d_length]. Positive values measure from the path’s initial point and negative values from its final point. If the `inverted` argument is set to `true`, the new path will contain everything from the original *except* the region between the specified endpoints.
 
 Passing a single number (either positive or negative) sets the starting position and selects the region from there to the end of the path.
 

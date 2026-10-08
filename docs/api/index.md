@@ -8,14 +8,14 @@ Documentation for the key classes and their attributes is listed below—propert
 :::
 
 The library exports a number of classes emulating familiar browser objects including:
- - [Canvas][mdn_canvas] ⧸ [extensions][canvas] 🧪
- - [CanvasGradient][CanvasGradient] ⧸ [extensions][ctx_canvasgradient] 🧪
+ - [Canvas][mdn_canvas] / [extensions][canvas] 🧪
+ - [CanvasGradient][CanvasGradient] / [extensions][ctx_canvasgradient] 🧪
  - [CanvasPattern][CanvasPattern]
- - [CanvasRenderingContext2D][CanvasRenderingContext2D] ⧸ [extensions][context] 🧪
+ - [CanvasRenderingContext2D][CanvasRenderingContext2D] / [extensions][context] 🧪
  - [DOMMatrix][DOMMatrix]
- - [Image][mdn_image] ⧸ [extensions][image] 🧪
- - [ImageData][mdn_imagedata] ⧸ [extensions][imagedata] 🧪
- - [Path2D][p2d_mdn] ⧸ [extensions][path2d] 🧪
+ - [Image][mdn_image] / [extensions][image] 🧪
+ - [ImageData][mdn_imagedata] / [extensions][imagedata] 🧪
+ - [Path2D][p2d_mdn] / [extensions][path2d] 🧪
 
 In addition, the module contains:
 - [FontLibrary][fontlibrary] a global object for inspecting the system’s fonts and loading additional ones

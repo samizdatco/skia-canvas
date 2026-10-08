@@ -4,7 +4,7 @@ description: Bitmap & vector image container
 
 # Image
 
-> Skia Canvas's `Image` object is a stripped-down version of the [standard **Image**][img_element] used in browser environments. Since the Canvas API ignores most of its properties, only the relevant ones have been recreated here. Use the asynchronous [`loadImage()`][loadimage] helper function to create an `Image` from any supported data source.
+> Skia Canvas’s `Image` object is a stripped-down version of the [standard **Image**][img_element] used in browser environments. Since the Canvas API ignores most of its properties, only the relevant ones have been recreated here. Use the asynchronous [`loadImage()`][loadimage] helper function to create an `Image` from any supported data source.
 
 | Content                                        | Loading                      | Event Handlers                                            | Memory |
 | --                                             | --                           | --                                                        | --     |
@@ -17,7 +17,7 @@ description: Bitmap & vector image container
 Before an image file can be drawn to the canvas a number of behind-the-scenes steps have to take place: its data has to be loaded, potentially from a remote system, its format needs to be determined, and its data must be decompressed. As a result, newly created Image objects are not ready for use; instead you must asynchronously wait for them to complete their loading & decoding process before making use of them.
 
 ### Callbacks
-The traditional way to do this is to set up an event listener waiting for the `load` event. You can do this either by assigning a callback function to the image's [`onload`][img_onload] property, or by using the [on()][img_bind] or [once()][img_bind] methods to set up the listener by name. Once the event handler has been set up, you can then kick off the load process by setting a `src` value for the image:
+The traditional way to do this is to set up an event listener waiting for the `load` event. You can do this either by assigning a callback function to the image’s [`onload`][img_onload] property, or by using the [on()][img_bind] or [once()][img_bind] methods to set up the listener by name. Once the event handler has been set up, you can then kick off the load process by setting a `src` value for the image:
 
 ```js
 let img = new Image()
@@ -39,7 +39,7 @@ img.on("load", (theImage) => {
 
 ### Promises
 
-If you're setting up an Image within an asynchronous function, you can avoid some of this ‘callback hell’ by using the `await` keyword in combination with the Image's [decode()][img_decode] method. It returns a [Promise][Promise] which resolves only once the load process is complete and the image is ready for use, making it convenient for pausing execution before drawing the image:
+If you’re setting up an Image within an asynchronous function, you can avoid some of this ‘callback hell’ by using the `await` keyword in combination with the Image’s [decode()][img_decode] method. It returns a [Promise][Promise] which resolves only once the load process is complete and the image is ready for use, making it convenient for pausing execution before drawing the image:
 
 ```js
 let img = new Image()
@@ -57,7 +57,7 @@ ctx.drawImage(img, 100, 100)
 
 ### Cleaning Up
 
-Each `Image` object holds references to native resources (raw image bytes, cache buffers, etc.) that won't be released until the object is reclaimed by the garbage collector. Since the collector only runs in between ticks of the Node event loop this means that collection will be deferred even if your code is asynchronous, and will not happen *at all* if you're loading and rendering images within a synchronous loop. The best way to handle these situations is to use explicit resource management (see also the [Canvas object's support][canvas_cleanup] for this).
+Each `Image` object holds references to native resources (raw image bytes, cache buffers, etc.) that won’t be released until the object is reclaimed by the garbage collector. Since the collector only runs in between ticks of the Node event loop this means that collection will be deferred even if your code is asynchronous, and will not happen *at all* if you’re loading and rendering images within a synchronous loop. The best way to handle these situations is to use explicit resource management (see also the [Canvas object’s support][canvas_cleanup] for this).
 
 On Node versions 24 and later, the `using` and `await using` keywords will allow you to mark an Image object for disposal as soon as it goes out of the scope in which it was created. On Node 22 and earlier you can achieve the same effect by using the [`dispose()`](#dispose) and [`release()`](#release) methods.
 
@@ -92,7 +92,7 @@ new Image(dataURL)   // a String with a valid `data:` url
 new Image(data, src) // optionally include a `src` string
 ```
 
-While loading images from remote sources is inherently asynchronous, if you've already fetched a file yourself you can create an Image synchronously by passing its data to the Image constructor. The data can be in any of the *encoded* formats Skia Canvas supports (`png`, `jpeg`, `webp`, `svg`, or `pdf`) but can't be raw pixel data—for that you should use [ImageData][imgdata_new] instead.
+While loading images from remote sources is inherently asynchronous, if you’ve already fetched a file yourself you can create an Image synchronously by passing its data to the Image constructor. The data can be in any of the *encoded* formats Skia Canvas supports (`png`, `jpeg`, `webp`, `svg`, or `pdf`) but can’t be raw pixel data—for that you should use [ImageData][imgdata_new] instead.
 
 For example, you can synchronously create an image from a local file via:
 ```js prints="Image { width:100, height:100, complete:true, src:'::Buffer::' }"
@@ -104,7 +104,7 @@ let img = new Image(data)
 console.log(img)
 ```
 
-Note that if you just provide the data, the `src` property on the resulting `Image` will be a placeholder. If you'd like to be able to read from the `src` later (perhaps to help identify the image), you can optionally pass a string as the second argument. Note that it isn't actually used for loading the image so it needn't be a valid URL:
+Note that if you just provide the data, the `src` property on the resulting `Image` will be a placeholder. If you’d like to be able to read from the `src` later (perhaps to help identify the image), you can optionally pass a string as the second argument. Note that it isn’t actually used for loading the image so it needn’t be a valid URL:
 
 ```js prints="Image { width:100, height:100, complete:true, src:'this string can be anything' }"
 let img = new Image(data, 'this string can be anything')
@@ -126,14 +126,14 @@ The images you load can be from a variety of formats:
 - Bitmap: `png`, `jpeg`, or `webp`
 - Vector: `svg` or `pdf`
 
-Note that the image will be [`complete`][img_complete] immediately if a Buffer or Data URL was used, but otherwise you'll need to [wait for it to load](#loading-image-objects).
+Note that the image will be [`complete`][img_complete] immediately if a Buffer or Data URL was used, but otherwise you’ll need to [wait for it to load](#loading-image-objects).
 
 ### `.width` & `.height`
 
-In the browser these are writable properties that can control the display size of the image within the HTML page. But the context's [`drawImage`][drawImage()] method ignores them in favor of the image's intrinsic size. As a result, Skia Canvas doesn't let you overwrite the `width` and `height` properties (since it would have no effect anyway) and provides them as read-only values derived from the image data.
+In the browser these are writable properties that can control the display size of the image within the HTML page. But the context’s [`drawImage`][drawImage()] method ignores them in favor of the image’s intrinsic size. As a result, Skia Canvas doesn’t let you overwrite the `width` and `height` properties (since it would have no effect anyway) and provides them as read-only values derived from the image data.
 
 :::info[Note]
-When loading an image from an SVG file, the intrinsic size may not be defined since the root `<svg>` element is not required to have a defined `width` and `height`. In these cases, the Image will use a default size of 300×150. If the SVG lacks an intrinsic size but *does* contain a `viewBox` attribute, its aspect ratio will be preserved and its size will be scaled to fit within the default 300×150 frame. Note that in *any* case where the default size is used, the image will be re-scaled when passed to [`drawImage`][drawImage()] so that it is contained by the canvas's dimensions (mimicking Chrome's behavior).
+When loading an image from an SVG file, the intrinsic size may not be defined since the root `<svg>` element is not required to have a defined `width` and `height`. In these cases, the Image will use a default size of 300×150. If the SVG lacks an intrinsic size but *does* contain a `viewBox` attribute, its aspect ratio will be preserved and its size will be scaled to fit within the default 300×150 frame. Note that in *any* case where the default size is used, the image will be re-scaled when passed to [`drawImage`][drawImage()] so that it is contained by the canvas’s dimensions (mimicking Chrome’s behavior).
 :::
 
 
@@ -143,7 +143,7 @@ A boolean that is `true` once the `src` data has been fetched and parsed. It doe
 
 ### `.onload` & `.onerror`
 
-For compatibility with browser conventions, event handlers can be set up by assigning functions to the **Image**'s `.onload` and `.onerror` properties. For a more modern-feeling approach, try using [`.on("load", …)`][img_bind] and [`.on("error", …)`][img_bind] instead.
+For compatibility with browser conventions, event handlers can be set up by assigning functions to the **Image**’s `.onload` and `.onerror` properties. For a more modern-feeling approach, try using [`.on("load", …)`][img_bind] and [`.on("error", …)`][img_bind] instead.
 
 The `.onload` function will be passed a reference to the **Image** as its argument, and the `this` of its function context will also refer to the same **Image** object (presuming it is not defined as an arrow function).
 
@@ -151,7 +151,7 @@ The `.onerror` function will be called with a reference to the [Error][js_error]
 
 ### `.disposed`
 
-The `.disposed` flag identifies when the image's encoded bytes have been freed and it is no longer valid as a drawing source. It will be `false` until the image's [`dispose()`](#dispose) or [`release()`](#release) method is called.
+The `.disposed` flag identifies when the image’s encoded bytes have been freed and it is no longer valid as a drawing source. It will be `false` until the image’s [`dispose()`](#dispose) or [`release()`](#release) method is called.
 
 
 ## Methods
@@ -279,7 +279,7 @@ Note that you can pass a wide variety of image sources to the `loadImage` helper
 
 #### Loading PDFs
 
-When loading a PDF file containing multiple pages, the first page’s content will be used by default. If you'd like to specify a different page number pass a positive integer as the optional `page` argument:
+When loading a PDF file containing multiple pages, the first page’s content will be used by default. If you’d like to specify a different page number pass a positive integer as the optional `page` argument:
 
 ```js
 let firstPage = await loadImage("book.pdf") // defaults to page 1
@@ -327,7 +327,7 @@ let img = await loadImage('https://example.com/customized.svg', {
 })
 ```
 
-You can monitor the connection's health in two ways (and potentially catch the promise rejection to retry if it fails):
+You can monitor the connection’s health in two ways (and potentially catch the promise rejection to retry if it fails):
 
 ```js
 let img = await loadImage('https://example.com/potentially-slow.jpg', {

@@ -67,7 +67,7 @@ console.log("canvas", [win.canvas.width, win.canvas.height])
 ```js
 new Window(800, 600, {textContrast:1, textGamma: 0.8}) // more contrast & darker gamma
 ```
-An optional text-rendering argument can be included when creating a new Window and will apply to all the images it renders. Note that these settings have shading effects on top of the context's current [`fontHinting`][fonthinting] setting, so you may need to experiment to find the results you're looking for:
+An optional text-rendering argument can be included when creating a new Window and will apply to all the images it renders. Note that these settings have shading effects on top of the context’s current [`fontHinting`][fonthinting] setting, so you may need to experiment to find the results you’re looking for:
   - `textContrast` — a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to `0.0`)
   - `textGamma` — a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to `1.4`)
 
@@ -112,9 +112,9 @@ win.on('keydown', e => {
 
 ##  Responding to Events
 
-Once you've created a `Window` object, Node will wait for your current function to end and then open the window and begin dispatching events. You can still use standard Node methods for scheduling callbacks (`setTimeout`, `setImmediate`, `setInterval`, etc.), but you will find it much more natural to use event handlers attached to the `Window` object instead.
+Once you’ve created a `Window` object, Node will wait for your current function to end and then open the window and begin dispatching events. You can still use standard Node methods for scheduling callbacks (`setTimeout`, `setImmediate`, `setInterval`, etc.), but you will find it much more natural to use event handlers attached to the `Window` object instead.
 
-By calling the window’s `.on()`, `.off()`, and `.once()` methods, you can respond to [user interface events][win_bind] like mouse and keyboard input, the window being dragged or resized, a new window becoming active, etc. Any changes you make in an event handler (whether to the window's canvas or its attributes) will become visible in the next pass through the event loop. For example, you can let the user scribble to the canvas with the mouse and clear it via the escape key with:
+By calling the window’s `.on()`, `.off()`, and `.once()` methods, you can respond to [user interface events][win_bind] like mouse and keyboard input, the window being dragged or resized, a new window becoming active, etc. Any changes you make in an event handler (whether to the window’s canvas or its attributes) will become visible in the next pass through the event loop. For example, you can let the user scribble to the canvas with the mouse and clear it via the escape key with:
 
 ```js
 let win = new Window(400, 300, {background:'rgba(16, 16, 16, 0.35)'}),
@@ -138,7 +138,7 @@ win.on('keydown', ({key}) => {
 })
 ```
 
-In the previous example, we used references to the window’s `ctx` and `canvas` that were created outside the event handler, but this makes the function less general since it's tied to a single window. We can get a reference to the specific window associated with an event through its `.target` attribute, allowing us to write an event handler that doesn't contain a reference to the `win` variable it's attached to:
+In the previous example, we used references to the window’s `ctx` and `canvas` that were created outside the event handler, but this makes the function less general since it’s tied to a single window. We can get a reference to the specific window associated with an event through its `.target` attribute, allowing us to write an event handler that doesn’t contain a reference to the `win` variable it’s attached to:
 ```js
 const closeWindow = (e) => {
   console.log("now closing window:", e.target)
@@ -188,7 +188,7 @@ win.on("draw", e => {
 })
 ```
 
-You can also use the Window's [`requestAnimationFrame()`][requestAnimationFrame] method to queue up a *single* callback invocation synced to the next display refresh. It passes a monotonically increasing frame number as the sole argument to your callback:
+You can also use the Window’s [`requestAnimationFrame()`][requestAnimationFrame] method to queue up a *single* callback invocation synced to the next display refresh. It passes a monotonically increasing frame number as the sole argument to your callback:
 
 ```js
 let win = new Window(150, 150),
@@ -208,7 +208,7 @@ win.requestAnimationFrame(redraw)
 ## Properties
 
 ###  `.background`
-This specifies the color of the window's background which is drawn behind your canvas content. It supports all the same CSS color formats as the `fillStyle` and `strokeStyle` properties. Defaults to white.
+This specifies the color of the window’s background which is drawn behind your canvas content. It supports all the same CSS color formats as the `fillStyle` and `strokeStyle` properties. Defaults to white.
 
 ###  `.canvas`
 The `Canvas` object associated with the window. By default the window will create a canvas with the same size as the window dimensions, but the canvas can also be replaced at any time by assigning a new one to this property.
@@ -217,16 +217,16 @@ The `Canvas` object associated with the window. By default the window will creat
 A read-only boolean indicating whether the Window has been closed (either programmatically or via its title-bar close button). A closed window can be re-opened by calling its [`open()`][open] method.
 
 ###  `.ctx`
-The rendering context of the window's canvas. This is a shortcut to calling `win.canvas.getContext("2d")`. If the canvas has multiple pages, this will point to the most recent (i.e., the ‘topmost’ page in the stack).
+The rendering context of the window’s canvas. This is a shortcut to calling `win.canvas.getContext("2d")`. If the canvas has multiple pages, this will point to the most recent (i.e., the ‘topmost’ page in the stack).
 
 ###  `.page`
-A 1-based index into the canvas's pages array. If the canvas has multiple pages, this property allows you to select which one to display (potentially allowing for pre-rendering a canvas then animating it as a flip-book). Page `1` is the earliest (or ‘bottommost’) page created. Negative page numbers also work, counting backward from `-1` (the ‘topmost’ page).
+A 1-based index into the canvas’s pages array. If the canvas has multiple pages, this property allows you to select which one to display (potentially allowing for pre-rendering a canvas then animating it as a flip-book). Page `1` is the earliest (or ‘bottommost’) page created. Negative page numbers also work, counting backward from `-1` (the ‘topmost’ page).
 
 ###  `.left` / `.top` / `.width` / `.height`
-The current location and size of the window as specified in resolution-independent ‘points’. Defaults to a 512 × 512 pt window in the center of the screen. Note that the window and the canvas have independent sizes: the window will scale the canvas's content to fit its current dimensions (using the `fit` property to determine how to deal with differences in aspect ratio).
+The current location and size of the window as specified in resolution-independent ‘points’. Defaults to a 512 × 512 pt window in the center of the screen. Note that the window and the canvas have independent sizes: the window will scale the canvas’s content to fit its current dimensions (using the `fit` property to determine how to deal with differences in aspect ratio).
 
 ###  `.title`
-The string that is displayed in the window's title bar.
+The string that is displayed in the window’s title bar.
 
 ###  `.cursor`
 The icon used for the mouse pointer. By default an arrow cursor is used, but other styles can be selected by setting the property to one of the standard [CSS cursor][mdn_cursor] values.
@@ -234,7 +234,7 @@ The icon used for the mouse pointer. By default an arrow cursor is used, but oth
 ###  `.fit`
 When the window is resized, it is likely that it will not perfectly match the aspect ratio of the underlying canvas. This property selects how the layout should adapt—whether it should add margins, allow portions of the canvas to be cropped, or stretch the image to fit. It supports the standard [CSS modes][mdn_object_fit] (`"none"`, `"contain"`, `"cover"`, `"fill"`, and `"scale-down"`) plus some additions:
   - `contain-x` and `contain-y` extend the `contain` mode to choose which axis to use when fitting the canvas
-  - `resize` will modify the window's canvas to match the new window size (you'll probably also want to define an `.on("resize")` handler to update the contents)
+  - `resize` will modify the window’s canvas to match the new window size (you’ll probably also want to define an `.on("resize")` handler to update the contents)
 
 ###  `.borderless`
 When set to `true`, the window will be drawn without a title bar or other controls (e.g., close buttons, resize handles, rounded corners, etc.). As a result its size and placement can only be set [programmatically][win_layout].
@@ -284,7 +284,7 @@ The events emitted by the `Window` object are mostly consistent with browser-bas
 
 ### `close`
 
-Emitted when a window is closed via a user interface click on its close widget or by a programmatic call to the window's [`close()`][close] method.
+Emitted when a window is closed via a user interface click on its close widget or by a programmatic call to the window’s [`close()`][close] method.
 
 ### `fullscreen`
 Emitted when a window switches into or out of full-screen mode. The event object includes a boolean `enabled` property flagging the new state.
@@ -293,15 +293,15 @@ Emitted when a window switches into or out of full-screen mode. The event object
 Emitted when the user drags the window to a new position. The event object includes `top` and `left` properties expressed in resolution-independent points.
 
 ### `setup`
-The `setup` event is emitted just before a newly created window is displayed on screen. This can be a good place to collect the data you'll need for an animation. Immediately after `setup`, the `frame` and `draw` events will fire.
+The `setup` event is emitted just before a newly created window is displayed on screen. This can be a good place to collect the data you’ll need for an animation. Immediately after `setup`, the `frame` and `draw` events will fire.
 
 ### `frame`
 Similar to the `requestAnimationFrame` callback system in browsers, the `frame` event allows you to schedule redrawing your canvas to maintain a constant frame rate. The event object provides a window-specific frame counter that begins ticking upward from zero as soon as the window appears.
 
 ### `draw`
-The `draw` event fires immediately after `frame` and has the potentially convenient side effect of automatically erasing the window's canvas before calling your event handler.
+The `draw` event fires immediately after `frame` and has the potentially convenient side effect of automatically erasing the window’s canvas before calling your event handler.
 
-> Note that this canvas-clearing behavior depends upon your having set up an event handler using `.on("draw", …)` and will continue until (and unless) you delete the window's `draw` event handlers using `.off()` or [`removeAllListeners()`][remove_all].
+> Note that this canvas-clearing behavior depends upon your having set up an event handler using `.on("draw", …)` and will continue until (and unless) you delete the window’s `draw` event handlers using `.off()` or [`removeAllListeners()`][remove_all].
 
 <!-- references_begin -->
 [close]: #close

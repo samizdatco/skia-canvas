@@ -23,7 +23,7 @@ let defaultCanvas = new Canvas() // without arguments, defaults to 300 × 150 px
 let squareCanvas = new Canvas(512, 512) // creates a 512 px square
 ```
 
-To actually *draw* to a canvas you'll also need to get a reference to its Context:
+To actually *draw* to a canvas you’ll also need to get a reference to its Context:
 ```js
 let canvas = new Canvas()
 let ctx = canvas.getContext("2d") // the "2d" arg is required
@@ -40,9 +40,9 @@ let ctx = canvas.getContext("2d", {
 })
 ```
 - The `colorSpace` setting controls the color gamut of any bitmaps you later [export][toFile] from the Canvas. It also sets the range of colors used when one Canvas is [drawn][drawcanvas] to another.
-- The `willReadFrequently` flag keeps a copy of the Canvas's backing bitmap in memory so repeated calls to `getImageData` don't need to re-render the content each time. Note that the bitmap will remain in memory until the Canvas is garbage collected.
+- The `willReadFrequently` flag keeps a copy of the Canvas’s backing bitmap in memory so repeated calls to `getImageData` don’t need to re-render the content each time. Note that the bitmap will remain in memory until the Canvas is garbage collected.
 
-You can also create a new Canvas with content pre-drawn to it by pointing [`loadCanvas()`][loadcanvas] at a bitmap, SVG, or PDF file. This is most useful for loading multi-page PDFs, since it preserves their structure and sizing, drawing each PDF page into its own context in the Canvas's [`pages`][canvas_pages] array. For other file types, only a single page will be created. Consider using [`loadCanvas()`][loadcanvas] when you want to draw **on** an existing file's contents, and use [`loadImage()`][loadimage] when you want to draw a file's contents **to** another Canvas.
+You can also create a new Canvas with content pre-drawn to it by pointing [`loadCanvas()`][loadcanvas] at a bitmap, SVG, or PDF file. This is most useful for loading multi-page PDFs, since it preserves their structure and sizing, drawing each PDF page into its own context in the Canvas’s [`pages`][canvas_pages] array. For other file types, only a single page will be created. Consider using [`loadCanvas()`][loadcanvas] when you want to draw **on** an existing file’s contents, and use [`loadImage()`][loadimage] when you want to draw a file’s contents **to** another Canvas.
 
 
 ## Saving graphics to files, buffers, and strings
@@ -85,7 +85,7 @@ function synchronous(){
 ```js
 new Canvas(512, 512, {textContrast:1, textGamma: 0.8}) // more contrast & darker gamma
 ```
-An optional text-rendering argument can be included when creating a new Canvas and will apply to all the bitmaps it generates. Note that these settings have shading effects on top of the context's current [`fontHinting`][fonthinting] setting, so you may need to experiment to find the results you're looking for:
+An optional text-rendering argument can be included when creating a new Canvas and will apply to all the bitmaps it generates. Note that these settings have shading effects on top of the context’s current [`fontHinting`][fonthinting] setting, so you may need to experiment to find the results you’re looking for:
   - `textContrast` — a number in the range 0.0–1.0 controlling the amount of additional weight to add (defaults to `0.0`)
   - `textGamma` — a number in the range 0.0–4.0 controlling how glyph edges are blended with the background (defaults to `1.4`)
 
@@ -96,15 +96,15 @@ An optional text-rendering argument can be included when creating a new Canvas a
 new Canvas(512, 512, {gpu: false}) // use CPU-based rendering
 ```
 
-By default, Skia will make use of your system’s GPU for faster rendering. You can toggle this on and off after creating a canvas object by reassigning its [`gpu` property][canvas_gpu] (see below), or you can pass a `gpu` option to the constructor when creating it in the first place. In general, you'll get significantly better performance from the GPU when rendering complex scenes (i.e., those with a large number of drawing operations).
+By default, Skia will make use of your system’s GPU for faster rendering. You can toggle this on and off after creating a canvas object by reassigning its [`gpu` property][canvas_gpu] (see below), or you can pass a `gpu` option to the constructor when creating it in the first place. In general, you’ll get significantly better performance from the GPU when rendering complex scenes (i.e., those with a large number of drawing operations).
 
 The main scenario in which you should consider disabling the `gpu` is when you are repeatedly accessing the canvas’s [bitmap data][ctx_imagedata] from your JavaScript code rather than writing it to the filesystem and you have a *discrete* GPU with its own dedicated memory pool. In those cases the overhead of copying the pixels between GPU and CPU memory may outweigh any potential speedup in rendering.
 
 ## Cleaning Up
 
-When you're done with a Canvas, just let its reference go out of scope and the Node garbage collector will release its system memory and GPU resources during the next sweep. Note, however, that the garbage collector only runs in between event loop ticks, so if you're creating a large number of temporary canvases (especially in a tight, **synchronous** loop) a lot of unfreed memory can build up.
+When you’re done with a Canvas, just let its reference go out of scope and the Node garbage collector will release its system memory and GPU resources during the next sweep. Note, however, that the garbage collector only runs in between event loop ticks, so if you’re creating a large number of temporary canvases (especially in a tight, **synchronous** loop) a lot of unfreed memory can build up.
 
-You can keep memory usage under control in these situations by using explicit resource management. On Node 24+ you can use the [`using`][using] or [`await using`][await_using] keywords to automatically free resources when the Canvas goes out of scope. On Node 22 and earlier you'll want to call the [`dispose()`](#dispose) or [`release()`](#release) methods directly for the same effect.
+You can keep memory usage under control in these situations by using explicit resource management. On Node 24+ you can use the [`using`][using] or [`await using`][await_using] keywords to automatically free resources when the Canvas goes out of scope. On Node 22 and earlier you’ll want to call the [`dispose()`](#dispose) or [`release()`](#release) methods directly for the same effect.
 
 In synchronous loops, prefer the `using` keyword:
 ```js
@@ -116,7 +116,7 @@ for (let i=0; i<9999; i++) {
 } // ← calls canvas.dispose() at the end of each loop iteration
 ```
 
-In async loops it's less necessary, but the `await using` keyword will still keep memory usage measurably lower:
+In async loops it’s less necessary, but the `await using` keyword will still keep memory usage measurably lower:
 ```js
 for (let i=0; i<9999; i++) {
   await using canvas = new Canvas(512, 512)
@@ -132,15 +132,15 @@ for (let i=0; i<9999; i++) {
 
 ### `.gpu`
 
-The `.gpu` attribute allows you to control whether rendering occurs on the graphics card or uses the CPU. Rendering is hardware accelerated by default, using [Metal](https://developer.apple.com/metal/) on macOS and [Vulkan](https://www.vulkan.org) on Linux and Windows. To use software-based rendering, set the `.gpu` property to `false`. If the current platform doesn't support GPU-based rendering, the property will be `false` by default (see [this article](https://linuxconfig.org/install-and-test-vulkan-on-linux) for some tips on getting Vulkan working on Linux).
+The `.gpu` attribute allows you to control whether rendering occurs on the graphics card or uses the CPU. Rendering is hardware accelerated by default, using [Metal](https://developer.apple.com/metal/) on macOS and [Vulkan](https://www.vulkan.org) on Linux and Windows. To use software-based rendering, set the `.gpu` property to `false`. If the current platform doesn’t support GPU-based rendering, the property will be `false` by default (see [this article](https://linuxconfig.org/install-and-test-vulkan-on-linux) for some tips on getting Vulkan working on Linux).
 
 ### `.engine`
 
-The `.engine` property is a read-only object that provides you with a status report on how this Canvas's images will be rendered. It contains the following fields:
-  - `renderer`: describes whether the `CPU` or `GPU` is currently being used to generate output images. If GPU initialization failed, the renderer will report being the `CPU`, even if you set the Canvas's [`.gpu`][canvas_gpu] property to `true`
+The `.engine` property is a read-only object that provides you with a status report on how this Canvas’s images will be rendered. It contains the following fields:
+  - `renderer`: describes whether the `CPU` or `GPU` is currently being used to generate output images. If GPU initialization failed, the renderer will report being the `CPU`, even if you set the Canvas’s [`.gpu`][canvas_gpu] property to `true`
   - `api`: either `Metal` or `Vulkan` depending on your platform
   - `device`: the identity of the ‘video card’ that was found during start-up
-  - `driver`: the name of the OS's device driver *‹vulkan-only›*
+  - `driver`: the name of the OS’s device driver *‹vulkan-only›*
   - `msaa`: an array with the samples-per-pixel values supported by the GPU for [multisample antialiasing][msaa]
   - `threads`: the number of threads in the worker pool that will be used for asynchronous [`toFile`][toFile], [`toBuffer`][toBuffer], & [`toURL`][toURL] exports. By default this is the same as the number of CPU cores found, but can be overridden by setting the [`SKIA_CANVAS_THREADS`][multithreading] environment variable.
   - `error`: if GPU initialization failed, this property will contain a description of what went wrong. Otherwise it will be undefined.
@@ -151,7 +151,7 @@ The `.engine` property is a read-only object that provides you with a status rep
 
 The canvas’s `.pages` attribute is an array of [`CanvasRenderingContext2D`][CanvasRenderingContext2D] objects corresponding to each ‘page’ that has been created. The first page is added when the canvas is initialized and additional ones can be added by calling the [`newPage()`][newPage] method. Note that all the pages remain drawable persistently, so you don’t have to constrain yourself to modifying the ‘current’ page as you render your document or image sequence.
 
-You can also use each of the Contexts in the `pages` array as a drawing source that can be passed to [`drawImage()`][drawimage] to produce a bitmap or [`drawCanvas()`][drawcanvas] to draw the page's contents as a vector:
+You can also use each of the Contexts in the `pages` array as a drawing source that can be passed to [`drawImage()`][drawimage] to produce a bitmap or [`drawCanvas()`][drawcanvas] to draw the page’s contents as a vector:
 
 ```js
 let canvas = new Canvas(512, 512)
@@ -177,7 +177,7 @@ ctx.drawCanvas(canvas.pages[3], s, s, s, s) // drawn as vector
 
 ### `.disposed`
 
-The `.disposed` flag identifies when the canvas's resources have been freed and it is no longer valid as a drawing source or target. It will be `false` until the canvas's [`dispose()`](#dispose) or [`release()`](#release) method is called.
+The `.disposed` flag identifies when the canvas’s resources have been freed and it is no longer valid as a drawing source or target. It will be `false` until the canvas’s [`dispose()`](#dispose) or [`release()`](#release) method is called.
 
 ### `pdf`, `svg`, `png`, `jpg`, `webp`, & `raw`
 
@@ -237,7 +237,7 @@ Supported formats include:
 The optional `matte` argument accepts a color-string specifying the background that should be drawn *behind* the canvas in the exported image. Any transparent portions of the image will be filled with the matte color.
 
 #### `density`
-By default, the images will be at a 1:1 ratio with the canvas's `width` and `height` dimensions (i.e., a 72 × 72 canvas will yield a 72 pixel × 72 pixel bitmap). But with screens increasingly operating at higher densities, you’ll frequently want to generate images where an on-canvas 'point' may occupy multiple pixels. The optional `density` argument allows you to specify this magnification factor using an integer ≥1. As a shorthand, you can also select a density by choosing a filename using the `@nx` naming convention:
+By default, the images will be at a 1:1 ratio with the canvas’s `width` and `height` dimensions (i.e., a 72 × 72 canvas will yield a 72 pixel × 72 pixel bitmap). But with screens increasingly operating at higher densities, you’ll frequently want to generate images where an on-canvas ‘point’ may occupy multiple pixels. The optional `density` argument allows you to specify this magnification factor using an integer ≥1. As a shorthand, you can also select a density by choosing a filename using the `@nx` naming convention:
 
 ```js
 canvas.toFile('image.png', {density:2}) // choose the density explicitly
@@ -256,14 +256,14 @@ The optional `page` argument accepts an integer that allows for the individual s
 :::
 The `msaa` option controls whether the GPU uses ‘multisample antialiasing’ rather than shader-based ‘analytic AA’ when rendering the edges of paths. You can assign it an integer to select the number of **samples per pixel**—common values are `2`, `4`, or `8`, but see [`engine.msaa`][engine] for the full list your GPU supports. If omitted, the renderer defaults to 4× MSAA as it produces good results with relatively low overhead.
 
-MSAA allocates an additional buffer that's proportional to the source canvas size (≊268 MB for a 4096×4096 canvas at the default sampling of `4`) and can provide a *substantial* speed increase in exchange for that memory usage. On the other hand, it reduces the smoothness at the edges of paths since it can only account for five degrees of pixel coverage (0, ¼, ½, ¾, 1). Shader-based AA computes the fractions exactly for everything except stroked curves (which are quantized internally to 4×). Increasing the number of MSAA samples will increase the number of coverage levels it can account for, but at the cost of further-increased memory usage.
+MSAA allocates an additional buffer that’s proportional to the source canvas size (≊268 MB for a 4096×4096 canvas at the default sampling of `4`) and can provide a *substantial* speed increase in exchange for that memory usage. On the other hand, it reduces the smoothness at the edges of paths since it can only account for five degrees of pixel coverage (0, ¼, ½, ¾, 1). Shader-based AA computes the fractions exactly for everything except stroked curves (which are quantized internally to 4×). Increasing the number of MSAA samples will increase the number of coverage levels it can account for, but at the cost of further-increased memory usage.
 
-MSAA has no effect at all on text, gradients, or images, so you get nothing in exchange for its memory usage if that's all your canvas is rendering. As a result, you may want to **disable MSAA** by setting `msaa` to `0` or `false` in situations where you:
-- aren't doing heavy path drawing on your canvas (and want to reclaim memory)
+MSAA has no effect at all on text, gradients, or images, so you get nothing in exchange for its memory usage if that’s all your canvas is rendering. As a result, you may want to **disable MSAA** by setting `msaa` to `0` or `false` in situations where you:
+- aren’t doing heavy path drawing on your canvas (and want to reclaim memory)
 - need the smoothest possible edges on your paths (regardless of speed)
 - are using [`clip()`][clip()] and want to ensure crisp boundaries
 
-The risk of disabling MSAA is that shader-based AA can exceed what Skia's GPU renderers can handle and move onto a much slower CPU rasterization path (and the conditions that trigger that are hard to predict). So be sure to profile if performance matters, since `{msaa:0}` can become expensive when you least expect it.
+The risk of disabling MSAA is that shader-based AA can exceed what Skia’s GPU renderers can handle and move onto a much slower CPU rasterization path (and the conditions that trigger that are hard to predict). So be sure to profile if performance matters, since `{msaa:0}` can become expensive when you least expect it.
 
 ![msaa and antialiasing quality](../assets/export-msaa.svg)
 
@@ -288,7 +288,7 @@ When exporting to JPEG, you can enable 4:2:0 [chroma subsampling][chroma_subsamp
 
 By default, PNG exports disable [‘adaptive filtering’][png_adaptive] since that typically produces better compression and faster exports for the kinds of flat graphics that canvas-drawing produces. If your content includes photographic imagery or complex shading, you may be able to get smaller file sizes by setting `filters` to `"all"`. This enables the full set of adaptive filters in exchange for approximately 2.5x the encoding time (and does not *always* yield smaller images).
 
-The `filters` option can also be set to `"auto"`, a middle-ground that tests the canvas content's compressibility on a subset of its pixels, then uses that measurement to decide between `"all"` or `"none"`. It generally minimizes output file size and avoids the expense of unnecessary `"all"` encodes, but it's a few milliseconds slower than the default in the cases where it ultimately selects `"none"` anyway.
+The `filters` option can also be set to `"auto"`, a middle-ground that tests the canvas content’s compressibility on a subset of its pixels, then uses that measurement to decide between `"all"` or `"none"`. It generally minimizes output file size and avoids the expense of unnecessary `"all"` encodes, but it’s a few milliseconds slower than the default in the cases where it ultimately selects `"none"` anyway.
 
 #### `colorType`
 
@@ -305,7 +305,7 @@ Specifies the color type to use when exporting pixel data in `"raw"` format (for
 *Default value: __`false`__*
 :::
 
-By default, pixel values in `"raw"` exports will use ‘straight’ (unpremultiplied) alpha, mirroring the representation used in an [ImageData][imagedata] object's buffer. Internally, the GPU stores pixels using premultiplied values and only converts them on export. By setting the optional `premultiplied` option to `true`, you can have it skip this conversion (which can be lossy at low opacities) and use the format typically preferred by other GPU-backed graphics pipelines.
+By default, pixel values in `"raw"` exports will use ‘straight’ (unpremultiplied) alpha, mirroring the representation used in an [ImageData][imagedata] object’s buffer. Internally, the GPU stores pixels using premultiplied values and only converts them on export. By setting the optional `premultiplied` option to `true`, you can have it skip this conversion (which can be lossy at low opacities) and use the format typically preferred by other GPU-backed graphics pipelines.
 
 ### `toBuffer()`
 ```js returns="Promise<Buffer>"
@@ -337,7 +337,7 @@ toSharp({matte, density, msaa, page})
 The Sharp library is an optional dependency that you must [install separately][sharp_npm]
 :::
 
-The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The `colorSpace` chosen upon creating the Canvas's context will be preserved as an ICC profile. The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
+The contents of the canvas can be copied into a [Sharp][sharp] image object, allowing you to make use of the extensive image-processing and optimization features offered by the library. The `colorSpace` chosen upon creating the Canvas’s context will be preserved as an ICC profile. The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
 
 Note that while this method returns synchronously, you will need to `await` most operations on the resulting Sharp object:
 
@@ -345,7 +345,7 @@ Note that while this method returns synchronously, you will need to `await` most
 let sharpImg = canvas.toSharp()
 await sharpImg.heif({compression:'hevc'}).toFile("image.heif")
 ```
-As a result, when using method-chaining you'll want to `await` the whole thing:
+As a result, when using method-chaining you’ll want to `await` the whole thing:
 ```js
 await canvas.toSharp().heif({compression:'hevc'}).toFile("image.heif")
 ```
@@ -405,14 +405,14 @@ loadCanvas(src, {
 })
 ```
 
-Similar to the [`loadImage()`][loadimage] utility, `loadCanvas()` will asynchronously fetch an image file from a URL or local file path. But rather than returning an [Image][image] for you to draw manually, it creates a new Canvas (matched to the image's size) with the file's contents already rendered to it. It supports the same sets of [file formats][loadimage_sources] and HTTP [request options][loadimage_request_opts] as `loadImage()`, as well as the set of optional arguments you'd ordinarily pass to the Canvas constructor or `getContext()`:
+Similar to the [`loadImage()`][loadimage] utility, `loadCanvas()` will asynchronously fetch an image file from a URL or local file path. But rather than returning an [Image][image] for you to draw manually, it creates a new Canvas (matched to the image’s size) with the file’s contents already rendered to it. It supports the same sets of [file formats][loadimage_sources] and HTTP [request options][loadimage_request_opts] as `loadImage()`, as well as the set of optional arguments you’d ordinarily pass to the Canvas constructor or `getContext()`:
 - `colorSpace` & `willReadFrequently` for configuring the [drawing context](#creating-new-canvas-objects)
 - `textContrast` & `textGamma` for controlling [font rendering](#controlling-font-rendering)
 - `gpu` for choosing the [rendering engine](#choosing-a-rendering-engine)
 
-Note that if you load a multi-page PDF, all of the pages will be available as individual Contexts in the [`pages`][canvas_pages] attribute, but the Canvas's `width` & `height` will correspond to the *final* page (which is also what [`getContext()`][getContext] will return a reference to). If you'd like to access the dimensions for individual pages, read the `width` and `height` values returned by each page's [`getContextAttributes()`][ctx_attrs].
+Note that if you load a multi-page PDF, all of the pages will be available as individual Contexts in the [`pages`][canvas_pages] attribute, but the Canvas’s `width` & `height` will correspond to the *final* page (which is also what [`getContext()`][getContext] will return a reference to). If you’d like to access the dimensions for individual pages, read the `width` and `height` values returned by each page’s [`getContextAttributes()`][ctx_attrs].
 
-Use `loadCanvas()` when you want to draw *onto* some existing content and then re-export it. It's especially handy when dealing with multi-page PDFs since you can make your modifications and save a new multi-page copy while keeping the page flow intact. If your goal is to draw an image or a single page *to* another canvas, consider using the [`loadImage()`][loadimage] helper instead.
+Use `loadCanvas()` when you want to draw *onto* some existing content and then re-export it. It’s especially handy when dealing with multi-page PDFs since you can make your modifications and save a new multi-page copy while keeping the page flow intact. If your goal is to draw an image or a single page *to* another canvas, consider using the [`loadImage()`][loadimage] helper instead.
 
 
 <!-- references_begin -->

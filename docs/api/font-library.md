@@ -76,9 +76,9 @@ For instance, on my system `FontLibrary.family("Raleway")` returns:
 }
 ```
 
-Because Raleway is a [variable font][VariableFonts], the `variable` flag is set to `true`, and its variation axes are itemized in the `variations` object. Each key in `variations` is a four-character code that can be used with the Context's  [`fontVariationSettings`][fontvariations] property and points to an object with the font's `min`, `max`, and `default` values for that axis (plus a human-readable `label`).
+Because Raleway is a [variable font][VariableFonts], the `variable` flag is set to `true`, and its variation axes are itemized in the `variations` object. Each key in `variations` is a four-character code that can be used with the Context’s  [`fontVariationSettings`][fontvariations] property and points to an object with the font’s `min`, `max`, and `default` values for that axis (plus a human-readable `label`).
 
-The `features` object itemizes all the OpenType features the font supports, identifying them using four-character codes that can be used with the [`fontFeatureSettings`][fontfeatures] property. Each feature's `type` can either be `"on/off"` (meaning it can be set to `1` to enable it or `0` to disable it) or `indexed` (meaning it allows you to select among different alternates via a 1-based index, or `0` to use the default form).
+The `features` object itemizes all the OpenType features the font supports, identifying them using four-character codes that can be used with the [`fontFeatureSettings`][fontfeatures] property. Each feature’s `type` can either be `"on/off"` (meaning it can be set to `1` to enable it or `0` to disable it) or `indexed` (meaning it allows you to select among different alternates via a 1-based index, or `0` to use the default form).
 
 
 ### `has()`
@@ -148,7 +148,7 @@ FontLibrary.use("Stinson", glob('fonts/Crimson_Pro/*.ttf'))
 
 ---
 
-The return value will be either a list or an object (matching the style in which it was called) with an entry describing each font file that was added. For instance, the Semibold from the "Grizwald" alias example above could be:
+The return value will be either a list or an object (matching the style in which it was called) with an entry describing each font file that was added. For instance, the Semibold from the “Grizwald” alias example above could be:
 ```js
 {
   family: 'Grizwald',

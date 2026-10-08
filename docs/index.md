@@ -51,7 +51,7 @@ For detailed [installation][installation] instructions and runtime [configuratio
 
 ## Example Usage
 
-Skia Canvas's classes and extensions to the standard are extensively covered in the [API Documentation][api_docs]. But to give you a sense of some of the things you can achieve with it, here are some real-world examples:
+Skia Canvas’s classes and extensions to the standard are extensively covered in the [API Documentation][api_docs]. But to give you a sense of some of the things you can achieve with it, here are some real-world examples:
 
 ### Generating image files
 

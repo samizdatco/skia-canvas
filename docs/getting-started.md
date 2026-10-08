@@ -18,7 +18,7 @@ Working around this requires different approaches based on your package manager 
 
 ### `npm`
 
-The default `npm` package manager installs whichever optional dependency matches the *current* machine's OS & architecture by default. But you can also create a `node_modules` folder that's directly shippable to your target platform by specifying its configuration explicitly:
+The default `npm` package manager installs whichever optional dependency matches the *current* machine’s OS & architecture by default. But you can also create a `node_modules` folder that’s directly shippable to your target platform by specifying its configuration explicitly:
 
 ```bash
 npm ci --os=linux --cpu=x64 --libc=glibc # (or --libc=musl)
@@ -37,7 +37,7 @@ supportedArchitectures:
   libc: [current, glibc, musl]
 ```
 
-Once this is in place, you can run `pnpm install` or `yarn install` and the generated lockfile will contain all the specified optional dependencies. If you're adding this to an existing project, you may want to delete the existing lockfile before running `install` to ensure it picks up the change.
+Once this is in place, you can run `pnpm install` or `yarn install` and the generated lockfile will contain all the specified optional dependencies. If you’re adding this to an existing project, you may want to delete the existing lockfile before running `install` to ensure it picks up the change.
 
 ## Platform Support
 
@@ -62,7 +62,7 @@ If you wish to use Alpine as the underlying distribution, you can start with som
 FROM node:alpine
 ```
 
-Whichever distribution you choose, you'll probably want to bundle the `node_modules` folder into the container image itself so you can ensure it includes the correct optional dependencies for the target architecture:
+Whichever distribution you choose, you’ll probably want to bundle the `node_modules` folder into the container image itself so you can ensure it includes the correct optional dependencies for the target architecture:
 
 ```dockerfile
 FROM node:lts-slim
@@ -76,11 +76,11 @@ USER node
 CMD ["node", "your-script-name.js"]
 ```
 
-You'll also want to make sure that your project's `.dockerignore` contains `node_modules`, so your local copy doesn't partially overwrite and corrupt the version that's created by `npm ci`.
+You’ll also want to make sure that your project’s `.dockerignore` contains `node_modules`, so your local copy doesn’t partially overwrite and corrupt the version that’s created by `npm ci`.
 
 ### Cloudflare
 
-To use Skia Canvas as part of a Cloudflare Worker process, you must first create a docker container with its dependencies and [deploy](https://developers.cloudflare.com/containers/guides/deploy/) it to [Cloudflare Containers](https://developers.cloudflare.com/containers/). Start with a Dockerfile like those described in the previous section, but ensure that it's building for the `linux/amd64` configuration that Cloudflare supports:
+To use Skia Canvas as part of a Cloudflare Worker process, you must first create a docker container with its dependencies and [deploy](https://developers.cloudflare.com/containers/guides/deploy/) it to [Cloudflare Containers](https://developers.cloudflare.com/containers/). Start with a Dockerfile like those described in the previous section, but ensure that it’s building for the `linux/amd64` configuration that Cloudflare supports:
 
 ```dockerfile
 FROM node --platform=linux/amd64
@@ -88,7 +88,7 @@ FROM node --platform=linux/amd64
 
 ### AWS Lambda
 
-Skia Canvas depends on libraries that aren't present in the standard Lambda [runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html). You can add these to your function by uploading a ‘[layer](https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html)’ (a zip file containing the required libraries and `node_modules` directory) and configuring your function to use it.
+Skia Canvas depends on libraries that aren’t present in the standard Lambda [runtime](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html). You can add these to your function by uploading a ‘[layer](https://docs.aws.amazon.com/lambda/latest/dg/chapter-layers.html)’ (a zip file containing the required libraries and `node_modules` directory) and configuring your function to use it.
 
 <details>
 
@@ -130,7 +130,7 @@ Note that the layer only includes Skia Canvas and its dependencies—any other n
 
 ### Next.js / Webpack
 
-If you are using a framework like Next.js that bundles your server-side code with Webpack, you'll need to mark `skia-canvas` as an ‘external’, otherwise its platform-native binary file will be excluded from the final build. Try adding these options to your `next.config.ts` file:
+If you are using a framework like Next.js that bundles your server-side code with Webpack, you’ll need to mark `skia-canvas` as an ‘external’, otherwise its platform-native binary file will be excluded from the final build. Try adding these options to your `next.config.ts` file:
 
 ```js
 const nextConfig: NextConfig = {
@@ -154,10 +154,10 @@ If prebuilt binaries aren’t available for your system you’ll need to compile
 
 Start by installing:
 
-  1. A recent version of `git` (older versions have difficulties with Skia's submodules)
+  1. A recent version of `git` (older versions have difficulties with Skia’s submodules)
   2. The [Rust compiler](https://www.rust-lang.org/tools/install) and cargo package manager using [`rustup`](https://rust-lang.github.io/rustup/)
   3. A C compiler toolchain (either LLVM/Clang or MSVC)
-  4. Python 3 (used by Skia's [build process](https://skia.org/docs/user/build/))
+  4. Python 3 (used by Skia’s [build process](https://skia.org/docs/user/build/))
   5. The [Ninja](https://ninja-build.org) build system
   6. On Linux: Fontconfig and OpenSSL
 
@@ -165,11 +165,11 @@ Start by installing:
 
 ## Global Settings
 
-> There are a handful of settings that can only be configured at launch and will apply to all the canvases you create in your script. The sections below describe the different [environment variables][node_env] you can set to make global changes. You can either set them as part of your command line invocation, or place them in a `.env` file in your project directory and use Node 20's [`--env-file` argument][node_env_arg] to load them all at once.
+> There are a handful of settings that can only be configured at launch and will apply to all the canvases you create in your script. The sections below describe the different [environment variables][node_env] you can set to make global changes. You can either set them as part of your command line invocation, or place them in a `.env` file in your project directory and use Node 20’s [`--env-file` argument][node_env_arg] to load them all at once.
 
 ### Multithreading
 
-When rendering canvases in the background (e.g., by using the asynchronous [toFile][toFile] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object's [`engine.threads`][engine] property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
+When rendering canvases in the background (e.g., by using the asynchronous [toFile][toFile] or [toBuffer][toBuffer] methods), tasks are spawned in a thread pool managed by the [rayon][rayon] library. By default it will create up to as many threads as your CPU has cores. You can see this default value by inspecting any [Canvas][canvas] object’s [`engine.threads`][engine] property. If you wish to override this default, you can set the `SKIA_CANVAS_THREADS` environment variable to your preferred value.
 
 For example, you can limit your asynchronous processing to two simultaneous tasks by running your script with:
 ```bash
@@ -178,7 +178,7 @@ SKIA_CANVAS_THREADS=2 node my-canvas-script.js
 
 ### Render Cache
 
-Skia Canvas defers rendering until the canvas is exported in order to allow a single canvas to be rendered as both a vector and a bitmap. As a result, it needs to re-execute all the canvas's drawing commands every time a bitmap is requested—even if nothing has changed since it was last rasterized. To avoid this wasted work, rendered bitmaps are cached internally and reused if possible, improving execution speed at the cost of some memory.
+Skia Canvas defers rendering until the canvas is exported in order to allow a single canvas to be rendered as both a vector and a bitmap. As a result, it needs to re-execute all the canvas’s drawing commands every time a bitmap is requested—even if nothing has changed since it was last rasterized. To avoid this wasted work, rendered bitmaps are cached internally and reused if possible, improving execution speed at the cost of some memory.
 
 By default, the cache is set to a maximum of **128MB** (enough to contain ~32 rasters at 720p resolution), but you can adjust this to fit your use case via the `SKIA_CANVAS_CACHE` environment variable. Caching can be disabled altogether by setting it to `0` or `off`, and a different maximum size can be set by passing a number (representing a number of megabytes):
 
@@ -192,9 +192,9 @@ SKIA_CANVAS_CACHE=256 node script.js # set the maximum size to double the defaul
 Only applies to `glibc` systems
 :::
 
-The memory allocator used by `glibc` does not return memory to the kernel the moment it's freed. Instead it maintains its own internal cache of reusable memory regions and only releases memory if a *contiguous* empty region sits at the very end of its arena. As a result, this can allow RSS to balloon if empty blocks of memory are punctuated by even a single small allocation.
+The memory allocator used by `glibc` does not return memory to the kernel the moment it’s freed. Instead it maintains its own internal cache of reusable memory regions and only releases memory if a *contiguous* empty region sits at the very end of its arena. As a result, this can allow RSS to balloon if empty blocks of memory are punctuated by even a single small allocation.
 
-Since that kind of fragmentation occurs quite frequently with canvas workflows (e.g., large export buffers interleaved with small Color and Path2D allocations), Skia Canvas calls `malloc_trim` intermittently to release unoccupied memory chunks even if they're not at the end of the arena. There is a marginal performance cost in exchange for the lower memory ceiling this maintains so you can tune the behavior to be more or less aggressive via the `SKIA_CANVAS_TRIM` environment variable:
+Since that kind of fragmentation occurs quite frequently with canvas workflows (e.g., large export buffers interleaved with small Color and Path2D allocations), Skia Canvas calls `malloc_trim` intermittently to release unoccupied memory chunks even if they’re not at the end of the arena. There is a marginal performance cost in exchange for the lower memory ceiling this maintains so you can tune the behavior to be more or less aggressive via the `SKIA_CANVAS_TRIM` environment variable:
 
 ```bash
 SKIA_CANVAS_TRIM=0 node script.js     # `0`/`off` disable the `malloc_trim` calls altogether

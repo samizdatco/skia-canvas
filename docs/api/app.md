@@ -15,12 +15,12 @@ description: Global window manager and process controller
 
 ####  ~~`.eventLoop`~~
 
-**The eventLoop property has been deprecated** and setting it no longer has an effect. Node's event loop now continues to operate even while a GUI window is active and the OS is handling rendering and UI events. As a result, [the `launch()`][launch] method now runs asynchronously and returns a `Promise` that resolves when the last window is closed. In the meantime, Node-based events like timers and intervals will fire normally.
+**The eventLoop property has been deprecated** and setting it no longer has an effect. Node’s event loop now continues to operate even while a GUI window is active and the OS is handling rendering and UI events. As a result, [the `launch()`][launch] method now runs asynchronously and returns a `Promise` that resolves when the last window is closed. In the meantime, Node-based events like timers and intervals will fire normally.
 
-Keep in mind though that you'll still be better off using the [`frame`][frame] or [`draw`][draw] event for timing rather than setting up a timeout- or interval-based rendering callback.
+Keep in mind though that you’ll still be better off using the [`frame`][frame] or [`draw`][draw] event for timing rather than setting up a timeout- or interval-based rendering callback.
 
 ####  `.fps`
-By default, each window will attempt to re-render its content every time the display refreshes (typically 60 times per second). You can reduce this by setting `App.fps` to a smaller integer value. Raising it above the display's native refresh rate will have no effect.
+By default, each window will attempt to re-render its content every time the display refreshes (typically 60 times per second). You can reduce this by setting `App.fps` to a smaller integer value. Raising it above the display’s native refresh rate will have no effect.
 > This setting is only relevant if you are listening for [`frame`][frame] or [`draw`][draw] events (or have a pending `requestAnimationFrame`) on your windows. Otherwise the canvas will only be updated when responding to UI interactions like keyboard and mouse events.
 
 ####  `.running`
@@ -43,13 +43,13 @@ Any `Window` you create will schedule the `App` to begin running as soon as the 
 App.quit()
 ```
 
-By default your process will terminate once the final window has closed (and any timers or intervals you've set up have been cleared). If you wish to bring things to a swifter conclusion from code, call the `App.quit()` method from one of your event handlers instead.
+By default your process will terminate once the final window has closed (and any timers or intervals you’ve set up have been cleared). If you wish to bring things to a swifter conclusion from code, call the `App.quit()` method from one of your event handlers instead.
 
 ### Events
 
 #### `idle`
 
-Emitted when the final active window is closed via a user interface click on its close widget or by a programmatic call to the window's [`close()`][close] method.
+Emitted when the final active window is closed via a user interface click on its close widget or by a programmatic call to the window’s [`close()`][close] method.
 
 <!-- references_begin -->
 [close]: window.md#close

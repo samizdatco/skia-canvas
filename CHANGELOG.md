@@ -37,10 +37,10 @@
   - `variations`: Variable font axes represented as an object with supported axis tags (e.g., `wdth`, `slnt`) mapping to `{min, max, default, label}` summaries
   - `features`: OpenType features represented as an object with supported feature tags (e.g., `liga`, `smcp`) mapping to `{type, label}` summaries
 - The [`textRendering`][textRendering] property is now supported, offering control over how text is rasterized:
-  - `"auto"`: the default, uses browser-standard glyph placement
-  - `"geometricPrecision"`: uses sub-pixel positioning (lining up exactly with [`outlineText()`][outlineText()] and vector output)
-  - `"optimizeLegibility"`: enables CoreText’s font smoothing, DirectWrite’s grid fitting, or FreeType’s light autohinting
-  - `"optimizeSpeed"`: snaps glyphs to whole pixels so GPU renders can reuse cached per-glyph bitmaps
+  - `"auto"`: use browser-standard glyph placement (enabled by default)
+  - `"geometricPrecision"`: use sub-pixel positioning (lining up exactly with [`outlineText()`][outlineText()] and vector output)
+  - `"optimizeLegibility"`: enable CoreText’s font smoothing, DirectWrite’s grid fitting, or FreeType’s light autohinting
+  - `"optimizeSpeed"`: snap glyphs to whole pixels so GPU renders can reuse cached per-glyph bitmaps
 
 #### Imagery
 - **Image** objects can now load **PDF** documents (via [`loadImage()`][loadImage()], [new Image()][image_constructor], or the [`src`][Image.src] setter) and render them as resolution-independent vectors.
@@ -156,7 +156,7 @@
 - SVG **Image**s lacking an explicit `width` and `height` now use the CSS [default sizing algorithm][default_sizing_algo] (with a 300×150 [default object size][default_size]) to establish a default intrinsic size. An SVG with only one concrete dimension plus a `viewBox` ratio now resolves to a fully-determined intrinsic size. This changes both the reported `width`/`height` of such images and how they scale when drawn without explicit size arguments (including when used as fill/stroke-pattern tiles).
 - An **ImageData** created from a Node `Buffer` object now *shares* the buffer’s memory rather than copying it.
 - The `window` Cargo feature is no longer independently configurable (it is now automatically enabled by a `metal` or `vulkan` feature being present).
-- [`fontHinting`][fontHinting] is now ignored on macOS (since CoreText has no support for hinting). Previously it enabled heavier text rendering, which is now available by setting `textRendering` to `"optimizeLegibility"` instead.
+- [`fontHinting`][fontHinting] is now ignored on macOS (since CoreText has no support for hinting). Previously it enabled heavier text rendering, which is now available by setting `textRendering` to `"optimizeLegibility"` instead
 - Text drawn with `textAlign: 'justify'` and `direction: 'rtl'` now extends leftward from the anchor like right-aligned text does
 - Vertical placement for non-alphabetic [`textBaseline`][textBaseline] settings has shifted in order to match browser behavior
 
@@ -366,7 +366,7 @@
 [downsample]: /docs/api/canvas.md#downsample
 [canvas_text_rendering]: /docs/api/canvas.md#controlling-font-rendering
 [window_text_rendering]: /docs/api/window.md#controlling-font-rendering
-[running_lambda]: /docs/getting-started.md#running-on-aws-lambda
+[running_lambda]: /docs/getting-started.md#aws-lambda
 [node_url]: https://nodejs.org/api/url.html#class-url
 [meta_url]: https://nodejs.org/api/esm.html#importmetaurl
 [Image.src]: /docs/api/image.md#src

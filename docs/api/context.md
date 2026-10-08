@@ -7,15 +7,15 @@ description: The drawing API for a particular Canvas
 
 | Canvas State                                                       | Drawing                                      | Pattern & Color                                  | Line Style                              | Transform                                         | Bezier Paths                             | Font Style                                     | Text Layout                                             | Images                                                       | Compositing & Effects                                    |
 |--------------------------------------------------------------------|----------------------------------------------|--------------------------------------------------|-----------------------------------------|---------------------------------------------------|------------------------------------------|------------------------------------------------|---------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------|
-| [**canvas**][canvas_attr] [🧪][canvas]                             | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**font**][font] [🧪][c2d_font]                | [**direction**][direction]                              | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
+| [**canvas**][canvas_attr] / [🧪][canvas]                           | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**font**][font] / [🧪][c2d_font]              | [**direction**][direction]                              | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
 | [getContextAttributes()][getContextAttributes()] / [🧪][ctx_attrs] | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                   | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]       | [lineTo()][lineTo()]                     | [**fontKerning**][fontKerning]                 | [**textAlign**][textAlign] / [🧪][c2d_textAlign]         | [**imageSmoothingQuality**][imageSmoothingQuality]           | [**globalAlpha**][globalAlpha]                           |
-| [beginPath()][beginPath()]                                         | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()] ⧸[🧪][gradients]   | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontStretch**][fontStretch]                 | [**textBaseline**][textBaseline]                        | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
-| [closePath()][closePath()]                                         | [fillText()][fillText()] ⧸[🧪][drawText]     | [createLinearGradient()][createLinearGradient()] ⧸[🧪][gradients] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()]⧸[🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontHinting** 🧪][fonthinting]              | [**textDecoration** 🧪][textDecoration]                 | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
-| [isPointInPath()][isPointInPath()]                                 | [strokeText()][strokeText()] ⧸[🧪][drawText] | [createRadialGradient()][createRadialGradient()] ⧸[🧪][gradients] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**fontSmoothing** 🧪][fontsmoothing]          | [**textWrap** 🧪][textwrap]                             | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
-| [isPointInStroke()][isPointInStroke()]                             | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] ⧸[🧪][transforms]      | [quadraticCurveTo()][quadraticCurveTo()] | [**fontSynthesis** 🧪][fontsynthesis]          | [measureText()][measureText()] / [🧪][c2d_measuretext]    | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
-| [save()][save()]                                                   | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**fontVariant** 🧪][fontvariant]              | [outlineText() 🧪][outlineText()]                       | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
-| [restore()][restore()]                                             |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**fontFeatureSettings** 🧪][fontfeatures]     |                                                         |                                                              |                                                          |
-| [reset()][reset()]                                                 |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**fontVariationSettings** 🧪][fontvariations] |                                                       |                                                              |                                                          |
+| [beginPath()][beginPath()]                                         | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()] / [🧪][gradients]  | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontStretch**][fontStretch]                 | [**textBaseline**][textBaseline]                        | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
+| [closePath()][closePath()]                                         | [fillText()][fillText()] / [🧪][drawText]    | [createLinearGradient()][createLinearGradient()] / [🧪][gradients] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()] / [🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontHinting** 🧪][fonthinting]              | [**textDecoration** 🧪][textDecoration]                 | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
+| [isPointInPath()][isPointInPath()]                                 | [strokeText()][strokeText()] / [🧪][drawText] | [createRadialGradient()][createRadialGradient()] / [🧪][gradients] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**fontSmoothing** 🧪][fontsmoothing]          | [**textRendering**][textRendering] / [🧪][c2d_textRendering] | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
+| [isPointInStroke()][isPointInStroke()]                             | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] / [🧪][transforms]     | [quadraticCurveTo()][quadraticCurveTo()] | [**fontSynthesis** 🧪][fontsynthesis]          | [**textWrap** 🧪][textwrap]                             | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
+| [save()][save()]                                                   | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**fontVariant** 🧪][fontvariant]              | [measureText()][measureText()] / [🧪][c2d_measuretext]    | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
+| [restore()][restore()]                                             |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**fontFeatureSettings** 🧪][fontfeatures]     | [outlineText() 🧪][outlineText()]                       |                                                              |                                                          |
+| [reset()][reset()]                                                 |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**fontVariationSettings** 🧪][fontvariations] |                                                         |                                                              |                                                          |
 | [clip()][clip()]                                                   |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [**letterSpacing**][letterSpacing]             |                                                         |                                                              |                                                          |
 |                                                                    |                                              |                                                  |                                         |                                                   |                                          | [**wordSpacing**][wordSpacing]                 |                                                         |                                                              |                                                          |
 
@@ -50,11 +50,11 @@ ctx.font = "24px/1.5 Avenir" // sets the line height to 1.5 ems
 
 ### `.fontHinting`
 
-By default the canvas disables Skia’s [font hinting](https://en.wikipedia.org/wiki/Font_hinting) when rendering text in order to better match the text rendering produced by browsers. To enable hinting, set the context's `.fontHinting` property to `true`. When enabled the results will likely look heavier than the default, but may appear more smoothly antialiased.
+By default the canvas disables Skia’s [font hinting](https://en.wikipedia.org/wiki/Font_hinting) when rendering text in order to better match the text rendering produced by browsers. To enable hinting, set the context’s `.fontHinting` property to `true`, but note that only Linux and Windows renderers support the feature. On macOS, enabling hinting has no effect since CoreText has no support for it (though see the [`.textRendering`][c2d_textRendering] property’s `optimizeLegibility` setting if you’d like to enable the ‘text smoothing’ that hinting used to trigger in earlier Skia Canvas releases).
 
 ### `.fontSmoothing`
 
-Text is rendered with standard greyscale antialiasing and sub-pixel positioning by default. Setting `.fontSmoothing` to `false` disables AA entirely and aligns each glyph to the pixel grid, producing hard-edged letterforms with no shading.
+Text is rendered with standard greyscale antialiasing and sub-pixel positioning by default. Setting `.fontSmoothing` to `false` disables AA entirely and aligns each glyph to the pixel grid, producing hard-edged letterforms with no shading. Note that GPU canvases apply additional [`msaa`][msaa] antialiasing by default, so you’ll need to disable that for truly pixelated text.
 
 ### `.fontSynthesis`
 
@@ -84,11 +84,20 @@ ctx.fontVariationSettings = "normal" // back to the font’s defaults
 
 ### `.textAlign`
 
-In addition to the [standard alignment values][textAlign] you may also specify `"justify"`. When justifying text you *must* provide a `width` argument in your call to [`fillText`][drawText]/[`strokeText`][drawText]/etc. so the typesetter knows how much space it needs to fill. Otherwise it will behave as if you had selected `"start"` alignment.
+In addition to the [standard alignment values][textAlign] you may also specify `"justify"`. When justifying text you *must* provide a `width` argument in your call to [`fillText`][drawText]/[`strokeText`][drawText]/etc. so the typesetter knows how much space it needs to fill. Otherwise it will behave as if you had selected `"start"` alignment and follow the current [`direction`][direction].
 
 ### `.textDecoration`
 
 The `.textDecoration` property can be assigned a string using the same syntax as the CSS [`text-decoration`][css_textDecoration] property. With it, you can choose `underline`, `overline`, and `line-through` styles, specify the line color, and select a style like `wavy`, `dotted`, or `dashed`. Set it to `none` to go back to drawing undecorated text. This setting will persist across changes to the `.font` property.
+
+### `.textRendering`
+
+The `.textRendering` setting controls what the renderer prioritizes when converting typography to a bitmap. It defaults to `"auto"`, which aligns text baselines to the pixel grid but allows sub-pixel positioning on the horizontal axis. You can choose other sets of trade-offs, including:
+- `"geometricPrecision"`: uses sub-pixel positioning on both axes, so text lines up exactly with [`outlineText()`][outlineText()] and vector output
+- `"optimizeLegibility"`: enables platform-specific glyph-shape enhancements: CoreText’s font smoothing, DirectWrite’s grid fitting, or FreeType’s light autohinting
+- `"optimizeSpeed"`: snaps glyphs to whole pixels on both axes, speeding up GPU rendering by allowing maximal reuse of the ‘glyph atlas’ cache
+
+![rasterization differences depending on textRendering mode](../assets/text-rendering.svg)
 
 ### `.textWrap`
 
@@ -147,7 +156,7 @@ drawArc(400, "#aaa")
 
 ### `.lineDashFit`
 
-The `lineDashFit` attribute can be set to `"move"`, `"turn"`, or `"follow"` and controls how the marker is transformed with each repetition along the path. `"move"`  and `"turn"` use simple translation and rotation, whereas `"follow"` will bend the marker to match the dashed path's contours.
+The `lineDashFit` attribute can be set to `"move"`, `"turn"`, or `"follow"` and controls how the marker is transformed with each repetition along the path. `"move"`  and `"turn"` use simple translation and rotation, whereas `"follow"` will bend the marker to match the dashed path’s contours.
 
 ------
 
@@ -160,7 +169,7 @@ getContextAttributes()
 
 Returns properties describing the settings the context was created with and its dimensions. The `colorSpace` and `willReadFrequently` values will always be unchanged from when the context was originally created (whether by [`getContext()`][getContext] or [`newPage()`][newPage]).
 
-The `width` and `height` properties reflect the final size of the Canvas while that context was the 'current' page. In general, these dimensions will be redundant to just consulting the parent canvas's size. However, they become important when dealing with multi-page canvases, where the parent canvas's `width` and `height` always refer to the **last** page in the [`pages`][canvas_pages] array. The `getContextAttributes()` fields allow you to see the dimensions of each page *independently*.
+The `width` and `height` properties reflect the final size of the Canvas while that context was the ‘current’ page. In general, these dimensions will be redundant to just consulting the parent canvas’s size. However, they become important when dealing with multi-page canvases, where the parent canvas’s `width` and `height` always refer to the **last** page in the [`pages`][canvas_pages] array. The `getContextAttributes()` fields allow you to see the dimensions of each page *independently*.
 
 ### `conicCurveTo()`
 
@@ -175,7 +184,7 @@ Adds a line segment connecting the current point to (*x, y*) but curving toward 
 createProjection(quad, [basis])
 ```
 
-This method returns a [DOMMatrix][DOMMatrix] object which can be used to simulate perspective effects or other distortions in which the four corners of the canvas are mapped to an arbitrary quadrilateral (four sided polygon). The matrix must be passed to the context's [setTransform][setTransform()] method for it to take effect.
+This method returns a [DOMMatrix][DOMMatrix] object which can be used to simulate perspective effects or other distortions in which the four corners of the canvas are mapped to an arbitrary quadrilateral (four sided polygon). The matrix must be passed to the context’s [setTransform][setTransform()] method for it to take effect.
 
 #### `quad`
 
@@ -193,7 +202,7 @@ The geometry of the quadrilateral should be described as an Array of either 8 or
 
 #### `basis`
 
-The optional `basis` argument defines the **source** quadrilateral whose corners will be mapped to the positions defined by `quad`. If no `basis` is specified, the canvas's bounding box will be used (i.e., the rectangle from ⟨`0`, `0`⟩ to ⟨`canvas.width`, `canvas.height`⟩). Note that drawing commands that go outside of the `basis` region may well be visible—it only establishes the geometry of the projection, not the [clipping][clip()] path.
+The optional `basis` argument defines the **source** quadrilateral whose corners will be mapped to the positions defined by `quad`. If no `basis` is specified, the canvas’s bounding box will be used (i.e., the rectangle from ⟨`0`, `0`⟩ to ⟨`canvas.width`, `canvas.height`⟩). Note that drawing commands that go outside of the `basis` region may well be visible—it only establishes the geometry of the projection, not the [clipping][clip()] path.
 
 The `basis` polygon can be described using 2, 4, or 8 numbers, using the canvas dimensions to fill in the unspecified coordinates:
 ```js
@@ -270,7 +279,7 @@ createRadialGradient(x0, y0, r0, x1, y1, r1)
 createConicGradient(startAngle, x, y)
 ```
 
-There are three gradient-construction methods, each returning a **CanvasGradient** object that can be used as a `fillStyle` or `strokeStyle`. The ‘create gradient’ call itself is just concerned with the *geometry* of the gradient, defining its spatial range in the canvas's current coordinate space (incorporating any transforms that have been applied).
+There are three gradient-construction methods, each returning a **CanvasGradient** object that can be used as a `fillStyle` or `strokeStyle`. The ‘create gradient’ call itself is just concerned with the *geometry* of the gradient, defining its spatial range in the canvas’s current coordinate space (incorporating any transforms that have been applied).
 
 
 
@@ -280,7 +289,7 @@ For a [linear gradient][createLinearGradient()] you define the starting and stop
 
 #### `CanvasGradient` objects
 
-The gradient's colors are defined through a series of calls to [`addColorStop()`][addColorStop()], each of which provides a color string and an `offset` value between `0` and `1` describing (proportionally) where in the transition that color should occur. For example, the ‘linear’ example above was created with:
+The gradient’s colors are defined through a series of calls to [`addColorStop()`][addColorStop()], each of which provides a color string and an `offset` value between `0` and `1` describing (proportionally) where in the transition that color should occur. For example, the ‘linear’ example above was created with:
 
 ```js
 let g = ctx.createLinearGradient(0, 0, 200, 200)
@@ -291,11 +300,11 @@ ctx.fillStyle = g
 ctx.fillRect(0, 0, 200, 200)
 ```
 
-Skia Canvas's `CanvasGradient` objects give you additional control over how the colors between the stops are interpolated. Each gradient object has a `colorInterpolationMethod` property (defining its colorspace), a `hueInterpolationMethod` property (controlling how angle-based values are interpolated), and a `premultipliedAlpha` property (allowing you to opt into the transparency model used by normal CSS gradients):
+Skia Canvas’s `CanvasGradient` objects give you additional control over how the colors between the stops are interpolated. Each gradient object has a `colorInterpolationMethod` property (defining its colorspace), a `hueInterpolationMethod` property (controlling how angle-based values are interpolated), and a `premultipliedAlpha` property (allowing you to opt into the transparency model used by normal CSS gradients):
 
 #### `colorInterpolationMethod`
 
-Selects the color space used for calculating the gradient's colors in between the explicit color stops. Defaults to `"srgb"`.
+Selects the color space used for calculating the gradient’s colors in between the explicit color stops. Defaults to `"srgb"`.
 
 | Coordinate System | Values |
 |-- | -- |
@@ -343,7 +352,7 @@ If set to a positive number, the path will be stroked rather than filled and the
 
 #### `cap`
 
-By default, stroked lines in the pattern will be drawn with blunt line caps. The `cap` argument can be set to any valid [lineCap][lineCap] string to change this style. If the `line` argument isn't also included, the `cap` setting will have no effect since the pattern will be filled rather than stroked.
+By default, stroked lines in the pattern will be drawn with blunt line caps. The `cap` argument can be set to any valid [lineCap][lineCap] string to change this style. If the `line` argument isn’t also included, the `cap` setting will have no effect since the pattern will be filled rather than stroked.
 
 #### `color`
 By default the texture will be drawn in black (filled if `line` is undefined, stroked otherwise). The `color` argument can be set to a string defining the stroke/fill color to be used instead.
@@ -448,14 +457,14 @@ getImageData(sx, sy, sw, sh)
 getImageData(sx, sy, sw, sh, {colorType="rgba", colorSpace="srgb", density, matte, msaa})
 ```
 
-These methods behave identically to the standard [createImageData()][createImageData()] and [getImageData()][getImageData()] methods but have been extended to also accept an optional `colorType` value in their settings argument. The `colorType` defines the arrangement of individual color components in the ImageData's pixel array. If omitted, the type will default to `"rgba"`, but any of the [supported color types][imgdata_colortype] can be specified instead.
+These methods behave identically to the standard [createImageData()][createImageData()] and [getImageData()][getImageData()] methods but have been extended to also accept an optional `colorType` value in their settings argument. The `colorType` defines the arrangement of individual color components in the ImageData’s pixel array. If omitted, the type will default to `"rgba"`, but any of the [supported color types][imgdata_colortype] can be specified instead.
 
 The `colorSpace` argument can be set to `"srgb"` or `"display-p3"` and, if omitted, defaults to the color space the context was created with.
 
 The `getImageData()` method also accepts a handful of rendering options which have the same behaviors and default values as their equivalents in the Canvas [toFile()][toFile] method: [`density`][density], [`matte`][matte], and [`msaa`][msaa].
 
 :::tip
-Calling `getImageData` involves copying bitmaps between the GPU and main memory. If you're invoking it frequently in your code (e.g., within a tight loop), you may get better performance by disabling the [`gpu` property][canvas_gpu] for that canvas to avoid this overhead. Repeated calls can also be sped up by setting `willReadFrequently` when creating the context (so it caches the buffer between calls).
+Calling `getImageData` involves copying bitmaps between the GPU and main memory. If you’re invoking it frequently in your code (e.g., within a tight loop), you may get better performance by disabling the [`gpu` property][canvas_gpu] for that canvas to avoid this overhead. Repeated calls can also be sped up by setting `willReadFrequently` when creating the context (so it caches the buffer between calls).
 :::
 
 ### `drawImage()`
@@ -468,9 +477,9 @@ drawImage(img, srcX, srcY, srcWidth, srcHeight, x, y, width, height)
 This method behaves identically to the standard [`drawImage()`][drawImage()] function, but accepts [ImageData][imagedata] and [Context][context] objects (as well as the usual [Image][image] and [Canvas][canvas] objects) as its first argument.
 
 :::info[Note]
-Image objects loaded from SVG files that don't have an [intrinsic size][img_size] have some behavioral quirks to keep in mind when drawing:
-- When passed to `drawImage()` without size arguments, the SVG will be scaled to a size that fits within the Canvas's current bounds (using an approach akin to CSS's `object-fit: contain`).
-- When using the 9-argument version of `drawImage()`, the ‘crop’ arguments (`srcX`, `srcY`, `srcWidth`, & `srcHeight`) will correspond to this scaled-to-fit size, *not* the Image's reported `width` & `height`.
+Image objects loaded from SVG files that don’t have an [intrinsic size][img_size] have some behavioral quirks to keep in mind when drawing:
+- When passed to `drawImage()` without size arguments, the SVG will be scaled to a size that fits within the Canvas’s current bounds (using an approach akin to CSS’s `object-fit: contain`).
+- When using the 9-argument version of `drawImage()`, the ‘crop’ arguments (`srcX`, `srcY`, `srcWidth`, & `srcHeight`) will correspond to this scaled-to-fit size, *not* the Image’s reported `width` & `height`.
 :::
 
 ### `drawCanvas()`
@@ -613,8 +622,8 @@ async function metricsDemo(){
     ctx.stroke()
 
     // draw dotted lines around the 1em tall text block (i.e., the non-leading portions of the lineHeight)
-    let textTop    = line.baseline + m.alphabeticBaseline - m.fontBoundingBoxAscent
-    let textBottom = line.baseline + m.alphabeticBaseline + m.fontBoundingBoxDescent
+    let textTop    = line.baseline - m.fontBoundingBoxAscent
+    let textBottom = line.baseline + m.fontBoundingBoxDescent
     ctx.beginPath()
     ctx.setLineDash([2])
     ctx.strokeStyle = 'rgba(0,50,50, 0.4)'
@@ -640,11 +649,11 @@ metricsDemo()
 Output:
 ```
 TextMetrics {
-  width: 667.3400268554688,
-  actualBoundingBoxLeft: -0,
-  actualBoundingBoxRight: 667.3400268554688,
-  actualBoundingBoxAscent: 44.79999923706055,
-  actualBoundingBoxDescent: 182.1999969482422,
+  width: 667.34375,
+  actualBoundingBoxLeft: -2.40625,
+  actualBoundingBoxRight: 666.1875,
+  actualBoundingBoxAscent: 43.84375,
+  actualBoundingBoxDescent: 180.78125,
   fontBoundingBoxAscent: 48,
   fontBoundingBoxDescent: 16,
   emHeightAscent: 48,
@@ -654,46 +663,46 @@ TextMetrics {
   ideographicBaseline: -16,
   lines: [
     {
-      x: 2,
-      y: -44.79999923706055,
-      width: 665.9375,
-      height: 60,
-      baseline: 0.40000152587890625,
-      hangingBaseline: -38,
-      alphabeticBaseline: 0.40000152587890625,
-      ideographicBaseline: 16.400001525878906,
-      ascent: -47.599998474121094,
-      descent: 16.400001525878906,
+      x: 3.46875,
+      y: -43.84375,
+      width: 662.71875,
+      height: 57.125,
+      baseline: 0,
+      hangingBaseline: -38.400001525878906,
+      alphabeticBaseline: 0,
+      ideographicBaseline: 16,
+      ascent: -48,
+      descent: 16,
       startIndex: 0,
       endIndex: 27,
       runs: [Array]
     },
     {
-      x: 1,
-      y: 45.19999694824219,
-      width: 657.4375,
-      height: 60,
-      baseline: 90.39999389648438,
-      hangingBaseline: 51.99999237060547,
-      alphabeticBaseline: 90.39999389648438,
-      ideographicBaseline: 106.39999389648438,
-      ascent: 42.399993896484375,
-      descent: 106.39999389648438,
+      x: 2.40625,
+      y: 46.15625,
+      width: 654.375,
+      height: 57.125,
+      baseline: 90,
+      hangingBaseline: 51.599998474121094,
+      alphabeticBaseline: 90,
+      ideographicBaseline: 106,
+      ascent: 42,
+      descent: 106,
       startIndex: 28,
       endIndex: 53,
       runs: [Array]
     },
     {
-      x: 2,
-      y: 135.1999969482422,
-      width: 292.65625,
-      height: 47,
-      baseline: 180.39999389648438,
-      hangingBaseline: 142,
-      alphabeticBaseline: 180.39999389648438,
-      ideographicBaseline: 196.39999389648438,
-      ascent: 132.39999389648438,
-      descent: 196.39999389648438,
+      x: 3.03125,
+      y: 136.15625,
+      width: 289.96875,
+      height: 44.625,
+      baseline: 180,
+      hangingBaseline: 141.60000610351562,
+      alphabeticBaseline: 180,
+      ideographicBaseline: 196,
+      ascent: 132,
+      descent: 196,
       startIndex: 54,
       endIndex: 65,
       runs: [Array]
@@ -725,7 +734,7 @@ const canvas = new Canvas(750, 120),
 async function baselinesDemo(){
   const BASELINES = ["top", "hanging", "middle", "alphabetic", "ideographic", "bottom"]
   let [x, y] = [20, 60] // set the location of the first column
-  let spacing = 25 // space between columns
+  let spacing = 27 // space between columns
   let padding = 7 // amount to outdent the gray lines for hanging & alphabetical
   ctx.font = 'italic 30px serif'
   ctx.textWrap = true
@@ -890,7 +899,7 @@ outlineText(str, [width])
 
 The `outlineText()` method typesets a string and returns a Path2D containing the shapes of its character glyphs. It will use the context’s current typography settings (e.g., [`.font`][font], [`.textWrap`][textwrap], [`.textAlign`][textAlign], [`.textBaseline`][textBaseline], etc.) to style the string and will anchor the text relative to the (0, 0) origin point. As a result, you’ll typically want to use the context’s transform-related methods or Path2D’s [`offset()`][p2d_offset] and [`transform()`][p2d_transform] to position the path before drawing it to the canvas.
 
-As with the [`fillText()`][drawText] and [`strokeText()`][drawText] methods, `outlineText()` will produce a single line of text unless `.textWrap` is enabled and will use the optional `width` argument to determine the maximum line width. If a `width` is specified but `.textWrap` is *not* enabled, any text that doesn't fit within that measure will be omitted from the path.
+As with the [`fillText()`][drawText] and [`strokeText()`][drawText] methods, `outlineText()` will produce a single line of text unless `.textWrap` is enabled and will use the optional `width` argument to determine the maximum line width. If a `width` is specified but `.textWrap` is *not* enabled, any text that doesn’t fit within that measure will be omitted from the path.
 
 ```js
 ctx.textBaseline = 'top'
@@ -910,6 +919,7 @@ for (let i=0; i<8000; i++){
 [c2d_font]: #font
 [c2d_measuretext]: #measuretext
 [c2d_textAlign]: #textalign
+[c2d_textRendering]: #textrendering
 [canvas]: canvas.md
 [canvas_gpu]: canvas.md#gpu
 [canvas_pages]: canvas.md#pages
@@ -982,6 +992,7 @@ for (let i=0; i<8000; i++){
 [shadowOffsetY]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/shadowOffsetY
 [strokeStyle]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/strokeStyle
 [textAlign]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/textAlign
+[textRendering]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/textRendering
 [textBaseline]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/textBaseline
 [letterSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/letterSpacing
 [wordSpacing]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/wordSpacing
