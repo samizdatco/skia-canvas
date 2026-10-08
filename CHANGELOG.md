@@ -36,6 +36,11 @@
   - `variable`: A boolean flag identifying that this is a variable font
   - `variations`: Variable font axes represented as an object with supported axis tags (e.g., `wdth`, `slnt`) mapping to `{min, max, default, label}` summaries
   - `features`: OpenType features represented as an object with supported feature tags (e.g., `liga`, `smcp`) mapping to `{type, label}` summaries
+- The [`textRendering`][textRendering] property is now supported, offering control over how text is rasterized:
+  - `"auto"`: the default, uses browser-standard glyph placement
+  - `"geometricPrecision"`: uses sub-pixel positioning (lining up exactly with [`outlineText()`][outlineText()] and vector output)
+  - `"optimizeLegibility"`: enables CoreText’s font smoothing, DirectWrite’s grid fitting, or FreeType’s light autohinting
+  - `"optimizeSpeed"`: snaps glyphs to whole pixels so GPU renders can reuse cached per-glyph bitmaps
 
 #### Imagery
 - **Image** objects can now load **PDF** documents (via [`loadImage()`][loadImage()], [new Image()][image_constructor], or the [`src`][Image.src] setter) and render them as resolution-independent vectors.
@@ -55,7 +60,7 @@
 
 #### Drawing throughput
 - Vector drawing operations are now queued on the JS side in a binary “drawlist” and sent to Rust in batches rather than making one bridged call per verb. In addition, paths are now constructed lazily via Skia’s `PathBuilder`, leading to substantially faster rendering on verb-heavy workloads
-- [`measureText()`][measureText()] results are now memoized, so repeatedly measuring the same strings no longer requires a full layout pass on each call.
+- [`measureText()`][measureText()] is substantially faster, especially for long strings and text-wrapped layouts
 
 #### GPU rendering & exports
 - All GPU work (offscreen exports as well as windows) now shares a dedicated render thread instead of giving every worker thread its own GPU context. This removes an unnecessary GPU⇄CPU roundtrip and duplicated per-thread resource caches, making exports meaningfully faster and lowering peak memory
@@ -96,14 +101,21 @@
 #### Text
 - Variable font instancing now uses Skia’s font-argument path, fixing missing or blank glyphs, weights that drifted from glyph to glyph within a single string, and the weight axis being ignored entirely on Linux (#272, #280, #294)
 - [`textDecoration`][textDecoration] is now drawn behind the text (unless it’s `line-through`) and underlines now leave gaps for descenders
-- Text is now positioned with subpixel precision rather than having its baseline snapped to the pixel grid
-- [`measureText()`][measureText()] now reports browser-like `width` and `actualBoundingBox*` values when [`letterSpacing`][letterSpacing] is non-zero: `width` includes a trailing letter-space and `actualBoundingBoxLeft`/`Right` now use the ink bounds
 - Fixed [`textBaseline`][textBaseline] being applied incorrectly when drawing with the default font
+- [`measureText()`][measureText()] now reports more accurate, browser-like metrics:
+  - `actualBoundingBox*` values (and per-line metrics) are now traced from the glyph outlines and include diacritics
+  - `width` now includes a trailing letter-space when [`letterSpacing`][letterSpacing] is non-zero
+  - `fontBoundingBoxAscent`/`Descent` are now derived from the font’s metrics tables and no longer include line-spacing or double-count the [`textBaseline`][textBaseline]
+  - `emHeightAscent`/`Descent` describe the em square (proportionally dividing the font size) rather than duplicating the font box (which incorporates padding)
 - Improved parsing of CSS-derived properties:
   - [`filter`][filter] now ignores the entire assignment if any component is invalid (rather than filtering them out and keeping just the valid components)
   - [`textDecoration`][textDecoration] handles multi-word values (e.g., color functions), newlines, and repeated delimiters
   - a `normal` keyword in a [`font`][ctx_font] shorthand declaration no longer clobbers a preceding `italic` (#278)
   - [`fontVariant`][fontVariant] parsing has been corrected
+- Form feeds & vertical tab escapes no longer truncate the text (or force a line break with [`textWrap`][textWrap] enabled)
+- The `top`, `middle` & `bottom` [`textBaseline`][textBaseline] settings now agree with browsers, positioning relative to the em square (rather than the ascent/descent box)
+- Trailing spaces are now used for determining the width of the [`textDecoration`][textDecoration] and positioning right-aligned or centered text
+- [`letterSpacing`][letterSpacing] no longer applies to words in Arabic or other cursive scripts; only the spaces between words are widened
 
 #### GPU
 - Fixed window flickering at the canvas’s edges when sizing to [`fit`][window_fit] (#285)
@@ -144,6 +156,9 @@
 - SVG **Image**s lacking an explicit `width` and `height` now use the CSS [default sizing algorithm][default_sizing_algo] (with a 300×150 [default object size][default_size]) to establish a default intrinsic size. An SVG with only one concrete dimension plus a `viewBox` ratio now resolves to a fully-determined intrinsic size. This changes both the reported `width`/`height` of such images and how they scale when drawn without explicit size arguments (including when used as fill/stroke-pattern tiles).
 - An **ImageData** created from a Node `Buffer` object now *shares* the buffer’s memory rather than copying it.
 - The `window` Cargo feature is no longer independently configurable (it is now automatically enabled by a `metal` or `vulkan` feature being present).
+- [`fontHinting`][fontHinting] is now ignored on macOS (since CoreText has no support for hinting). Previously it enabled heavier text rendering, which is now available by setting `textRendering` to `"optimizeLegibility"` instead.
+- Text drawn with `textAlign: 'justify'` and `direction: 'rtl'` now extends leftward from the anchor like right-aligned text does
+- Vertical placement for non-alphabetic [`textBaseline`][textBaseline] settings has shifted in order to match browser behavior
 
 [pointerevent]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent
 [pointerevent_types]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent#pointer_event_types
@@ -193,6 +208,10 @@
 [rendercache]: /docs/getting-started.md#render-cache
 [default_sizing_algo]: https://www.w3.org/TR/css-images-3/#default-sizing
 [default_size]: https://www.w3.org/TR/CSS22/visudet.html#inline-replaced-width
+[textRendering]: /docs/api/context.md#textrendering
+[fontHinting]: /docs/api/context.md#fonthinting
+[outlineText()]: /docs/api/context.md#outlinetext
+[textWrap]: /docs/api/context.md#textwrap
 
 ## 📦 ⟩ [v3.0.8] ⟩ Sep 25, 2025
 
