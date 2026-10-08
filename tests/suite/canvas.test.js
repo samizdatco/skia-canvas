@@ -690,6 +690,14 @@ describe("Canvas", ()=>{
       let hi = await canvas.toBuffer('jpg', {quality:1.0}),
           lo = await canvas.toBuffer('jpg', {quality:0.2})
       assert(lo.length < hi.length / 2)
+
+      // in PDFs, opaque bitmaps are JPEG-compressed unless quality is 1.0
+      let img = await loadImage(await canvas.toBuffer('png', {matte:'white'}))
+      ctx.drawImage(img, 0, 0)
+      let jpeg = await canvas.toBuffer('pdf', {quality:0.92}),
+          lossless = await canvas.toBuffer('pdf', {quality:1.0})
+      assert.contains(jpeg.toString('latin1'), '/DCTDecode')
+      assert.doesNotContain(lossless.toString('latin1'), '/DCTDecode')
     })
 
     test("filters", async () => {

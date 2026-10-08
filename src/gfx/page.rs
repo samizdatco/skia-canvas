@@ -873,9 +873,11 @@ pub fn pages_arg(cx: &mut FunctionContext, idx:usize, canvas:&BoxedCanvas) -> Ne
 }
 
 fn pdf_metadata(quality:f32, density:f32) -> pdf::Metadata<'static>{
+  // quality 1.0 means use deflate rather than JPEG (101 is skia's lossless sentinel)
+  let encoding_quality = if quality >= 1.0 { 101 } else { (quality*100.0) as i32 };
   pdf::Metadata {
     producer: "Skia Canvas <https://skia-canvas.org>".to_string(),
-    encoding_quality: Some((quality*100.0) as i32),
+    encoding_quality: Some(encoding_quality),
     raster_dpi: Some(density * 72.0),
     ..Default::default()
   }
