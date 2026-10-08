@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use allsorts::binary::read::ReadScope;
 use allsorts::tables::NameTable;
 use allsorts::get_name::fontcode_get_name;
-use skia_safe::{Typeface, FourByteTag, FontArguments};
+use skia_safe::{Typeface, FourByteTag, FontArguments, Data};
+use read_fonts::{FontData, TableProvider, TopLevelTable, types::Tag, tables::{hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, layout::FeatureParams}};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::{TextAlign, TextDecorationStyle, TextStyle};
@@ -295,6 +296,35 @@ pub fn typeface_details<'a>(cx: &mut FunctionContext<'a>, filename:&str, font: &
   Ok(dict)
 }
 
+// a subset of a typeface's tables, copied out of Skia once so read-fonts can parse them in place
+// (as a TableProvider: `tables.hhea()`, `tables.gsub()`, etc.)
+pub struct FontTables(Vec<(Tag, Data)>);
+
+impl FontTables{
+  // tables for BaselineMetrics
+  pub fn metrics(face:Option<&Typeface>) -> Self{
+    // skip fonts without a usable units-per-em (their values are in font units)
+    let face = face.filter(|face| face.units_per_em().is_some_and(|upm| upm > 0));
+    Self::copy(face, &[Mvar::TAG, Fvar::TAG, Avar::TAG, Hhea::TAG, Os2::TAG, Base::TAG])
+  }
+
+  // tables for FontCapabilities
+  pub fn capabilities(face:&Typeface) -> Self{
+    Self::copy(Some(face), &[Fvar::TAG, Gsub::TAG, Gpos::TAG])
+  }
+
+  fn copy(face:Option<&Typeface>, tags:&[Tag]) -> Self{
+    FontTables(tags.iter().filter_map(|&tag| Some((tag, face?.copy_table_data(u32::from_be_bytes(tag.to_be_bytes()))?))).collect())
+  }
+}
+
+impl<'a> TableProvider<'a> for &'a FontTables{
+  fn data_for_tag(&self, tag:Tag) -> Option<FontData<'a>>{
+    let tables:&'a FontTables = self;
+    tables.0.iter().find(|(t, _)| *t == tag).map(|(_, data)| FontData::new(data))
+  }
+}
+
 #[derive(Debug, Clone)]
 pub struct AxisDetails{
   pub tag: String,
@@ -338,29 +368,13 @@ impl FontCapabilities{
     }
 
     // walk the font's variation-axis table and build a tag -> human-readable label mapping
-    let mut axis_labels:Vec<(String, Option<String>)> = vec![];
-    if let Some(data) = font.copy_table_data(*FourByteTag::from_chars('f','v','a','r')){
-      let bytes = data.as_bytes();
-
-      if bytes.len() >= 12 {
-        // read fvar header
-        let offset = u16::from_be_bytes([bytes[4], bytes[5]]) as usize;
-        let count = u16::from_be_bytes([bytes[8], bytes[9]]) as usize;
-        let size = u16::from_be_bytes([bytes[10], bytes[11]]) as usize;
-
-        // extract each VariationAxisRecord
-        for i in 0..count {
-          let rec = offset + i * size;
-          if size < 20 || rec + 20 > bytes.len() { break }
-          let tag = match std::str::from_utf8(&bytes[rec..rec + 4]){
-            Ok(tag) => tag.trim_end().to_string(),
-            Err(_) => continue,
-          };
-          let name_id = u16::from_be_bytes([bytes[rec + 18], bytes[rec + 19]]);
-          axis_labels.push((tag, names.get(&name_id).cloned()));
-        }
-      }
-    }
+    let tables = &FontTables::capabilities(font);
+    let axis_labels:Vec<(String, Option<String>)> = tables.fvar().and_then(|fvar| fvar.axes()).unwrap_or_default().iter()
+      .filter_map(|axis| {
+        let tag = std::str::from_utf8(&axis.axis_tag().to_be_bytes()).ok()?.trim_end().to_string();
+        Some((tag, names.get(&axis.axis_name_id().to_u16()).cloned()))
+      })
+      .collect();
 
     // extract each axis's value-range and merge in the labels (preserving the fvar table's ordering)
     let mut axes = vec![];
@@ -376,42 +390,20 @@ impl FontCapabilities{
 
     // extract supported feature tags from the GSUB+GPOS tables and pair with their human-readable labels
     let mut features:Vec<FeatureDetails> = vec![];
-    for table in [FourByteTag::from_chars('G','S','U','B'), FourByteTag::from_chars('G','P','O','S')]{
-      let data = match font.copy_table_data(*table){ Some(data) => data, None => continue };
-      let bytes = data.as_bytes();
+    let feature_lists = [tables.gsub().and_then(|gsub| gsub.feature_list()), tables.gpos().and_then(|gpos| gpos.feature_list())];
+    for list in feature_lists.into_iter().flatten(){
+      for record in list.feature_records(){
+        let Ok(tag) = std::str::from_utf8(&record.feature_tag().to_be_bytes()).map(|tag| tag.trim_end().to_string()) else { continue };
 
-      // read GSUB or GPOS table header
-      if bytes.len() < 8 { continue }
-      let offset = u16::from_be_bytes([bytes[6], bytes[7]]) as usize;
-      if offset == 0 || offset + 2 > bytes.len() { continue }
-      let count = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]) as usize;
-
-      // extract each FeatureRecord
-      for i in 0..count {
-        let rec = offset + 2 + i * 6;
-        if rec + 6 > bytes.len() { break }
-        let tag = match std::str::from_utf8(&bytes[rec..rec + 4]){
-          Ok(tag) => tag.trim_end().to_string(),
-          Err(_) => continue,
+        // most features use the 0 "no label" ID (since they have canonical names), but check for custom labels in
+        // the FeatureParams for stylistic sets (ss01–ss20) and character variants (cv01–cv99)
+        let numbered = tag.len() == 4 && (tag.starts_with("ss") || tag.starts_with("cv")) && tag[2..].bytes().all(|b| b.is_ascii_digit());
+        let params = if numbered { record.feature(list.offset_data()).ok().and_then(|feature| feature.feature_params()?.ok()) } else { None };
+        let name_id = match params {
+          Some(FeatureParams::StylisticSet(ss)) => ss.ui_name_id().to_u16(),
+          Some(FeatureParams::CharacterVariant(cv)) => cv.feat_ui_label_name_id().to_u16(),
+          _ => 0,
         };
-
-        // most features use the 0 "no label" ID (since we have the canonical names for them anyway)
-        let mut name_id = 0;
-
-        // stylistic sets (ss01–ss20) and character variants (cv01–cv99) may have custom labels worth extracting...
-        if tag.len() == 4
-          && (tag.starts_with("ss") || tag.starts_with("cv"))
-          && tag[2..].bytes().all(|b| b.is_ascii_digit())
-        {
-          // ...so look at the known location (the second u16) in their FeatureParams tables for the label ID
-          let feat_tbl = offset + u16::from_be_bytes([bytes[rec + 4], bytes[rec + 5]]) as usize;
-          if feat_tbl + 2 <= bytes.len(){
-            let params = feat_tbl + u16::from_be_bytes([bytes[feat_tbl], bytes[feat_tbl + 1]]) as usize;
-            if params > feat_tbl && params + 4 <= bytes.len(){
-              name_id = u16::from_be_bytes([bytes[params + 2], bytes[params + 3]]);
-            }
-          }
-        }
 
         // keep the first label either table provided for a tag
         let label = names.get(&name_id).cloned();

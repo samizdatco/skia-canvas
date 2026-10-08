@@ -2,13 +2,13 @@ use std::iter::zip;
 use std::sync::Once;
 use std::collections::BTreeSet;
 use serde_json::{json, Value};
-use skia_safe::{FontMetrics, FourByteTag, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
+use skia_safe::{FontMetrics, Paint, Point, Rect, Path as SkPath, PathBuilder, Font, GlyphId, TextBlob, TextBlobBuilder, Canvas as SkCanvas, Picture, PictureRecorder, dash_path_effect, path_utils::fill_path_with_paint};
 use skia_safe::paint::{Style as PaintStyle, Cap as PaintCap};
 use skia_safe::textlayout::{
   FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
   TextAlign, TextDecorationStyle, TextDirection, TextStyle,
 };
-use read_fonts::{FontData, FontRead, types::{Tag, Fixed, F2Dot14}, tables::{hhea::Hhea, os2::{Os2, SelectionFlags}, base::Base, fvar::Fvar, avar::Avar, mvar::{Mvar, tags::{HASC, HDSC}}}};
+use read_fonts::{TableProvider, types::{Tag, Fixed, F2Dot14}, tables::{os2::SelectionFlags, mvar::tags::{HASC, HDSC}}};
 use crate::font_library::{FontLibrary, RenderAttrs, cached_glyph_bounds};
 use crate::bridge::*;
 use crate::context::State;
@@ -605,22 +605,19 @@ impl BaselineMetrics{
   pub fn for_style(style:&TextStyle) -> Self{
     let size = style.font_size() as f64;
     let typeface = style.typeface();
-    let upm = typeface.as_ref().and_then(|face| face.units_per_em()).filter(|&upm| upm > 0).unwrap_or(0) as f64;
-    let table = |tag:&[u8; 4]| typeface.as_ref().filter(|_| upm > 0.0)?.copy_table_data(u32::from_be_bytes(*tag));
+    let upm = typeface.as_ref().and_then(|face| face.units_per_em()).unwrap_or(0) as f64;
+    let tables = &FontTables::metrics(typeface.as_ref());
     let px = |units:f64| units * size / upm;
 
     // variable fonts may have `hasc` and `hdsc` deltas that apply to their ascender & descender lengths
     let (hasc, hdsc) = (|| {
-      let mvar_data = table(b"MVAR")?;
+      let mvar = tables.mvar().ok()?;
       let instance = style.font_arguments()?.clone_typeface(typeface.clone()?)?;
       let position = instance.variation_design_position()?;
-      let fvar_data = table(b"fvar")?;
-      let axes = Fvar::read(FontData::new(&fvar_data)).ok()?.axes().ok()?;
-      let avar_data = table(b"avar");
-      let avar = avar_data.as_deref().and_then(|data| Avar::read(FontData::new(data)).ok());
+      let axes = tables.fvar().ok()?.axes().ok()?;
+      let avar = tables.avar().ok(); // optional: without it, the normalized coordinates are used as-is
       let coords:Vec<F2Dot14> = axes.iter().enumerate().map(|(i, axis)| {
-        let tag = FourByteTag::from(u32::from_be_bytes(axis.axis_tag().to_be_bytes()));
-        let value = match position.iter().find(|coord| coord.axis == tag) {
+        let value = match position.iter().find(|coord| Tag::from_u32(*coord.axis) == axis.axis_tag()) {
           Some(coord) => Fixed::from_f64(coord.value as f64),
           None => axis.default_value(),
         };
@@ -630,23 +627,16 @@ impl BaselineMetrics{
           None => coord.to_f2dot14(),
         }
       }).collect();
-      let mvar = Mvar::read(FontData::new(&mvar_data)).ok()?;
       let delta = |tag| mvar.metric_delta(tag, &coords).map_or(0.0, |delta| delta.to_f64());
       Some((delta(HASC), delta(HDSC)))
     })().unwrap_or_default();
 
-    // extract the em square and font box measurements
-    let hhea = (|| {
-      let data = table(b"hhea")?;
-      let hhea = Hhea::read(FontData::new(&data)).ok()?;
-      Some((px(hhea.ascender().to_i16() as f64 + hasc), -px(hhea.descender().to_i16() as f64 + hdsc)))
-    })();
-    let os2 = (|| {
-      let data = table(b"OS/2")?;
-      let os2 = Os2::read(FontData::new(&data)).ok()?;
+    // extract the em square and font box ascent/descent pairs
+    let hhea = tables.hhea().ok().map(|hhea| (px(hhea.ascender().to_i16() as f64 + hasc), -px(hhea.descender().to_i16() as f64 + hdsc)));
+    let os2 = tables.os2().ok().filter(|_| hhea.is_some()).map(|os2| {
       let typo = (px(os2.s_typo_ascender() as f64 + hasc), -px(os2.s_typo_descender() as f64 + hdsc));
-      Some((typo, os2.fs_selection().contains(SelectionFlags::USE_TYPO_METRICS)))
-    })().filter(|_| hhea.is_some());
+      (typo, os2.fs_selection().contains(SelectionFlags::USE_TYPO_METRICS))
+    });
     let typo = os2.map(|(typo, _)| typo);
     let font = match (hhea.filter(|&hhea| hhea != (0.0, 0.0)), os2) {
       (Some(_), Some((typo, true))) => typo,
@@ -663,15 +653,14 @@ impl BaselineMetrics{
 
     // extract any additional baseline offsets defined in the BASE table for the `DFLT` script
     let [romn, hang, ideo] = (|| {
-      let base_data = table(b"BASE")?;
-      let axis = Base::read(FontData::new(&base_data)).ok()?.horiz_axis()?.ok()?;
+      let axis = tables.base().ok()?.horiz_axis()?.ok()?;
       let (tags, scripts) = (axis.base_tag_list()?.ok()?, axis.base_script_list().ok()?);
       let values = scripts.base_script_records().iter()
-        .find(|record| record.base_script_tag() == Tag::new(b"DFLT"))?
+        .find(|record| record.base_script_tag() == *b"DFLT")?
         .base_script(scripts.offset_data()).ok()?
         .base_values()?.ok()?;
       let coord = |tag:&[u8; 4]| {
-        let index = tags.baseline_tags().iter().position(|t| t.get() == Tag::new(tag))?;
+        let index = tags.baseline_tags().iter().position(|t| t.get() == *tag)?;
         Some(px(values.base_coords().get(index).ok()?.coordinate() as f64))
       };
       Some([coord(b"romn"), coord(b"hang"), coord(b"ideo")])
