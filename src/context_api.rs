@@ -1043,7 +1043,8 @@ pub fn set_filter(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let mut this = this.borrow_mut();
   if !cx.argument::<JsValue>(1)?.is_a::<JsNull, _>(&mut cx) {
     let (filter_text, specs) = filter_arg(&mut cx, 1)?;
-    if filter_text != this.state.filter.to_string() {
+    // the same text can resolve to different values (e.g., `em` units after a font change)
+    if filter_text != this.state.filter.css || specs != this.state.filter.specs {
       this.state.filter = Filter::new(&filter_text, &specs);
     }
   }

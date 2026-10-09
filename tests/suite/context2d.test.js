@@ -697,6 +697,11 @@ describe("Context2D", ()=>{
       ctx.filter = 'none'
       assert.equal(ctx.filter, 'none')
 
+      // newlines are ordinary whitespace, including inside a function's parens
+      ctx.filter = 'blur(\n4px\n)\ndrop-shadow(1px\n2px\nred)'
+      assert.equal(ctx.filter, 'blur(4px) drop-shadow(1px 2px red)')
+      ctx.filter = 'none'
+
       // a unitless zero is a valid <length> even though every other number needs a unit
       ctx.filter = 'drop-shadow(20px 20px 0 red)'
       assert.equal(ctx.filter, 'drop-shadow(20px 20px 0 red)')
@@ -704,6 +709,24 @@ describe("Context2D", ()=>{
       assert.equal(ctx.filter, 'blur(0)')
       ctx.filter = 'drop-shadow(20px 20px 1 red)' // …but a non-zero one still doesn't
       assert.equal(ctx.filter, 'blur(0)')
+
+      // bare numbers (for percentage-valued functions) follow the same digits-only grammar as
+      // lengths: no exponents and no JS-isms like hex (which used to be silently read as 0)
+      ctx.filter = 'opacity(.5)'
+      assert.equal(ctx.filter, 'opacity(.5)')
+      for (let junk of ['opacity(1e2)', 'opacity(0x10)', 'opacity(5.)']){
+        ctx.filter = junk
+        assert.equal(ctx.filter, 'opacity(.5)', `"${junk}" should be rejected`)
+      }
+
+      // negative values invalidate the whole chain, except for hue-rotate angles & shadow offsets
+      for (let neg of ['blur(-5px)', 'sepia(-1)', 'brightness(-50%)', 'drop-shadow(1px 1px -5px red)', 'blur(2px) opacity(-1)']){
+        ctx.filter = neg
+        assert.equal(ctx.filter, 'opacity(.5)', `"${neg}" should be rejected`)
+      }
+      ctx.filter = 'hue-rotate(-90deg) drop-shadow(-1px -2px 3px red)'
+      assert.equal(ctx.filter, 'hue-rotate(-90deg) drop-shadow(-1px -2px 3px red)')
+      ctx.filter = 'blur(0)'
 
       // an unparseable drop-shadow color invalidates the whole declaration rather than
       // dropping just the shadow (which would leave `filter` describing a no-op)
@@ -783,6 +806,35 @@ describe("Context2D", ()=>{
       ctx.fillRect(10, 10, 20, 20)
       assert.deepEqual(pixel(60, 60), BLACK)
       ctx.filter = 'none'
+    })
+
+    test("filter with em lengths", () => {
+      // like browsers, `em` resolves against the font size in effect when the filter is set
+      let blurred = (setup) => {
+        ctx.reset()
+        setup()
+        ctx.fillRect(20, 20, 20, 20)
+        return ctx.getImageData(0, 0, 60, 60).data
+      }
+      let blur4 = blurred(() => ctx.filter = 'blur(4px)'),
+          blur1 = blurred(() => ctx.filter = 'blur(1px)')
+      assert.notDeepEqual(blur4, blur1)
+
+      assert.deepEqual(blurred(() => { ctx.font = '40px serif'; ctx.filter = 'blur(0.1em)' }), blur4)
+      assert.deepEqual(blurred(() => { ctx.filter = 'blur(1em)' }), blurred(() => ctx.filter = 'blur(10px)')) // default font
+
+      // a later font change doesn't affect it, but re-assigning the same string re-resolves it
+      assert.deepEqual(blurred(() => { ctx.font = '40px serif'; ctx.filter = 'blur(0.1em)'; ctx.font = '10px serif' }), blur4)
+      assert.deepEqual(blurred(() => {
+        ctx.font = '40px serif'; ctx.filter = 'blur(0.1em)'; ctx.font = '10px serif'; ctx.filter = 'blur(0.1em)'
+      }), blur1)
+
+      // percentages & size keywords aren't <length>s
+      ctx.filter = 'blur(1em)'
+      for (let bad of ['blur(10%)', 'blur(small)', 'drop-shadow(1px 1px 10% red)']){
+        ctx.filter = bad
+        assert.equal(ctx.filter, 'blur(1em)', `"${bad}" should be rejected`)
+      }
     })
 
     test('shadow', async() => {

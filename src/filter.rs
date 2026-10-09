@@ -5,7 +5,7 @@ use skia_safe::{Paint, Matrix, Point, Color4f, MaskFilter, ImageFilter as SkImag
 
 use crate::bridge::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FilterSpec{
   Plain{name:String, value:f32},
   Shadow{offset:Point, blur:f32, color:Color4f},
@@ -14,7 +14,7 @@ pub enum FilterSpec{
 #[derive(Clone, Debug)]
 pub struct Filter {
   pub css: String,
-  specs: Vec<FilterSpec>,
+  pub specs: Vec<FilterSpec>,
   _raster: Option<LastFilter>,
   _vector: Option<LastFilter>
 }
