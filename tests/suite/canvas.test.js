@@ -851,7 +851,7 @@ describe("Canvas", ()=>{
       return canvas.toBuffer('pdf')
     }
 
-    test("reads multipage PDFs", async () => {
+    test("multi-page PDFs", async () => {
       let doc = await loadCanvas(await makePdf())
 
       // one canvas page per document page, each at its own size…
@@ -866,7 +866,7 @@ describe("Canvas", ()=>{
       assert.deepEqual(firstPixel(doc.pages[2]), [0, 0, 255, 255])
     })
 
-    test("can re-export multipage docs", async () => {
+    test("multi-page re-export", async () => {
       // the pages hold real geometry, so the document can make a round trip
       let doc = await loadCanvas(await makePdf()),
           again = await loadCanvas(await doc.toBuffer('pdf'))
@@ -876,7 +876,7 @@ describe("Canvas", ()=>{
       assert.deepEqual(firstPixel(again.pages[2]), [0, 0, 255, 255])
     })
 
-    test("reads single-page sources", async () => {
+    test("single-page sources", async () => {
       // a bitmap is sized to its pixel dimensions and pre-drawn
       let bitmap = await loadCanvas(PNG_PATH)
       assert.equal(bitmap.pages.length, 1)
@@ -897,7 +897,7 @@ describe("Canvas", ()=>{
       assert.deepEqual(firstPixel(short.getContext('2d')), [0, 255, 0, 255])
     })
 
-    test("uses the viewBox for sizeless SVGs", async () => {
+    test("sizeless SVGs", async () => {
       let svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 250"></svg>')
       assert.deepEqual((c => [c.width, c.height])(await loadCanvas(svg)), [400, 250])
 
@@ -909,7 +909,7 @@ describe("Canvas", ()=>{
       assert.deepEqual((c => [c.width, c.height])(await loadCanvas(bare)), [300, 150])
     })
 
-    test("parses canvas & context options", async () => {
+    test("canvas & context options", async () => {
       let doc = await loadCanvas(PNG_PATH, {colorSpace:'display-p3', gpu:false, textGamma:1.8})
       assert.equal(doc.getContext('2d').getContextAttributes().colorSpace, 'display-p3')
       assert.equal(doc.gpu, false)

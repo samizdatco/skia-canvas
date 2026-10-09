@@ -1140,7 +1140,7 @@ describe("Path2D", ()=>{
     })
   })
 
-  describe("winds shapes correctly", ()=>{
+  describe("sets winding for", ()=>{
     // Regression guards for the rect/roundRect corner-ordering fixes. These shapes fill
     // identically no matter where their closed contour starts or which way it winds, so the
     // divergences we fixed are invisible to a plain fill — they only surface in dash phase,
@@ -1180,7 +1180,7 @@ describe("Path2D", ()=>{
       assert.deepEqual(line, ["lineTo", 95, 20])   // top edge → (x + w − rTR, y)
     })
 
-    test("matches Context2D", ()=>{
+    test("Context2D paths", ()=>{
       // ctx.rect/roundRect delegate to these builders. Preceded by real geometry and drawn as
       // a dashed stroke, any divergence in start vertex, winding, or new-subpath-vs-connecting-
       // line shows up as differing pixels (a plain fill would hide all three).

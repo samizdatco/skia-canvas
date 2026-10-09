@@ -802,7 +802,7 @@ describe("Context2D", ()=>{
       assert.notEqual(pixel(143, 117), BLACK)
     })
 
-    test("globalCompositeOperation()", () => {
+    test("globalCompositeOperation", () => {
       let RED = [255,0,0,255],
           BLUE = [0,0,255,255],
           MAGENTA = [255,0,255,255]
@@ -1455,7 +1455,7 @@ describe("Context2D", ()=>{
     })
 
     describe("measureText()", () => {
-      test("provides line metrics", () => {
+      test("line metrics", () => {
         FontLibrary.use('MeasureFace', [`tests/assets/fonts/montserrat-latin/montserrat-v30-latin-regular.woff2`])
         ctx.font = "20px MeasureFace"
 
@@ -1560,7 +1560,7 @@ describe("Context2D", ()=>{
       // the memo dropped outright whenever the font set changes, so these pin the two ways it could
       // go wrong: serving a stale entry after a state change, and serving a pre-`use()` fallback
       // measurement after the named family has actually been loaded
-      test("repeated measurements are identical", () => {
+      test("repeated calls", () => {
         ctx.font = '16px sans-serif'
         let first = ctx.measureText('repeat me')
         ctx.fillText('unrelated drawing', 10, 100)
@@ -1568,7 +1568,7 @@ describe("Context2D", ()=>{
         assert.deepEqual({...again}, {...first})
       })
 
-      test("state changes re-measure", () => {
+      test("state changes", () => {
         ctx.font = '16px sans-serif'
         let m16 = ctx.measureText('measure me').width
         ctx.font = '32px sans-serif'
@@ -1591,7 +1591,7 @@ describe("Context2D", ()=>{
         assert.nearEqual(ctx.measureText('measure me').width, m32)
       })
 
-      test("font loading re-measures", () => {
+      test("font loading", () => {
         ctx.font = '32px MemoFace' // not yet registered: measures with the fallback face
         let fallback = ctx.measureText('Wavy Text').width
 
@@ -1603,7 +1603,7 @@ describe("Context2D", ()=>{
         assert.ok(Math.abs(loaded - fallback) > 1, `expected re-measure after use() (${fallback} vs ${loaded})`)
       })
 
-      test("ink bounds for every textBaseline", () => {
+      test("ink bounds by textBaseline", () => {
         // fillText() and measureText() each have to account for the textBaseline shift exactly
         // once, so the drawn ink should be centered on the actualBoundingBox for every setting
         // (compare centers since the glyph-outline bounds run slightly past the antialiased ink)
@@ -1624,7 +1624,7 @@ describe("Context2D", ()=>{
         }
       })
 
-      test("font & em boxes relative to textBaseline", () => {
+      test("font & em boxes by textBaseline", () => {
         FontLibrary.use('BaselineFace', [`tests/assets/fonts/montserrat-latin/montserrat-v30-latin-regular.woff2`])
         ctx.font = '48px BaselineFace'
         ctx.textBaseline = 'alphabetic'
@@ -1758,7 +1758,7 @@ describe("Context2D", ()=>{
     })
 
     describe('drawImage()', () => {
-      test('draws bitmaps', async () => {
+      test("bitmaps", async () => {
         let image = await loadAsset('checkers.png')
         ctx.imageSmoothingEnabled = false
 
@@ -1835,7 +1835,7 @@ describe("Context2D", ()=>{
         assert.deepEqual(pixel(21, 20), GREEN)
       })
 
-      test('draws vectors', async () => {
+      test("vectors", async () => {
         // an SVG Image's picture is wrapped in a synthetic Page and drawn as an embed, so repeated
         // draws share one cached device-scale raster. these pin the properties that must survive
         // the cache: repeated draws are identical, distinct images stay distinct, upscales stay
@@ -1898,7 +1898,7 @@ describe("Context2D", ()=>{
         }
       })
 
-      test('skips draws with empty rects', async () => {
+      test("empty rects", async () => {
         // a crop that misses the source entirely, or that has no area, has to leave the canvas
         // untouched: clipping it can't hand back an inverted rect, and the src→dst scale can't
         // divide by a zero-width crop and reach the draw with NaN edges
@@ -1985,7 +1985,7 @@ describe("Context2D", ()=>{
         }
       })
 
-      test('draws canvases', () => {
+      test("canvases", () => {
         const swatch = (color, size=8) => {
           let c = new Canvas(size, size), x = c.getContext('2d')
           x.fillStyle = color
@@ -2094,7 +2094,7 @@ describe("Context2D", ()=>{
         assert.deepEqual(pixel(24, 4), GREEN) // …without disturbing the earlier draws
       })
 
-      test('with negative dimensions normalized', async () => {
+      test("with negative dimensions", async () => {
         let srcCanvas = new Canvas(3, 3),
             srcCtx = srcCanvas.getContext("2d");
         srcCtx.fillStyle = 'green'
@@ -2145,7 +2145,7 @@ describe("Context2D", ()=>{
         assert.doesNotThrow( () => ctx.drawCanvas(image, 0, 0) )
       })
 
-      test('with a page context as source', () => {
+      test("from a page context", () => {
         // a multi-page canvas source draws its *newest* page; passing a specific context
         // from `.pages` selects any page instead (on both the vector and raster paths)
         let src = new Canvas(8, 8),
@@ -2164,7 +2164,7 @@ describe("Context2D", ()=>{
         assert.deepEqual(pixel(44, 4), GREEN)
       })
 
-      test('with a loaded PDF page as source', async () => {
+      test("from a PDF page", async () => {
         // the contact-sheet path: parse a multi-page pdf once with loadCanvas, then
         // composite arbitrary pages by drawing their contexts
         let doc = new Canvas(8, 8),

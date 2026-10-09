@@ -17,7 +17,7 @@ describe("DrawList", () => {
 
   describe("kernel", () => {
     // — valueOf coercion (documented change #1): args are coerced as they're enqueued —
-    test("valueOf coerces at enqueue", () => {
+    test("valueOf() coercion", () => {
       let p = new Path2D(); p.moveTo(1, 1)
       // @ts-expect-error — objects with valueOf() are coerced at enqueue time
       p.lineTo({valueOf: () => 7}, {valueOf: () => 8})
@@ -27,7 +27,7 @@ describe("DrawList", () => {
     // Source discipline (§5d): only the kernel (neon.js, and path.js which now hosts the
     // drawlist kernel) may dereference the boxed-struct symbol [ø]; every other object-handle
     // crossing must go through core().
-    test("no [ø] dereference outside the kernel", () => {
+    test("[ø] access", () => {
       let dir = path.join(__dirname, '../../lib/classes')
       let offenders = fs.readdirSync(dir)
         .filter(f => f.endsWith('.js') && f !== 'neon.js' && f !== 'path.js')
@@ -36,29 +36,29 @@ describe("DrawList", () => {
     })
   })
   
-  describe("flush barriers", () => {
+  describe("flushes on", () => {
     // — receiver barrier: a query flushes the object's own pending verbs —
-    test("a query flushes pending verbs", () => {
+    test("queries", () => {
       let p = new Path2D(); p.rect(0, 0, 30, 30)              // pending, never queried
       assert.deepEqual([p.bounds.left, p.bounds.right], [0, 30])
     })
   
     // — pending queues drain before a handle crosses via core() —
-    test("fill(path) drains the arg queue", () => {
+    test("fill(path)", () => {
       let ctx = new Canvas(100, 100).getContext('2d')
       let p = new Path2D(); p.rect(20, 20, 40, 40)           // pending
       ctx.fillStyle = 'black'; ctx.fill(p)
       assert.deepEqual([...ctx.getImageData(40, 40, 1, 1).data], [0, 0, 0, 255])
     })
   
-    test("addPath drains both queues", () => {
+    test("addPath()", () => {
       let a = new Path2D(); a.rect(0, 0, 10, 10)             // pending receiver
       let b = new Path2D(); b.rect(50, 50, 10, 10)           // pending argument
       a.addPath(b)
       assert.deepEqual([a.bounds.left, a.bounds.right], [0, 60])
     })
   
-    test("new Path2D(pending) drains the source", () => {
+    test("new Path2D(pending)", () => {
       let a = new Path2D(); a.rect(5, 5, 20, 20)             // pending
       let b = new Path2D(a)
       assert.equal(b.d, a.d)
@@ -66,9 +66,9 @@ describe("DrawList", () => {
     })    
   })
   
-  describe("reëntrancy", () => {
+  describe("handles reëntrant", () => {
     // — re-entrancy (coerce-then-commit, §5f) —
-    test("nested valueOf replays once, in order", () => {
+    test("nested valueOf()", () => {
       let p = new Path2D()
       p.moveTo(0, 0); p.lineTo(10, 10)
       let hot = { valueOf(){ p.lineTo(50, 50); void p.bounds; return 20 } } // nested enqueue + barrier flush
@@ -78,7 +78,7 @@ describe("DrawList", () => {
       assert.equal(p.d, "M0 0L10 10L50 50L20 30")
     })
   
-    test("a throwing valueOf leaves the queue untouched", () => {
+    test("throwing valueOf()", () => {
       let p = new Path2D(); p.moveTo(0, 0); p.lineTo(10, 10)
       // @ts-expect-error — deliberately passing a throwing valueOf
       assert.throws(() => p.lineTo({valueOf(){ throw new Error('boom') }}, 5), /boom/)
@@ -86,9 +86,9 @@ describe("DrawList", () => {
     })    
   })
 
-  describe("error parity", () => {
+  describe("validates", () => {
     // — non-strict: a verb with a NaN arg is dropped from the batch (adds nothing to `d`) —
-    test("invalid verbs are dropped from the path", () => {
+    test("invalid verbs", () => {
       let p = new Path2D(); p.moveTo(5, 5); p.lineTo(10, 10); p.lineTo(NaN, 0)
       assert.equal(p.d, "M5 5L10 10")
   
@@ -97,19 +97,19 @@ describe("DrawList", () => {
     })
   
     // — draw-verb error parity: the batched wrappers still raise the un-batched arg errors —
-    test("fill(NaN) throws fillRule error", () => {
+    test("fill(NaN)", () => {
       let ctx = new Canvas(10, 10).getContext('2d')
       // @ts-expect-error — deliberately invalid arg
       assert.throws(() => ctx.fill(NaN), /Expected `fillRule`/)
     })
   
-    test("fill(NaN, 'evenodd') throws Path2D error", () => {
+    test("fill(NaN, 'evenodd')", () => {
       let ctx = new Canvas(10, 10).getContext('2d')
       // @ts-expect-error — deliberately invalid arg (2-arg form wants a Path2D)
       assert.throws(() => ctx.fill(NaN, 'evenodd'), /Expected a Path2D/)
     })
   
-    test("stroke(NaN) throws Path2D error", () => {
+    test("stroke(NaN)", () => {
       let ctx = new Canvas(10, 10).getContext('2d')
       // @ts-expect-error — deliberately invalid arg
       assert.throws(() => ctx.stroke(NaN), /Expected a Path2D/)
@@ -153,9 +153,9 @@ describe("DrawList", () => {
     })
   })
 
-  describe("Context2D", () => {
+  describe("batches Context2D", () => {
     // — Context2D flip: transforms, state stack, and draw verbs are all batched now —
-    test("transforms bake into batched verbs", () => {
+    test("transforms", () => {
       let c = new Canvas(200, 200); c.gpu = false; let ctx = c.getContext('2d')
       ctx.fillStyle = 'black'
       ctx.translate(100, 100)
@@ -164,14 +164,14 @@ describe("DrawList", () => {
       assert.deepEqual([...ctx.getImageData(5, 5, 1, 1).data], [0, 0, 0, 0]) // origin untouched
     })
   
-    test("getTransform flushes pending transforms", () => {
+    test("getTransform()", () => {
       let c = new Canvas(50, 50); c.gpu = false; let ctx = c.getContext('2d')
       ctx.translate(12, 34) // queued
       let m = ctx.getTransform() // barrier → flush → read native matrix
       assert.equal(m.e, 12); assert.equal(m.f, 34)
     })
   
-    test("save/restore captures paint at save time", () => {
+    test("save() & restore()", () => {
       let c = new Canvas(60, 20); c.gpu = false; let ctx = c.getContext('2d')
       ctx.fillStyle = 'rgb(255,0,0)'
       ctx.save()
@@ -183,7 +183,7 @@ describe("DrawList", () => {
       assert.deepEqual([...ctx.getImageData(50, 10, 1, 1).data], [255, 0, 0, 255])
     })
   
-    test("beginPath/arc/fill marker loop draws each marker", () => {
+    test("marker loops", () => {
       let c = new Canvas(200, 60); c.gpu = false; let ctx = c.getContext('2d')
       ctx.fillStyle = 'black'
       for (let i = 0; i < 3; i++){
@@ -194,7 +194,7 @@ describe("DrawList", () => {
       }
     })
   
-    test("fill(path) drains the ctx queue then draws the arg", () => {
+    test("fill(path)", () => {
       let c = new Canvas(80, 80); c.gpu = false; let ctx = c.getContext('2d')
       ctx.fillStyle = 'black'
       ctx.rect(0, 0, 5, 5)              // pending on the ctx queue (current path)
@@ -203,7 +203,7 @@ describe("DrawList", () => {
       assert.deepEqual([...ctx.getImageData(40, 40, 1, 1).data], [0, 0, 0, 255])
     })
   
-    test("clip is a barrier constraining later draws", () => {
+    test("clip()", () => {
       let c = new Canvas(100, 100); c.gpu = false; let ctx = c.getContext('2d')
       ctx.beginPath(); ctx.rect(0, 0, 40, 40); ctx.clip() // barrier
       ctx.fillStyle = 'black'; ctx.fillRect(0, 0, 100, 100)

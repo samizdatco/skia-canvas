@@ -228,7 +228,7 @@ describe("Typography", () => {
     let opaque = () => ctx.getImageData(0, 0, WIDTH, HEIGHT).data.filter((v, i) => i % 4 == 3 && v > 10).length
     let ink = () => { ctx.clearRect(0, 0, WIDTH, HEIGHT); ctx.fillText("Hamburg", 20, 100); return opaque() }
 
-    test("parses & serializes CSS-canonically", () => {
+    test("CSS serialization", () => {
       assert.equal(ctx.fontVariationSettings, "normal") // default
 
       // sorted alphabetically by tag, double-quoted, minimal numbers
@@ -257,7 +257,7 @@ describe("Typography", () => {
       assert.equal(ctx.fontVariationSettings, '"wght" 700')
     })
 
-    test("accepts {tag: value} objects", () => {
+    test("{tag: value} objects", () => {
       ctx.fontVariationSettings = {wght: 625, opsz: 48, GRAD: -30}
       assert.equal(ctx.fontVariationSettings, '"GRAD" -30, "opsz" 48, "wght" 625')
 
@@ -281,7 +281,7 @@ describe("Typography", () => {
       assert.equal(ctx.fontVariationSettings, "normal")
     })
 
-    test("instances arbitrary axes", () => {
+    test("arbitrary axes", () => {
       // Amstelvar exposes wght, opsz, wdth + custom axes (GRAD, XOPQ, …)
       FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
       ctx.font = "80px AmstelvarAlpha"
@@ -300,7 +300,7 @@ describe("Typography", () => {
       assert(highGrade > lowGrade)
     })
 
-    test("overrides the weight/stretch-derived axes", () => {
+    test("weight & stretch axes", () => {
       FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
 
       // font-weight says 100, but an explicit `wght` in the settings must win (CSS Fonts 4)
@@ -311,12 +311,12 @@ describe("Typography", () => {
       assert(bySettings > byWeight)
     })
 
-    test("is reset by the `font` shorthand", () => {
+    test("font shorthand reset", () => {
       ctx.fontVariationSettings = '"opsz" 48'
       ctx.font = "40px serif"
       assert.equal(ctx.fontVariationSettings, "normal")
     })
-    test("sets optical sizing correctly", () => {
+    test("optical sizing", () => {
       // `opsz` is instanced from the pixel font size by default (48px -> opsz 48), matching browsers
       // rather than converting to points; an explicit `opsz` overrides it (last-wins on duplicate axes)
       FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
@@ -395,7 +395,7 @@ describe("Typography", () => {
   describe("fontFeatureSettings", () => {
     let width = str => ctx.measureText(str).width
 
-    test("parses & serializes CSS-canonically", () => {
+    test("CSS serialization", () => {
       assert.equal(ctx.fontFeatureSettings, "normal") // default
 
       // tag-sorted, double-quoted; an omitted value defaults to `on` (1)
@@ -418,7 +418,7 @@ describe("Typography", () => {
       assert.equal(ctx.fontFeatureSettings, '"liga" 1')
     })
 
-    test("accepts {tag: value} objects", () => {
+    test("{tag: value} objects", () => {
       // booleans map to 1/0
       ctx.fontFeatureSettings = {tnum: true, liga: false, ss01: 1, salt: 3}
       assert.equal(ctx.fontFeatureSettings, '"liga" 0, "salt" 3, "ss01" 1, "tnum" 1')
@@ -439,7 +439,7 @@ describe("Typography", () => {
       assert.equal(ctx.fontFeatureSettings, "normal")
     })
 
-    test("applies OpenType features & is reset by the `font` shorthand", () => {
+    test("font shorthand reset", () => {
       FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
       ctx.font = "100px Montserrat"
       let text = "AVAWAToTa"
@@ -453,7 +453,7 @@ describe("Typography", () => {
       assert.nearEqual(width(text), on)
     })
 
-    test("wins over fontVariant & fontKerning on conflicting tags", () => {
+    test("fontVariant & fontKerning conflicts", () => {
       FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
       ctx.font = "100px Montserrat"
       let text = "AVAWAToTa"
@@ -474,7 +474,7 @@ describe("Typography", () => {
       assert.nearEqual(width("1"), proportional)
     })
 
-    test("composes with fontVariant on non-conflicting tags", () => {
+    test("fontVariant composition", () => {
       FontLibrary.use("Montserrat", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
       ctx.font = "100px Montserrat"
       let text = "AVAWAToTa"
@@ -495,7 +495,7 @@ describe("Typography", () => {
       FontLibrary.use("Geomini", [findFont("Geomini-VF.ttf")]) // `wght` instances from ExtraLight (200) to ExtraBold (800)
     })
 
-    test("is reset by the `font` shorthand", () => {
+    test("font shorthand reset", () => {
       assert.equal(ctx.fontInstance, "auto") // default
 
       ctx.font = "40px Geomini"
@@ -513,7 +513,7 @@ describe("Typography", () => {
       assert.equal(ctx.fontInstance, "auto")
     })
 
-    test("overrides the weight but not fontVariationSettings", () => {
+    test("precedence", () => {
       let [light, bold] = [widthAt("300 40px Geomini"), widthAt("bold 40px Geomini")]
       assert(light < bold)
 
@@ -524,14 +524,14 @@ describe("Typography", () => {
       assert.nearEqual(width(), bold)
     })
 
-    test("matches names case-insensitively", () => {
+    test("case-insensitive names", () => {
       let light = widthAt("300 40px Geomini")
       ctx.font = "40px Geomini"
       ctx.fontInstance = "LIGHT"
       assert.nearEqual(width(), light)
     })
 
-    test("ignores names the font doesn't define", () => {
+    test("unknown names", () => {
       let bold = widthAt("bold 40px Geomini")
       ctx.fontInstance = "Light Italic"
       assert.equal(ctx.fontInstance, "Light Italic")
@@ -571,7 +571,7 @@ describe("Typography", () => {
       assert.equal(ctx.fontStretch, "83%")
     })
 
-    test("instances variable wdth axis", () => {
+    test("variable wdth axis", () => {
       // Amstelvar's wdth axis ranges 35–100 (condenses only)
       FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
       ctx.font = "80px AmstelvarAlpha"
@@ -636,7 +636,7 @@ describe("Typography", () => {
       }
     })
 
-    test("ignores unresolvable units (%, ex, ch)", () => {
+    test("unresolvable units", () => {
       ctx.letterSpacing = "4px"
       for (let bad of ["10%", "2ex", "3ch"]){
         ctx.letterSpacing = bad
@@ -745,7 +745,7 @@ describe("Typography", () => {
         assert(lined > 0, "expected overline ink above the glyphs")
       })
 
-      test("supports solid, double, dotted, dashed, and wavy", () => {
+      test("line styles", () => {
         for (const style of ["", "double", "dotted", "dashed", "wavy"]){
           assert(inkInBand(`underline ${style}`.trim(), BASELINE+1, BASELINE+18) > 0,
             `expected ink for underline ${style || "solid"}`)
@@ -758,7 +758,7 @@ describe("Typography", () => {
           "expected blue underline pixels")
       })
 
-      test("skips ink around descenders", () => {
+      test("descender gaps", () => {
         // within the underline's inked span, descender glyphs leave gaps; plain glyphs don't
         const underlineGaps = (text) => {
           const canvas = new Canvas(W, H)
@@ -786,7 +786,7 @@ describe("Typography", () => {
         assert.equal(underlineGaps("mmmm"), 0, "expected a continuous underline with no descenders")
       })
 
-      test("skips a leading descender", () => {
+      test("leading descenders", () => {
         // skparagraph draws straight through a descender hugging the line's start; we gap it.
         // 'june' has exactly one descender — the leading 'j' — so the underline picks up a gap
         // under the leading glyph, while 'nune' (no descenders) stays continuous there.
@@ -845,7 +845,7 @@ describe("Typography", () => {
         assert(aliased.opaque > 0, "the aliased underline should still be drawn")
       })
 
-      test("spans trailing whitespace unless wrapping", () => {
+      test("trailing whitespace", () => {
         // draw only the rule (transparent glyphs) and find its horizontal extent relative to the anchor
         function ruleExtent(text, opts){
           const canvas = new Canvas(W, H)
@@ -967,7 +967,7 @@ describe("Typography", () => {
   })
 
   describe("textAlign", () => {
-    test("handles edge whitespace", () => {
+    test("edge whitespace", () => {
       FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
       ctx.font = "20px TestFace"
       for (const direction of /** @type {const} */ (["ltr", "rtl"])){
@@ -984,7 +984,7 @@ describe("Typography", () => {
       }
     })
 
-    test("includes letterspacing", () => {
+    test("letterSpacing", () => {
       FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
       ctx.font = "20px TestFace"
       const inkLeft = (text, ls, textAlign) => {
@@ -1007,7 +1007,7 @@ describe("Typography", () => {
       }
     })
 
-    test("uses full-precision widths", () => {
+    test("fractional widths", () => {
       FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
       ctx.font = "17.3px TestFace"
       // skparagraph's rounding hack would snap every width to a multiple of 0.01px
@@ -1015,7 +1015,7 @@ describe("Typography", () => {
       assert(widths.some(w => Math.abs(w * 100 - Math.round(w * 100)) > 1e-3), `widths ${widths} all look rounded`)
     })
 
-    test("aligns each line on its own", () => {
+    test("multi-line text", () => {
       FontLibrary.use("TestFace", [findFont("montserrat-latin/montserrat-v30-latin-regular.woff2")])
       // the Arabic line has no non-cursive cluster, so skparagraph doesn't nudge it by half a letter-space
       // like the others; every line should still land exactly where it would if drawn by itself
@@ -1265,7 +1265,7 @@ describe("Typography", () => {
     })
   })
 
-  describe("PDF export produces selectable text", {skip: hasPdftotext ? false : "pdftotext (poppler) not installed"}, () => {
+  describe("selectable PDF text for", {skip: hasPdftotext ? false : "pdftotext (poppler) not installed"}, () => {
     // pdftotext wraps RTL/bidi segments in Unicode bidi control characters (LRM/RLM,
     // LRE…RLO, isolates); strip them and collapse whitespace so we compare plain text.
     const BIDI_CONTROLS = /[‎‏‪-‮⁦-⁩]/g
@@ -1297,33 +1297,35 @@ describe("Typography", () => {
       finally { try { fs.unlinkSync(file) } catch {} }
     }
 
-    test("plain Latin round-trips", () => {
+    test("plain Latin", () => {
       assert.equal(pdfText("Hello World"), "Hello World")
     })
 
-    test("ligatures recover source letters", () => {
+    test("ligatures", () => {
       // e.g. an "fi"/"ffl" ligature glyph must copy back as "f","i" — the whole point of
       // attaching ActualText, since the font's reverse ToUnicode yields U+FB01/FB02.
       assert.equal(pdfText("Waffle fi office"), "Waffle fi office")
     })
 
-    test("emoji ZWJ round-trips", () => {
+    test("emoji ZWJ sequences", () => {
       assert.equal(pdfText("👨‍👩‍👧 family"), "👨‍👩‍👧 family")
     })
 
-    test("combining marks round-trip", () => {
+    test("combining marks", () => {
       assert.equal(pdfText("café résumé"), "café résumé")
     })
 
-    test("Arabic round-trips in logical order", () => {
+    test("Arabic", () => {
+      // copies back in logical (not visual) order
       assert.equal(pdfText("مرحبا بالعالم"), "مرحبا بالعالم")
     })
 
-    test("Hebrew round-trips in logical order", () => {
+    test("Hebrew", () => {
+      // copies back in logical (not visual) order
       assert.equal(pdfText("שלום עולם"), "שלום עולם")
     })
 
-    test("mixed bidi recovers every segment", () => {
+    test("mixed bidi", () => {
       // a reader may linearize mixed bidi in its own order; assert the content is all
       // present and correct rather than a specific concatenation order.
       const got = pdfText("abc مرحبا 123")
@@ -1332,7 +1334,7 @@ describe("Typography", () => {
       }
     })
 
-    test("hard line breaks round-trip", () => {
+    test("hard line breaks", () => {
       // a single shaped run split across lines must map each line's glyphs to that line's text
       // (not the run's first clusters, as Skia's extendedVisit reports for every line)
       assert.equal(pdfText("first line\nsecond line\nthird", {
@@ -1340,20 +1342,20 @@ describe("Typography", () => {
       }), "first line second line third")
     })
 
-    test("soft wraps round-trip", () => {
+    test("soft wraps", () => {
       assert.equal(pdfText("alpha beta gamma delta epsilon zeta", {
         font: "24px TestFace", height: 300, maxWidth: 150, setup: ctx => { ctx.textWrap = true }
       }), "alpha beta gamma delta epsilon zeta")
     })
 
-    test("wrapped rtl round-trips", () => {
+    test("wrapped rtl", () => {
       const got = pdfText("שלום עולם שלום עולם שלום עולם", {
         font: "24px TestFace", height: 300, maxWidth: 150, setup: ctx => { ctx.textWrap = true }
       })
       assert.equal(got.replace(/\s+/g, ""), "שלוםעולםשלוםעולםשלוםעולם")
     })
 
-    test("textured text stays selectable", () => {
+    test("textured text", () => {
       // a texture fill draws the visible glyphs as a stamped path (no text); an invisible
       // blob layer carries the utf-8 so the text is still selectable
       assert.equal(pdfText("textured", {setup: ctx => {
@@ -1367,7 +1369,7 @@ describe("Typography", () => {
     // the flag is read once when lib/classes/neon.js loads, so it can't be toggled in-process.
     // exercise every strict-mode rejection in a single child process (rather than one per case);
     // the child collects any mismatch, prints it to stderr, and exits non-zero.
-    test("invalid values throw", () => {
+    test("invalid values", () => {
       const {execFileSync} = require('node:child_process')
       const lib = require.resolve('../../lib')
       const child = `

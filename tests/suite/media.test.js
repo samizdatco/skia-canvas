@@ -245,7 +245,7 @@ describe("Image", () => {
       ])
     })
 
-    test("Sharp objects with non-RGBA output", {skip: HAS_SHARP ? false : "sharp is not installed"}, async () => {
+    test("non-RGBA Sharp objects", {skip: HAS_SHARP ? false : "sharp is not installed"}, async () => {
       const sharp = require('sharp')
       const GREY = /** @type {import('sharp').SharpOptions} */ ({create:{width:8, height:8, channels:3, background:'#808080'}})
 
@@ -633,7 +633,7 @@ describe("Image", () => {
       await assert.rejects(loadImage(pdf, {page:'nope'}), /Could not decode/)
     })
 
-    test("with byte-identical font dicts in different documents", async () => {
+    test("documents sharing font dicts", async () => {
       // decoded documents are cached across loadImage() calls, keyed by the file's bytes. hayro's own font
       // key hashes just the font dict, and these two files share one byte-for-byte while embedding
       // different programs (Oswald Medium vs Bold) — a cache keyed on the font alone would hand the
@@ -656,36 +656,6 @@ describe("Image", () => {
         programs.push(raw.match(/\/FontFile2 (\d+) 0 R/)?.[1] && raw.slice(raw.indexOf(`\n${raw.match(/\/FontFile2 (\d+) 0 R/)[1]} 0 obj`)).match(/stream\r?\n([\s\S]{200})/)?.[1])
       }
       assert.notEqual(programs[0], programs[1], 'the second document was exported with the first one\'s font program')
-    })
-
-    test("with embedded CFF & Type 1 text that survives export as text", async () => {
-      // hayro withholds the program for Type 1 & CFF simple fonts, so pdf.rs reads the FontFile /
-      // FontFile3 stream itself and rebuilds it as a TrueType font. When that works the re-exported
-      // page keeps its text operators and a font resource instead of filling every glyph as a path.
-      // Each fixture's second line has a stretched & sheared text matrix, which the text-run batcher
-      // absorbs as font scaleX/skewX
-      for (const [fixture, letters] of [['cff-medium', 'MediumSlantCF'], ['type1', 'MediumSlantTyp1']]){
-        let page = await loadImage(`tests/assets/embed-${fixture}.pdf`),
-            canvas = new Canvas(page.width, page.height)
-        canvas.getContext('2d').drawImage(page, 0, 0)
-
-        let pdf = await canvas.toBuffer('pdf'),
-            streams = []
-        for (const m of pdf.toString('latin1').matchAll(/(?<!end)stream\r?\n/g)){
-          let start = m.index + m[0].length
-          try{ streams.push(zlib.inflateSync(pdf.subarray(start, pdf.indexOf('endstream', start))).toString('latin1')) }catch{}
-        }
-        let content = streams.find(ops => /\sBT\s/.test(ops))
-        assert.match(pdf.toString('latin1'), /\/Subtype \/CIDFontType2/, `${fixture}: no TrueType font in output`)
-        assert.match(content, /\sTj\b/, `${fixture}: no text operators`)  // glyphs went out as text…
-        assert.doesNotMatch(content, /\sf\*?\s/, `${fixture}: glyphs filled as paths`) // …none as filled paths
-
-        // …and the run's unicode (from the source PDF, not the embedded font) landed in /ToUnicode,
-        // so the text is searchable & copyable: every letter of the fixture's text is a bfchar destination
-        let cmap = streams.filter(ops => ops.includes('beginbfchar')).join(),
-            mapped = new Set([...cmap.matchAll(/<[0-9A-F]+> <([0-9A-F]{4})>/g)].map(m => String.fromCharCode(parseInt(m[1], 16))))
-        for (const ch of letters) assert(mapped.has(ch), `${fixture}: ${ch} missing from ToUnicode (${[...mapped].join('')})`)
-      }
     })
 
     test("a reused vector Image", async () => {
@@ -816,6 +786,36 @@ describe("Image", () => {
       // and since the pdf's embedded font came through as real glyph runs (not traced
       // outlines), re-exporting the drawn image keeps text as text
       assert.contains((await outCanvas.toBuffer('svg')).toString(), '<text')
+    })
+
+    test("CFF & Type 1 fonts", async () => {
+      // hayro withholds the program for Type 1 & CFF simple fonts, so pdf.rs reads the FontFile /
+      // FontFile3 stream itself and rebuilds it as a TrueType font. When that works the re-exported
+      // page keeps its text operators and a font resource instead of filling every glyph as a path.
+      // Each fixture's second line has a stretched & sheared text matrix, which the text-run batcher
+      // absorbs as font scaleX/skewX
+      for (const [fixture, letters] of [['cff-medium', 'MediumSlantCF'], ['type1', 'MediumSlantTyp1']]){
+        let page = await loadImage(`tests/assets/embed-${fixture}.pdf`),
+            canvas = new Canvas(page.width, page.height)
+        canvas.getContext('2d').drawImage(page, 0, 0)
+
+        let pdf = await canvas.toBuffer('pdf'),
+            streams = []
+        for (const m of pdf.toString('latin1').matchAll(/(?<!end)stream\r?\n/g)){
+          let start = m.index + m[0].length
+          try{ streams.push(zlib.inflateSync(pdf.subarray(start, pdf.indexOf('endstream', start))).toString('latin1')) }catch{}
+        }
+        let content = streams.find(ops => /\sBT\s/.test(ops))
+        assert.match(pdf.toString('latin1'), /\/Subtype \/CIDFontType2/, `${fixture}: no TrueType font in output`)
+        assert.match(content, /\sTj\b/, `${fixture}: no text operators`)  // glyphs went out as text…
+        assert.doesNotMatch(content, /\sf\*?\s/, `${fixture}: glyphs filled as paths`) // …none as filled paths
+
+        // …and the run's unicode (from the source PDF, not the embedded font) landed in /ToUnicode,
+        // so the text is searchable & copyable: every letter of the fixture's text is a bfchar destination
+        let cmap = streams.filter(ops => ops.includes('beginbfchar')).join(),
+            mapped = new Set([...cmap.matchAll(/<[0-9A-F]+> <([0-9A-F]{4})>/g)].map(m => String.fromCharCode(parseInt(m[1], 16))))
+        for (const ch of letters) assert(mapped.has(ch), `${fixture}: ${ch} missing from ToUnicode (${[...mapped].join('')})`)
+      }
     })
 
     // Assemble a single-page pdf from a list of object bodies (1-indexed), splicing the embedded
@@ -1408,7 +1408,7 @@ describe("ImageData", () => {
       assert.matchesSubset(new ImageData(bytes, 60, 60), RGBA)
     })
 
-    test("shares memory with the array it was given", () => {
+    test("aliased arrays", () => {
       // the spec has the constructor *use* the array it was handed, so writes through the
       // original are visible in `.data` — for every accepted buffer type, not just one
       for (const source of [new Uint8ClampedArray(16), new Uint8Array(16), Buffer.alloc(16)]){
@@ -1419,7 +1419,7 @@ describe("ImageData", () => {
       }
     })
 
-    test("copies when the byte offset can't be aliased", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
+    test("unaligned byte offsets", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
       // a Buffer carved out of the shared pool can land on an odd byteOffset, which a 2-byte
       // element type can't view directly
       let odd = Buffer.alloc(33).subarray(1)
@@ -1429,7 +1429,7 @@ describe("ImageData", () => {
       assert.notEqual(imgData.data[0], 99) // fell back to a copy rather than throwing
     })
 
-    test("rejects buffer types it can't interpret", () => {
+    test("unsupported buffer types", () => {
       // a wide typed array is ambiguous — Uint16Array could be raw bytes or 16-bit samples —
       // so name the problem instead of reading it as a width
       for (const bad of [new Uint16Array(8), new Float32Array(4), new ArrayBuffer(16)]){
@@ -1527,7 +1527,7 @@ describe("ImageData", () => {
     })
   })
 
-  test("supports colorSpace setting", () => {
+  test("can set colorSpace", () => {
     assert.equal(new ImageData(8, 8).colorSpace, 'srgb')
     assert.equal(new ImageData(8, 8, {colorSpace:'display-p3'}).colorSpace, 'display-p3')
 
@@ -1536,7 +1536,7 @@ describe("ImageData", () => {
     assert.equal(new ImageData(8, 8, {colorSpace:'rec2020'}).colorSpace, 'srgb')
   })
 
-  test("round-trips half-float pixels", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
+  test("can round-trip half-float pixels", {skip: HAS_FLOAT16 ? false : "Float16Array requires Node 23+"}, () => {
     let [width, height] = [4, 4],
         canvas = new Canvas(width, height),
         ctx = canvas.getContext("2d")
@@ -1895,7 +1895,7 @@ describe("FontLibrary", ()=>{
     }
   })
 
-  test("instances variable fonts at the requested weight", () => {
+  test("can instance variable fonts by weight", () => {
     // Amstelvar exposes a `wght` axis, so heavier weights must lay down more ink
     // (verifies Skia's native variable-font instancing in Typesetter::layout)
     FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
