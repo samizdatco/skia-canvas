@@ -257,6 +257,30 @@ describe("Typography", () => {
       assert.equal(ctx.fontVariationSettings, '"wght" 700')
     })
 
+    test("accepts {tag: value} objects", () => {
+      ctx.fontVariationSettings = {wght: 625, opsz: 48, GRAD: -30}
+      assert.equal(ctx.fontVariationSettings, '"GRAD" -30, "opsz" 48, "wght" 625')
+
+      // any invalid tag or value rejects the whole object (leaving the prior value)
+      ctx.fontVariationSettings = {wght: 700}
+      ctx.fontVariationSettings = {wg: 700}              // tag not 4 chars
+      // @ts-expect-error — values must be numbers
+      ctx.fontVariationSettings = {wght: "700"}          // string value
+      // @ts-expect-error — booleans are features-only
+      ctx.fontVariationSettings = {wght: true}           // booleans are features-only
+      ctx.fontVariationSettings = {wght: 900, opsz: NaN} // one bad entry
+      // @ts-expect-error — plain objects only
+      ctx.fontVariationSettings = new Map([["wght", 900]])
+      // @ts-expect-error — plain objects only
+      ctx.fontVariationSettings = [900]
+      ctx.fontVariationSettings = null
+      assert.equal(ctx.fontVariationSettings, '"wght" 700')
+
+      // an empty object clears, like `normal`
+      ctx.fontVariationSettings = {}
+      assert.equal(ctx.fontVariationSettings, "normal")
+    })
+
     test("instances arbitrary axes", () => {
       // Amstelvar exposes wght, opsz, wdth + custom axes (GRAD, XOPQ, …)
       FontLibrary.use(findFont("AmstelvarAlpha-VF.ttf"))
@@ -392,6 +416,27 @@ describe("Typography", () => {
       ctx.fontFeatureSettings = '"lig" 1'    // tag not 4 chars
       ctx.fontFeatureSettings = '"liga" -1'  // negative value
       assert.equal(ctx.fontFeatureSettings, '"liga" 1')
+    })
+
+    test("accepts {tag: value} objects", () => {
+      // booleans map to 1/0
+      ctx.fontFeatureSettings = {tnum: true, liga: false, ss01: 1, salt: 3}
+      assert.equal(ctx.fontFeatureSettings, '"liga" 0, "salt" 3, "ss01" 1, "tnum" 1')
+
+      // any invalid tag or value rejects the whole object (leaving the prior value)
+      ctx.fontFeatureSettings = {liga: 1}
+      ctx.fontFeatureSettings = {lig: 1}             // tag not 4 chars
+      ctx.fontFeatureSettings = {liga: -1}           // negative value
+      ctx.fontFeatureSettings = {liga: 1.5}          // non-integer value
+      // @ts-expect-error — keywords are string-form only
+      ctx.fontFeatureSettings = {liga: "on"}         // keywords are string-form only
+      ctx.fontFeatureSettings = {tnum: 1, liga: -1}  // one bad entry
+      ctx.fontFeatureSettings = null
+      assert.equal(ctx.fontFeatureSettings, '"liga" 1')
+
+      // an empty object clears, like `normal`
+      ctx.fontFeatureSettings = {}
+      assert.equal(ctx.fontFeatureSettings, "normal")
     })
 
     test("applies OpenType features & is reset by the `font` shorthand", () => {
@@ -1286,6 +1331,9 @@ describe("Typography", () => {
           ['textDecoration', 'notaword blue',                   true],
           ['filter',         'blur(2px)junk',                   true],
           ['filter',         'blur(2px) garbage(3)',            true],
+          ['fontVariationSettings', {wg: 700},                  true],
+          ['fontVariationSettings', null,                       true],
+          ['fontFeatureSettings',   {liga: -1},                 true],
           // rejected Rust-side via the ⚠️ canary (neon.js \`rustError\`)
           ['textDecoration', 'blahblah',                        true],
           ['textDecoration', 'underline notacolor',             true],
@@ -1294,6 +1342,9 @@ describe("Typography", () => {
           ['letterSpacing',  '1rem',                            false],
           ['textDecoration', 'line-through oklch(0.7 0.1 200)', false],
           ['filter',         'blur(2px) invert(50%)',           false],
+          ['fontVariationSettings', {wght: 700},                false],
+          ['fontFeatureSettings',   {liga: false},              false],
+          ['fontFeatureSettings',   {},                         false],
         ]
 
         const fails = []

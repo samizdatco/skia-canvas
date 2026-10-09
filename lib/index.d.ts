@@ -874,12 +874,15 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
   readonly canvas: Canvas
   fontVariant: FontVariantSetting
   /** A CSS `font-variation-settings` string (e.g. `'"wght" 625, "opsz" 48'`) giving low-level
-   *  control over variable-font axes. Set to `"normal"` to clear. */
-  fontVariationSettings: string
+   *  control over variable-font axes. Also accepts a `{tag: value}` object (e.g.
+   *  `{wght: 625, opsz: 48}`). Set to `"normal"` or `{}` to clear. */
+  get fontVariationSettings(): string
+  set fontVariationSettings(settings: string | Record<string, number>)
   /** A CSS `font-feature-settings` string (e.g. `'"liga" 0, "tnum" 1, "ss01"'`) giving low-level
-   *  control over OpenType features. Overrides `fontVariant`/`fontKerning` on conflicting tags. Set
-   *  to `"normal"` to clear. */
-  fontFeatureSettings: string
+   *  control over OpenType features. Also accepts a `{tag: value}` object whose values are booleans or
+   *  integers (e.g. `{liga:false, tnum:true, ss01:true}`). Set to `"normal"` or `{}` to clear. */
+  get fontFeatureSettings(): string
+  set fontFeatureSettings(settings: string | Record<string, number | boolean>)
   fontHinting: boolean
   fontSmoothing: boolean
   fontSynthesis: boolean
