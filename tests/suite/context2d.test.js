@@ -3051,7 +3051,7 @@ describe("Context2D", ()=>{
       assert.throws(() => ctx.createRadialGradient(0,0,NaN,0,0,0), /Expected a number for/)
       assert.throws(() => ctx.createConicGradient(0,NaN,0), /Expected a number for/)
       // @ts-expect-error — deliberately invalid repetition value
-      assert.throws(() => ctx.createPattern(img, "___"), /Expected `repetition`/)
+      assert.throws(() => ctx.createPattern(img, "___"), {name:'SyntaxError', message:/Expected `repetition`/})
       assert.throws(() => g.addColorStop(NaN, '#000'), /Expected a number/)
       assert.throws(() => g.addColorStop(0, {}), /Could not be parsed as a color/)
       assert.throws(() => lax.setLineDash(NaN), /Value is not a sequence/)
@@ -3085,7 +3085,7 @@ describe("Context2D", ()=>{
       let square = new Path2D()
       square.rect(0, 0, 10, 10)
       assert.ok(lax.createPattern(canvas, new String('repeat-x')))
-      assert.throws(() => lax.createPattern(canvas, 5), /Expected `repetition`/)
+      assert.throws(() => lax.createPattern(canvas, 5), {name:'SyntaxError'})
       assert.equal(lax.isPointInPath(square, 5, 5, new String('evenodd')), true)
       assert.ok(lax.createTexture(10, {cap: {toString: () => 'round'}}))
       assert.doesNotThrow(() => lax.fill(new String('evenodd')))
