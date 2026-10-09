@@ -526,6 +526,7 @@ pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
     return Ok(cx.undefined().upcast())
   }
 
+  let instances = caps.instances_object(&mut cx, styles.len() > 1)?;
   let weights = floats_to_array(&mut cx, &weights)?;
   let widths = strings_to_array(&mut cx, &widths)?;
   let styles = strings_to_array(&mut cx, &styles)?;
@@ -539,6 +540,7 @@ pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
   details.prop(&mut cx, "styles").set(styles)?;
   details.prop(&mut cx, "variable").set(!caps.axes.is_empty())?;
   details.prop(&mut cx, "variations").set(variations)?;
+  details.prop(&mut cx, "instances").set(instances)?;
   details.prop(&mut cx, "features").set(features)?;
 
   Ok(details.upcast())

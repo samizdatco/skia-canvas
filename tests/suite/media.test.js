@@ -1838,6 +1838,26 @@ describe("FontLibrary", ()=>{
     assert.contains(tags, "sups") // only in Oswald
     assert.contains(tags, "tnum") // only in Montserrat
   })
+
+  test("can describe named instances", ()=>{
+    let [face] = FontLibrary.use("VariableFace", [findFont("Geomini-VF.ttf")]),
+        family = FontLibrary.family("VariableFace"),
+        names = ["ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bold", "ExtraBold"];
+
+    for (let {instances} of [face, family]){
+      // keyed by name in the font's `fvar` order, with a value for each of the face's axes
+      assert.deepEqual(Object.keys(instances), names)
+      assert.deepEqual(instances.Light, {settings:{wght:300}})
+    }
+
+    // a family with more than one style notes which one selects each instance's face
+    FontLibrary.use("Mixed", [findFont("Geomini-VF.ttf"), findFont("montserrat-latin/montserrat-v30-latin-italic.woff2")])
+    assert.deepEqual(FontLibrary.family("Mixed").instances.Light, {style:"normal", settings:{wght:300}})
+
+    // faces without named instances report none
+    assert.deepEqual(FontLibrary.use("NoInstances", [findFont("AmstelvarAlpha-VF.ttf")])[0].instances, {})
+    assert.deepEqual(useTestFace()[0].instances, {})
+  })
   test("can register fonts", ()=>{
     let ttf = findFont("AmstelvarAlpha-VF.ttf"),
         name = "AmstelvarAlpha",

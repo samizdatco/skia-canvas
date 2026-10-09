@@ -1094,6 +1094,13 @@ export interface FontFeature {
   type: "on/off" | "indexed"
 }
 
+export interface FontInstance {
+  /** The style that must be passed to `ctx.font` to select this instance (if any) */
+  style?: string
+  /** The `fontVariationSettings` this instance corresponds to */
+  settings: Record<string, number>
+}
+
 export interface FontFamily {
   family: string
   weights: number[]
@@ -1101,6 +1108,7 @@ export interface FontFamily {
   styles: string[]
   variable: boolean
   variations: Record<string, FontVariationAxis>
+  instances: Record<string, FontInstance>
   features: Record<string, FontFeature>
 }
 
@@ -1112,6 +1120,7 @@ export interface Font {
   file: string
   variable: boolean
   variations: Record<string, FontVariationAxis>
+  instances: Record<string, FontInstance>
   features: Record<string, FontFeature>
 }
 

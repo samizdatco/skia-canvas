@@ -4,7 +4,7 @@ use allsorts::binary::read::ReadScope;
 use allsorts::tables::NameTable;
 use allsorts::get_name::fontcode_get_name;
 use skia_safe::{Typeface, FourByteTag, FontArguments, Data};
-use read_fonts::{FontData, TableProvider, TopLevelTable, types::Tag, tables::{hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, layout::FeatureParams}};
+use read_fonts::{FontData, TableProvider, TopLevelTable, types::{Tag, Fixed}, tables::{hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, layout::FeatureParams}};
 use skia_safe::font_style::{FontStyle, Weight, Width, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::{TextAlign, TextDecorationStyle, TextStyle};
@@ -303,6 +303,7 @@ pub fn typeface_details<'a>(cx: &mut FunctionContext<'a>, filename:&str, font: &
   let caps = FontCapabilities::new(font);
   let variations = caps.variations_object(cx)?;
   let features = caps.features_object(cx)?;
+  let instances = caps.instances_object(cx, false)?;
 
   let dict = JsObject::new(cx);
   dict.prop(cx, "family").set(alias.unwrap_or_else(|| font.family_name()))?;
@@ -311,6 +312,7 @@ pub fn typeface_details<'a>(cx: &mut FunctionContext<'a>, filename:&str, font: &
   dict.prop(cx, "width").set(from_width(style.width()))?;
   dict.prop(cx, "variable").set(!caps.axes.is_empty())?;
   dict.prop(cx, "variations").set(variations)?;
+  dict.prop(cx, "instances").set(instances)?;
   dict.prop(cx, "features").set(features)?;
   dict.prop(cx, "file").set(filename)?;
   Ok(dict)
@@ -355,6 +357,13 @@ pub struct AxisDetails{
 }
 
 #[derive(Debug, Clone)]
+pub struct InstanceDetails{
+  pub name: String,
+  pub coords: Vec<(String, f64)>,
+  pub style: Slant,
+}
+
+#[derive(Debug, Clone)]
 pub struct FeatureDetails{
   pub tag: String,
   pub label: Option<String>,
@@ -364,11 +373,12 @@ pub struct FeatureDetails{
 pub struct FontCapabilities{
   pub axes: Vec<AxisDetails>, // variable-font design axes (in fvar order)
   pub features: Vec<FeatureDetails>, // OpenType features (from GSUB/GPOS tables)
+  pub instances: Vec<InstanceDetails>, // named instances (normal→italic→oblique, then in fvar order)
 }
 
 impl FontCapabilities{
   pub fn new(font:&Typeface) -> Self{
-    // read the font's `name` table (for accessing both variation-axis and feature names)
+    // read the font's `name` table (for accessing axis, feature, and instance names)
     let mut names:HashMap<u16, String> = HashMap::new();
     if let Some(data) = font.copy_table_data(*FourByteTag::from_chars('n','a','m','e')){
       let bytes = data.as_bytes();
@@ -435,10 +445,35 @@ impl FontCapabilities{
     }
     features.sort_by(|a, b| a.tag.cmp(&b.tag));
 
-    FontCapabilities{ axes, features }
+    // collect the face's named instances along with the style that selects the face
+    let style = font.font_style().slant();
+    let mut instances:Vec<InstanceDetails> = vec![];
+    if let Ok(fvar) = tables.fvar(){
+      let tags:Vec<String> = fvar.axes().unwrap_or_default().iter()
+        .map(|axis| String::from_utf8_lossy(&axis.axis_tag().to_be_bytes()).to_string())
+        .collect();
+
+      for record in fvar.instances().into_iter().flat_map(|records| records.iter()).flatten(){
+        // skip unnamed and repeated instances
+        let Some(name) = names.get(&record.subfamily_name_id.to_u16()) else { continue };
+        if instances.iter().any(|inst| inst.name == *name){ continue }
+
+        let coords = tags.iter().zip(record.coordinates).map(|(tag, val)| {
+          // use the shortest decimal that rounds back to the same fixed-point value
+          let val = val.get();
+          let short = [1.0, 1e1, 1e2, 1e3, 1e4, 1e5].iter()
+            .map(|scale| (val.to_f64() * scale).round() / scale)
+            .find(|approx| Fixed::from_f64(*approx) == val);
+          (tag.clone(), short.unwrap_or(val.to_f64()))
+        }).collect();
+        instances.push(InstanceDetails{ name:name.clone(), coords, style });
+      }
+    }
+
+    FontCapabilities{ axes, features, instances }
   }
 
-  // expand range to the union of the two sets of axes+features (so a family of faces can be summarized)
+  // expand range to the union of the two sets of axes+features+instances (so a family of faces can be summarized)
   pub fn merge(&mut self, other:Self){
     for axis in other.axes {
       match self.axes.iter_mut().find(|existing| existing.tag == axis.tag){
@@ -458,6 +493,14 @@ impl FontCapabilities{
       }
     }
     self.features.sort_by(|a, b| a.tag.cmp(&b.tag));
+
+    for instance in other.instances {
+      // the first face to define a given instance name wins
+      if !self.instances.iter().any(|existing| existing.name == instance.name){
+        self.instances.push(instance);
+      }
+    }
+    self.instances.sort_by_key(|inst| inst.style as i32); // stable, so fvar order is kept within each face
   }
 
   // the min & max weights covered by the `wght` axis and all 100x steps in between
@@ -489,6 +532,22 @@ impl FontCapabilities{
         range.prop(cx, "label").set(label.as_str())?;
       }
       dict.prop(cx, axis.tag.as_str()).set(range)?;
+    }
+    Ok(dict)
+  }
+
+  // return a js object mapping instance names to {style?, settings} objects
+  pub fn instances_object<'a>(&self, cx: &mut FunctionContext<'a>, with_style:bool) -> JsResult<'a, JsObject>{
+    let dict = JsObject::new(cx);
+    for instance in &self.instances {
+      let entry = JsObject::new(cx);
+      if with_style{ entry.prop(cx, "style").set(from_slant(instance.style))?; }
+      let settings = JsObject::new(cx);
+      for (tag, value) in &instance.coords {
+        settings.prop(cx, tag.as_str()).set(*value)?;
+      }
+      entry.prop(cx, "settings").set(settings)?;
+      dict.prop(cx, instance.name.as_str()).set(entry)?;
     }
     Ok(dict)
   }
