@@ -33,6 +33,9 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     }
   }
 
+  // detect CPU features and use the fastest available SIMD routines (x86 only)
+  skia_safe::graphics::init();
+
   // initialize thread pool w/ non-default size if requested
   if let Ok(value) = std::env::var("SKIA_CANVAS_THREADS") && let Ok(num) = value.parse::<usize>(){
     rayon::ThreadPoolBuilder::new().num_threads(num).build_global().unwrap();
