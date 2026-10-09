@@ -725,7 +725,7 @@ impl Context2D{
       self.state.line_height = spec.line_height;
       self.state.font_stretch = width_percent(spec.width);
       self.state.font_oblique = spec.oblique;
-      self.state.font_axes.clear_variations();
+      self.state.font_axes.clear();
       self.state.font_features.set_named(&spec.features);
       self.state.font_features.clear_tagged();
     }
@@ -746,6 +746,17 @@ impl Context2D{
   pub fn set_font_variation(&mut self, settings:Vec<(String, f32)>){
     self.state.font_axes.set_variations(settings);
   }
+
+  // returns false if the current font has no named instance matching the (non-`auto`) name
+  pub fn set_font_instance(&mut self, name:&str) -> bool{
+    // look in the first typeface matched by the current font (resolving the implicit default font if necessary)
+    let style = &self.state.char_style;
+    let typeface = style.typeface().or_else(||
+      FontLibrary::with_shared(|lib| lib.update_style(style, &FontSpec::default())).and_then(|style| style.typeface())
+    );
+    self.state.font_axes.set_instance(name, typeface)
+  }
+
   pub fn set_font_feature_settings(&mut self, settings:Vec<(String, i32)>){
     self.state.font_features.set_tagged(settings);
   }

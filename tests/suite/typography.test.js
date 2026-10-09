@@ -487,6 +487,65 @@ describe("Typography", () => {
     })
   })
 
+  describe("fontInstance", () => {
+    let width = () => ctx.measureText("Hamburgefonstiv").width
+    let widthAt = font => { ctx.font = font; return width() }
+
+    beforeEach(() => {
+      FontLibrary.use("Geomini", [findFont("Geomini-VF.ttf")]) // `wght` instances from ExtraLight (200) to ExtraBold (800)
+    })
+
+    test("is reset by the `font` shorthand", () => {
+      assert.equal(ctx.fontInstance, "auto") // default
+
+      ctx.font = "40px Geomini"
+      ctx.fontInstance = "Light"
+      assert.equal(ctx.fontInstance, "Light")
+
+      // part of the drawing state (and unaffected by an invalid font)
+      ctx.save()
+      ctx.fontInstance = "Bold"
+      ctx.restore()
+      ctx.font = "not a font"
+      assert.equal(ctx.fontInstance, "Light")
+
+      ctx.font = "40px Geomini"
+      assert.equal(ctx.fontInstance, "auto")
+    })
+
+    test("overrides the weight but not fontVariationSettings", () => {
+      let [light, bold] = [widthAt("300 40px Geomini"), widthAt("bold 40px Geomini")]
+      assert(light < bold)
+
+      ctx.fontInstance = "Light"
+      assert.nearEqual(width(), light)
+
+      ctx.fontVariationSettings = {wght: 700}
+      assert.nearEqual(width(), bold)
+    })
+
+    test("matches names case-insensitively", () => {
+      let light = widthAt("300 40px Geomini")
+      ctx.font = "40px Geomini"
+      ctx.fontInstance = "LIGHT"
+      assert.nearEqual(width(), light)
+    })
+
+    test("ignores names the font doesn't define", () => {
+      let bold = widthAt("bold 40px Geomini")
+      ctx.fontInstance = "Light Italic"
+      assert.equal(ctx.fontInstance, "Light Italic")
+      assert.nearEqual(width(), bold)
+
+      // @ts-expect-error — names must be strings
+      ctx.fontInstance = 300
+      assert.equal(ctx.fontInstance, "Light Italic")
+
+      ctx.fontInstance = "auto"
+      assert.equal(ctx.fontInstance, "auto")
+    })
+  })
+
   describe("fontStretch", () => {
     test("defaults to normal", () => {
       assert.equal(ctx.fontStretch, "normal")
@@ -1337,6 +1396,8 @@ describe("Typography", () => {
           // rejected Rust-side via the ⚠️ canary (neon.js \`rustError\`)
           ['textDecoration', 'blahblah',                        true],
           ['textDecoration', 'underline notacolor',             true],
+          ['fontInstance',   'No Such Instance',                true],
+          ['fontInstance',   42,                                true],
           // valid values must survive strict mode untouched
           ['fontVariant',    'small-caps',                      false],
           ['letterSpacing',  '1rem',                            false],
@@ -1345,6 +1406,7 @@ describe("Typography", () => {
           ['fontVariationSettings', {wght: 700},                false],
           ['fontFeatureSettings',   {liga: false},              false],
           ['fontFeatureSettings',   {},                         false],
+          ['fontInstance',          'auto',                     false],
         ]
 
         const fails = []

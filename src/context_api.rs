@@ -928,6 +928,22 @@ pub fn set_fontVariationSettings(mut cx: FunctionContext) -> JsResult<JsUndefine
   Ok(cx.undefined())
 }
 
+pub fn get_fontInstance(mut cx: FunctionContext) -> JsResult<JsString> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow();
+  Ok(cx.string(this.state.font_axes.instance().unwrap_or("auto")))
+}
+
+pub fn set_fontInstance(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  if let Some(name) = opt_string_arg(&mut cx, 1){
+    if !this.borrow_mut().set_font_instance(&name){
+      cx.throw_type_error(format!("⚠️The current font has no named instance called {:?}", name))?
+    }
+  }
+  Ok(cx.undefined())
+}
+
 pub fn get_fontFeatureSettings(mut cx: FunctionContext) -> JsResult<JsString> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();

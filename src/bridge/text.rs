@@ -568,10 +568,34 @@ impl FontCapabilities{
 
 #[derive(Clone, Debug, Default)]
 pub struct FontAxes{
-  variations: Vec<(String, f32)>, // decoded fontVariationSettings
+  instance: Option<(String, Vec<(FourByteTag, f32)>)>, // selected fontInstance name & axis values
+  variations: Vec<(String, f32)>, // decoded fontVariationSettings (overrides any instance settings)
 }
 
 impl FontAxes{
+  // check via case-insensitive lookup whether a given named instance id defined (and use it if so)
+  pub fn set_instance(&mut self, name:&str, typeface:Option<Typeface>) -> bool{
+    let name = name.trim();
+    if name.eq_ignore_ascii_case("auto"){
+      self.instance = None;
+      return true
+    }
+
+    let found = typeface.and_then(|tf| FontCapabilities::new(&tf).instances.into_iter()
+      .find(|inst| inst.name.to_lowercase() == name.to_lowercase())
+    );
+    let coords = found.as_ref().map(|inst| inst.coords.iter().map(|(tag, value)|{
+      let b = tag.as_bytes();
+      (FourByteTag::from_chars(b[0] as char, b[1] as char, b[2] as char, b[3] as char), *value as f32)
+    }).collect());
+    self.instance = Some((name.to_string(), coords.unwrap_or_default()));
+    found.is_some()
+  }
+
+  pub fn instance(&self) -> Option<&str>{
+    self.instance.as_ref().map(|(name, _)| name.as_str())
+  }
+
   pub fn set_variations(&mut self, mut variations:Vec<(String, f32)>){
     variations.sort_by(|(a, _), (b, _)| a.cmp(b));
     self.variations = variations;
@@ -586,8 +610,9 @@ impl FontAxes{
       .join(", ")
   }
 
-  pub fn clear_variations(&mut self){
+  pub fn clear(&mut self){
     self.variations.clear();
+    self.instance = None;
   }
 
   // merge the variable font instancing fields into the provided char_style
@@ -613,6 +638,13 @@ impl FontAxes{
       ]),
       _ => coords.push(Coordinate{ axis:Coordinate::ital, value:0.0 }),
     }
+
+    // a named instance overrides any style-derived values that collide
+    if let Some((_, instance)) = &self.instance{
+      coords.extend(instance.iter().map(|&(axis, value)| Coordinate{ axis, value }));
+    }
+
+    // fontVariationSettings still override everything else
     for (tag, value) in &self.variations{
       let b = tag.as_bytes();
       let axis = FourByteTag::from_chars(b[0] as char, b[1] as char, b[2] as char, b[3] as char);
@@ -635,8 +667,10 @@ impl FontAxes{
   }
 
   // state the measureText cache depends on
-  pub fn cache_key(&self) -> Vec<(String, u32)>{
-    self.variations.iter().map(|(tag, value)| (tag.clone(), value.to_bits())).collect()
+  pub fn cache_key(&self) -> (Vec<(String, u32)>, Option<String>){
+    let variations = self.variations.iter().map(|(tag, value)| (tag.clone(), value.to_bits())).collect();
+    let instances = self.instance().map(|name| name.to_lowercase());
+    (variations, instances)
   }
 }
 

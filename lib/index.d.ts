@@ -883,6 +883,10 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
    *  integers (e.g. `{liga:false, tnum:true, ss01:true}`). Set to `"normal"` or `{}` to clear. */
   get fontFeatureSettings(): string
   set fontFeatureSettings(settings: string | Record<string, number | boolean>)
+  /** A string selecting one of the named instances from a variable font (see `FontLibrary.family().instances`),
+   *  inheriting all its axis values except for those overridden in `fontVariationSettings`. Resets to `"auto"`
+   *  whenever a new `ctx.font` value is assigned. */
+  fontInstance: string
   fontHinting: boolean
   fontSmoothing: boolean
   fontSynthesis: boolean
