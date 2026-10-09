@@ -2655,6 +2655,50 @@ describe("Context2D", ()=>{
       )
     })
 
+    test('mixed case', () => {
+      // keywords, units & function names in CSS-derived values are case-insensitive (and read back
+      // in lowercase), but family names & OpenType tags keep their case
+      assert.matchesSubset(css.font('BOLD Italic Small-Caps Condensed 12PT/1.5EM Serif'), {
+        weight: 700, style: 'italic', variant: 'small-caps', stretch: 'condensed', size: 16, lineHeight: 24, family: ['serif']
+      })
+      assert.deepEqual(css.font('16px ARIAL, "Serif", SANS-SERIF').family, ['ARIAL', 'Serif', 'sans-serif'])
+
+      ctx.letterSpacing = '2PX'
+      assert.equal(ctx.letterSpacing, '2px')
+      ctx.wordSpacing = '0.5EM'
+      assert.equal(ctx.wordSpacing, '0.5em')
+      ctx.fontVariant = 'Small-Caps Styleset(3)'
+      assert.equal(ctx.fontVariant, 'small-caps styleset(3)')
+      ctx.filter = 'BLUR(2PX) Drop-Shadow(1PX 2PX RED)'
+      assert.equal(ctx.filter, 'blur(2px) drop-shadow(1px 2px red)')
+      ctx.filter = 'None'
+      assert.equal(ctx.filter, 'none')
+      ctx.fontFeatureSettings = '"liga" OFF'
+      assert.equal(ctx.fontFeatureSettings, '"liga" 0')
+      ctx.fontFeatureSettings = 'NORMAL'
+      assert.equal(ctx.fontFeatureSettings, 'normal')
+      ctx.fontFeatureSettings = '"LIGA" 0'
+      assert.equal(ctx.fontFeatureSettings, '"LIGA" 0')
+      ctx.textDecoration = 'UNDERLINE Wavy RED'
+      assert.equal(ctx.textDecoration, 'underline wavy red')
+
+      // currentColor is a keyword too, so every spelling draws the rule in the fill color
+      FontLibrary.use('CaseFace', [`tests/assets/fonts/montserrat-latin/montserrat-v30-latin-regular.woff2`])
+      let underlined = (deco) => {
+        ctx.reset()
+        ctx.font = '20px CaseFace'
+        ctx.fillStyle = 'blue'
+        ctx.textDecoration = `underline ${deco}`
+        ctx.fillText('xx', 10, 30)
+        return ctx.getImageData(0, 0, 60, 40).data
+      }
+      let blue = underlined('blue')
+      assert.notDeepEqual(underlined('red'), blue)
+      for (let spelling of ['currentColor', 'currentcolor', 'CURRENTCOLOR']){
+        assert.deepEqual(underlined(spelling), blue, `"${spelling}" should draw in the fill color`)
+      }
+    })
+
     test('colors', () => {
       ctx.fillStyle = '#ffccaa';
       assert.equal(ctx.fillStyle, '#ffccaa');

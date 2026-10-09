@@ -209,7 +209,7 @@ pub fn decoration_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option
 
     // inherit the fill color unless textDecoration specifies a css color to use
     let color = match string_for_key(cx, &deco, "color")?.as_str(){
-      "currentColor" => None,
+      clr if clr.eq_ignore_ascii_case("currentColor") => None,
       color_str => match CssColor::parse(color_str){
         Some(color) => Some(color),
         None => return cx.throw_type_error(format!("⚠️Invalid text decoration: {:?}", css)),
