@@ -47,6 +47,13 @@ describe("Path2D", ()=>{
       p1.rect(10, 10, 100, 100)
       let p2 = new Path2D("M 10,10 h 100 v 100 h -100 Z")
       assert.matchesSubset(p1.bounds, p2.bounds)
+
+      // anything other than a Path2D is stringified (so wrapped strings work, and junk is empty)
+      // @ts-expect-error — a String object rather than a string
+      let p3 = new Path2D(new String("M 10,10 h 100 v 100 h -100 Z"))
+      assert.matchesSubset(p1.bounds, p3.bounds)
+      // @ts-expect-error — deliberately non-string source
+      assert.equal(new Path2D(5).d, "")
     })
 
     test('a stream of edges', () => {

@@ -185,10 +185,7 @@ pub fn fill_rule_arg_or(cx: &mut FunctionContext, idx: usize, default: &str) -> 
   // against Chrome: `undefined` behaves as the default "nonzero"; `null` and bogus strings throw.)
   let mode = match cx.argument_opt(idx) {
     Some(arg) if arg.is_a::<JsUndefined, _>(cx) => Ok(default.to_string()),
-    Some(arg) => match arg.downcast::<JsString, _>(cx) {
-      Ok(v) => Ok(v.value(cx)),
-      Err(_e) => cx.throw_type_error(&err_msg)
-    },
+    Some(arg) => Ok(arg.to_string(cx)?.value(cx)), // stringified, so wrapped strings work
     None => Ok(default.to_string())
   }?;
 

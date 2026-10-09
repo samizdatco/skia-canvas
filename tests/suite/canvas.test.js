@@ -172,6 +172,25 @@ describe("Canvas", ()=>{
       assert.throws(() => canvas.toFile(`${TMP}/output`) , /Cannot determine image format/);
       assert.throws(() => canvas.toFile(`${TMP}/`) , /Cannot determine image format/);
       await canvas.toFile(`${TMP}/output`, {format:'png'});
+
+      // formats are stringified, so non-strings are just unsupported formats (rather than a crash)…
+      for (let junk of [5, null, {}]){
+        // @ts-expect-error — deliberately non-string format
+        assert.throws(() => canvas.toDataURL(junk), /Unsupported file format/)
+        // @ts-expect-error — deliberately non-string format
+        assert.throws(() => canvas.toBufferSync(junk), /Unsupported file format/)
+        // @ts-expect-error — deliberately non-string format
+        assert.throws(() => canvas.toFileSync(`${TMP}/output`, {format:junk}),
+          // a null format option counts as omitted, so the extension-less filename is the problem
+          junk === null ? /Cannot determine image format/ : /Unsupported file format/)
+      }
+      // …while wrapped strings work like the strings they contain
+      // @ts-expect-error — a String object rather than a string
+      assert.match(canvas.toDataURL(new String('jpg')), /^data:image\/jpeg;/)
+      // @ts-expect-error — an object with a toString() rather than a string
+      assert.match(canvas.toDataURL({toString: () => 'webp'}), /^data:image\/webp;/)
+      // @ts-expect-error — a String object rather than a string
+      canvas.toFileSync(`${TMP}/output`, {format:new String('png')})
     })
 
   })

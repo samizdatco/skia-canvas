@@ -3037,7 +3037,7 @@ describe("Context2D", ()=>{
       assert.throws(() => lax.createTexture(20, {line:{}}), /Expected a number for `line`/)
       assert.throws(() => lax.createTexture(20, {angle:{}}), /Expected a number for `angle`/)
       assert.throws(() => lax.createTexture(20, {offset:{}}), /Expected a number or array/)
-      assert.throws(() => lax.createTexture(20, {cap:{}}), /Expected a string/)
+      assert.throws(() => lax.createTexture(20, {cap:{}}), /Expected \"butt\", \"square\"/) // stringified to "[object Object]"
       assert.throws(() => lax.createTexture(20, {cap:""}), /Expected \"butt\", \"square\"/)
       assert.throws(() => ctx.createTexture(20, {offset:[1, NaN]}), /Expected a number or array/)
       assert.throws(() => lax.isPointInPath(0, 10, 10), /Expected `fillRule`/)
@@ -3055,6 +3055,45 @@ describe("Context2D", ()=>{
       assert.throws(() => g.addColorStop(NaN, '#000'), /Expected a number/)
       assert.throws(() => g.addColorStop(0, {}), /Could not be parsed as a color/)
       assert.throws(() => lax.setLineDash(NaN), /Value is not a sequence/)
+    })
+
+    test('non-string values', async () => {
+      // string attributes stringify whatever they're given (as WebIDL does), so values that
+      // stringify to something valid are applied, and anything else is silently ignored
+      let valid = {lineCap:'round', textAlign:'center', globalCompositeOperation:'multiply', font:'20px serif',
+                   filter:'blur(2px)', fontVariant:'small-caps', letterSpacing:'2px', textDecoration:'underline'}
+      for (let [prop, val] of Object.entries(valid)){
+        lax.reset()
+        let initial = lax[prop]
+        lax[prop] = val
+        let applied = lax[prop]
+
+        for (let junk of [5, null, undefined, {}]){
+          lax.reset()
+          assert.doesNotThrow(() => lax[prop] = junk, `${prop} = ${junk}`)
+          assert.equal(lax[prop], initial, `${prop} = ${junk} should be ignored`)
+        }
+        for (let wrapped of [new String(val), {toString: () => val}, [val]]){
+          lax.reset()
+          lax[prop] = wrapped
+          assert.equal(lax[prop], applied, `${prop} = ${typeof wrapped} should apply`)
+        }
+      }
+      assert.throws(() => lax.lineCap = Symbol('round'), /Cannot convert a Symbol/)
+
+      // string-taking methods stringify their arguments too (then validate them as usual)
+      let square = new Path2D()
+      square.rect(0, 0, 10, 10)
+      assert.ok(lax.createPattern(canvas, new String('repeat-x')))
+      assert.throws(() => lax.createPattern(canvas, 5), /Expected `repetition`/)
+      assert.equal(lax.isPointInPath(square, 5, 5, new String('evenodd')), true)
+      assert.ok(lax.createTexture(10, {cap: {toString: () => 'round'}}))
+      assert.doesNotThrow(() => lax.fill(new String('evenodd')))
+      assert.doesNotThrow(() => lax.clip({toString: () => 'evenodd'}))
+      assert.throws(() => lax.fill(null), /Expected `fillRule`/) // as in browsers
+      let pixels = lax.getImageData(0, 0, 1, 1, {colorSpace: new String('display-p3'), colorType: new String('bgra')})
+      assert.equal(pixels.colorSpace, 'display-p3')
+      assert.equal(pixels.colorType, 'bgra')
     })
 
     test('NaN arguments', async () => {

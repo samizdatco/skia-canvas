@@ -37,21 +37,20 @@ pub fn opt_object_for_key<'a>(cx: &mut FunctionContext<'a>, obj: &Handle<'a, JsO
 // strings
 //
 
-pub fn strings_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> Vec<String>{
+// non-strings are stringified (as WebIDL does for DOMStrings), which only throws for Symbols
+pub fn strings_in(cx: &mut FunctionContext, vals: &[Handle<JsValue>]) -> NeonResult<Vec<String>>{
   let mut strs:Vec<String> = Vec::new();
   for val in vals.iter() {
-    if let Ok(txt) = val.downcast::<JsString, _>(cx){
-      let val = txt.value(cx);
-      strs.push(val);
-    }
+    let txt = val.to_string(cx)?;
+    strs.push(txt.value(cx));
   }
-  strs
+  Ok(strs)
 }
 
 pub fn strings_at_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> NeonResult<Vec<String>>{
   let array:Handle<JsArray> = obj.get(cx, attr)?;
   let list = array.to_vec(cx)?;
-  Ok(strings_in(cx, &list))
+  strings_in(cx, &list)
 }
 
 pub fn opt_string_for_key(cx: &mut FunctionContext, obj: &Handle<JsObject>, attr:&str) -> Option<String>{
@@ -79,13 +78,13 @@ pub fn opt_string_arg(cx: &mut FunctionContext, idx: usize) -> Option<String>{
   }
 }
 
+// a missing arg is an error, but anything else is stringified (as WebIDL does for DOMStrings),
+// which only throws for Symbols
 pub fn string_arg(cx: &mut FunctionContext, idx: usize, attr:&str) -> NeonResult<String> {
-  let exists = cx.len() > idx;
-  match opt_string_arg(cx, idx){
-    Some(v) => Ok(v),
+  match cx.argument_opt(idx){
+    Some(arg) => Ok(arg.to_string(cx)?.value(cx)),
     None => cx.throw_type_error(
-      if exists { format!("Expected a string for `{}`", attr) }
-      else { format!("not enough arguments: expected a string for `{}` as {} arg", attr, arg_num(idx)) }
+      format!("not enough arguments: expected a string for `{}` as {} arg", attr, arg_num(idx))
     )
   }
 }

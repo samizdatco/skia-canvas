@@ -25,6 +25,14 @@ describe("DOMMatrix", ()=>{
     test("a css transform string", () => {
       let m = new DOMMatrix('translate(10px, 20px) scale(2)')
       nearly(cells(m), [2, 0, 0, 2, 10, 20])
+
+      // objects with their own toString() are parsed as css (not read as an {a, b, …} dictionary)
+      // @ts-expect-error — an object with a toString() rather than a string
+      nearly(cells(new DOMMatrix({toString: () => 'translate(10px, 20px) scale(2)'})), [2, 0, 0, 2, 10, 20])
+      nearly(cells(new DOMMatrix(new String('scale(3)'))), [3, 0, 0, 3, 0, 0])
+      nearly(cells(DOMMatrix.fromMatrix({a: 4, d: 4})), [4, 0, 0, 4, 0, 0]) // …while plain dictionaries are still matrices
+      // @ts-expect-error — an object with a toString() rather than a string
+      nearly(cells(new DOMMatrix().setMatrixValue({toString: () => 'scale(5)'})), [5, 0, 0, 5, 0, 0])
     })
   })
 

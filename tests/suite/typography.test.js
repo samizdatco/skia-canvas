@@ -537,9 +537,11 @@ describe("Typography", () => {
       assert.equal(ctx.fontInstance, "Light Italic")
       assert.nearEqual(width(), bold)
 
-      // @ts-expect-error — names must be strings
+      // like any string attribute, other values are stringified (so this is just another unknown name)
+      // @ts-expect-error — names are typed as strings
       ctx.fontInstance = 300
-      assert.equal(ctx.fontInstance, "Light Italic")
+      assert.equal(ctx.fontInstance, "300")
+      assert.nearEqual(width(), bold)
 
       ctx.fontInstance = "auto"
       assert.equal(ctx.fontInstance, "auto")

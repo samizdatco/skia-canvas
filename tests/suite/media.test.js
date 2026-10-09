@@ -101,6 +101,12 @@ describe("Image", () => {
       assert.matchesSubset(img, LOADED)
       assert.equal(img.src, DATA_URI)
 
+      // non-Buffers are stringified, so wrapped strings work and other values are invalid data URLs
+      // @ts-expect-error — a String object rather than a string
+      assert.matchesSubset(new Image(new String(DATA_URI)), LOADED)
+      // @ts-expect-error — deliberately non-string data
+      assert.throws(() => new Image(5), /Expected a valid data URL/)
+
       let fakeSrc = 'arbitrary*src*string'
       img = new Image(DATA_URI, fakeSrc)
       assert.equal(img.src, fakeSrc)
@@ -1760,6 +1766,12 @@ describe("FontLibrary", ()=>{
     useTestFace()
     assert(FontLibrary.has("TestFace"))
     assert(!FontLibrary.has("_n_o_n_e_s_u_c_h_"))
+
+    // names are stringified, so wrapped strings work and other values are just unknown names
+    // @ts-expect-error — a String object rather than a string
+    assert(FontLibrary.has(new String("TestFace")))
+    // @ts-expect-error — deliberately non-string name
+    assert(!FontLibrary.has(5))
   })
 
   test("can describe a family", ()=>{

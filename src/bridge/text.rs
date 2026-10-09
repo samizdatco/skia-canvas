@@ -80,7 +80,7 @@ pub fn font_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<FontS
 pub fn font_features(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut features:Vec<(String, i32)> = vec![];
-  for key in strings_in(cx, &keys).iter() {
+  for key in strings_in(cx, &keys)?.iter() {
     match key.as_str() {
       "on" | "off" => strings_at_key(cx, obj, key)?.iter().for_each(|feat|{
         features.push( (feat.to_string(), if key == "on"{ 1 } else { 0 }) );
@@ -678,7 +678,7 @@ impl FontAxes{
 pub fn variation_settings(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, f32)>>{
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut settings:Vec<(String, f32)> = vec![];
-  for key in strings_in(cx, &keys).iter() {
+  for key in strings_in(cx, &keys)?.iter() {
     settings.push( (key.to_string(), float_for_key(cx, obj, key)?) );
   }
   Ok(settings)
@@ -730,7 +730,7 @@ impl FontFeatures{
 pub fn feature_settings(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<Vec<(String, i32)>>{
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut settings:Vec<(String, i32)> = vec![];
-  for key in strings_in(cx, &keys).iter() {
+  for key in strings_in(cx, &keys)?.iter() {
     settings.push( (key.to_string(), float_for_key(cx, obj, key)? as i32) );
   }
   Ok(settings)

@@ -15,7 +15,7 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, V
   let obj:Handle<JsObject> = arg.get(cx, "filters")?;
   let keys = obj.get_own_property_names(cx)?.to_vec(cx)?;
   let mut filters = vec![];
-  for (name, key) in strings_in(cx, &keys).iter().zip(keys) {
+  for (name, key) in strings_in(cx, &keys)?.iter().zip(keys) {
     match name.as_str() {
       "drop-shadow" => {
         let values = obj.get::<JsArray, _, _>(cx, key)?;
