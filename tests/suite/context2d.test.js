@@ -1456,7 +1456,8 @@ describe("Context2D", ()=>{
 
     describe("measureText()", () => {
       test("provides line metrics", () => {
-        ctx.font = "20px Arial, DejaVu Sans"
+        FontLibrary.use('MeasureFace', [`tests/assets/fonts/montserrat-latin/montserrat-v30-latin-regular.woff2`])
+        ctx.font = "20px MeasureFace"
 
         let ø = ctx.measureText('').width,
             _ = ctx.measureText(' ').width,
