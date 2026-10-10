@@ -30,10 +30,12 @@
 - The [`letterSpacing`][letterSpacing] and [`wordSpacing`][wordSpacing] properties now accept `em` and `rem` units. `em` is relative to the current font size and `rem` uses a 16px root size.
 - Variable fonts that support optical sizing (the `opsz` axis) are now automatically sized to the current `font` size (matching browser behavior).
 - The `font` attribute now accepts an oblique angle (e.g., `"oblique 14deg 24px Recursive"`) and will set the `slnt` axis (and suppress italic letterforms) for variable fonts that support it.
-- The new [`fontVariationSettings`][fontVariationSettings] property takes a CSS [`font-variation-settings`][mdn_fontvariation] string (e.g., `'"wght" 625, "opsz" 48'`) for low-level control over arbitrary variable-font axes. Set it to `"normal"` to clear.
-- The new [`fontFeatureSettings`][fontFeatureSettings] property takes a CSS [`font-feature-settings`][mdn_fontfeature] string (e.g., `'"liga" 0, "tnum" 1, "ss01"'`) for directly enabling or disabling OpenType features by tag. On conflicting tags it overrides `fontVariant` and `fontKerning`. Set it to `"normal"` to clear.
+- Variable fonts can now be selected via named instances using the [`fontInstance`][fontInstance] property
+- The new [`fontVariationSettings`][fontVariationSettings] property takes a CSS [`font-variation-settings`][mdn_fontvariation] string (e.g., `'"wght" 625, "opsz" 48'`) or `{tag:value}` object for low-level control over arbitrary variable-font axes. Set it to `"normal"` to clear.
+- The new [`fontFeatureSettings`][fontFeatureSettings] property takes a CSS [`font-feature-settings`][mdn_fontfeature] string (e.g., `'"liga" 0, "tnum" 1, "ss01"'`) or `{tag:value}` object for directly enabling or disabling OpenType features by tag. On conflicting tags it overrides `fontVariant` and `fontKerning`. Set it to `"normal"` to clear.
 - The **FontLibrary**’s [`use()`][FontLibrary.use] and [`family()`][FontLibrary.family] methods now include additional fields describing the capabilities of user-loaded or system-installed fonts:
   - `variable`: A boolean flag identifying that this is a variable font
+  - `instances`: A mapping of variable font instance names (e.g., `"Display Semibold"`, `"Subhead Light"`) to their corresponding variation axis settings. Names can be passed to the [`fontInstance`][fontInstance] property and settings to [`fontVariationSettings`][fontVariationSettings].
   - `variations`: Variable font axes represented as an object with supported axis tags (e.g., `wdth`, `slnt`) mapping to `{min, max, default, label}` summaries
   - `features`: OpenType features represented as an object with supported feature tags (e.g., `liga`, `smcp`) mapping to `{type, label}` summaries
   - `replaces` & `replacedBy`: File paths showing which fonts were kept or discarded when multiple faces with the same family and style were passed to [`use()`][FontLibrary.use]
@@ -43,10 +45,11 @@
   - `"optimizeLegibility"`: enable CoreText’s font smoothing, DirectWrite’s grid fitting, or FreeType’s light autohinting
   - `"optimizeSpeed"`: snap glyphs to whole pixels so GPU renders can reuse cached per-glyph bitmaps
 
+
 #### Imagery
-- **Image** objects can now load **PDF** documents (via [`loadImage()`][loadImage()], [new Image()][image_constructor], or the [`src`][Image.src] setter) and render them as resolution-independent vectors.
-  - Single pages can be loaded via [`loadImage()`][loadImage()] which now accepts a 1-based `page` number option, so you can draw PDFs to other Canvases.
-  - Whole documents can be loaded via [`loadCanvas()`][loadCanvas], which adds each PDF page as a content-sized entry in the Canvas’s `pages` attribute allowing you to draw annotations onto them.
+- **Image** objects can now load **PDF** documents (via [`loadImage()`][loadImage()], [`new Image()`][image_constructor], or the [`src`][Image.src] setter) and render them as resolution-independent vectors.
+  - Single pages can be loaded via [`loadImage()`][loadImage()] which now accepts a 1-based `page` number option, so you can draw PDFs to other **Canvas** objects.
+  - Whole documents can be loaded via [`loadCanvas()`][loadCanvas], which adds each PDF page as a content-sized entry in the **Canvas**’s `pages` attribute allowing you to draw annotations onto them.
 - SVG images now apply CSS rules contained in `<style>` elements and support most CSS selectors (#276). Custom properties have only basic support: `var()` references only resolve against `:root` or inline `style` declarations, and chained definitions like `--foo: var(--bar)` are not currently handled.
 - [**ImageData**][ImageData] now supports `Float16Array` (on Node 23+) for half-float pixel formats and [`getImageData()`][mdn_getImageData] will return one when a float-based `colorType` is requested (#271).
 - When [exporting][Canvas.toFile] in `"raw"` format, you can now include a `premultiplied` option to leave the pixel values in their GPU-native state (and avoid a potentially lossy conversion to un-premultiplied at low alpha).
@@ -86,10 +89,11 @@
 
 ### Misc. Improvements
 - The postinstall script for downloading precompiled native binaries has been replaced by platform-specific `optionalDependencies` in the `@skia-canvas/*` namespace. Installs now work with `--ignore-scripts` enabled (#275) and behind firewalls that only mirror the npm registry (#287). As a fallback, the binaries can still be downloaded from the GitHub release via an explicit `npm run build` or `npm run download`.
-- [`getContextAttributes()`][getContextAttributes] now also includes the **Context**’s `width` & `height`, which is the only way to get page-specific dimensions in a multi-page canvas (since the Canvas’s size corresponds to the *final* page).
+- [`getContextAttributes()`][getContextAttributes] now also includes the **Context**’s `width` & `height`, which is the only way to get page-specific dimensions in a multi-page canvas (since the **Canvas**’s size corresponds to the *final* page).
 - The [`points()`][p2d_points] method now takes a sampling `mode` argument: the default `"even"` fits the step to each contour so both endpoints are present, while the new `"exact"` mode samples at precise multiples of the requested step.
 - [`loadImage()`][loadImage()] and [`loadImageData()`][loadImageData()] now take a `timeout` [request option][request_opts], rejecting the Promise if the request stalls. See also: the [`AbortSignal.timeout()`][mdn_abortTimeout] `signal` option.
 - Upgraded Skia to [milestone 153](https://github.com/rust-skia/rust-skia/releases/tag/0.153.2) (via `skia-safe` 0.99.0) and `winit` to 0.30.13
+- Now backward compatible with [Sharp][sharp] ≥0.33.5
 - Dropped the `string-split-by` runtime dependency, reducing the total number of direct and transitive dependencies to 6.
 
 ### Bugfixes
@@ -141,7 +145,7 @@
 - The [`toSharp()`][imgdata_tosharp] method now produces correct pixel values for *all* supported color types, not just the 8-bit formats.
 
 #### Compositing
-- Drawing one canvas onto another (via [`drawImage()`][mdn_drawImage] or [`drawCanvas()`][drawcanvas]) now isolates the source’s compositing from the destination. Previously, if the drawn canvas used a non-`source-over` blend mode, called `clearRect()`, or blitted an ImageData it would blend against (or erase) the destination canvas’s content.
+- Drawing one canvas onto another (via [`drawImage()`][mdn_drawImage] or [`drawCanvas()`][drawcanvas]) now isolates the source’s compositing from the destination. Previously, if the drawn canvas used a non-`source-over` blend mode, called `clearRect()`, or blitted an **ImageData** it would blend against (or erase) the destination canvas’s content.
 - The `matte` is now composited *underneath* the finished page rather than painted first, preventing a canvas that uses region-affecting composite operations from erasing it.
 
 #### Geometry
@@ -155,6 +159,7 @@
 - [`unwind()`][p2d_unwind] has been deprecated in favor of [`simplify("evenodd")`][p2d_simplify], which selects the same region; it will be removed in a future release.
 - Boolean-op and [`simplify()`][p2d_simplify] results now render differently when filled with the default `"nonzero"` rule. Results containing holes (e.g., via `xor` or `difference`) previously filled in solid without an explicit `"evenodd"`.
 - SVG **Image**s lacking an explicit `width` and `height` now use the CSS [default sizing algorithm][default_sizing_algo] (with a 300×150 [default object size][default_size]) to establish a default intrinsic size. An SVG with only one concrete dimension plus a `viewBox` ratio now resolves to a fully-determined intrinsic size. This changes both the reported `width`/`height` of such images and how they scale when drawn without explicit size arguments (including when used as fill/stroke-pattern tiles).
+- SVG strings passed to the **Path2D** constructor or [`d`][p2d_d] setter now follow browser behavior: invalid strings are truncated at the first error rather than rejected outright, and paths that don’t begin with a *MoveTo* are now empty (rather than starting with an implicit `M 0,0`).
 - An **ImageData** created from a Node `Buffer` object now *shares* the buffer’s memory rather than copying it.
 - The `window` Cargo feature is no longer independently configurable (it is now automatically enabled by a `metal` or `vulkan` feature being present).
 - [`fontHinting`][fontHinting] is now ignored on macOS (since CoreText has no support for hinting). Previously it enabled heavier text rendering, which is now available by setting `textRendering` to `"optimizeLegibility"` instead
@@ -214,6 +219,7 @@
 [fontHinting]: /docs/api/context.md#fonthinting
 [outlineText()]: /docs/api/context.md#outlinetext
 [textWrap]: /docs/api/context.md#textwrap
+[fontInstance]: /docs/api/context.md#fontinstance
 
 ## 📦 ⟩ [v3.0.8] ⟩ Sep 25, 2025
 
