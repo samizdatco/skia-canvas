@@ -34,6 +34,8 @@ ahash = "0.8"
 process_path = "0.1.4"
 hayro-interpret = "0.7"
 kurbo = "0.13"
+# finds where an invalid Path2D string stops being valid (skia's parser is all-or-nothing)
+svgtypes = "0.16"
 smallvec = "1"
 roxmltree = "0.20"
 # only used to wrap ImageData pixels in an uncompressed, ICC-tagged container for `toSharp()`;

@@ -56,6 +56,33 @@ describe("Path2D", ()=>{
       assert.equal(new Path2D(5).d, "")
     })
 
+    test('an invalid SVG string', () => {
+      // like browsers, everything up to the first error is kept (each of these matches Chrome)
+      let truncated = {
+        'M0 0 L10 10 garbage':          'M0 0 L10 10',
+        'M0 0 L10 10 20':               'M0 0 L10 10',             // a dangling coordinate
+        'M0 0 L10 10 20 20 30':         'M0 0 L10 10 20 20',       // implicit repeats are segments too
+        'M0 0 L10 10 L':                'M0 0 L10 10',
+        'M0 0 L10 10 L20 20,':          'M0 0 L10 10 L20 20',      // a trailing separator is fine
+        'M0 0 L10 10 M20 0 L20 10 Q':   'M0 0 L10 10 M20 0 L20 10',
+        'M0 0 L10 10 A5 5 0 2 0 20 20': 'M0 0 L10 10',             // 2 isn't an arc flag
+        'M0 0 L10 10 L , 20 20':        'M0 0 L10 10',             // no comma after a command
+      }
+      for (let [invalid, valid] of Object.entries(truncated)){
+        let expected = new Path2D(valid).d,
+            assigned = new Path2D('M1 1 L2 2')
+        assigned.d = invalid // the `d` setter parses the same way
+        assert.equal(new Path2D(invalid).d, expected, invalid)
+        assert.equal(assigned.d, expected, `d = ${invalid}`)
+      }
+
+      // and nothing at all unless it starts with a moveto
+      assert.equal(new Path2D('L10 10 L20 20').d, '')
+      let replaced = new Path2D('M1 1 L2 2')
+      replaced.d = 'garbage'
+      assert.equal(replaced.d, '')
+    })
+
     test('a stream of edges', () => {
       let p = new Path2D()
 

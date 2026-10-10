@@ -2,10 +2,12 @@
 #![allow(non_snake_case)]
 use std::cell::{Ref, RefCell};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
+use std::fmt::Write;
 use neon::prelude::*;
 use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, StrokeRec};
 use skia_safe::{PathEffect, trim_path_effect, ContourMeasure, ContourMeasureIter};
 use skia_safe::path::{self, AddPathMode, Verb};
+use svgtypes::{PathParser, PathSegment};
 
 use crate::bridge::*;
 use crate::drawlist::Pen;
@@ -48,6 +50,46 @@ impl From<Path> for Path2D{
 }
 
 impl Path2D{
+  pub fn from_svg(svg:&str) -> Self {
+    use PathSegment::*;
+
+    // validate the path like the browser (reject if first command isn't a MoveTo, truncate at first bad command)
+    let mut segments = vec![];
+    let mut complete = true;
+    for segment in PathParser::from(svg){
+      match segment{
+        Ok(segment) => segments.push(segment),
+        Err(_) => { complete = false; break }
+      }
+    }
+
+    // if valid, use as-is
+    if complete && let Some(path) = Path::from_svg(svg){
+      return Self::from(path)
+    }
+
+    // if invalid, reconstruct up to the first error
+    let mut valid = String::new();
+    for segment in segments{
+      let args = match segment{
+        MoveTo{x, y, ..} | LineTo{x, y, ..} | SmoothQuadratic{x, y, ..} => vec![x, y],
+        HorizontalLineTo{x, ..} => vec![x],
+        VerticalLineTo{y, ..} => vec![y],
+        CurveTo{x1, y1, x2, y2, x, y, ..} => vec![x1, y1, x2, y2, x, y],
+        SmoothCurveTo{x2, y2, x, y, ..} => vec![x2, y2, x, y],
+        Quadratic{x1, y1, x, y, ..} => vec![x1, y1, x, y],
+        EllipticalArc{rx, ry, x_axis_rotation, large_arc, sweep, x, y, ..} =>
+          vec![rx, ry, x_axis_rotation, large_arc as u8 as f64, sweep as u8 as f64, x, y],
+        ClosePath{..} => vec![],
+      };
+      valid.push(segment.command() as char);
+      for arg in args{
+        let _ = write!(valid, " {arg}");
+      }
+    }
+    Self::from(Path::from_svg(&valid).unwrap_or_default())
+  }
+
   // either return the cached path (if no additional appends have happened) or replay the builder to generate a new one
   pub fn path(&self) -> Path {
     let mut cache = self.cache.borrow_mut();
@@ -298,8 +340,7 @@ pub fn from_path(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
 
 pub fn from_svg(mut cx: FunctionContext) -> JsResult<BoxedPath2D> {
   let svg_string = string_arg(&mut cx, 1, "svgPath")?;
-  let path = Path::from_svg(svg_string).unwrap_or_default();
-  Ok(cx.boxed(RefCell::new(Path2D::from(path))))
+  Ok(cx.boxed(RefCell::new(Path2D::from_svg(&svg_string))))
 }
 
 // Adds a path to the current path.
@@ -766,12 +807,6 @@ pub fn get_d(mut cx: FunctionContext) -> JsResult<JsString> {
 pub fn set_d(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedPath2D>(0)?;
   let svg_string = string_arg(&mut cx, 1, "svgPath")?;
-  let mut this = this.borrow_mut();
-
-  if let Some(path) = Path::from_svg(svg_string){
-    this.update().reset().add_path(&path, None);
-    Ok(cx.undefined())
-  }else{
-    cx.throw_type_error("Expected a valid SVG path string")
-  }
+  *this.borrow_mut() = Path2D::from_svg(&svg_string);
+  Ok(cx.undefined())
 }
