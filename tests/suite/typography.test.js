@@ -636,6 +636,21 @@ describe("Typography", () => {
       }
     })
 
+    test("unitless zero", () => {
+      // a bare 0 is a valid <length>, unlike every other unitless number
+      for (let zero of ["0", "+0", "-0", "0.0", ".0"]){
+        ctx.letterSpacing = "4px"
+        ctx.letterSpacing = zero
+        assert.equal(ctx.letterSpacing, "0px", `${zero} should reset letterSpacing`)
+        ctx.wordSpacing = "4px"
+        ctx.wordSpacing = zero
+        assert.equal(ctx.wordSpacing, "0px", `${zero} should reset wordSpacing`)
+      }
+      ctx.letterSpacing = "4px"
+      ctx.letterSpacing = "1"
+      assert.equal(ctx.letterSpacing, "4px")
+    })
+
     test("unresolvable units", () => {
       ctx.letterSpacing = "4px"
       for (let bad of ["10%", "2ex", "3ch"]){
