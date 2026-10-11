@@ -19,7 +19,7 @@ use skia_safe::utils::OrderedFontMgr;
 
 use crate::bridge::*;
 use crate::typography::TextMetrics;
-use crate::opentype::{FontCapabilities, InstanceDetails};
+use crate::opentype::{FontCapabilities, NamedInstance};
 use kurbo::{BezPath, CubicBez, PathEl, Point};
 use read_fonts::{model::pen::OutlinePen, types::GlyphId, ps::{cff::CffFontRef, type1::Type1Font}};
 use write_fonts::{
@@ -187,14 +187,19 @@ impl FontLibrary{
     names
   }
 
-  // all the system fonts with a given family name plus any fonts registered under it (as a family name or alias)
   fn family_faces(&self, family:&str) -> Vec<Typeface>{
+    let registered:Vec<Typeface> = self.fonts.iter()
+      .filter(|(font, alias)| alias.as_deref().map_or_else(
+        || font.family_name() == family,
+        |alias| alias == family))
+      .map(|(font, _)| font.clone())
+      .collect();
+
+    // user-registered fonts shadow system fonts of the same name
+    if !registered.is_empty(){ return registered }
+
     let mut set = self.mgr.match_family(family);
-    let system:Vec<Typeface> = (0..set.count()).filter_map(|i| set.new_typeface(i)).collect();
-    let registered = self.fonts.iter()
-      .filter(|(font, alias)| alias.as_deref().map_or_else(|| font.family_name() == family, |alias| alias == family))
-      .map(|(font, _)| font.clone());
-    system.into_iter().chain(registered).collect()
+    (0..set.count()).filter_map(|i| set.new_typeface(i)).collect()
   }
 
   fn family_details(&self, family:&str) -> (Vec<f32>, Vec<String>, Vec<String>, FontCapabilities){
@@ -263,13 +268,17 @@ impl FontLibrary{
       })
   }
 
+  // the typeface a style selects (resolving the implicit default font if no font has been set)
+  pub fn font_face(&mut self, style:&TextStyle) -> Option<Typeface>{
+    match style.typeface(){
+      Some(face) => Some(face),
+      None => self.update_style(style, &FontSpec::default())?.typeface(),
+    }
+  }
+
   // search for a named instance in the currently selected font family
-  pub fn find_instance(&mut self, style:&TextStyle, name:&str) -> Option<InstanceDetails>{
-    // find the identity of the default typeface if one hasn't been set
-    let face = match style.typeface(){
-      Some(face) => face,
-      None => self.update_style(style, &FontSpec::default())?.typeface()?,
-    };
+  pub fn find_instance(&mut self, style:&TextStyle, name:&str) -> Option<NamedInstance>{
+    let face = self.font_face(style)?;
 
     // extract the face's family name/alias
     let family_name = self.fonts.iter().find(|(font, _)| font.unique_id() == face.unique_id())

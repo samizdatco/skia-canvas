@@ -5,16 +5,15 @@
 use std::collections::HashMap;
 use neon::prelude::*;
 use allsorts::{binary::read::ReadScope, get_name::fontcode_get_name, tables::NameTable};
-use read_fonts::{FontData, TableProvider, TopLevelTable, types::{Tag, Fixed, F2Dot14}, tables::{hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, layout::FeatureParams}};
+use read_fonts::{FontData, TableProvider, TopLevelTable, types::{Tag, Fixed, F2Dot14}, tables::{hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, head::Head, layout::FeatureParams}};
 use skia_safe::{Data, FontArguments, FourByteTag, Typeface};
-use skia_safe::font_style::Slant;
+use skia_safe::font_style::{FontStyle, Weight, Slant};
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::TextStyle;
 
 use crate::bridge::*;
+use crate::font_library::FontLibrary;
 
-// a subset of a typeface's tables, copied out of Skia once so read-fonts can parse them in place
-// (as a TableProvider: `tables.hhea()`, `tables.gsub()`, etc.)
 pub struct FontTables(Vec<(Tag, Data)>);
 
 impl FontTables{
@@ -23,6 +22,10 @@ impl FontTables{
     FontTables(tags.iter().filter_map(|&tag| Some((tag, face?.copy_table_data(u32::from_be_bytes(tag.to_be_bytes()))?))).collect())
   }
 
+  // uniquely identify the font file the typeface was derived from
+  pub fn id(face:&Typeface) -> Option<Data>{
+    face.copy_table_data(u32::from_be_bytes(Head::TAG.to_be_bytes()))
+  }
 
   // tables for BaselineMetrics
   pub fn metrics(face:Option<&Typeface>) -> Self{
@@ -82,6 +85,12 @@ impl<'a> TableProvider<'a> for &'a FontTables{
 //
 
 #[derive(Debug, Clone)]
+pub struct FeatureDetails{
+  pub tag: String,
+  pub label: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct AxisDetails{
   pub tag: FourByteTag,
   pub min: f32,
@@ -91,27 +100,25 @@ pub struct AxisDetails{
 }
 
 #[derive(Debug, Clone)]
-pub struct InstanceDetails{
-  pub name: String,
-  pub coords: Vec<(FourByteTag, f64)>,
-  pub face: Typeface,
+pub struct NamedInstance{
+  pub name: String, // the instance name (e.g., "Caption Semibold")
+  pub coords: Vec<(FourByteTag, f64)>, // axis tag -> value mappings
+  pub face: Typeface, // the variable font that this instance is derived from
 }
 
-impl InstanceDetails{
+impl NamedInstance{
+  pub fn new(face:&Typeface, name:&str, coords:Vec<(FourByteTag, f64)>) -> Self{
+    NamedInstance{ name:name.to_string(), coords, face:face.clone() }
+  }
+
   pub fn style(&self) -> Slant{ self.face.font_style().slant() }
-}
-
-#[derive(Debug, Clone)]
-pub struct FeatureDetails{
-  pub tag: String,
-  pub label: Option<String>,
 }
 
 #[derive(Debug, Default)]
 pub struct FontCapabilities{
-  pub axes: Vec<AxisDetails>, // variable-font design axes (in fvar order)
   pub features: Vec<FeatureDetails>, // OpenType features (from GSUB/GPOS tables)
-  pub instances: Vec<InstanceDetails>, // named instances (normal→italic→oblique, then in fvar order)
+  pub axes: Vec<AxisDetails>, // variable-font design axes (in fvar order)
+  pub instances: Vec<NamedInstance>, // font-defined name -> axis-settings bundles
 }
 
 impl FontCapabilities{
@@ -182,22 +189,22 @@ impl FontCapabilities{
     features.sort_by(|a, b| a.tag.cmp(&b.tag));
 
     // collect the face's named instances
-    let mut instances:Vec<InstanceDetails> = vec![];
+    let mut instances:Vec<NamedInstance> = vec![];
     if let Ok(fvar) = tables.fvar(){
       for record in fvar.instances().into_iter().flat_map(|records| records.iter()).flatten(){
         // skip unnamed and repeated instances
         let Some(name) = names.get(&record.subfamily_name_id.to_u16()) else { continue };
         if instances.iter().any(|inst| inst.name == *name){ continue }
 
-        let coords = fvar_axes.iter().zip(record.coordinates).map(|((tag, _), val)| {
-          // use the shortest decimal that rounds back to the same fixed-point value
+        let coords:Vec<(FourByteTag, f64)> = fvar_axes.iter().zip(record.coordinates).map(|((tag, _), val)| {
+          // fvar coords are 16.16 fixed-point, convert to an f64 that rounds back to the same value
           let val = val.get();
           let short = [1.0, 1e1, 1e2, 1e3, 1e4, 1e5].iter()
             .map(|scale| (val.to_f64() * scale).round() / scale)
             .find(|approx| Fixed::from_f64(*approx) == val);
           (*tag, short.unwrap_or(val.to_f64()))
         }).collect();
-        instances.push(InstanceDetails{ name:name.clone(), coords, face:font.clone() });
+        instances.push(NamedInstance::new(font, name, coords));
       }
     }
 
@@ -297,19 +304,92 @@ impl FontCapabilities{
 // Active variation-axis/feature settings
 //
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct FontAxes{
-  instance: Option<InstanceDetails>, // selected fontInstance (if any)
-  variations: Vec<(String, f32)>, // decoded fontVariationSettings (overrides any instance settings)
+  instance: Option<NamedInstance>, // selected fontInstance (if any)
+  variations: Vec<(String, f32)>,  // decoded fontVariationSettings (overrides any instance settings)
+  layout_style: Option<FontStyle>, // the style to request in layout (if the instance/variations differ from the font's)
+  allows_synthesis: bool, // false when synthetic bold/italic would misrepresent the axis values
+}
+
+impl Default for FontAxes{
+  fn default() -> Self{
+    FontAxes{ instance:None, variations:vec![], layout_style:None, allows_synthesis:true }
+  }
 }
 
 impl FontAxes{
-  pub fn set_instance(&mut self, instance:Option<InstanceDetails>){
+  pub fn set_instance(&mut self, instance:Option<NamedInstance>){
     self.instance = instance;
   }
 
   pub fn instance(&self) -> Option<&str>{
     self.instance.as_ref().map(|inst| inst.name.as_str())
+  }
+
+  pub fn allows_synthesis(&self) -> bool{
+    self.allows_synthesis
+  }
+
+  // update layout_style to match instance & variation settings (so fallback fonts match and synthetic bold/ital aren't
+  // over-applied) unless it would cause skia to match a different face altogether
+  pub fn resolve_style(&mut self, char_style:&TextStyle, stretch:f32, oblique:Option<f32>){
+    let (font_face, mut collection) = FontLibrary::with_shared(|lib| (lib.font_face(char_style), lib.font_collection()));
+    let (face, base) = match (&self.instance, font_face){
+      (Some(inst), _) => (inst.face.clone(), inst.face.font_style()),
+      (None, Some(face)) => (face, char_style.font_style()),
+      (None, None) => { (self.layout_style, self.allows_synthesis) = (None, true); return }
+    };
+
+    // merge the instance's coords with explicit variation settings (only for axes the font actually has)
+    let axes = face.variation_design_parameters().unwrap_or_default();
+    let overrides:Vec<(FourByteTag, f32)> = self.instance.iter()
+      .flat_map(|inst| inst.coords.iter().map(|&(tag, value)| (tag, value as f32)))
+      .chain(self.variations.iter().map(|(tag, value)| (axis_tag(tag), *value)))
+      .filter_map(|(tag, value)| axes.iter().find(|axis| axis.tag == tag).map(|axis| (tag, value.clamp(axis.min, axis.max))))
+      .collect();
+
+    // derive a FontStyle that matches the axis coords (to use for fallback fonts and synthesis decisions)
+    let implied = {
+      let value = |axis| overrides.iter().rev().find(|(tag, _)| *tag == axis).map(|(_, value)| *value);
+      let weight = value(Coordinate::wght).map_or(base.weight(), |wght| Weight::from(wght as i32));
+      let width = value(Coordinate::wdth).map_or(base.width(), nearest_width);
+      let slant = match (value(Coordinate::ital), value(Coordinate::slnt)){
+        (None, None) => base.slant(),
+        (ital, slnt) => match ital.is_some_and(|ital| ital >= 0.5) || slnt.is_some_and(|slnt| slnt < 0.0){
+          true => Slant::Italic,
+          false => Slant::Upright,
+        },
+      };
+      FontStyle::new(weight, width, slant)
+    };
+
+    // use the implied style so long as it doesn't cause skia to match to a different face
+    (self.layout_style, self.allows_synthesis) = match self.instance.is_none() && implied == base{
+      true => (None, true),
+      false => {
+        let families:Vec<String> = char_style.font_families().iter().map(|family| family.to_string()).collect();
+        let selected = collection.find_typefaces(&families, implied).into_iter().next();
+        match selected.is_some_and(|selected| FontTables::id(&selected) == FontTables::id(&face)){
+          true => (Some(implied), true),
+          false => (Some(base), false),
+        }
+      }
+    };
+
+    // disable synthesis if skia would fake a weight/slant that the axis settings are already providing
+    let has_axis = |tag| axes.iter().any(|axis| axis.tag == tag);
+    let (weight_axis, slant_axis) = (has_axis(Coordinate::wght), has_axis(Coordinate::ital) || has_axis(Coordinate::slnt));
+    if self.allows_synthesis && (weight_axis || slant_axis){
+      let mut scratch = char_style.clone();
+      self.apply(scratch.set_typeface(face.clone()), stretch, oblique);
+      let wanted = scratch.font_style();
+      if let Some(drawn) = scratch.font_arguments().and_then(|args| args.clone_typeface(face)).map(|face| face.font_style()){
+        let fakes_bold = weight_axis && *wanted.weight() >= 600 && *wanted.weight() - *drawn.weight() >= 200;
+        let fakes_italic = slant_axis && wanted.slant() == Slant::Italic && drawn.slant() != Slant::Italic;
+        self.allows_synthesis = !(fakes_bold || fakes_italic);
+      }
+    }
   }
 
   pub fn set_variations(&mut self, mut variations:Vec<(String, f32)>){
@@ -327,18 +407,16 @@ impl FontAxes{
   }
 
   pub fn clear(&mut self){
-    self.variations.clear();
-    self.instance = None;
+    *self = Self::default();
   }
 
   // merge the variable font instancing fields into the provided char_style
   pub fn apply(&self, char_style:&mut TextStyle, stretch:f32, oblique:Option<f32>){
-    // make sure the font style will resolve to the face that contains the selected fontInstance (if any)
+    if let Some(style) = self.layout_style{
+      char_style.set_font_style(style); // use the resolved style
+    }
     if let Some(inst) = &self.instance{
-      if !char_style.typeface().is_some_and(|face| face.unique_id() == inst.face.unique_id()){
-        char_style.set_font_style(inst.face.font_style());
-        char_style.set_typeface(inst.face.clone());
-      }
+      char_style.set_typeface(inst.face.clone()); // use the instance's 'parent' typeface
     }
 
     let font_style = char_style.font_style();
@@ -370,9 +448,7 @@ impl FontAxes{
 
     // fontVariationSettings still override everything else
     for (tag, value) in &self.variations{
-      let b = tag.as_bytes();
-      let axis = FourByteTag::from_chars(b[0] as char, b[1] as char, b[2] as char, b[3] as char);
-      coords.push(Coordinate{ axis, value:*value });
+      coords.push(Coordinate{ axis:axis_tag(tag), value:*value });
     }
 
     // only set coordinates for axes the typeface supports and clamp them to the font's min/max range
@@ -396,6 +472,11 @@ impl FontAxes{
     let instances = self.instance().map(|name| name.to_lowercase());
     (variations, instances)
   }
+}
+
+fn axis_tag(tag:&str) -> FourByteTag{
+  let b = tag.as_bytes();
+  FourByteTag::from_chars(b[0] as char, b[1] as char, b[2] as char, b[3] as char)
 }
 
 #[derive(Clone, Debug, Default)]

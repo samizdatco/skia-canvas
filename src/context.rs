@@ -154,6 +154,9 @@ impl Default for State {
 impl State{
   // styling config for use by Typesetter
   pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, TextRendering, bool) {
+    let mut graf_style = self.graf_style.clone(); // inherit align & ltr/rtl settings
+    graf_style.set_fake_missing_font_styles(self.font_synthesis && self.font_axes.allows_synthesis());
+
     let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
     if char_style.typeface().is_none() { // if still using the implicit default font, resolve it now
       char_style = FontLibrary::with_shared(|lib| lib.update_style(&char_style, &FontSpec::default()))
@@ -167,18 +170,24 @@ impl State{
     // (this must precede setting the baseline since the axes affect the baseline metrics)
     self.font_axes.apply(&mut char_style, self.font_stretch, self.font_oblique);
 
+    // set vertical offset and horizontal spacing
     char_style.set_baseline_shift(BaselineMetrics::for_style(&char_style).get_offset(self.text_baseline));
     char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
     char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));
 
-    let mut graf_style = self.graf_style.clone(); // inherit align & ltr/rtl settings
-    let font_families = char_style.font_families(); // consult proper metrics for height & leading defaults
+    // reflect context's `fontHinting`, `fontSmoothing`, & `textRendering` settings
+    let (edging, subpixel) = if self.font_smoothing{ (Edging::AntiAlias, true) }else{ (Edging::Alias, false) };
+    let hinted = self.font_hinting && self.text_rendering != TextRendering::GeometricPrecision;
+    char_style.set_font_hinting(if hinted && !cfg!(target_os = "macos"){ FontHinting::Normal }else{ FontHinting::None });
+    char_style.set_font_edging(edging);
+    char_style.set_subpixel(subpixel);
 
     if self.text_wrap{
       // render shy hyphens (U+00AD) rather than just breaking on them
       graf_style.set_render_soft_hyphens(true);
 
-      // handle multi-line spacing
+      // handle multi-line spacing (using metrics for height & leading defaults)
+      let font_families = char_style.font_families();
       let mut strut_style = StrutStyle::new();
       strut_style
         .set_font_families(&font_families.iter().collect::<Vec<_>>())
@@ -201,15 +210,6 @@ impl State{
       // omit anything that doesn't fit on a single line
       graf_style.set_max_lines(Some(1));
     }
-
-    // reflect context's `fontSynthesis`, `fontHinting`, `fontSmoothing`, `textRendering` & `fontKerning` settings.
-    // (macOS doesn't ever apply hinting and uses the flag to enable a totally unrelated 'smoothing' mode instead)
-    graf_style.set_fake_missing_font_styles(self.font_synthesis);
-    let (edging, subpixel) = if self.font_smoothing{ (Edging::AntiAlias, true) }else{ (Edging::Alias, false) };
-    let hinted = self.font_hinting && self.text_rendering != TextRendering::GeometricPrecision;
-    char_style.set_font_hinting(if hinted && !cfg!(target_os = "macos"){ FontHinting::Normal }else{ FontHinting::None });
-    char_style.set_font_edging(edging);
-    char_style.set_subpixel(subpixel);
 
     ( char_style, graf_style, self.text_decoration.clone(), self.text_rendering, self.text_wrap )
   }
@@ -729,6 +729,7 @@ impl Context2D{
       self.state.font_axes.clear();
       self.state.font_features.set_named(&spec.features);
       self.state.font_features.clear_tagged();
+      self.resolve_font_axes();
     }
   }
 
@@ -742,10 +743,12 @@ impl Context2D{
     let font_style = FontStyle::new(style.weight(), nearest_width(pct), style.slant());
     self.state.char_style.set_font_style(font_style);
     self.state.font_stretch = pct;
+    self.resolve_font_axes();
   }
 
   pub fn set_font_variation(&mut self, settings:Vec<(String, f32)>){
     self.state.font_axes.set_variations(settings);
+    self.resolve_font_axes();
   }
 
   pub fn set_font_instance(&mut self, name:&str) -> bool{
@@ -756,7 +759,14 @@ impl Context2D{
         None => return false // no match, so flag that state was left unchanged
       }
     }
+    self.resolve_font_axes();
     true
+  }
+
+  // choose the style layout will request based on the current fontInstance & fontVariationSettings
+  fn resolve_font_axes(&mut self){
+    let state = &mut self.state;
+    state.font_axes.resolve_style(&state.char_style, state.font_stretch, state.font_oblique);
   }
 
   pub fn set_font_feature_settings(&mut self, settings:Vec<(String, i32)>){
