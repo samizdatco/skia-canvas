@@ -8,6 +8,7 @@ use allsorts::{binary::read::ReadScope, get_name::fontcode_get_name, tables::Nam
 use read_fonts::{FontData, TableProvider, TopLevelTable, types::{Tag, Fixed, F2Dot14}, tables::{hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, head::Head, layout::FeatureParams}};
 use skia_safe::{Data, FontArguments, FourByteTag, Typeface};
 use skia_safe::font_style::{FontStyle, Weight, Slant};
+use skia_safe::font_parameters::VariationAxis;
 use skia_safe::font_arguments::{VariationPosition, variation_position::Coordinate};
 use skia_safe::textlayout::TextStyle;
 
@@ -342,7 +343,9 @@ impl FontAxes{
     };
 
     // merge the instance's coords with explicit variation settings (only for axes the font actually has)
-    let axes = face.variation_design_parameters().unwrap_or_default();
+    let axes:Vec<VariationAxis> = face.variation_design_parameters().unwrap_or_default().into_iter()
+      .filter(css_compatible) // skip legacy faces that don't use css value ranges
+      .collect();
     let overrides:Vec<(FourByteTag, f32)> = self.instance.iter()
       .flat_map(|inst| inst.coords.iter().map(|&(tag, value)| (tag, value as f32)))
       .chain(self.variations.iter().map(|(tag, value)| (axis_tag(tag), *value)))
@@ -424,11 +427,18 @@ impl FontAxes{
     let has_axis = |tag| axes.as_ref().is_some_and(|params| params.iter().any(|p| p.tag == tag));
     let slant_only_font = has_axis(Coordinate::slnt) && !has_axis(Coordinate::ital);
 
-    let mut coords = vec![
+    // only set weight & stretch axes if they use css value ranges
+    let mut coords:Vec<Coordinate> = [
       Coordinate{ axis:Coordinate::wght, value:*font_style.weight() as f32 },
       Coordinate{ axis:Coordinate::wdth, value:stretch },
       Coordinate{ axis:Coordinate::opsz, value:char_style.font_size() },
-    ];
+    ].into_iter()
+      .filter(|coord| axes.iter()
+        .flatten()
+        .find(|axis| axis.tag == coord.axis)
+        .map_or(true, css_compatible))
+      .collect();
+
     match (font_style.slant(), slant_only_font){
       // for slnt-only fonts, map an italic style to the default oblique angle
       (Slant::Italic, true)  => coords.push(Coordinate{ axis:Coordinate::slnt, value:-14.0 }),
@@ -471,6 +481,15 @@ impl FontAxes{
     let variations = self.variations.iter().map(|(tag, value)| (tag.clone(), value.to_bits())).collect();
     let instances = self.instance().map(|name| name.to_lowercase());
     (variations, instances)
+  }
+}
+
+// check whether the axes use standard css value ranges (rather than an arbitrary scale like some AAT fonts do)
+fn css_compatible(axis:&VariationAxis) -> bool{
+  match axis.tag{
+    tag if tag == Coordinate::wght => (100.0..=1000.0).contains(&axis.def),
+    tag if tag == Coordinate::wdth => axis.def >= 10.0,
+    _ => true,
   }
 }
 
