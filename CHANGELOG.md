@@ -36,6 +36,7 @@
   - `variable`: A boolean flag identifying that this is a variable font
   - `variations`: Variable font axes represented as an object with supported axis tags (e.g., `wdth`, `slnt`) mapping to `{min, max, default, label}` summaries
   - `features`: OpenType features represented as an object with supported feature tags (e.g., `liga`, `smcp`) mapping to `{type, label}` summaries
+  - `replaces` & `replacedBy`: File paths showing which fonts were kept or discarded when multiple faces with the same family and style were passed to [`use()`][FontLibrary.use]
 - The [`textRendering`][textRendering] property is now supported, offering control over how text is rasterized:
   - `"auto"`: use browser-standard glyph placement (enabled by default)
   - `"geometricPrecision"`: use sub-pixel positioning (lining up exactly with [`outlineText()`][outlineText()] and vector output)
@@ -159,6 +160,7 @@
 - [`fontHinting`][fontHinting] is now ignored on macOS (since CoreText has no support for hinting). Previously it enabled heavier text rendering, which is now available by setting `textRendering` to `"optimizeLegibility"` instead
 - Text drawn with `textAlign: 'justify'` and `direction: 'rtl'` now extends leftward from the anchor like right-aligned text does
 - Vertical placement for non-alphabetic [`textBaseline`][textBaseline] settings has shifted in order to match browser behavior
+- When both a static and a variable font of the same family and style are registered via [`FontLibrary.use()`][FontLibrary.use], the variable font will now be preferred (rather that letting ordering decide)
 
 [pointerevent]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent
 [pointerevent_types]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent#pointer_event_types

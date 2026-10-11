@@ -43,6 +43,7 @@ pub struct FontLibrary{
     mgr: FontMgr,
     collection: Option<FontCollection>,
     fonts: Vec<(Typeface, Option<String>)>,
+    sources: HashMap<u32, String>,
     generics_cache: Vec<(Typeface, Option<String>)>,
     collection_attrs: RenderAttrs,
   }
@@ -72,7 +73,7 @@ impl FontLibrary{
         skia_safe::graphics::set_font_cache_count_limit(8192);
 
         RefCell::new(FontLibrary{
-          mgr:FontMgr::default(), fonts:vec![], collection:None, collection_attrs:RenderAttrs::default(), generics_cache:vec![]
+          mgr:FontMgr::default(), fonts:vec![], sources:HashMap::new(), collection:None, collection_attrs:RenderAttrs::default(), generics_cache:vec![]
         })
       });
 
@@ -229,20 +230,27 @@ impl FontLibrary{
     (weights, widths, styles, caps)
   }
 
-  fn add_typeface(&mut self, font:Typeface, alias:Option<String>){
-    // replace any previously added font with the same metadata/alias
-    if let Some(idx) = self.fonts.iter().position(|(old_font, old_alias)|
-      match alias.is_some(){
-        true => old_alias == &alias,
-        false => old_font.family_name() == font.family_name()
-      } && old_font.font_style() == font.font_style()
-    ){
-      self.fonts.remove(idx);
-    }
+  // the index of the registered font with the same name (its alias, or else its family name) & style as the given one
+  fn registered(&self, font:&Typeface, alias:&Option<String>) -> Option<usize>{
+    let name = |font:&Typeface, alias:&Option<String>| alias.clone().unwrap_or_else(|| font.family_name());
+    self.fonts.iter().position(|(old, old_alias)|
+      old.font_style() == font.font_style() && name(old, old_alias) == name(font, alias)
+    )
+  }
 
-    // add the new typeface/alias and recreate the FontCollection to include it
-    self.fonts.push((font, alias));
-    self.invalidate();
+  // replace any font with the same style & alias/family (but never let a static font replace a variable one),
+  // returning the font that was displaced (if any)
+  fn add_typeface(&mut self, font:Typeface, alias:Option<String>) -> Option<Typeface>{
+    let is_variable = |face:&Typeface| face.variation_design_parameters().is_some_and(|axes| !axes.is_empty());
+    match self.registered(&font, &alias){
+      Some(idx) if is_variable(&self.fonts[idx].0) && !is_variable(&font) => None,
+      slot => {
+        let displaced = slot.map(|idx| self.fonts.remove(idx).0);
+        self.fonts.push((font, alias));
+        self.invalidate();
+        displaced
+      }
+    }
   }
 
   fn invalidate(&mut self){
@@ -572,6 +580,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
   let alias = opt_string_arg(&mut cx, 1);
   let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
   let results = JsArray::new(&mut cx, filenames.len());
+  let mut batch:Vec<(Typeface, Handle<JsObject>)> = vec![]; // this call's typefaces & result entries
 
   for (i, filename) in strings_in(&mut cx, &filenames)?.iter().enumerate(){
     let path = Path::new(&filename);
@@ -620,14 +629,30 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
         let details = typeface_details(&mut cx, filename, &font, alias.clone())?;
         results.set(&mut cx, i as u32, details)?;
 
-        // register the typeface
-        FontLibrary::with_shared(|lib|
-          lib.add_typeface(font, alias.clone())
-        );
+        // register the typeface and note the font it replaced (if any) in the results
+        let displaced = FontLibrary::with_shared(|lib|{
+          lib.sources.insert(font.unique_id(), filename.clone());
+          lib.add_typeface(font.clone(), alias.clone()).map(|old| lib.sources[&old.unique_id()].clone())
+        });
+        if let Some(file) = displaced{
+          details.prop(&mut cx, "replaces").set(file)?;
+        }
+        batch.push((font, details));
       },
       None => {
         return cx.throw_error(format!("Could not decode font data in {}", path.display()))
       }
+    }
+  }
+
+  // identify the file that was kept for all the fonts that were ultimately skipped
+  for (font, entry) in &batch{
+    let replaced_by = FontLibrary::with_shared(|lib|{
+      let (chosen, _) = &lib.fonts[lib.registered(font, &alias)?];
+      (chosen.unique_id() != font.unique_id()).then(|| lib.sources[&chosen.unique_id()].clone())
+    });
+    if let Some(file) = replaced_by{
+      entry.prop(&mut cx, "replacedBy").set(file)?;
     }
   }
 
@@ -637,6 +662,7 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn reset(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   FontLibrary::with_shared(|lib|{
     lib.fonts.clear();
+    lib.sources.clear();
     lib.invalidate();
   });
 

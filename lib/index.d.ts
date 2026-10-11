@@ -1122,10 +1122,18 @@ export interface Font {
   style: string
   width: string
   file: string
+  /** Whether this is a variable font with one or more variation axes */
   variable: boolean
+  /** The variation axes the font supports via `fontVariationSettings` */
   variations: Record<string, FontVariationAxis>
+  /** The font's named `fontInstance` strings with the `fontVariationSettings` each one corresponds to */
   instances: Record<string, FontInstance>
+  /** The OpenType features the font supports via `fontFeatureSettings` */
   features: Record<string, FontFeature>
+  /** The font file (with the same family & style) that was registered instead of this one */
+  replacedBy?: string
+  /** The previously registered font file (with the same family & style) that this font replaced */
+  replaces?: string
 }
 
 interface FontLibrary {
