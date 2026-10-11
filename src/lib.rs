@@ -12,6 +12,7 @@ mod gradient;
 mod pattern;
 mod texture;
 mod font_library;
+mod opentype;
 mod typography;
 mod bridge;
 mod mem;

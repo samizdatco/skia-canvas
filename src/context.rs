@@ -22,6 +22,7 @@ use crate::font_library::{FontLibrary, MetricsKey, cached_metrics};
 use crate::path::Path2D;
 use crate::drawlist::{Pen, Plotter};
 use crate::typography::{Typesetter, TextMetrics, Baseline, DecorationStyle, TextRendering, BaselineMetrics};
+use crate::opentype::{FontAxes, FontFeatures};
 use crate::filter::{Filter, ImageFilter, FilterQuality};
 use crate::gradient::{CanvasGradient, BoxedCanvasGradient};
 use crate::pattern::{CanvasPattern, BoxedCanvasPattern};

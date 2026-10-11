@@ -9,8 +9,9 @@ use skia_safe::textlayout::{
   FontCollection, Paragraph, ParagraphBuilder, ParagraphStyle, RectHeightStyle, RectWidthStyle,
   TextAlign, TextDecorationStyle, TextDirection, TextStyle,
 };
-use read_fonts::{TableProvider, types::{Tag, Fixed, F2Dot14}, tables::{os2::SelectionFlags, mvar::tags::{HASC, HDSC}}};
+use read_fonts::{TableProvider, tables::{os2::SelectionFlags, mvar::tags::{HASC, HDSC}}};
 use crate::font_library::{FontLibrary, RenderAttrs, cached_glyph_bounds};
+use crate::opentype::FontTables;
 use crate::bridge::*;
 use crate::context::State;
 
@@ -673,26 +674,13 @@ impl BaselineMetrics{
     let px = |units:f64| units * size / upm;
 
     // variable fonts may have `hasc` and `hdsc` deltas that apply to their ascender & descender lengths
-    let (hasc, hdsc) = (|| {
-      let mvar = tables.mvar().ok()?;
-      let instance = style.font_arguments()?.clone_typeface(typeface.clone()?)?;
-      let position = instance.variation_design_position()?;
-      let axes = tables.fvar().ok()?.axes().ok()?;
-      let avar = tables.avar().ok(); // optional: without it, the normalized coordinates are used as-is
-      let coords:Vec<F2Dot14> = axes.iter().enumerate().map(|(i, axis)| {
-        let value = match position.iter().find(|coord| Tag::from_u32(*coord.axis) == axis.axis_tag()) {
-          Some(coord) => Fixed::from_f64(coord.value as f64),
-          None => axis.default_value(),
-        };
-        let coord = axis.normalize(value);
-        match avar.as_ref().and_then(|avar| avar.axis_segment_maps().get(i)?.ok()) {
-          Some(map) => map.apply(coord).to_f2dot14(),
-          None => coord.to_f2dot14(),
-        }
-      }).collect();
-      let delta = |tag| mvar.metric_delta(tag, &coords).map_or(0.0, |delta| delta.to_f64());
-      Some((delta(HASC), delta(HDSC)))
-    })().unwrap_or_default();
+    let [hasc, hdsc] = match tables.mvar(){
+      Ok(_) => style.font_arguments()
+        .and_then(|args| args.clone_typeface(typeface.clone()?))
+        .and_then(|instance| instance.variation_design_position())
+        .and_then(|position| tables.metric_deltas([HASC, HDSC], &position)),
+      Err(_) => None,
+    }.unwrap_or_default();
 
     // extract the em square and font box ascent/descent pairs
     let hhea = tables.hhea().ok().map(|hhea| (px(hhea.ascender().to_i16() as f64 + hasc), -px(hhea.descender().to_i16() as f64 + hdsc)));
@@ -713,20 +701,9 @@ impl BaselineMetrics{
     let (ascent, descent) = typo.filter(|(a, d)| *a > 0.0 && a + d > 0.0).unwrap_or(font);
     let em = if ascent + descent > 0.0 { (size * ascent / (ascent + descent), size * descent / (ascent + descent)) } else { (size, 0.0) };
 
-    // extract any additional baseline offsets defined in the BASE table for the `DFLT` script
-    let [romn, hang, ideo] = (|| {
-      let axis = tables.base().ok()?.horiz_axis()?.ok()?;
-      let (tags, scripts) = (axis.base_tag_list()?.ok()?, axis.base_script_list().ok()?);
-      let values = scripts.base_script_records().iter()
-        .find(|record| record.base_script_tag() == *b"DFLT")?
-        .base_script(scripts.offset_data()).ok()?
-        .base_values()?.ok()?;
-      let coord = |tag:&[u8; 4]| {
-        let index = tags.baseline_tags().iter().position(|t| t.get() == *tag)?;
-        Some(px(values.base_coords().get(index).ok()?.coordinate() as f64))
-      };
-      Some([coord(b"romn"), coord(b"hang"), coord(b"ideo")])
-    })().unwrap_or_default();
+    // extract any additional baseline offsets defined in the BASE table
+    let [romn, hang, ideo] = tables.base_coords([b"romn", b"hang", b"ideo"]).unwrap_or_default()
+      .map(|coord| coord.map(px));
 
     // measure everything against the shifted baseline (resolving any synthesized baselines first)
     let unshifted = BaselineMetrics{font, em, romn, hang, ideo};

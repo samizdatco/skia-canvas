@@ -19,6 +19,7 @@ use skia_safe::utils::OrderedFontMgr;
 
 use crate::bridge::*;
 use crate::typography::TextMetrics;
+use crate::opentype::FontCapabilities;
 use kurbo::{BezPath, CubicBez, PathEl, Point};
 use read_fonts::{model::pen::OutlinePen, types::GlyphId, ps::{cff::CffFontRef, type1::Type1Font}};
 use write_fonts::{
