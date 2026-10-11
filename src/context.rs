@@ -748,14 +748,15 @@ impl Context2D{
     self.state.font_axes.set_variations(settings);
   }
 
-  // returns false if the current font has no named instance matching the (non-`auto`) name
   pub fn set_font_instance(&mut self, name:&str) -> bool{
-    // look in the first typeface matched by the current font (resolving the implicit default font if necessary)
-    let style = &self.state.char_style;
-    let typeface = style.typeface().or_else(||
-      FontLibrary::with_shared(|lib| lib.update_style(style, &FontSpec::default())).and_then(|style| style.typeface())
-    );
-    self.state.font_axes.set_instance(name, typeface)
+    match name.trim().to_ascii_lowercase().as_str(){
+      "auto" => self.state.font_axes.set_instance(None),
+      name => match FontLibrary::with_shared(|lib| lib.find_instance(&self.state.char_style, name)){
+        Some(instance) => self.state.font_axes.set_instance(Some(instance)),
+        None => return false // no match, so flag that state was left unchanged
+      }
+    }
+    true
   }
 
   pub fn set_font_feature_settings(&mut self, settings:Vec<(String, i32)>){

@@ -83,7 +83,7 @@ impl<'a> TableProvider<'a> for &'a FontTables{
 
 #[derive(Debug, Clone)]
 pub struct AxisDetails{
-  pub tag: String,
+  pub tag: FourByteTag,
   pub min: f32,
   pub max: f32,
   pub def: f32,
@@ -93,8 +93,12 @@ pub struct AxisDetails{
 #[derive(Debug, Clone)]
 pub struct InstanceDetails{
   pub name: String,
-  pub coords: Vec<(String, f64)>,
-  pub style: Slant,
+  pub coords: Vec<(FourByteTag, f64)>,
+  pub face: Typeface,
+}
+
+impl InstanceDetails{
+  pub fn style(&self) -> Slant{ self.face.font_style().slant() }
 }
 
 #[derive(Debug, Clone)]
@@ -133,22 +137,20 @@ impl FontCapabilities{
 
     // walk the font's variation-axis table and build a tag -> human-readable label mapping
     let tables = &FontTables::capabilities(font);
-    let axis_labels:Vec<(String, Option<String>)> = tables.fvar().and_then(|fvar| fvar.axes()).unwrap_or_default().iter()
-      .filter_map(|axis| {
-        let tag = std::str::from_utf8(&axis.axis_tag().to_be_bytes()).ok()?.trim_end().to_string();
-        Some((tag, names.get(&axis.axis_name_id().to_u16()).cloned()))
-      })
+    let fvar_axes:Vec<(FourByteTag, Option<String>)> = tables.fvar()
+      .and_then(|fvar| fvar.axes()).unwrap_or_default().iter()
+      .map(|axis| (
+        FourByteTag::from(u32::from_be_bytes(axis.axis_tag().to_be_bytes())),
+        names.get(&axis.axis_name_id().to_u16()).cloned(),
+      ))
       .collect();
 
     // extract each axis's value-range and merge in the labels (preserving the fvar table's ordering)
     let mut axes = vec![];
     if let Some(params) = font.variation_design_parameters(){
       for param in params {
-        let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-        if let Ok(tag) = String::from_utf8(chars){
-          let label = axis_labels.iter().find(|(t, _)| *t == tag).and_then(|(_, label)| label.clone());
-          axes.push(AxisDetails{ tag, min:param.min, max:param.max, def:param.def, label });
-        }
+        let label = fvar_axes.iter().find(|(tag, _)| *tag == param.tag).and_then(|(_, label)| label.clone());
+        axes.push(AxisDetails{ tag:param.tag, min:param.min, max:param.max, def:param.def, label });
       }
     }
 
@@ -179,28 +181,23 @@ impl FontCapabilities{
     }
     features.sort_by(|a, b| a.tag.cmp(&b.tag));
 
-    // collect the face's named instances along with the style that selects the face
-    let style = font.font_style().slant();
+    // collect the face's named instances
     let mut instances:Vec<InstanceDetails> = vec![];
     if let Ok(fvar) = tables.fvar(){
-      let tags:Vec<String> = fvar.axes().unwrap_or_default().iter()
-        .map(|axis| String::from_utf8_lossy(&axis.axis_tag().to_be_bytes()).to_string())
-        .collect();
-
       for record in fvar.instances().into_iter().flat_map(|records| records.iter()).flatten(){
         // skip unnamed and repeated instances
         let Some(name) = names.get(&record.subfamily_name_id.to_u16()) else { continue };
         if instances.iter().any(|inst| inst.name == *name){ continue }
 
-        let coords = tags.iter().zip(record.coordinates).map(|(tag, val)| {
+        let coords = fvar_axes.iter().zip(record.coordinates).map(|((tag, _), val)| {
           // use the shortest decimal that rounds back to the same fixed-point value
           let val = val.get();
           let short = [1.0, 1e1, 1e2, 1e3, 1e4, 1e5].iter()
             .map(|scale| (val.to_f64() * scale).round() / scale)
             .find(|approx| Fixed::from_f64(*approx) == val);
-          (tag.clone(), short.unwrap_or(val.to_f64()))
+          (*tag, short.unwrap_or(val.to_f64()))
         }).collect();
-        instances.push(InstanceDetails{ name:name.clone(), coords, style });
+        instances.push(InstanceDetails{ name:name.clone(), coords, face:font.clone() });
       }
     }
 
@@ -234,13 +231,13 @@ impl FontCapabilities{
         self.instances.push(instance);
       }
     }
-    self.instances.sort_by_key(|inst| inst.style as i32); // stable, so fvar order is kept within each face
+    self.instances.sort_by_key(|inst| inst.style() as i32); // stable, so fvar order is kept within each face
   }
 
   // the min & max weights covered by the `wght` axis and all 100x steps in between
   pub fn wght_range(&self) -> Vec<i32>{
     let mut wghts = vec![];
-    if let Some(axis) = self.axes.iter().find(|axis| axis.tag == "wght"){
+    if let Some(axis) = self.axes.iter().find(|axis| axis.tag == Coordinate::wght){
       let (min, max) = (axis.min as i32, axis.max as i32);
       let mut val = min;
       while val <= max {
@@ -265,7 +262,7 @@ impl FontCapabilities{
       if let Some(label) = &axis.label{
         range.prop(cx, "label").set(label.as_str())?;
       }
-      dict.prop(cx, axis.tag.as_str()).set(range)?;
+      dict.prop(cx, String::from_utf8_lossy(&axis.tag.to_be_bytes()).as_ref()).set(range)?;
     }
     Ok(dict)
   }
@@ -275,10 +272,10 @@ impl FontCapabilities{
     let dict = JsObject::new(cx);
     for instance in &self.instances {
       let entry = JsObject::new(cx);
-      if with_style{ entry.prop(cx, "style").set(from_slant(instance.style))?; }
+      if with_style{ entry.prop(cx, "style").set(from_slant(instance.style()))?; }
       let settings = JsObject::new(cx);
       for (tag, value) in &instance.coords {
-        settings.prop(cx, tag.as_str()).set(*value)?;
+        settings.prop(cx, String::from_utf8_lossy(&tag.to_be_bytes()).as_ref()).set(*value)?;
       }
       entry.prop(cx, "settings").set(settings)?;
       dict.prop(cx, instance.name.as_str()).set(entry)?;
@@ -302,32 +299,17 @@ impl FontCapabilities{
 
 #[derive(Clone, Debug, Default)]
 pub struct FontAxes{
-  instance: Option<(String, Vec<(FourByteTag, f32)>)>, // selected fontInstance name & axis values
+  instance: Option<InstanceDetails>, // selected fontInstance (if any)
   variations: Vec<(String, f32)>, // decoded fontVariationSettings (overrides any instance settings)
 }
 
 impl FontAxes{
-  // check via case-insensitive lookup whether a given named instance id defined (and use it if so)
-  pub fn set_instance(&mut self, name:&str, typeface:Option<Typeface>) -> bool{
-    let name = name.trim();
-    if name.eq_ignore_ascii_case("auto"){
-      self.instance = None;
-      return true
-    }
-
-    let found = typeface.and_then(|tf| FontCapabilities::new(&tf).instances.into_iter()
-      .find(|inst| inst.name.to_lowercase() == name.to_lowercase())
-    );
-    let coords = found.as_ref().map(|inst| inst.coords.iter().map(|(tag, value)|{
-      let b = tag.as_bytes();
-      (FourByteTag::from_chars(b[0] as char, b[1] as char, b[2] as char, b[3] as char), *value as f32)
-    }).collect());
-    self.instance = Some((name.to_string(), coords.unwrap_or_default()));
-    found.is_some()
+  pub fn set_instance(&mut self, instance:Option<InstanceDetails>){
+    self.instance = instance;
   }
 
   pub fn instance(&self) -> Option<&str>{
-    self.instance.as_ref().map(|(name, _)| name.as_str())
+    self.instance.as_ref().map(|inst| inst.name.as_str())
   }
 
   pub fn set_variations(&mut self, mut variations:Vec<(String, f32)>){
@@ -351,6 +333,14 @@ impl FontAxes{
 
   // merge the variable font instancing fields into the provided char_style
   pub fn apply(&self, char_style:&mut TextStyle, stretch:f32, oblique:Option<f32>){
+    // make sure the font style will resolve to the face that contains the selected fontInstance (if any)
+    if let Some(inst) = &self.instance{
+      if !char_style.typeface().is_some_and(|face| face.unique_id() == inst.face.unique_id()){
+        char_style.set_font_style(inst.face.font_style());
+        char_style.set_typeface(inst.face.clone());
+      }
+    }
+
     let font_style = char_style.font_style();
     let axes = char_style.typeface().and_then(|tf| tf.variation_design_parameters());
     let has_axis = |tag| axes.as_ref().is_some_and(|params| params.iter().any(|p| p.tag == tag));
@@ -374,8 +364,8 @@ impl FontAxes{
     }
 
     // a named instance overrides any style-derived values that collide
-    if let Some((_, instance)) = &self.instance{
-      coords.extend(instance.iter().map(|&(axis, value)| Coordinate{ axis, value }));
+    if let Some(inst) = &self.instance{
+      coords.extend(inst.coords.iter().map(|&(axis, value)| Coordinate{ axis, value:value as f32 }));
     }
 
     // fontVariationSettings still override everything else

@@ -19,7 +19,7 @@ use skia_safe::utils::OrderedFontMgr;
 
 use crate::bridge::*;
 use crate::typography::TextMetrics;
-use crate::opentype::FontCapabilities;
+use crate::opentype::{FontCapabilities, InstanceDetails};
 use kurbo::{BezPath, CubicBez, PathEl, Point};
 use read_fonts::{model::pen::OutlinePen, types::GlyphId, ps::{cff::CffFontRef, type1::Type1Font}};
 use write_fonts::{
@@ -187,41 +187,31 @@ impl FontLibrary{
     names
   }
 
+  // all the system fonts with a given family name plus any fonts registered under it (as a family name or alias)
+  fn family_faces(&self, family:&str) -> Vec<Typeface>{
+    let mut set = self.mgr.match_family(family);
+    let system:Vec<Typeface> = (0..set.count()).filter_map(|i| set.new_typeface(i)).collect();
+    let registered = self.fonts.iter()
+      .filter(|(font, alias)| alias.as_deref().map_or_else(|| font.family_name() == family, |alias| alias == family))
+      .map(|(font, _)| font.clone());
+    system.into_iter().chain(registered).collect()
+  }
+
   fn family_details(&self, family:&str) -> (Vec<f32>, Vec<String>, Vec<String>, FontCapabilities){
-    // merge the system fonts and our dynamically added fonts into one list of FontStyles
-    let mut dynamic = TypefaceFontProvider::new();
-    for (font, alias) in &self.fonts{
-      dynamic.register_typeface(font.clone(), alias.as_deref());
-    }
-    let std_mgr = self.mgr.clone();
-    let dyn_mgr:FontMgr = dynamic.into();
-    let mut std_set = std_mgr.match_family(family);
-    let mut dyn_set = dyn_mgr.match_family(family);
-    let std_styles = (0..std_set.count()).map(|i| std_set.style(i));
-    let dyn_styles = (0..dyn_set.count()).map(|i| dyn_set.style(i));
-    let all_styles = std_styles.chain(dyn_styles);
-
-    // set up a collection to query for variable fonts who specify their weights
-    // via the 'wght' axis rather than through distinct files with different FontStyles
-    let mut var_fc = FontCollection::new();
-    var_fc.set_default_font_manager(self.mgr.clone(), None);
-    var_fc.set_asset_font_manager(Some(dyn_mgr));
-
-    // pull style values out of each matching font
+    // pull style values out of each font in the family
     let mut weights:Vec<i32> = vec![];
     let mut widths:Vec<String> = vec![];
     let mut styles:Vec<String> = vec![];
     let mut caps = FontCapabilities::default();
-    all_styles.for_each(|(style, _name)| {
+    for font in self.family_faces(family){
+      let style = font.font_style();
       widths.push(from_width(style.width()));
       styles.push(from_slant(style.slant()));
       weights.push(*style.weight());
-      if let Some(font) = var_fc.find_typefaces(&[&family], style).first(){
-        let face = FontCapabilities::new(font);
-        weights.append(&mut face.wght_range()); // if variable: include all supported 100x sizes
-        caps.merge(face); // merge variable font axes and opentype features
-      }
-    });
+      let face = FontCapabilities::new(&font);
+      weights.append(&mut face.wght_range()); // if variable: include all supported 100x sizes
+      caps.merge(face); // merge variable font axes and opentype features
+    }
 
     // repackage collected values
     widths.sort_by(|a, b| a.replace("normal", "_").partial_cmp(&b.replace("normal", "_")).unwrap());
@@ -271,6 +261,28 @@ impl FontLibrary{
         style.set_font_size(spec.size);
         style
       })
+  }
+
+  // search for a named instance in the currently selected font family
+  pub fn find_instance(&mut self, style:&TextStyle, name:&str) -> Option<InstanceDetails>{
+    // find the identity of the default typeface if one hasn't been set
+    let face = match style.typeface(){
+      Some(face) => face,
+      None => self.update_style(style, &FontSpec::default())?.typeface()?,
+    };
+
+    // extract the face's family name/alias
+    let family_name = self.fonts.iter().find(|(font, _)| font.unique_id() == face.unique_id())
+      .and_then(|(_, alias)| alias.clone())
+      .unwrap_or_else(|| face.family_name());
+
+    // search through just the variable fonts for a case-insensitive instance name match
+    std::iter::once(face)
+      .chain(self.family_faces(&family_name))
+      .filter(|face| face.variation_design_parameters().is_some_and(|axes| !axes.is_empty()))
+      .find_map(|face| FontCapabilities::new(&face).instances.into_iter()
+        .find(|inst| inst.name.to_lowercase() == name.to_lowercase())
+      )
   }
 
   pub fn set_render_attrs(&mut self, attrs:RenderAttrs) -> &mut Self{

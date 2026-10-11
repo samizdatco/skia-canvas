@@ -524,24 +524,61 @@ describe("Typography", () => {
       assert.nearEqual(width(), bold)
     })
 
-    test("case-insensitive names", () => {
+    test("normalized names", () => {
       let light = widthAt("300 40px Geomini")
       ctx.font = "40px Geomini"
       ctx.fontInstance = "LIGHT"
+      assert.equal(ctx.fontInstance, "Light") // reported as spelled in the font
       assert.nearEqual(width(), light)
+
+      ctx.fontInstance = "auto"
+      ctx.fontInstance = " light "
+      assert.equal(ctx.fontInstance, "Light")
+    })
+
+    test("separate italic face", () => {
+      FontLibrary.use("Raleway", [findFont("Raleway-VariableFont_wght.ttf"), findFont("Raleway-Italic-VariableFont_wght.ttf")])
+      let withInstance = (font, name) => { ctx.font = font; ctx.fontInstance = name; return width() }
+      let [bold, boldItalic] = [withInstance("40px Raleway", "Bold"), withInstance("italic 40px Raleway", "Bold Italic")]
+      assert(bold != boldItalic)
+
+      // an instance defined by another of the family's faces overrides the font's style (in either direction)
+      assert.nearEqual(withInstance("40px Raleway", "Bold Italic"), boldItalic)
+      assert.equal(ctx.fontInstance, "Bold Italic")
+      assert.nearEqual(withInstance("italic 40px Raleway", "Bold"), bold)
+    })
+
+    test("mixed static & variable faces", () => {
+      // Montserrat's static 400-weight italic outranks Raleway's variable italic (registered at weight 100) when matching
+      FontLibrary.use("Mixed", [
+        findFont("Raleway-VariableFont_wght.ttf"),
+        findFont("Raleway-Italic-VariableFont_wght.ttf"),
+        findFont("montserrat-latin/montserrat-v30-latin-italic.woff2"),
+      ])
+      let withInstance = (font, name) => { ctx.font = font; ctx.fontInstance = name; return width() }
+      let [bold, lightItalic] = [widthAt("bold 40px Mixed"), widthAt("italic 300 40px Mixed")]
+
+      // instances are found in the family's variable faces regardless of the font's weight or style
+      assert.nearEqual(withInstance("40px Mixed", "Light Italic"), lightItalic)
+      assert.nearEqual(withInstance("italic 40px Mixed", "Bold"), bold) // the static italic face is skipped
+      assert.equal(ctx.fontInstance, "Bold")
     })
 
     test("unknown names", () => {
-      let bold = widthAt("bold 40px Geomini")
+      let light = widthAt("300 40px Geomini")
+      ctx.font = "bold 40px Geomini"
+      ctx.fontInstance = "Light"
+
+      // the current instance is left in place
       ctx.fontInstance = "Light Italic"
-      assert.equal(ctx.fontInstance, "Light Italic")
-      assert.nearEqual(width(), bold)
+      assert.equal(ctx.fontInstance, "Light")
+      assert.nearEqual(width(), light)
 
       // like any string attribute, other values are stringified (so this is just another unknown name)
       // @ts-expect-error — names are typed as strings
       ctx.fontInstance = 300
-      assert.equal(ctx.fontInstance, "300")
-      assert.nearEqual(width(), bold)
+      assert.equal(ctx.fontInstance, "Light")
+      assert.nearEqual(width(), light)
 
       ctx.fontInstance = "auto"
       assert.equal(ctx.fontInstance, "auto")
