@@ -1891,6 +1891,27 @@ describe("FontLibrary", ()=>{
     assert(!FontLibrary.has(alias))
   })
 
+  test("can replace fonts", ()=>{
+    let vf = findFont("oswald/Oswald-VariableFont_wght.ttf"),
+        regular = findFont("oswald/static/Oswald-Regular.ttf"),
+        conflicts = results => results.map(({replaces, replacedBy}) => ({replaces, replacedBy}));
+
+    // within a single call, a variable font takes precedence over a same-style static
+    assert.deepEqual(conflicts(FontLibrary.use("Oswald", [vf, regular])), [
+      {replaces:undefined, replacedBy:undefined}, {replaces:undefined, replacedBy:vf}
+    ])
+    FontLibrary.reset()
+    assert.deepEqual(conflicts(FontLibrary.use("Oswald", [regular, vf])), [
+      {replaces:undefined, replacedBy:vf}, {replaces:regular, replacedBy:undefined}
+    ])
+
+    // but a static font in a subsequent call replaces it
+    assert.deepEqual(conflicts(FontLibrary.use("Oswald", [regular])), [
+      {replaces:vf, replacedBy:undefined}
+    ])
+    assert.deepEqual(FontLibrary.family("Oswald").weights, [400])
+  })
+
   test("can render woff2 fonts", ()=>{
     for (const ext of ['woff', 'woff2']){
       let woff = findFont("Monoton-Regular." + ext),

@@ -238,19 +238,71 @@ impl FontLibrary{
     )
   }
 
-  // replace any font with the same style & alias/family (but never let a static font replace a variable one),
-  // returning the font that was displaced (if any)
-  fn add_typeface(&mut self, font:Typeface, alias:Option<String>) -> Option<Typeface>{
-    let is_variable = |face:&Typeface| face.variation_design_parameters().is_some_and(|axes| !axes.is_empty());
-    match self.registered(&font, &alias){
-      Some(idx) if is_variable(&self.fonts[idx].0) && !is_variable(&font) => None,
-      slot => {
-        let displaced = slot.map(|idx| self.fonts.remove(idx).0);
-        self.fonts.push((font, alias));
-        self.invalidate();
-        displaced
+  fn load_font(&self, path:&Path) -> Result<Typeface, String>{
+    let bytes = fs::read(path).map_err(|why| format!("{}: \"{}\"", why, path.display()))?;
+
+    // TEMPORARY WORKAROUND: decode woff/woff2 to sfnt
+    //
+    // originally only Windows needed this since it's the one platform that lacks built-in
+    // support, but there is a use-after-free bug for woffs in harfbuzz versions <14.4.0
+    // (including the one skia bundles as of m153)
+    //
+    // go back to using #[cfg(target_os = "windows")] when skia's harfbuzz is upgraded
+    let bytes = {
+      fn decode_woff(bytes:&Vec<u8>) -> Option<Vec<u8>>{
+        let woff = ReadScope::new(bytes).read::<WoffFont>().ok()?;
+        let tags = woff.table_tags()?;
+        whole_font(&woff, &tags).ok()
       }
+
+      fn decode_woff2(bytes:&Vec<u8>) -> Option<Vec<u8>>{
+        let woff2 = ReadScope::new(bytes).read::<Woff2Font>().ok()?;
+        let tables = woff2.table_provider(0).ok()?;
+        let tags = tables.table_tags()?;
+        whole_font(&tables, &tags).ok()
+      }
+
+      match path.to_string_lossy().to_ascii_lowercase(){
+        name if name.ends_with(".woff") => decode_woff(&bytes),
+        name if name.ends_with(".woff2") => decode_woff2(&bytes),
+        _ => None
+      }
+    }.unwrap_or(bytes);
+
+    self.mgr.new_from_bytes(&bytes, None)
+      .ok_or_else(|| format!("Could not decode font data in {}", path.display()))
+  }
+
+  // register each font and return the resolution details for name/style collisions
+  fn add_family(&mut self, alias:&Option<String>, fonts:&[(Typeface, String)]) -> Vec<(Option<String>, Option<String>)>{
+    let is_variable = |face:&Typeface| face.variation_design_parameters().is_some_and(|axes| !axes.is_empty());
+    let in_batch = |face:&Typeface| fonts.iter().any(|(font, _)| font.unique_id() == face.unique_id());
+
+    let mut replaces = vec![];
+    for (font, filename) in fonts{
+      // record font file paths for future resolutions
+      self.sources.insert(font.unique_id(), filename.clone());
+
+      // variable fonts always win over static, otherwise last-submitted wins
+      replaces.push(match self.registered(font, alias){
+        Some(idx) if in_batch(&self.fonts[idx].0) && is_variable(&self.fonts[idx].0) && !is_variable(font) => None,
+        slot => {
+          let displaced = slot.map(|idx| self.fonts.remove(idx).0);
+          self.fonts.push((font.clone(), alias.clone()));
+          displaced.map(|old| self.sources[&old.unique_id()].clone())
+        }
+      });
     }
+    self.invalidate();
+
+    // identify the file that was kept for each font that was ultimately skipped
+    fonts.iter().zip(replaces).map(|((font, _), replaces)|{
+      let replaced_by = self.registered(font, alias)
+        .map(|idx| &self.fonts[idx].0)
+        .filter(|chosen| chosen.unique_id() != font.unique_id())
+        .map(|chosen| self.sources[&chosen.unique_id()].clone());
+      (replaces, replaced_by)
+    }).collect()
   }
 
   fn invalidate(&mut self){
@@ -579,81 +631,23 @@ pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
 pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
   let alias = opt_string_arg(&mut cx, 1);
   let filenames = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
-  let results = JsArray::new(&mut cx, filenames.len());
-  let mut batch:Vec<(Typeface, Handle<JsObject>)> = vec![]; // this call's typefaces & result entries
 
-  for (i, filename) in strings_in(&mut cx, &filenames)?.iter().enumerate(){
-    let path = Path::new(&filename);
-    let typeface = match fs::read(path){
-      Err(why) => {
-        return cx.throw_error(format!("{}: \"{}\"", why, path.display()))
-      },
-      Ok(bytes) => {
-        // TEMPORARY WORKAROUND: decode woff/woff2 to sfnt
-        //
-        // originally only Windows needed this since it's the one platform that lacks built-in
-        // support, but there is a use-after-free bug for woffs in harfbuzz versions <14.4.0
-        // (including the one skia bundles as of m153)
-        //
-        // go back to using #[cfg(target_os = "windows")] when skia's harfbuzz is upgraded
-        let bytes = {
-          fn decode_woff(bytes:&Vec<u8>) -> Option<Vec<u8>>{
-            let woff = ReadScope::new(bytes).read::<WoffFont>().ok()?;
-            let tags = woff.table_tags()?;
-            whole_font(&woff, &tags).ok()
-          }
+  // load and parse all the font files
+  let fonts = strings_in(&mut cx, &filenames)?.into_iter()
+    .map(|filename| FontLibrary::with_shared(|lib| lib.load_font(Path::new(&filename))).map(|font| (font, filename)))
+    .collect::<Result<Vec<_>, _>>()
+    .or_else(|msg| cx.throw_error(msg))?;
 
-          fn decode_woff2(bytes:&Vec<u8>) -> Option<Vec<u8>>{
-            let woff2 = ReadScope::new(bytes).read::<Woff2Font>().ok()?;
-            let tables = woff2.table_provider(0).ok()?;
-            let tags = tables.table_tags()?;
-            whole_font(&tables, &tags).ok()
-          }
+  // if all of the fonts are valid, register them with the library
+  let conflicts = FontLibrary::with_shared(|lib| lib.add_family(&alias, &fonts));
 
-          match filename.to_ascii_lowercase(){
-            name if name.ends_with(".woff") => decode_woff(&bytes),
-            name if name.ends_with(".woff2") => decode_woff2(&bytes),
-            _ => None
-          }
-        }.unwrap_or(bytes);
-
-        FontLibrary::with_shared(|lib|
-          lib.mgr.new_from_bytes(&bytes, None)
-        )
-      }
-    };
-
-    match typeface {
-      Some(font) => {
-        // add family/weight/width/slant details to return value
-        let details = typeface_details(&mut cx, filename, &font, alias.clone())?;
-        results.set(&mut cx, i as u32, details)?;
-
-        // register the typeface and note the font it replaced (if any) in the results
-        let displaced = FontLibrary::with_shared(|lib|{
-          lib.sources.insert(font.unique_id(), filename.clone());
-          lib.add_typeface(font.clone(), alias.clone()).map(|old| lib.sources[&old.unique_id()].clone())
-        });
-        if let Some(file) = displaced{
-          details.prop(&mut cx, "replaces").set(file)?;
-        }
-        batch.push((font, details));
-      },
-      None => {
-        return cx.throw_error(format!("Could not decode font data in {}", path.display()))
-      }
-    }
-  }
-
-  // identify the file that was kept for all the fonts that were ultimately skipped
-  for (font, entry) in &batch{
-    let replaced_by = FontLibrary::with_shared(|lib|{
-      let (chosen, _) = &lib.fonts[lib.registered(font, &alias)?];
-      (chosen.unique_id() != font.unique_id()).then(|| lib.sources[&chosen.unique_id()].clone())
-    });
-    if let Some(file) = replaced_by{
-      entry.prop(&mut cx, "replacedBy").set(file)?;
-    }
+  // add family/weight/width/slant/replacement details to the return value
+  let results = JsArray::new(&mut cx, fonts.len());
+  for (i, ((font, filename), (replaces, replaced_by))) in fonts.iter().zip(conflicts).enumerate(){
+    let details = typeface_details(&mut cx, filename, font, alias.clone())?;
+    if let Some(file) = replaces{ details.prop(&mut cx, "replaces").set(file)?; }
+    if let Some(file) = replaced_by{ details.prop(&mut cx, "replacedBy").set(file)?; }
+    results.set(&mut cx, i as u32, details)?;
   }
 
   Ok(results.upcast())

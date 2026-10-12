@@ -160,7 +160,7 @@
 - [`fontHinting`][fontHinting] is now ignored on macOS (since CoreText has no support for hinting). Previously it enabled heavier text rendering, which is now available by setting `textRendering` to `"optimizeLegibility"` instead
 - Text drawn with `textAlign: 'justify'` and `direction: 'rtl'` now extends leftward from the anchor like right-aligned text does
 - Vertical placement for non-alphabetic [`textBaseline`][textBaseline] settings has shifted in order to match browser behavior
-- When both a static and a variable font of the same family and style are registered via [`FontLibrary.use()`][FontLibrary.use], the variable font will now be preferred (rather that letting ordering decide)
+- When both a static and a variable font of the same family and style are registered via the same [`FontLibrary.use()`][FontLibrary.use] call, the variable font will now be preferred (rather than letting ordering decide)
 
 [pointerevent]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent
 [pointerevent_types]: https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent#pointer_event_types
