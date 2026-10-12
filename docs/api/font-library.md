@@ -22,67 +22,58 @@ The `.families` property contains a list of family names, merging together all t
 ## Methods
 
 ### `family()`
-```js returns="{family, weights, widths, styles, variable, variations, features}"
+```js returns="{family, weights, widths, styles, variable, variations, instances, features}"
 FontLibrary.family(name)
 ```
 
 If `name` matches the name of an installed font family, this method will return an object with information about the available weights and styles (aggregated across all the individual fonts in the family). If no matches are found, it will return `undefined`.
 
-For instance, on my system `FontLibrary.family("Raleway")` returns:
+For instance, on my system `FontLibrary.family("Lora")` returns:
 ```js
 {
-  family: 'Raleway',
-  weights: [
-    100, 200, 300,
-    400, 500, 600,
-    700, 800, 900
-  ],
+  family: 'Lora',
+  weights: [ 400, 500, 600, 700 ],
   widths: [ 'normal' ],
-  styles: [ 'normal' ],
+  styles: [ 'normal', 'italic' ],
   variable: true,
-  variations: { wght: { min: 100, max: 900, default: 100, label: 'Weight' } },
+  variations: { wght: { min: 400, max: 700, default: 400, label: 'Weight' } },
+  instances: {
+    Regular: { style: 'normal', settings: { wght: 400 } },
+    Medium: { style: 'normal', settings: { wght: 500 } },
+    SemiBold: { style: 'normal', settings: { wght: 600 } },
+    Bold: { style: 'normal', settings: { wght: 700 } },
+    Italic: { style: 'italic', settings: { wght: 400 } },
+    'Medium Italic': { style: 'italic', settings: { wght: 500 } },
+    'SemiBold Italic': { style: 'italic', settings: { wght: 600 } },
+    'Bold Italic': { style: 'italic', settings: { wght: 700 } }
+  },
   features: {
     aalt: { label: 'Access All Alternates', type: 'indexed' },
-    c2sc: { label: 'Small Capitals From Capitals', type: 'on/off' },
+    calt: { label: 'Contextual Alternates', type: 'on/off' },
+    case: { label: 'Case-Sensitive Forms', type: 'on/off' },
     ccmp: { label: 'Glyph Composition / Decomposition', type: 'on/off' },
-    dlig: { label: 'Discretionary Ligatures', type: 'on/off' },
-    dnom: { label: 'Denominators', type: 'on/off' },
     frac: { label: 'Fractions', type: 'on/off' },
     kern: { label: 'Kerning', type: 'on/off' },
     liga: { label: 'Standard Ligatures', type: 'on/off' },
-    lnum: { label: 'Lining Figures', type: 'on/off' },
     locl: { label: 'Localized Forms', type: 'on/off' },
     mark: { label: 'Mark Positioning', type: 'on/off' },
     mkmk: { label: 'Mark to Mark Positioning', type: 'on/off' },
-    numr: { label: 'Numerators', type: 'on/off' },
     ordn: { label: 'Ordinals', type: 'on/off' },
-    salt: { label: 'Stylistic Alternates', type: 'indexed' },
-    sinf: { label: 'Scientific Inferiors', type: 'on/off' },
-    smcp: { label: 'Small Capitals', type: 'on/off' },
-    ss01: { label: 'Stylistic Set 1', type: 'on/off' },
-    ss02: { label: 'Stylistic Set 2', type: 'on/off' },
-    ss03: { label: 'Stylistic Set 3', type: 'on/off' },
-    ss04: { label: 'Stylistic Set 4', type: 'on/off' },
-    ss05: { label: 'Stylistic Set 5', type: 'on/off' },
-    ss06: { label: 'Stylistic Set 6', type: 'on/off' },
-    ss07: { label: 'Stylistic Set 7', type: 'on/off' },
-    ss08: { label: 'Stylistic Set 8', type: 'on/off' },
-    ss09: { label: 'Stylistic Set 9', type: 'on/off' },
-    ss10: { label: 'Stylistic Set 10', type: 'on/off' },
-    ss11: { label: 'Stylistic Set 11', type: 'on/off' },
-    subs: { label: 'Subscript', type: 'on/off' },
-    sups: { label: 'Superscript', type: 'on/off' }
+    pnum: { label: 'Proportional Figures', type: 'on/off' },
+    rvrn: { label: 'Required Variation Alternates', type: 'on/off' },
+    sups: { label: 'Superscript', type: 'on/off' },
+    tnum: { label: 'Tabular Figures', type: 'on/off' }
   }
 }
 ```
 
-Because Raleway is a [variable font][VariableFonts], the `variable` flag is set to `true`, and its variation axes are itemized in the `variations` object. Each key in `variations` is a four-character code that can be used with the Context’s  [`fontVariationSettings`][fontvariations] property and points to an object with the font’s `min`, `max`, and `default` values for that axis (plus a human-readable `label`).
+Because Lora is a [variable font][VariableFonts], the `variable` flag is set to `true`, and its variation axes are itemized in the `variations` object. Each key in `variations` is a four-character code that can be used with the Context’s [`fontVariationSettings`][fontvariations] property and points to an object with the font’s `min`, `max`, and `default` values for that axis (plus a human-readable `label`). The `instances` object lists the different names you can pass to [`fontInstance`][fontinstance] along with the style and variation settings that will be enabled for each.
 
 The `features` object itemizes all the OpenType features the font supports, identifying them using four-character codes that can be used with the [`fontFeatureSettings`][fontfeatures] property. Each feature’s `type` can either be `"on/off"` (meaning it can be set to `1` to enable it or `0` to disable it) or `indexed` (meaning it allows you to select among different alternates via a 1-based index, or `0` to use the default form).
 
 
 ### `has()`
-```js
+```js returns="boolean"
 FontLibrary.has(familyName)
 ```
 
@@ -93,7 +84,7 @@ Returns `true` if the family is installed on the system or has been added via `F
 Uninstalls any dynamically loaded fonts that had been added via `FontLibrary.use()`.
 
 ### `use()`
-```js returns="{family, weight, style, width, variable, variations, features, file}[]"
+```js returns="{family, weight, style, width, variable, variations, instances, features, file, replaces, replacedBy}[]"
 FontLibrary.use([...fontPaths])
 FontLibrary.use(familyName, [...fontPaths])
 FontLibrary.use({familyName:[...fontPaths], ...})
@@ -176,8 +167,55 @@ The return value will be either a list or an object (matching the style in which
 ```
 
 
+#### diagnosing errors
+
+```js
+// register a static and variable font with the same family name and intrinsic style
+FontLibrary.use("Inter", [
+  "fonts/Inter/Inter[opsz,wght].ttf", // variable (defaults to "Regular" weight)
+  "fonts/Inter/Inter-Regular.ttf",    // static (single weight)
+])
+```
+---
+
+Only one font can be added to the library for each unique combination of family name, weight, and style. As a result, not every font file you pass to `use()` will be successfully registered. In general, later fonts overwrite earlier ones, but within a single `use()` call a variable font will always replace a static one regardless of ordering. The `replaces` and `replacedBy` properties in the return value will let you see how naming collisions were resolved:
+- `replaces` means the font was successfully registered; its value identifies the font that it replaced
+- `replacedBy` means the font was skipped; its value identifies the font that was added instead
+
+```js
+[
+  {
+    family: 'Inter',
+    weight: 400,
+    style: 'normal',
+    width: 'normal',
+    variable: false,
+    variations: {},
+    instances: {},
+    features: { … },
+    file: 'fonts/Inter/Inter-Regular.ttf',
+    replacedBy: 'fonts/Inter/Inter[opsz,wght].ttf'
+  },
+  {
+    family: 'Inter',
+    weight: 400,
+    style: 'normal',
+    width: 'normal',
+    variable: true,
+    variations: {
+      opsz: { min: 14, max: 32, default: 14, label: 'Optical size' },
+      wght: { min: 100, max: 900, default: 400, label: 'Weight' }
+    },
+    instances: { Thin, ExtraLight, Light, … },
+    features: { … },
+    file: 'fonts/Inter/Inter[opsz,wght].ttf',
+    replaces: 'fonts/Inter/Inter-Regular.ttf'
+  }
+]
+```
 
 <!-- references_begin -->
+[fontinstance]: context.md#fontinstance
 [fontvariations]: context.md#fontvariationsettings
 [fontfeatures]: context.md#fontfeaturesettings
 [VariableFonts]: https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Fonts/Variable_Fonts_Guide

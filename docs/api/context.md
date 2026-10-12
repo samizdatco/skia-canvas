@@ -5,19 +5,18 @@ description: The drawing API for a particular Canvas
 
 > Most of your interaction with the canvas will actually be directed toward its ‘rendering context’, a supporting object you can acquire by calling the canvas’s [getContext()](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext) and [newPage()][newPage] methods.
 
-| Canvas State                                                       | Drawing                                      | Pattern & Color                                  | Line Style                              | Transform                                         | Bezier Paths                             | Font Style                                     | Text Layout                                             | Images                                                       | Compositing & Effects                                    |
-|--------------------------------------------------------------------|----------------------------------------------|--------------------------------------------------|-----------------------------------------|---------------------------------------------------|------------------------------------------|------------------------------------------------|---------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------|
-| [**canvas**][canvas_attr] / [🧪][canvas]                           | [clearRect()][clearRect()]                   | [**fillStyle**][fillStyle]                       | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]          | [moveTo()][moveTo()]                     | [**font**][font] / [🧪][c2d_font]              | [**direction**][direction]                              | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
-| [getContextAttributes()][getContextAttributes()] / [🧪][ctx_attrs] | [fillRect()][fillRect()]                     | [**strokeStyle**][strokeStyle]                   | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]       | [lineTo()][lineTo()]                     | [**fontKerning**][fontKerning]                 | [**textAlign**][textAlign] / [🧪][c2d_textAlign]         | [**imageSmoothingQuality**][imageSmoothingQuality]           | [**globalAlpha**][globalAlpha]                           |
-| [beginPath()][beginPath()]                                         | [strokeRect()][strokeRect()]                 | [createConicGradient()][createConicGradient()] / [🧪][gradients]  | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                  | [arcTo()][arcTo()]                       | [**fontStretch**][fontStretch]                 | [**textBaseline**][textBaseline]                        | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
-| [closePath()][closePath()]                                         | [fillText()][fillText()] / [🧪][drawText]    | [createLinearGradient()][createLinearGradient()] / [🧪][gradients] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()] / [🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontHinting** 🧪][fonthinting]              | [**textDecoration** 🧪][textDecoration]                 | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
-| [isPointInPath()][isPointInPath()]                                 | [strokeText()][strokeText()] / [🧪][drawText] | [createRadialGradient()][createRadialGradient()] / [🧪][gradients] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]              | [conicCurveTo() 🧪][conicCurveTo]        | [**fontSmoothing** 🧪][fontsmoothing]          | [**textRendering**][textRendering] / [🧪][c2d_textRendering] | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
-| [isPointInStroke()][isPointInStroke()]                             | [fill()][fill()]                             | [createPattern()][createPattern()]               | [**lineWidth**][lineWidth]              | [transform()][transform()] / [🧪][transforms]     | [quadraticCurveTo()][quadraticCurveTo()] | [**fontSynthesis** 🧪][fontsynthesis]          | [**textWrap** 🧪][textwrap]                             | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
-| [save()][save()]                                                   | [stroke()][stroke()]                         | [createTexture() 🧪][createTexture()]            | [**miterLimit**][miterLimit]            | [translate()][translate()]                        | [arc()][arc()]                           | [**fontVariant** 🧪][fontvariant]              | [measureText()][measureText()] / [🧪][c2d_measuretext]    | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
-| [restore()][restore()]                                             |                                              |                                                  | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                              | [ellipse()][ellipse()]                   | [**fontFeatureSettings** 🧪][fontfeatures]     | [outlineText() 🧪][outlineText()]                       |                                                              |                                                          |
-| [reset()][reset()]                                                 |                                              |                                                  | [setLineDash()][setLineDash()]          | [scale()][scale()]                                | [rect()][rect()]                         | [**fontVariationSettings** 🧪][fontvariations] |                                                         |                                                              |                                                          |
-| [clip()][clip()]                                                   |                                              |                                                  |                                         |                                                   | [roundRect()][roundRect()]               | [**letterSpacing**][letterSpacing]             |                                                         |                                                              |                                                          |
-|                                                                    |                                              |                                                  |                                         |                                                   |                                          | [**wordSpacing**][wordSpacing]                 |                                                         |                                                              |                                                          |
+| Canvas State                                                       | Drawing                                       | Pattern & Color                                                    | Line Style                              | Transform                                           | Bezier Paths                             | Font Style                                     | Text Layout                                                  | Images                                                       | Compositing & Effects                                    |
+|--------------------------------------------------------------------|-----------------------------------------------|--------------------------------------------------------------------|-----------------------------------------|-----------------------------------------------------|------------------------------------------|------------------------------------------------|--------------------------------------------------------------|--------------------------------------------------------------|----------------------------------------------------------|
+| [**canvas**][canvas_attr] / [🧪][canvas]                           | [clearRect()][clearRect()]                    | [**fillStyle**][fillStyle]                                         | [**lineCap**][lineCap]                  | [**currentTransform**][currentTransform]            | [moveTo()][moveTo()]                     | [**font**][font] / [🧪][c2d_font]              | [**direction**][direction]                                   | [**imageSmoothingEnabled**][imageSmoothingEnabled]           | [**filter**][filter]                                     |
+| [getContextAttributes()][getContextAttributes()] / [🧪][ctx_attrs] | [fillRect()][fillRect()]                      | [**strokeStyle**][strokeStyle]                                     | [**lineDashFit** 🧪][lineDashFit]       | [createProjection() 🧪][createProjection()]         | [lineTo()][lineTo()]                     | [**fontKerning**][fontKerning]                 | [**letterSpacing**][letterSpacing]                           | [**imageSmoothingQuality**][imageSmoothingQuality]           | [**globalAlpha**][globalAlpha]                           |
+| [beginPath()][beginPath()]                                         | [strokeRect()][strokeRect()]                  | [createConicGradient()][createConicGradient()] / [🧪][gradients]   | [**lineDashMarker** 🧪][lineDashMarker] | [getTransform()][getTransform()]                    | [arcTo()][arcTo()]                       | [**fontStretch**][fontStretch]                 | [**wordSpacing**][wordSpacing]                               | [createImageData()][createImageData()] / [🧪][ctx_imagedata] | [**globalCompositeOperation**][globalCompositeOperation] |
+| [closePath()][closePath()]                                         | [fillText()][fillText()] / [🧪][drawText]     | [createLinearGradient()][createLinearGradient()] / [🧪][gradients] | [**lineDashOffset**][lineDashOffset]    | [setTransform()][setTransform()] / [🧪][transforms] | [bezierCurveTo()][bezierCurveTo()]       | [**fontHinting** 🧪][fonthinting]              | [**textAlign**][textAlign] / [🧪][c2d_textAlign]             | [getImageData()][getImageData()] / [🧪][ctx_imagedata]       | [**shadowBlur**][shadowBlur]                             |
+| [isPointInPath()][isPointInPath()]                                 | [strokeText()][strokeText()] / [🧪][drawText] | [createRadialGradient()][createRadialGradient()] / [🧪][gradients] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]                | [conicCurveTo() 🧪][conicCurveTo]        | [**fontInstance** 🧪][fontinstance]            | [**textBaseline**][textBaseline]                             | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
+| [isPointInStroke()][isPointInStroke()]                             | [fill()][fill()]                              | [createPattern()][createPattern()]                                 | [**lineWidth**][lineWidth]              | [transform()][transform()] / [🧪][transforms]       | [quadraticCurveTo()][quadraticCurveTo()] | [**fontSmoothing** 🧪][fontsmoothing]          | [**textDecoration** 🧪][textDecoration]                      | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
+| [save()][save()]                                                   | [stroke()][stroke()]                          | [createTexture() 🧪][createTexture()]                              | [**miterLimit**][miterLimit]            | [translate()][translate()]                          | [arc()][arc()]                           | [**fontSynthesis** 🧪][fontsynthesis]          | [**textRendering**][textRendering] / [🧪][c2d_textRendering] | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
+| [restore()][restore()]                                             |                                               |                                                                    | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                                | [ellipse()][ellipse()]                   | [**fontVariant** 🧪][fontvariant]              | [**textWrap** 🧪][textwrap]                                  |                                                              |                                                          |
+| [reset()][reset()]                                                 |                                               |                                                                    | [setLineDash()][setLineDash()]          | [scale()][scale()]                                  | [rect()][rect()]                         | [**fontFeatureSettings** 🧪][fontfeatures]     | [measureText()][measureText()] / [🧪][c2d_measuretext]       |                                                              |                                                          |
+| [clip()][clip()]                                                   |                                               |                                                                    |                                         |                                                     | [roundRect()][roundRect()]               | [**fontVariationSettings** 🧪][fontvariations] | [outlineText() 🧪][outlineText()]                            |                                                              |                                                          |
 
 
 ## Choosing Colors
@@ -52,6 +51,28 @@ ctx.font = "24px/1.5 Avenir" // sets the line height to 1.5 ems
 
 By default the canvas disables Skia’s [font hinting](https://en.wikipedia.org/wiki/Font_hinting) when rendering text in order to better match the text rendering produced by browsers. To enable hinting, set the context’s `.fontHinting` property to `true`, but note that only Linux and Windows renderers support the feature. On macOS, enabling hinting has no effect since CoreText has no support for it (though see the [`.textRendering`][c2d_textRendering] property’s `optimizeLegibility` setting if you’d like to enable the ‘text smoothing’ that hinting used to trigger in earlier Skia Canvas releases).
 
+### `.fontInstance`
+
+Variable font families typically provide a set of named ‘instances’ corresponding to the standard weights, widths, and styles in a traditional, static font family. You can get a list of the instances a given family supports (and the [variation settings][fontvariations] each is equivalent to) from the `instances` list returned by [`FontLibrary.family()`][fontlibrary-family].
+
+Assigning one of these names to `fontInstance` will search for the instance in the currently selected [`.font`][c2d_font] and apply its style and variation settings. You can restore the font’s default instance by setting it to `"auto"`. Assigning a new value to `.font` will also reset the `.fontInstance` to `"auto"`.
+
+```js
+console.log(FontLibrary.family("Jost").instances)
+// {
+//   Thin: { style: 'normal', settings: { wght: 100 } },
+//   ExtraLight: { style: 'normal', settings: { wght: 200 } },
+//   …
+//   'ExtraBold Italic': { style: 'italic', settings: { wght: 800 } },
+//   'Black Italic': { style: 'italic', settings: { wght: 900 } }
+// }
+
+ctx.font = "16px Jost"
+ctx.fontInstance = "Thin" // sets the weight to 100
+ctx.fontInstance = "ExtraBold Italic" // sets the weight to 800 and style to italic
+ctx.fontInstance = "auto" // returns to using the default Jost weight & style
+```
+
 ### `.fontSmoothing`
 
 Text is rendered with standard greyscale antialiasing and sub-pixel positioning by default. Setting `.fontSmoothing` to `false` disables AA entirely and aligns each glyph to the pixel grid, producing hard-edged letterforms with no shading. Note that GPU canvases apply additional [`msaa`][msaa] antialiasing by default, so you’ll need to disable that for truly pixelated text.
@@ -66,19 +87,21 @@ The context’s [`.font`][font] property follows the CSS 2.1 standard and allows
 
 ### `.fontFeatureSettings`
 
-Takes a CSS [font-feature-settings][font-feature-settings] string, allowing you to enable or disable individual OpenType features by tag (presuming the currently selected font supports them). This setting takes precedence over [`.fontVariant`][fontvariant] and [`.fontKerning`][fontKerning] if they overlap. Assign `"normal"` to clear it.
+Takes a CSS [font-feature-settings][font-feature-settings] string (or equivalent options object), allowing you to enable or disable individual OpenType features by tag (presuming the currently selected font supports them). This setting takes precedence over [`.fontVariant`][fontvariant] and [`.fontKerning`][fontKerning] if they overlap. Assign `"normal"` (or an empty object) to clear it.
 
 ```js
-ctx.fontFeatureSettings = '"liga" 0, "tnum" 1, "ss01"' // no ligatures, tabular figures, stylistic set 1
+ctx.fontFeatureSettings = '"kern" off, "salt" 2, "ss01"' // no kerning, 2nd stylistic alternate, stylistic set 1
+ctx.fontFeatureSettings = {kern: false, salt: 2, ss01: true} // equivalent settings using object syntax
 ctx.fontFeatureSettings = "normal" // back to the font’s defaults
 ```
 
 ### `.fontVariationSettings`
 
-Takes a CSS [font-variation-settings][font-variation-settings] string, giving you low-level control over the individual axes of a [variable font][VariableFonts]. Assign `"normal"` to clear it.
+Takes a CSS [font-variation-settings][font-variation-settings] string (or equivalent options object), giving you low-level control over the individual axes of a [variable font][VariableFonts]. Assign `"normal"` (or an empty object) to clear it.
 
 ```js
-ctx.fontVariationSettings = '"wght" 625, "opsz" 48'
+ctx.fontVariationSettings = '"wght" 625, "opsz" 48' // semibold w/ 48pt optical size
+ctx.fontVariationSettings = {wght: 625, opsz: 48} // equivalent settings using object syntax
 ctx.fontVariationSettings = "normal" // back to the font’s defaults
 ```
 
@@ -930,8 +953,10 @@ for (let i=0; i<8000; i++){
 [drawText]: #filltext--stroketext
 [drawcanvas]: #drawcanvas
 [drawimage]: #drawimage
+[fontlibrary-family]: font-library.md#family
 [fontvariant]: #fontvariant
 [fonthinting]: #fonthinting
+[fontinstance]: #fontinstance
 [fontsmoothing]: #fontsmoothing
 [fontsynthesis]: #fontsynthesis
 [fontvariations]: #fontvariationsettings
