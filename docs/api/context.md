@@ -55,7 +55,7 @@ By default the canvas disables Skia’s [font hinting](https://en.wikipedia.org/
 
 Variable font families typically provide a set of named ‘instances’ corresponding to the standard weights, widths, and styles in a traditional, static font family. You can get a list of the instances a given family supports (and the [variation settings][fontvariations] each is equivalent to) from the `instances` list returned by [`FontLibrary.family()`][fontlibrary-family].
 
-Assigning one of these names to `fontInstance` will search for the instance in the currently selected [`.font`][c2d_font] and apply its style and variation settings. You can restore the font’s default instance by setting it to `"auto"`. Assigning a new value to `.font` will also reset the `.fontInstance` to `"auto"`.
+Assigning one of these names to `fontInstance` will search for the instance in the currently selected [`.font`][c2d_font] and apply its style and variation settings. You can restore the font’s default instance by setting it to `"auto"`. Assigning a new value to `.font` will also reset the `.fontInstance`, so be sure to set the instance *after* selecting a typeface.
 
 ```js
 console.log(FontLibrary.family("Jost").instances)
@@ -83,7 +83,7 @@ When the family selected via [`.font`][font] doesn’t include a face matching t
 
 ### `.fontVariant`
 
-The context’s [`.font`][font] property follows the CSS 2.1 standard and allows the selection of only a single font-variant type: `normal` vs `small-caps`. The full range of CSS 3 [font-variant][font-variant] values can be used if assigned to the context’s `.fontVariant` property (presuming the currently selected font supports them). Note that setting `.font` will also update the current `.fontVariant` value, so be sure to set the variant *after* selecting a typeface.
+The context’s [`.font`][font] property follows the CSS 2.1 standard and allows the selection of only a single font-variant type: `normal` vs `small-caps`. The full range of CSS 3 [font-variant][font-variant] values can be used if assigned to the context’s `.fontVariant` property (presuming the currently selected font supports them). Note that setting `.font` will also reset the current `.fontVariant` value, so be sure to set the variant *after* selecting a typeface.
 
 ### `.fontFeatureSettings`
 
@@ -98,6 +98,8 @@ ctx.fontFeatureSettings = "normal" // back to the font’s defaults
 ### `.fontVariationSettings`
 
 Takes a CSS [font-variation-settings][font-variation-settings] string (or equivalent options object), giving you low-level control over the individual axes of a [variable font][VariableFonts]. Assign `"normal"` (or an empty object) to clear it.
+
+By default, variable fonts’ axis settings are controlled indirectly based on the style of the current [`.font`][font]. If you’ve also selected a [`.fontInstance`][fontinstance], its settings will be layered on top of those. The `.fontVariationSettings` are the last to be applied, allowing you to override any of the axis settings inherited from the earlier stages.
 
 ```js
 ctx.fontVariationSettings = '"wght" 625, "opsz" 48' // semibold w/ 48pt optical size

@@ -36,7 +36,9 @@ For instance, on my system `FontLibrary.family("Lora")` returns:
   widths: [ 'normal' ],
   styles: [ 'normal', 'italic' ],
   variable: true,
-  variations: { wght: { min: 400, max: 700, default: 400, label: 'Weight' } },
+  variations: {
+    wght: { min: 400, max: 700, default: 400, label: 'Weight' }
+  },
   instances: {
     Regular: { style: 'normal', settings: { wght: 400 } },
     Medium: { style: 'normal', settings: { wght: 500 } },
@@ -167,7 +169,7 @@ The return value will be either a list or an object (matching the style in which
 ```
 
 
-#### diagnosing errors
+#### with conflicting styles
 
 ```js
 // register a static and variable font with the same family name and intrinsic style
