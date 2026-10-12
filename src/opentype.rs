@@ -226,6 +226,17 @@ impl FontCapabilities{
       }
     }
 
+    // omit axes that every instance leaves at the default
+    let unvaried:Vec<FourByteTag> = axes.iter()
+      .filter(|axis| instances.iter()
+        .flat_map(|inst| &inst.coords)
+        .all(|&(tag, value)| tag != axis.tag || (value as f32 - axis.def).abs() < 1.0 / 65536.0))
+      .map(|axis| axis.tag)
+      .collect();
+    for inst in &mut instances{
+      inst.coords.retain(|(tag, _)| !unvaried.contains(tag));
+    }
+
     FontCapabilities{ axes, features, instances }
   }
 
@@ -352,19 +363,34 @@ impl FontAxes{
   // update layout_style to match instance & variation settings (so fallback fonts match and synthetic bold/ital aren't
   // over-applied) unless it would cause skia to match a different face altogether
   pub fn resolve_style(&mut self, char_style:&TextStyle, stretch:f32, oblique:Option<f32>){
-    let (font_face, mut collection) = FontLibrary::with_shared(|lib| (lib.font_face(char_style), lib.font_collection()));
-    let (face, base) = match (&self.instance, font_face){
+    // the face to resolve against, plus a style that skia will match to it
+    let font_face = FontLibrary::with_shared(|lib| lib.font_face(char_style));
+    let (face, matching_style) = match (&self.instance, font_face){
       (Some(inst), _) => (inst.face.clone(), inst.face.font_style()),
       (None, Some(face)) => (face, char_style.font_style()),
       (None, None) => { (self.layout_style, self.allows_synthesis) = (None, true); return }
     };
 
-    // merge the instance's coords with explicit variation settings (only for axes the font actually has)
+    // determine which axes the face supports
     let axes:Vec<VariationAxis> = face.variation_design_parameters().unwrap_or_default().into_iter()
       .filter(css_compatible) // skip legacy faces that don't use css value ranges
       .collect();
+    let has_axis = |tag| axes.iter().any(|axis| axis.tag == tag);
+    let (weight_axis, width_axis, slant_axis) = (
+      has_axis(Coordinate::wght), has_axis(Coordinate::wdth), has_axis(Coordinate::ital) || has_axis(Coordinate::slnt)
+    );
+
+    // start from the style set by `font`, except for properties the face has no axis for
+    let style = char_style.font_style();
+    let base = FontStyle::new(
+      if weight_axis { style.weight() } else { matching_style.weight() },
+      if width_axis { style.width() } else { matching_style.width() },
+      if slant_axis { style.slant() } else { matching_style.slant() },
+    );
+
+    // merge the `fontInstance` and `fontVariationSettings` coords
     let overrides:Vec<(FourByteTag, f32)> = self.instance.iter()
-      .flat_map(|inst| inst.coords.iter().map(|&(tag, value)| (tag, value as f32)))
+      .flat_map(|instance| instance.coords.iter().map(|&(tag, value)| (tag, value as f32)))
       .chain(self.variations.iter().map(|(tag, value)| (axis_tag(tag), *value)))
       .filter_map(|(tag, value)| axes.iter().find(|axis| axis.tag == tag).map(|axis| (tag, value.clamp(axis.min, axis.max))))
       .collect();
@@ -385,21 +411,18 @@ impl FontAxes{
     };
 
     // use the implied style so long as it doesn't cause skia to match to a different face
+    let matches_correctly = |style| {
+      let families:Vec<String> = char_style.font_families().iter().map(|family| family.to_string()).collect();
+      let mut collection = FontLibrary::with_shared(|lib| lib.font_collection());
+      collection.find_typefaces(&families, style).first().is_some_and(|selected| FontTables::id(selected) == FontTables::id(&face))
+    };
     (self.layout_style, self.allows_synthesis) = match self.instance.is_none() && implied == base{
       true => (None, true),
-      false => {
-        let families:Vec<String> = char_style.font_families().iter().map(|family| family.to_string()).collect();
-        let selected = collection.find_typefaces(&families, implied).into_iter().next();
-        match selected.is_some_and(|selected| FontTables::id(&selected) == FontTables::id(&face)){
-          true => (Some(implied), true),
-          false => (Some(base), false),
-        }
-      }
+      false if matches_correctly(implied) => (Some(implied), true),
+      false => (Some(matching_style), false),
     };
 
     // disable synthesis if skia would fake a weight/slant that the axis settings are already providing
-    let has_axis = |tag| axes.iter().any(|axis| axis.tag == tag);
-    let (weight_axis, slant_axis) = (has_axis(Coordinate::wght), has_axis(Coordinate::ital) || has_axis(Coordinate::slnt));
     if self.allows_synthesis && (weight_axis || slant_axis){
       let mut scratch = char_style.clone();
       self.apply(scratch.set_typeface(face.clone()), stretch, oblique);
@@ -432,6 +455,11 @@ impl FontAxes{
 
   // merge the variable font instancing fields into the provided char_style
   pub fn apply(&self, char_style:&mut TextStyle, stretch:f32, oblique:Option<f32>){
+    // save the weight & slant as set in `font` (before they're replaced by the layout_style)
+    let (font_weight, font_slant) = (
+      *char_style.font_style().weight() as f32, char_style.font_style().slant()
+    );
+
     if let Some(style) = self.layout_style{
       char_style.set_font_style(style); // use the resolved style
     }
@@ -439,14 +467,13 @@ impl FontAxes{
       char_style.set_typeface(inst.face.clone()); // use the instance's 'parent' typeface
     }
 
-    let font_style = char_style.font_style();
     let axes = char_style.typeface().and_then(|tf| tf.variation_design_parameters());
     let has_axis = |tag| axes.as_ref().is_some_and(|params| params.iter().any(|p| p.tag == tag));
     let slant_only_font = has_axis(Coordinate::slnt) && !has_axis(Coordinate::ital);
 
-    // only set weight & stretch axes if they use css value ranges
+    // skip setting the font-derived weight & width for axes that don't use css value ranges
     let mut coords:Vec<Coordinate> = [
-      Coordinate{ axis:Coordinate::wght, value:*font_style.weight() as f32 },
+      Coordinate{ axis:Coordinate::wght, value:font_weight },
       Coordinate{ axis:Coordinate::wdth, value:stretch },
       Coordinate{ axis:Coordinate::opsz, value:char_style.font_size() },
     ].into_iter()
@@ -456,7 +483,7 @@ impl FontAxes{
         .map_or(true, css_compatible))
       .collect();
 
-    match (font_style.slant(), slant_only_font){
+    match (font_slant, slant_only_font){
       // for slnt-only fonts, map an italic style to the default oblique angle
       (Slant::Italic, true)  => coords.push(Coordinate{ axis:Coordinate::slnt, value:-14.0 }),
       (Slant::Italic, false) => coords.push(Coordinate{ axis:Coordinate::ital, value:1.0 }),
