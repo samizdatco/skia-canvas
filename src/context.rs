@@ -477,12 +477,6 @@ impl Context2D{
     let paint = self.paint_for_drawing(style);
     self.render_to_canvas(&paint, |canvas, paint| {
       if let Some(tile) = self.state.texture(style){
-        // SKIA PATH EFFECT BUG WORKAROUND:
-        //
-        // Simply mixing the PathEffect into the paint and drawing totally misjudges the boundaries of the
-        // path being filled/stroked. Instead we'll create a path with the texture and a path with the
-        // desired outline separately, then draw their overlap
-
         // paint containing the PathEffect
         let mut tile_paint = paint.clone();
         tile.mix_into(&mut tile_paint, self.state.global_alpha);
@@ -492,16 +486,16 @@ impl Context2D{
         fill_path_with_paint(&path, paint, &mut stencil, None, None);
         let stencil = stencil.detach();
 
-        // construct a rectangle significantly larger than the path + stroke area (1.5x seems to work?)
-        let expanded_bounds = stencil.bounds().with_outset(tile.spacing() * 1.5);
-        let enclosing_frame = Path::rect(expanded_bounds, None);
+        // Skia's 2D path effects only draw tiles in whole lattice cells, so rather than applying the texture to the
+        // path directly, generate it across a frame that covers the path and then clip it to the exact outline
+        let frame = tile.frame(&stencil, &tile_paint, &self.state.matrix);
 
         // if outlining, intersect the user path with the tile pattern's outlines
         let outlined = match tile.use_clip(){
           true => None,
           false => {
             let mut textured_frame = PathBuilder::new();
-            fill_path_with_paint(&enclosing_frame, &tile_paint, &mut textured_frame, None, None);
+            fill_path_with_paint(&frame, &tile_paint, &mut textured_frame, None, None);
             stencil.op(&textured_frame.detach(), PathOp::Intersect) // may fail with None
           }
         };
@@ -514,10 +508,10 @@ impl Context2D{
             canvas.draw_path(&fill_path, &fill_paint);
           }
           None => {
-            // apply the user path as a clipping mask and fill the whole enclosing rect with tile pattern
+            // apply the user path as a clipping mask and fill the whole frame with tile pattern
             canvas.save();
             canvas.clip_path(&stencil, Some(ClipOp::Intersect), Some(true));
-            canvas.draw_path(&enclosing_frame, &tile_paint);
+            canvas.draw_path(&frame, &tile_paint);
             canvas.restore();
           }
         }

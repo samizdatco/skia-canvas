@@ -663,6 +663,19 @@ describe("Context2D", ()=>{
         assert.deepEqual(pixel(73, 73), CLEAR)
         assert.deepEqual(pixel(76, 76), BLACK)
       })
+
+      test("with offset Path2D", async () => {
+        // each tile is drawn 50px from its cell's center, so the first row & column come from cells outside the rect
+        let dot = new Path2D()
+        dot.rect(50, 50, 6, 6)
+        ctx.fillStyle = ctx.createTexture(20, {path:dot, color:'black'})
+        ctx.fillRect(10, 10, 80, 80)
+
+        assert.deepEqual(pixel(23, 23), BLACK)
+        assert.deepEqual(pixel(43, 23), BLACK)
+        assert.deepEqual(pixel(23, 63), BLACK)
+        assert.deepEqual(pixel(30, 30), CLEAR)
+      })
     })
   })
 

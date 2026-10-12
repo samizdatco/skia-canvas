@@ -2,8 +2,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::f32::consts::PI;
 use neon::prelude::*;
-use skia_safe::{Path, Color4f, Matrix, Paint, PaintStyle, PaintCap, Point};
-use skia_safe::{line_2d_path_effect, path_2d_path_effect};
+use skia_safe::{Path, PathBuilder, Color4f, Matrix, Paint, PaintStyle, PaintCap, Point, Rect};
+use skia_safe::{line_2d_path_effect, path_2d_path_effect, path_utils::fill_path_with_paint};
 
 use crate::bridge::*;
 
@@ -15,6 +15,26 @@ struct Texture{
   angle: f32,
   scale: (f32, f32),
   shift: (f32, f32),
+}
+
+impl Texture{
+  // maps lattice coordinates (one unit per tile) to the canvas
+  fn lattice_matrix(&self) -> Matrix{
+    let scale = match self.path{
+      Some(_) => self.scale,
+      None => { let s = self.scale.0.max(self.scale.1); (s, s) }
+    };
+    let mut matrix = Matrix::new_identity();
+    matrix
+      .pre_translate(self.shift)
+      .pre_rotate(180.0 * self.angle / PI, None)
+      .pre_scale(scale, None);
+    matrix
+  }
+
+  fn lattice_aligned_path(&self) -> Option<Path>{
+    self.path.as_ref().map(|path| path.with_transform(&Matrix::rotate_rad(self.angle)))
+  }
 }
 
 pub type BoxedCanvasTexture = JsBox<RefCell<CanvasTexture>>;
@@ -35,23 +55,10 @@ pub struct CanvasTexture{
 impl CanvasTexture{
   pub fn mix_into(&self, paint: &mut Paint, alpha:f32){
     let tile = self.texture.borrow();
-
-    let mut matrix = Matrix::new_identity();
-    matrix
-      .pre_translate(tile.shift)
-      .pre_rotate(180.0 * tile.angle / PI, None);
-
-    match &tile.path {
-      Some(path) => {
-        let path = path.with_transform(&Matrix::rotate_rad(tile.angle));
-        matrix.pre_scale(tile.scale, None);
-        paint.set_path_effect(path_2d_path_effect::new(&matrix, &path));
-      }
-      None => {
-        let scale = tile.scale.0.max(tile.scale.1);
-        matrix.pre_scale((scale, scale), None);
-        paint.set_path_effect(line_2d_path_effect::new(tile.line, &matrix));
-      }
+    let matrix = tile.lattice_matrix();
+    match tile.lattice_aligned_path() {
+      Some(path) => paint.set_path_effect(path_2d_path_effect::new(&matrix, &path)),
+      None => paint.set_path_effect(line_2d_path_effect::new(tile.line, &matrix)),
     };
 
     if tile.line > 0.0{
@@ -71,9 +78,57 @@ impl CanvasTexture{
     !self.outline
   }
 
-  pub fn spacing(&self) -> Point {
+  // the area the path effect must fill so that every tile overlapping `stencil` gets drawn
+  // (since a cell's tile is only drawn if the cell's center falls inside it)
+  pub fn frame(&self, stencil:&Path, tile_paint:&Paint, matrix:&Matrix) -> Path{
     let tile = self.texture.borrow();
-    tile.scale.into()
+    let bounds = stencil.bounds();
+    if bounds.is_empty(){ return Path::default() }
+
+    // anti-aliasing extends about one device pixel past the tile's geometry
+    let pad = match matrix.min_scale(){ scale if scale > 0.0 => 1.0 / scale, _ => 1.0 };
+
+    // the extent of one cell's geometry relative to its center
+    let reach = match tile.lattice_aligned_path(){
+      Some(path) => {
+        let mut traced = PathBuilder::new();
+        let mut plain = tile_paint.clone();
+        plain.set_path_effect(None);
+        fill_path_with_paint(&path, &plain, &mut traced, None, None);
+        traced.detach().bounds().with_outset((pad, pad)).to_quad(None)
+      }
+      None => {
+        // stripes run between cell centers and skip rows of a single cell, so the reach extends a full cell each way
+        let cell = tile.lattice_matrix().map_vector((1.0, 0.0)).length();
+        let length = cell + pad + if tile.cap == PaintCap::Butt { 0.0 } else { tile.line / 2.0 };
+        let width = tile.line / 2.0 + pad;
+        Rect::new(-length, -width, length, width).to_quad(None).map(|pt| Matrix::rotate_rad(tile.angle).map_point(pt))
+      }
+    };
+
+    // the convex hull of the bounds' corners shifted by the reach's corners (via Andrew's monotone chain)
+    let hull = {
+      let mut points:Vec<Point> = bounds.to_quad(None).into_iter()
+        .flat_map(|pt| reach.iter().map(move |offset| pt - *offset))
+        .collect();
+      points.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+      let cross = |o:Point, a:Point, b:Point| (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+      let half = |points:&mut dyn Iterator<Item=&Point>| {
+        let mut chain:Vec<Point> = vec![];
+        for &pt in points{
+          while chain.len() >= 2 && cross(chain[chain.len() - 2], chain[chain.len() - 1], pt) <= 0.0 { chain.pop(); }
+          chain.push(pt);
+        }
+        chain.pop();
+        chain
+      };
+      let mut hull = half(&mut points.iter());
+      hull.extend(half(&mut points.iter().rev()));
+      hull
+    };
+    let mut frame = PathBuilder::new();
+    frame.add_polygon(&hull, true);
+    frame.detach()
   }
 
   pub fn to_color_4f(&self, alpha:f32) -> Color4f {
