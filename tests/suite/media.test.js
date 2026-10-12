@@ -1892,24 +1892,24 @@ describe("FontLibrary", ()=>{
   })
 
   test("can replace fonts", ()=>{
-    let vf = findFont("oswald/Oswald-VariableFont_wght.ttf"),
-        regular = findFont("oswald/static/Oswald-Regular.ttf"),
+    let vf = findFont("AmstelvarAlpha-VF.ttf"),
+        regular = findFont("montserrat-latin/montserrat-v30-latin-regular.woff2"),
         conflicts = results => results.map(({replaces, replacedBy}) => ({replaces, replacedBy}));
 
     // within a single call, a variable font takes precedence over a same-style static
-    assert.deepEqual(conflicts(FontLibrary.use("Oswald", [vf, regular])), [
+    assert.deepEqual(conflicts(FontLibrary.use("Mixed", [vf, regular])), [
       {replaces:undefined, replacedBy:undefined}, {replaces:undefined, replacedBy:vf}
     ])
     FontLibrary.reset()
-    assert.deepEqual(conflicts(FontLibrary.use("Oswald", [regular, vf])), [
+    assert.deepEqual(conflicts(FontLibrary.use("Mixed", [regular, vf])), [
       {replaces:undefined, replacedBy:vf}, {replaces:regular, replacedBy:undefined}
     ])
 
     // but a static font in a subsequent call replaces it
-    assert.deepEqual(conflicts(FontLibrary.use("Oswald", [regular])), [
+    assert.deepEqual(conflicts(FontLibrary.use("Mixed", [regular])), [
       {replaces:vf, replacedBy:undefined}
     ])
-    assert.deepEqual(FontLibrary.family("Oswald").weights, [400])
+    assert.deepEqual(FontLibrary.family("Mixed").weights, [400])
   })
 
   test("can render woff2 fonts", ()=>{
