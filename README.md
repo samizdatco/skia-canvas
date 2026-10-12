@@ -18,7 +18,7 @@
 
 <div align="center">
 
-<!--### [Version 3.0 now available](https://github.com/samizdatco/skia-canvas/discussions/255)-->
+### [Version 4.0 now available](https://github.com/samizdatco/skia-canvas/discussions/307)
 
 </div>
 
