@@ -4,8 +4,7 @@
 
 use std::collections::HashMap;
 use neon::prelude::*;
-use allsorts::{binary::read::ReadScope, get_name::fontcode_get_name, tables::NameTable};
-use read_fonts::{FontData, TableProvider, TopLevelTable, types::{Tag, Fixed, F2Dot14}, tables::{hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, head::Head, layout::FeatureParams}};
+use read_fonts::{FontData, FontRead, TableProvider, TopLevelTable, types::{Tag, Fixed, F2Dot14}, tables::{name::Name, hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, head::Head, layout::FeatureParams}};
 use skia_safe::{Data, FontArguments, FourByteTag, Typeface};
 use skia_safe::font_style::{FontStyle, Weight, Slant};
 use skia_safe::font_parameters::VariationAxis;
@@ -127,17 +126,35 @@ impl FontCapabilities{
     // read the font's `name` table (for accessing axis, feature, and instance names)
     let mut names:HashMap<u16, String> = HashMap::new();
     if let Some(data) = font.copy_table_data(*FourByteTag::from_chars('n','a','m','e')){
-      let bytes = data.as_bytes();
-      if let Ok(table) = ReadScope::new(bytes).read::<NameTable<'_>>(){
-        for record in table.name_records.iter(){
-          // skip record 0 since that's also the no-label-for-this-feature ID
-          if record.name_id == 0 || names.contains_key(&record.name_id){ continue }
+      if let Ok(table) = Name::read(FontData::new(data.as_bytes())){
+        let mut scores:HashMap<u16, (bool, u8, u8)> = HashMap::new();
+        for record in table.name_record(){
+          let id = record.name_id().to_u16();
 
-          // use fontcode_get_name so it weights by unicode-coverage of the platform+encoding
-          if let Some(name) = fontcode_get_name(bytes, record.name_id).ok().flatten()
-            .and_then(|name| name.into_string().ok())
+          // rank by unicode coverage (as in harfbuzz), avoiding lossy MacRoman strings
+          let coverage = match (record.platform_id(), record.encoding_id()){
+            (3, 10) => 10, (0, 6) => 9, (0, 4) => 8, (3, 1) => 7, (0, 3) => 6,
+            (0, 2) => 5, (0, 1) => 4, (0, 0) => 3, (3, 0) => 2, (1, 0) => 1,
+            _ => continue,
+          };
+
+          // then prefer English, followed by Unicode-platform strings
+          let language = match (record.platform_id(), record.language_id()){
+            (3, lang) if lang & 0xFF == 0x09 => 2, // any English LCID (en-US is 0x0409)
+            (1, 0) => 2,
+            (0, _) => 1,
+            _ => 0,
+          };
+          let score = (coverage > 1, language, coverage);
+
+          // skip record 0 since that's also the no-label-for-this-feature ID
+          if id == 0 || scores.get(&id).is_some_and(|best| *best >= score){ continue }
+
+          if let Some(name) = record.string(table.string_data()).ok()
+            .map(|name| name.to_string())
             .filter(|name| !name.is_empty()){
-              names.insert(record.name_id, name);
+              scores.insert(id, score);
+              names.insert(id, name);
           }
         }
       }

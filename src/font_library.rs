@@ -29,13 +29,6 @@ use write_fonts::{
     maxp::Maxp, name::{Name, NameRecord}, os2::{Os2, SelectionFlags}, post::Post,
   },
 };
-use allsorts::{
-  binary::read::ReadScope,
-  subset::whole_font,
-  tables::FontTableProvider,
-  woff::WoffFont,
-  woff2::Woff2Font,
-};
 
 thread_local!( static LIBRARY: OnceLock<RefCell<FontLibrary>> = const{ OnceLock::new() }; );
 
@@ -241,32 +234,11 @@ impl FontLibrary{
   fn load_font(&self, path:&Path) -> Result<Typeface, String>{
     let bytes = fs::read(path).map_err(|why| format!("{}: \"{}\"", why, path.display()))?;
 
-    // TEMPORARY WORKAROUND: decode woff/woff2 to sfnt
-    //
-    // originally only Windows needed this since it's the one platform that lacks built-in
-    // support, but there is a use-after-free bug for woffs in harfbuzz versions <14.4.0
-    // (including the one skia bundles as of m153)
-    //
-    // go back to using #[cfg(target_os = "windows")] when skia's harfbuzz is upgraded
-    let bytes = {
-      fn decode_woff(bytes:&Vec<u8>) -> Option<Vec<u8>>{
-        let woff = ReadScope::new(bytes).read::<WoffFont>().ok()?;
-        let tags = woff.table_tags()?;
-        whole_font(&woff, &tags).ok()
-      }
-
-      fn decode_woff2(bytes:&Vec<u8>) -> Option<Vec<u8>>{
-        let woff2 = ReadScope::new(bytes).read::<Woff2Font>().ok()?;
-        let tables = woff2.table_provider(0).ok()?;
-        let tags = tables.table_tags()?;
-        whole_font(&tables, &tags).ok()
-      }
-
-      match path.to_string_lossy().to_ascii_lowercase(){
-        name if name.ends_with(".woff") => decode_woff(&bytes),
-        name if name.ends_with(".woff2") => decode_woff2(&bytes),
-        _ => None
-      }
+    // if woff/woff2, decode to sfnt
+    let bytes = match path.to_string_lossy().to_ascii_lowercase(){
+      name if name.ends_with(".woff") => wuff::decompress_woff1(&bytes).ok(),
+      name if name.ends_with(".woff2") => wuff::decompress_woff2(&bytes).ok(),
+      _ => None
     }.unwrap_or(bytes);
 
     self.mgr.new_from_bytes(&bytes, None)
