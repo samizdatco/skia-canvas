@@ -496,23 +496,29 @@ impl Context2D{
         let expanded_bounds = stencil.bounds().with_outset(tile.spacing() * 1.5);
         let enclosing_frame = Path::rect(expanded_bounds, None);
 
-        if tile.use_clip(){
-          // apply the user path as a clipping mask and fill the whole enclosing rect with tile pattern
-          canvas.save();
-          canvas.clip_path(&stencil, Some(ClipOp::Intersect), Some(true));
-          canvas.draw_path(&enclosing_frame, &tile_paint);
-          canvas.restore();
-        }else{
-          // create a path merging the the tile pattern outlines and the enclosing rectangle
-          let mut textured_frame = PathBuilder::new();
-          fill_path_with_paint(&enclosing_frame, &tile_paint, &mut textured_frame, None, None);
-          let textured_frame = textured_frame.detach();
+        // if outlining, intersect the user path with the tile pattern's outlines
+        let outlined = match tile.use_clip(){
+          true => None,
+          false => {
+            let mut textured_frame = PathBuilder::new();
+            fill_path_with_paint(&enclosing_frame, &tile_paint, &mut textured_frame, None, None);
+            stencil.op(&textured_frame.detach(), PathOp::Intersect) // may fail with None
+          }
+        };
 
-          // intersect the rectangular texture with the user path and fill with flat color
-          let mut fill_paint = paint.clone();
-          fill_paint.set_style(PaintStyle::Fill);
-          if let Some(fill_path) = stencil.op(&textured_frame, PathOp::Intersect){
+        match outlined{
+          Some(fill_path) => {
+            // fill the intersection with flat color (omitting the path effect that was already baked into the stencil)
+            let mut fill_paint = paint.clone();
+            fill_paint.set_style(PaintStyle::Fill).set_path_effect(None);
             canvas.draw_path(&fill_path, &fill_paint);
+          }
+          None => {
+            // apply the user path as a clipping mask and fill the whole enclosing rect with tile pattern
+            canvas.save();
+            canvas.clip_path(&stencil, Some(ClipOp::Intersect), Some(true));
+            canvas.draw_path(&enclosing_frame, &tile_paint);
+            canvas.restore();
           }
         }
       }else{
