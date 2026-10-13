@@ -20,12 +20,12 @@ use skia_safe::{
 use kurbo::{Affine, BezPath, Cap, Join, PathEl, Shape};
 use smallvec::smallvec;
 use hayro_interpret::{
-  BlendMode, CacheKey, ClipPath, Device, FillRule, GlyphDrawMode, Image, ImageData,
-  InterpreterCache, InterpreterSettings, LumaData, MaskType, Paint, PathDrawMode, SoftMask,
+  BlendMode, CacheKey, ClipPath, Device, DrawMode, DrawProps, FillRule, Image, ImageData,
+  ImageDrawProps, InterpreterCache, InterpreterSettings, LumaData, MaskType, Paint, SoftMask,
   StrokeProps, interpret_page,
   Context as PdfContext,
   color::AlphaColor,
-  font::{FontData, Glyph, OutlineGlyph},
+  font::{FontData, Glyph, GlyphRun as PdfGlyphRun, OutlineGlyph},
   hayro_cmap::BfString,
   hayro_syntax::{
     Pdf, page::Page as PdfPage,
@@ -110,84 +110,53 @@ struct PictureDevice<'a, 'c>{
   pdf: &'a Pdf,                           // the document, for locating the font programs hayro withholds
   fonts: Rc<DocumentFonts>,               // parsed fonts, shared with the rest of the document (and later loads of it)
   run: Option<GlyphRun<'a>>,              // glyphs accumulated for the pending text run
+  in_type3: bool,                         // drawing a Type3 glyph's primitives (whose mask & blend are applied to the glyph as a whole)
 }
 
 impl<'a, 'c> PictureDevice<'a, 'c>{
   fn new(canvas:&'c SkCanvas, pdf:&'a Pdf, fonts:Rc<DocumentFonts>) -> Self{
     PictureDevice{
-      canvas, mask:None, blend:BlendMode::Normal, groups:vec![], pdf, fonts, run:None
+      canvas, mask:None, blend:BlendMode::Normal, groups:vec![], pdf, fonts, run:None, in_type3:false
     }
   }
 }
 
 impl<'a> Device<'a> for PictureDevice<'a, '_>{
-  fn set_soft_mask(&mut self, mask:Option<SoftMask<'a>>){
-    if self.mask != mask{
-      self.flush_glyphs();
-      if mask.is_some(){ self.flush_groups() } // masked draws can see the group's isolation
-      self.mask = mask;
+  fn draw_path(&mut self, path:&BezPath, props:DrawProps<'a>, draw_mode:&DrawMode){
+    match draw_mode{
+      DrawMode::Invisible => return,
+      DrawMode::FillAndStroke(rule, stroke) => {
+        self.draw_path(path, props.clone(), &DrawMode::Fill(*rule));
+        return self.draw_path(path, props, &DrawMode::Stroke(stroke.clone()));
+      }
+      _ => {}
     }
-  }
-
-  fn set_blend_mode(&mut self, blend:BlendMode){
-    if self.blend != blend{
-      self.flush_glyphs();
-      if !matches!(blend, BlendMode::Normal){ self.flush_groups() } // so can non-SrcOver ones
-      self.blend = blend;
-    }
-  }
-
-  fn draw_path(&mut self, path:&BezPath, transform:Affine, paint:&Paint<'a>, draw_mode:&PathDrawMode){
     self.flush_glyphs();
+    self.set_compositing(props.soft_mask, props.blend_mode);
+    let (transform, paint) = (props.transform, &props.paint);
     self.with_compositing(|| Some(path_bounds(path, transform, draw_mode)), |dev| dev.draw_bez_path(path, transform, paint, draw_mode));
   }
 
-  fn draw_glyph(&mut self, glyph:&Glyph<'a>, transform:Affine, glyph_transform:Affine, paint:&Paint<'a>, draw_mode:&GlyphDrawMode){
-    if matches!(draw_mode, GlyphDrawMode::Invisible){ return }
+  fn draw_glyph_run(&mut self, glyph_run:&PdfGlyphRun<'_, 'a>, props:DrawProps<'a>, draw_mode:&DrawMode){
     let stroke = match draw_mode{
-      GlyphDrawMode::Stroke(props) => Some(props.clone()),
-      _ => None,
+      DrawMode::Fill(_) => None,
+      DrawMode::Stroke(stroke) => Some(stroke.clone()),
+      DrawMode::Invisible => return,
+      DrawMode::FillAndStroke(rule, stroke) => {
+        self.draw_glyph_run(glyph_run, props.clone(), &DrawMode::Fill(*rule));
+        return self.draw_glyph_run(glyph_run, props, &DrawMode::Stroke(stroke.clone()));
+      }
     };
-
-    // check whether the next glyph is compatible with being batched into a text-run
-    if let Glyph::Outline(outline) = glyph
-      && let Some((font, glyph_id, position, orientation)) = self.run_glyph(outline, glyph_transform)
-    {
-      // append compatible glyphs onto the pending TextBlob
-      let transform = transform * orientation;
-      if !self.run.as_ref().is_some_and(|run| run.accepts(&font, transform, paint, &stroke)){
-        self.flush_glyphs(); // flush & clear the run if the font, size, paint, draw mode, or text-transform changed
-      }
-      let run = self.run.get_or_insert_with(|| GlyphRun::new(font, transform, paint, stroke));
-      run.push(glyph_id, position, outline.as_unicode());
-    }else{
-      // if not-batchable, draw the glyph individually
-      self.flush_glyphs();
-      match glyph{
-        Glyph::Outline(outline) => {
-          // trace the glyph as a path with glyph_transform baked in, so only the text-transform scales the stroke
-          let path = glyph_transform * outline.outline();
-          let path_mode = stroke.map(PathDrawMode::Stroke).unwrap_or(PathDrawMode::Fill(FillRule::NonZero));
-          self.with_compositing(
-            || Some(path_bounds(&path, transform, &path_mode)),
-            |dev| dev.draw_bez_path(&path, transform, paint, &path_mode),
-          );
-        }
-        Glyph::Type3(glyph) => {
-          self.with_compositing(
-            || None, // hayro doesn't expose the Type3 bbox
-            |dev| {
-              glyph.interpret(dev, transform, glyph_transform, paint);
-              dev.flush_glyphs();
-            }
-          );
-        }
-      }
+    self.set_compositing(props.soft_mask, props.blend_mode);
+    for glyph in glyph_run.glyphs(){
+      self.draw_glyph(glyph, props.transform, glyph.transform(), &props.paint, &stroke);
     }
   }
 
-  fn draw_image(&mut self, image:Image<'a, '_>, transform:Affine){
+  fn draw_image(&mut self, image:Image<'a, '_>, props:ImageDrawProps<'a>){
     self.flush_glyphs();
+    self.set_compositing(props.soft_mask, props.blend_mode);
+    let transform = props.transform;
     match image{
       Image::Raster(raster) => raster.with_rgba(|data, alpha| {
         let extent = image_bounds(data.width(), data.height(), data.scale_factors(), transform);
@@ -209,7 +178,7 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
     self.canvas.clip_path(&sk_path, None, true);
   }
 
-  fn pop_clip_path(&mut self){
+  fn pop_clip(&mut self){
     self.flush_glyphs();
     self.canvas.restore();
   }
@@ -235,6 +204,61 @@ impl<'a> Device<'a> for PictureDevice<'a, '_>{
 }
 
 impl<'a> PictureDevice<'a, '_>{
+  // adopt the soft mask & blend mode that accompany each draw
+  fn set_compositing(&mut self, mask:Option<SoftMask<'a>>, blend:BlendMode){
+    if self.in_type3{ return } // a Type3 glyph's mask & blend apply to it as a whole
+    if self.mask != mask{
+      self.flush_glyphs();
+      if mask.is_some(){ self.flush_groups() } // masked draws can see the group's isolation
+      self.mask = mask;
+    }
+    if self.blend != blend{
+      self.flush_glyphs();
+      if !matches!(blend, BlendMode::Normal){ self.flush_groups() } // so can non-SrcOver ones
+      self.blend = blend;
+    }
+  }
+
+  fn draw_glyph(&mut self, glyph:&Glyph<'a>, transform:Affine, glyph_transform:Affine, paint:&Paint<'a>, stroke:&Option<StrokeProps>){
+    // check whether the next glyph is compatible with being batched into a text-run
+    if let Glyph::Outline(outline) = glyph
+      && let Some((font, glyph_id, position, orientation)) = self.run_glyph(outline, glyph_transform)
+    {
+      // append compatible glyphs onto the pending TextBlob
+      let transform = transform * orientation;
+      if !self.run.as_ref().is_some_and(|run| run.accepts(&font, transform, paint, stroke)){
+        self.flush_glyphs(); // flush & clear the run if the font, size, paint, draw mode, or text-transform changed
+      }
+      let run = self.run.get_or_insert_with(|| GlyphRun::new(font, transform, paint, stroke.clone()));
+      run.push(glyph_id, position, outline.as_unicode());
+    }else{
+      // if not-batchable, draw the glyph individually
+      self.flush_glyphs();
+      match glyph{
+        Glyph::Outline(outline) => {
+          // trace the glyph as a path with glyph_transform baked in, so only the text-transform scales the stroke
+          let path = glyph_transform * outline.outline();
+          let path_mode = stroke.clone().map(DrawMode::Stroke).unwrap_or(DrawMode::Fill(FillRule::NonZero));
+          self.with_compositing(
+            || Some(path_bounds(&path, transform, &path_mode)),
+            |dev| dev.draw_bez_path(&path, transform, paint, &path_mode),
+          );
+        }
+        Glyph::Type3(glyph) => {
+          self.with_compositing(
+            || None, // hayro doesn't expose the Type3 bbox
+            |dev| {
+              let outer = std::mem::replace(&mut dev.in_type3, true);
+              glyph.interpret(dev, transform, glyph_transform, paint);
+              dev.flush_glyphs();
+              dev.in_type3 = outer;
+            }
+          );
+        }
+      }
+    }
+  }
+
   // every draw starts with AA enabled and uses the current blend mode
   fn base_paint(&self) -> SkPaint{
     let mut paint = blend_paint(blend_mode(self.blend));
@@ -415,14 +439,15 @@ impl<'a> PictureDevice<'a, '_>{
     Some(sk_paint)
   }
 
-  fn draw_bez_path(&mut self, path:&BezPath, transform:Affine, paint:&Paint<'a>, draw_mode:&PathDrawMode){
+  fn draw_bez_path(&mut self, path:&BezPath, transform:Affine, paint:&Paint<'a>, draw_mode:&DrawMode){
     let device_bounds = || path_bounds(path, transform, draw_mode);
-    let is_stroke = matches!(draw_mode, PathDrawMode::Stroke(_));
+    let is_stroke = matches!(draw_mode, DrawMode::Stroke(_));
     let Some(mut sk_paint) = self.paint_for(paint, transform, is_stroke, device_bounds) else { return };
     let mut sk_path = skia_path(path);
     match draw_mode{
-      PathDrawMode::Fill(rule) => { sk_path.set_fill_type(fill_type(*rule)); }
-      PathDrawMode::Stroke(props) => { stroke_paint(&mut sk_paint, props); }
+      DrawMode::Fill(rule) => { sk_path.set_fill_type(fill_type(*rule)); }
+      DrawMode::Stroke(props) => { stroke_paint(&mut sk_paint, props); }
+      DrawMode::FillAndStroke(..) | DrawMode::Invisible => return, // split or skipped by `draw_path`
     }
 
     self.with_ctm(transform, |dev|{
@@ -741,9 +766,9 @@ fn unhinted_font(typeface:Typeface, size:f32) -> SkFont{
 
 
 // the page-space rect a path covers (stroke width included)
-fn path_bounds(path:&BezPath, transform:Affine, draw_mode:&PathDrawMode) -> kurbo::Rect{
+fn path_bounds(path:&BezPath, transform:Affine, draw_mode:&DrawMode) -> kurbo::Rect{
   let mut bounds = path.bounding_box();
-  if let PathDrawMode::Stroke(props) = draw_mode{
+  if let DrawMode::Stroke(props) | DrawMode::FillAndStroke(_, props) = draw_mode{
     bounds = bounds.inflate(props.line_width as f64, props.line_width as f64);
   }
   map_rect(transform, bounds)
@@ -865,7 +890,7 @@ fn sweep_shader(pattern:&ShadingPattern, ctm:Affine) -> Option<Shader>{
 
 // emulate hayro's color-handling/effect-ordering so our live gradients match its rasterizations
 fn shading_color(pattern:&ShadingPattern, value:&[f32]) -> Color4f{
-  let mut components = pattern.shading.color_space.to_rgba(value, 1.0, false).components();
+  let mut components = pattern.shading.color_space.to_rgba(value, 1.0).components();
   components[3] *= pattern.opacity;
   if let Some(tf) = &pattern.transfer_function{
     components = tf.apply(&AlphaColor::new(components)).components();
