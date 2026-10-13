@@ -995,25 +995,15 @@ fn sampled_shader(pattern:&ShadingPattern, ctm:Affine, device_bounds:kurbo::Rect
   let (width, height) = ((px_x.ceil() as i32).max(1), (px_y.ceil() as i32).max(1));
   let (scale_x, scale_y) = (width as f64 / extent_x, height as f64 / extent_y);
 
-  let encoded = pattern.encode();
-  let mut rgba:Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
-  for y in 0..height{
-    for x in 0..width{
-      let pos = encoded.base_transform * kurbo::Point::new(
-        device_bounds.x0 + (x as f64 + 0.5) / scale_x,
-        device_bounds.y0 + (y as f64 + 0.5) / scale_y,
-      );
-      rgba.extend(encoded.sample(pos).map(|c| (c.clamp(0.0, 1.0) * 255.0 + 0.5) as u8));
-    }
-  }
+  // fold the per-axis pixel scale into the pattern so it can be sampled on a unit grid
+  let to_device = Affine::translate((device_bounds.x0, device_bounds.y0)) * Affine::scale_non_uniform(1.0 / scale_x, 1.0 / scale_y);
+  let mut encoded = pattern.encode();
+  encoded.base_transform *= to_device;
+  let texture = encoded.render_texture(kurbo::Rect::new(0.0, 0.0, width as f64, height as f64), 1.0);
 
   // wrap the resulting raster in an image shader
-  let image = rgba_image(rgba, width as u32, height as u32)?;
-  let local_matrix = skia_matrix(
-    ctm.inverse()
-      * Affine::translate((device_bounds.x0, device_bounds.y0))
-      * Affine::scale_non_uniform(1.0 / scale_x, 1.0 / scale_y)
-  );
+  let image = rgba_image(texture.data, texture.width, texture.height)?;
+  let local_matrix = skia_matrix(ctm.inverse() * to_device);
   image.to_shader(
     Some((TileMode::Decal, TileMode::Decal)),
     SamplingOptions::from(FilterMode::Linear),
@@ -1050,7 +1040,7 @@ fn kurbo_rect(rect:SkRect) -> kurbo::Rect{
 
 // the device-space bounding box of a rect drawn under the given transform
 fn map_rect(transform:Affine, rect:kurbo::Rect) -> kurbo::Rect{
-  (transform * rect.to_path(0.1)).bounding_box()
+  transform.transform_rect_bbox(rect)
 }
 
 fn skia_matrix(affine:Affine) -> Matrix{
