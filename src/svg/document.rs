@@ -1,10 +1,11 @@
 use std::borrow::Cow;
 use skia_safe::{Data, Picture, PictureRecorder, Rect, Size, svg::{self, Length, LengthUnit}};
+use super::stylesheet;
 use crate::font_library::FontLibrary;
 
 // parse svg data and return it as a Picture along with its dimensions and an autosized flag
 // (fit_view_box=true will use the viewBox dimensions verbatim rather than autosizing)
-pub fn read_image(data:&Data, fit_view_box:bool) -> Option<(Picture, Size, bool)>{
+pub fn read_document(data:&Data, fit_view_box:bool) -> Option<(Picture, Size, bool)>{
   // resolve any <style> CSS first, since Skia's SVG DOM ignores it
   let mut dom = svg::Dom::try_from(StyledSvg::from_data(data)).ok()?;
   let root = dom.root();
@@ -86,7 +87,7 @@ impl<'a> StyledSvg<'a> {
         if let Some(t) = child.text() { css.push_str(t); css.push('\n'); }
       }
     }
-    let sheet = simplecss::StyleSheet::parse(&css);
+    let sheet = stylesheet::StyleSheet::parse(&css);
     if sheet.rules.is_empty() {
       return Self(Cow::Borrowed(svg));
     }
@@ -125,7 +126,7 @@ impl<'a> TryFrom<StyledSvg<'a>> for svg::Dom {
 
 
 #[derive(Clone, Copy)]
-struct StyleNode<'a, 'input>(roxmltree::Node<'a, 'input>); // a simplecss-compatible roxml node
+struct StyleNode<'a, 'input>(roxmltree::Node<'a, 'input>); // a `stylesheet::Element`-compatible roxml node
 type Edit = (usize, usize, String); // a single splice operation (start, end, replacement)
 
 impl<'a, 'input> StyleNode<'a, 'input> {
@@ -166,7 +167,7 @@ impl<'a, 'input> StyleNode<'a, 'input> {
   }
 }
 
-impl simplecss::Element for StyleNode<'_, '_> {
+impl stylesheet::Element for StyleNode<'_, '_> {
   fn parent_element(&self) -> Option<Self> {
     self.0.parent_element().map(StyleNode)
   }
@@ -182,10 +183,10 @@ impl simplecss::Element for StyleNode<'_, '_> {
   fn local_name(&self) -> &str {
     self.0.tag_name().name()
   }
-  fn attribute_matches(&self, local_name: &str, operator: simplecss::AttributeOperator) -> bool {
+  fn attribute_matches(&self, local_name: &str, operator: stylesheet::AttributeOperator) -> bool {
     self.0.attribute(local_name).is_some_and(|v| operator.matches(v))
   }
-  fn pseudo_class_matches(&self, _class: simplecss::PseudoClass) -> bool {
+  fn pseudo_class_matches(&self, _class: stylesheet::PseudoClass) -> bool {
     false // ignore :hover/:focus/:target/etc.
   }
 }

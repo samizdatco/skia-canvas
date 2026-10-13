@@ -29,44 +29,10 @@ Since it's very simple we will start with limitations:
 - No unsafe.
 */
 
-// LINEBENDER LINT SET - lib.rs - v2
-// See https://linebender.org/wiki/canonical-lints/
-// These lints aren't included in Cargo.toml because they
-// shouldn't apply to examples and tests
-#![warn(unused_crate_dependencies)]
-#![warn(clippy::print_stdout, clippy::print_stderr)]
-// Targeting e.g. 32-bit means structs containing usize can give false positives for 64-bit.
-#![cfg_attr(target_pointer_width = "64", warn(clippy::trivially_copy_pass_by_ref))]
-// END LINEBENDER LINT SET
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
-// The following lints are part of the Linebender standard set,
-// but resolving them has been deferred for now.
-// Feel free to send a PR that solves one or more of these.
-#![allow(
-    missing_debug_implementations,
-    unreachable_pub,
-    clippy::use_self,
-    clippy::missing_assert_message,
-    clippy::missing_panics_doc,
-    clippy::exhaustive_enums,
-    clippy::unseparated_literal_suffix
-)]
-#![cfg_attr(test, allow(unused_crate_dependencies))] // Some dev dependencies are only used in tests
+use std::{collections::BTreeMap, fmt};
 
-extern crate alloc;
-
-// skia-canvas: BTreeMap/String/format are used by StyleSheet::resolve_inline (below)
-use alloc::{collections::BTreeMap, format, string::String, vec::Vec};
-use core::fmt;
-
-use log::warn;
-
-mod selector;
-mod stream;
-
-pub use selector::*;
-use stream::Stream;
+pub use super::selector::*;
+use super::stream::Stream;
 
 /// A list of possible errors.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -154,7 +120,6 @@ impl fmt::Display for Error {
     }
 }
 
-#[cfg(feature = "std")]
 impl std::error::Error for Error {}
 
 /// A position in text.
@@ -244,9 +209,6 @@ impl<'a> StyleSheet<'a> {
             let _ = consume_statement(&mut s, &mut self.rules);
         }
 
-        if !s.at_end() {
-            warn!("{} bytes were left.", s.slice_tail().len());
-        }
 
         // Remove empty rules.
         self.rules.retain(|rule| !rule.declarations.is_empty());
@@ -480,8 +442,7 @@ fn consume_statement<'a>(s: &mut Stream<'a>, rules: &mut Vec<Rule<'a>>) -> Resul
 }
 
 fn consume_at_rule(s: &mut Stream<'_>) -> Result<(), Error> {
-    let ident = s.consume_ident()?;
-    warn!("The @{} rule is not supported. Skipped.", ident);
+    s.consume_ident()?;
 
     s.skip_bytes(|c| c != b';' && c != b'{');
 
@@ -623,7 +584,7 @@ fn recover_declaration(s: &mut Stream<'_>, stop_at_brace: bool) {
 /// # Example
 ///
 /// ```
-/// use simplecss::{DeclarationTokenizer, Declaration};
+/// use crate::svg::stylesheet::{DeclarationTokenizer, Declaration};
 ///
 /// let mut t = DeclarationTokenizer::from("background: url(\"img.png\"); color:red !important");
 /// assert_eq!(t.next().unwrap(), Declaration { name: "background", value: "url(\"img.png\")", important: false });

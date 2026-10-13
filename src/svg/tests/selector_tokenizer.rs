@@ -3,7 +3,7 @@
 
 //! Selector Tokenizer
 
-use simplecss::*;
+use crate::svg::stylesheet::*;
 
 macro_rules! tokenize {
     ($name:ident, $text:expr, $( $token:expr ),*) => (

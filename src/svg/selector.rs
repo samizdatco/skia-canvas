@@ -1,13 +1,11 @@
 // Copyright 2019 the SimpleCSS Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use alloc::{string::String, vec, vec::Vec};
-use core::fmt;
+use std::fmt;
 
-use log::warn;
 
-use crate::stream::Stream;
-use crate::Error;
+use super::stream::Stream;
+use super::stylesheet::Error;
 
 /// An attribute selector operator.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -445,10 +443,7 @@ pub(crate) fn parse(text: &str) -> (Option<Selector<'_>>, usize) {
 
         let token = match token {
             Ok(t) => t,
-            Err(e) => {
-                warn!("Selector parsing failed cause {}.", e);
-                return (None, tokenizer.stream.pos());
-            }
+            Err(_) => return (None, tokenizer.stream.pos()),
         };
 
         match token {
@@ -506,7 +501,6 @@ pub(crate) fn parse(text: &str) -> (Option<Selector<'_>>, usize) {
                     // never-matching subselector so the rule and its grouped siblings survive,
                     // rather than dropping the whole selector as upstream did.
                     _ => {
-                        warn!("':{}' is not supported; treated as never-matching.", ident);
                         PseudoClass::Unsupported(ident)
                     }
                 };
@@ -702,7 +696,7 @@ pub enum SelectorToken<'a> {
 /// # Example
 ///
 /// ```
-/// use simplecss::{SelectorTokenizer, SelectorToken};
+/// use crate::svg::stylesheet::{SelectorTokenizer, SelectorToken};
 ///
 /// let mut t = SelectorTokenizer::from("div > p:first-child");
 /// assert_eq!(t.next().unwrap().unwrap(), SelectorToken::TypeSelector("div"));

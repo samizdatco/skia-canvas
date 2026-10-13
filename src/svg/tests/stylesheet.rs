@@ -3,7 +3,7 @@
 
 //! Stylesheet
 
-use simplecss::*;
+use crate::svg::stylesheet::*;
 
 #[test]
 fn style_01() {

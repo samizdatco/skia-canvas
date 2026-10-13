@@ -3,7 +3,7 @@
 
 //! Select
 
-use simplecss::*;
+use crate::svg::stylesheet::*;
 
 struct XmlNode<'a, 'input: 'a>(roxmltree::Node<'a, 'input>);
 

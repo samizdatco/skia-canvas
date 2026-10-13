@@ -240,7 +240,7 @@ pub fn set_data<'a>(mut cx: FunctionContext<'a>) -> NeonResult<Handle<'a, JsBool
       Some((picture, size)) => Content::Vector(picture, size, ColorSpace::new_srgb()), // hayro only supports sRGB
       None => Content::Broken
     }
-  }else if let Some((picture, size, autosized)) = svg::read_image(&data, fit_view_box){
+  }else if let Some((picture, size, autosized)) = svg::read_document(&data, fit_view_box){
     // Finally, try parsing as SVG
     this.autosized = autosized;
     Content::Vector(picture, size, ColorSpace::new_srgb()) // skia only parses sRGB

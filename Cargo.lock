@@ -1939,13 +1939,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea"
 
 [[package]]
-name = "simplecss"
-version = "0.2.2"
-dependencies = [
- "log",
-]
-
-[[package]]
 name = "siphasher"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1999,7 +1992,6 @@ dependencies = [
  "roxmltree",
  "serde",
  "serde_json",
- "simplecss",
  "skia-safe",
  "smallvec",
  "spin_sleep",

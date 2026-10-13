@@ -6,7 +6,6 @@
 lib/*.node
 node_modules
 target
-vendor/simplecss/Cargo.lock
 tests/assets/fonts/oswald
 tests/assets/fonts/raleway
 

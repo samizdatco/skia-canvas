@@ -1,9 +1,9 @@
 // Copyright 2016 the SimpleCSS Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-use core::str;
+use std::str;
 
-use crate::{Error, TextPos};
+use super::stylesheet::{Error, TextPos};
 
 trait CssCharExt {
     fn is_name_start(&self) -> bool;
@@ -290,7 +290,7 @@ impl<'a> Stream<'a> {
     #[inline(never)]
     pub fn gen_text_pos_from(&self, pos: usize) -> TextPos {
         let mut s = *self;
-        s.pos = core::cmp::min(pos, self.text.len());
+        s.pos = std::cmp::min(pos, self.text.len());
         s.gen_text_pos()
     }
 

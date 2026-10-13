@@ -3,7 +3,7 @@
 
 //! Specificity
 
-use simplecss::*;
+use crate::svg::stylesheet::*;
 
 #[test]
 fn spec_01() {
