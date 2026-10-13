@@ -184,7 +184,8 @@ impl stylesheet::Element for StyleNode<'_, '_> {
     self.0.tag_name().name()
   }
   fn attribute_matches(&self, local_name: &str, operator: stylesheet::AttributeOperator) -> bool {
-    self.0.attribute(local_name).is_some_and(|v| operator.matches(v))
+    // unprefixed css attribute selectors should only match unnamespaced attributes
+    self.0.attributes().any(|a| a.namespace().is_none() && a.name() == local_name && operator.matches(a.value()))
   }
   fn pseudo_class_matches(&self, _class: stylesheet::PseudoClass) -> bool {
     false // ignore :hover/:focus/:target/etc.

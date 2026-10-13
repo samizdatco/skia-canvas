@@ -360,6 +360,19 @@ describe("Image", () => {
       }
     })
 
+    test("namespaced attributes", async () => {
+      // unprefixed selectors (incl. .class & #id) only match attributes outside any namespace
+      const cases = {
+        '[a=v]':  `<style>[data-k="1"]{fill:${GREEN}}</style><rect xmlns:x="urn:x" x:data-k="1" width="40" height="40"/>`,
+        '.class': `<style>.p{fill:${GREEN}}</style><rect xmlns:x="urn:x" x:class="p" width="40" height="40"/>`,
+        '#id':    `<style>#r{fill:${GREEN}}</style><rect xmlns:x="urn:x" x:id="r" width="40" height="40"/>`,
+        '[href]': `<style>[href="#a"]{fill:${GREEN}}</style><rect xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="#a" width="40" height="40"/>`,
+      }
+      for (const [name, body] of Object.entries(cases)){
+        assert(!isGreen(await render(body)), `${name} selector matched a namespaced attribute`)
+      }
+    })
+
     test("adjacent-sibling combinator (+)", async () => {
       // adjacent-sibling `rect + rect` targets only the SECOND of two stacked rects
       let adj = `<style>rect+rect{fill:${GREEN}}</style>` +
