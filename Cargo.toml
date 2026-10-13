@@ -22,7 +22,7 @@ window = ["dep:winit", "dep:spin_sleep", "dep:drm", "dep:objc2-core-foundation",
 [dependencies]
 neon = { version = "1.0", features = ["sys"] }
 libc = "0.2"
-libloading = "0.8"
+libloading = "0.9"
 crc = "^3.0"
 color = "0.3"
 rayon = "^1.5"
@@ -54,8 +54,8 @@ vulkano = { version = "0.35.2", optional = true }
 
 # metal
 objc2 = { version = "0.6", optional = true }
-objc2-metal = { version = "0.3", optional = true, default-features = false, features = ["std", "MTLDevice", "MTLCommandQueue", "MTLCommandBuffer", "MTLDrawable", "MTLPixelFormat", "MTLTexture"] }
-objc2-quartz-core = { version = "0.3", optional = true, default-features = false, features = ["std", "CALayer", "CAMetalLayer", "objc2-metal", "objc2-core-foundation"] }
+objc2-metal = { version = "0.3.2", optional = true, default-features = false, features = ["std", "MTLDevice", "MTLCommandQueue", "MTLCommandBuffer", "MTLDrawable", "MTLPixelFormat", "MTLTexture"] }
+objc2-quartz-core = { version = "0.3.2", optional = true, default-features = false, features = ["std", "CALayer", "CAMetalLayer", "objc2-metal", "objc2-core-foundation"] }
 raw-window-metal = { version = "1.1", optional = true }
 
 # window
@@ -71,5 +71,5 @@ drm = { version = "0.15", optional = true }
 # vblank source (CVDisplayLink), which also needs CoreVideo (+ CoreGraphics for CGDirectDisplayID)
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-core-foundation = { version = "0.3", optional = true, default-features = false, features = ["std", "CFCGTypes"] }
-objc2-core-video = { version = "0.3", optional = true, default-features = false, features = ["std", "CVBase", "CVReturn", "CVDisplayLink", "objc2-core-graphics"] }
+objc2-core-video = { version = "0.3.2", optional = true, default-features = false, features = ["std", "CVBase", "CVReturn", "CVDisplayLink", "objc2-core-graphics"] }
 objc2-core-graphics = { version = "0.3", optional = true, default-features = false, features = ["std", "CGColorSpace"] }

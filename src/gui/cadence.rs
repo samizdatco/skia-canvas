@@ -235,7 +235,7 @@ mod vblank {
 
         impl Drop for DisplayLink{
             fn drop(&mut self){
-                unsafe{ self.link.stop(); } // CFRetained releases the link itself
+                self.link.stop(); // CFRetained releases the link itself
             }
         }
 

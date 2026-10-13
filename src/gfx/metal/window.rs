@@ -92,7 +92,7 @@ impl MetalRenderer{
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         let cg_size = CGSize::new(size.width as f64, size.height as f64);
-        unsafe{ self.layer.setDrawableSize(cg_size) };
+        self.layer.setDrawableSize(cg_size);
         self.frame.start_resizing(); // invalidate the cached backdrop (shared with vulkan)
         self.resizing = true;        // …and draw the next frame synchronously
     }
@@ -124,7 +124,7 @@ pub struct MetalBackend {
 
 impl MetalBackend {
     pub fn for_layer(layer:&CAMetalLayer, color_type:ColorType) -> Self{
-        let device = unsafe{ layer.device() }.expect("Metal: layer has no device");
+        let device = layer.device().expect("Metal: layer has no device");
         let (queue, skia_ctx) = make_direct_context(&device)
             .expect("Metal: Failed to create Skia direct context");
         Self { skia_ctx, queue, color_type, color_space:to_color_space("display-p3") }
@@ -135,12 +135,12 @@ impl MetalBackend {
     {
       autoreleasepool(|_|{
         // if layer pool is exhausted, just drop the frame and try again next tick
-        let Some(drawable) = (unsafe{ layer.nextDrawable() }) else {
+        let Some(drawable) = layer.nextDrawable() else {
             return RenderOutcome::Skipped;
         };
 
         let drawable_size = {
-            let size = unsafe{ layer.drawableSize() };
+            let size = layer.drawableSize();
             Size::new(size.width as scalar, size.height as scalar)
         };
 
@@ -176,7 +176,7 @@ impl MetalBackend {
         command_buffer.commit();
 
         // during resizes, ensure drawing is complete before returning
-        if sync{ unsafe{ command_buffer.waitUntilCompleted() }; }
+        if sync{ command_buffer.waitUntilCompleted(); }
 
         // copy the frame contents (for the Frame cache) only when they'll be reused
         RenderOutcome::Rendered(snapshot.then(||
