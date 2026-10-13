@@ -1,84 +1,43 @@
 use std::borrow::Cow;
-use skia_safe::{Data, Picture, PictureRecorder, Rect, Size, svg::{self, Length, LengthUnit}};
+use skia_safe::{Data, Picture, PictureRecorder, Rect, Size, svg::{Length, LengthUnit}};
 use super::stylesheet;
 use crate::font_library::FontLibrary;
 
 // parse svg data and return it as a Picture along with its dimensions and an autosized flag
 // (fit_view_box=true will use the viewBox dimensions verbatim rather than autosizing)
 pub fn read_document(data:&Data, fit_view_box:bool) -> Option<(Picture, Size, bool)>{
-  // resolve any <style> CSS first, since Skia's SVG DOM ignores it
-  let mut dom = svg::Dom::try_from(StyledSvg::from_data(data)).ok()?;
-  let root = dom.root();
-
-  let mut size = root.intrinsic_size();
-  let mut autosized = false;
-
-  // handle files without explicit width/height dimensions
-  if size.is_empty(){
-    autosized = true;
-
-    let Length{ value:width, unit:w_unit } = root.width();
-    let Length{ value:height, unit:h_unit } = root.height();
-
-    size = match root.view_box().filter(|_| fit_view_box){
-      Some(view_box) => {
-        // `loadCanvas` prefers the viewBox dimensions since there isn't an opportunity to resize on draw
-        autosized = false;
-        (view_box.width(), view_box.height()).into()
-      }
-      None => {
-        // follow the CSS default sizing algorithm with a default object size of 300×150
-        let axis = |value:&f32, unit:&LengthUnit| matches!(unit, LengthUnit::Number).then_some(*value);
-        let (w, h) = (axis(width, w_unit), axis(height, h_unit));
-        let ratio = root.view_box().map(|vb| vb.width() / vb.height());
-        match ((w, h), ratio){
-          // one concrete axis plus a ratio fully determines an intrinsic size
-          ((Some(w), None), Some(r)) => { autosized = false; (w, w / r).into() }
-          ((None, Some(h)), Some(r)) => { autosized = false; (h * r, h).into() }
-          // otherwise at least one axis falls back to the default object size, so `autosized`
-          // stays set and the draw/pattern calls scale the whole box to fit the canvas
-          ((Some(w), None), None)    => (w, 150.0).into(),
-          ((None, Some(h)), None)    => (300.0, h).into(),
-          ((None, None),    Some(r)) => if r > 2.0 { (300.0, 300.0 / r) } else { (150.0 * r, 150.0) }.into(),
-          _                          => (300.0, 150.0).into(),
-        }
-      }
-    };
-  };
-
-  // record the SVG contents to a Picture
-  let bounds = Rect::from_size(size);
-  let mut recorder = PictureRecorder::new();
-  dom.set_container_size(bounds.size());
-  dom.render(recorder.begin_recording(bounds, true));
-  let picture = recorder.finish_recording_as_picture(None)?;
-
-  Some((picture, size, autosized))
+  let mut doc = SvgDocument::from_data(data)?;
+  let (size, autosized) = doc.size(fit_view_box);
+  Some((doc.picture(size)?, size, autosized))
 }
 
-//
-// SVG <style> tag handling
-//
-// Skia's SVG DOM ignores <style> elements and CSS selectors (it honors only presentation
-// attributes and inline style="…"), so we resolve the cascade ourselves and splice the winners
-// back in as inline styles before handing the bytes to Skia. We resolve it fully rather than
-// relying on Skia since, among other things, it discards any rule that has an `!important` keyword.
-//
-// Limitations: var() only uses 2-level scoping when looking up custom properties: it only looks in
-// `:root` and in the element's own `style` attr (not through parent <g> groups, etc.). Also, chained
-// definitions (`--a: var(--b)`) aren't supported. also, shorthand vs. longhand (font vs. font-size)
-// don't cascade against each other.
+// a parsed SVG, with any <style> rules already resolved to inline styles
+struct SvgDocument{
+  dom: skia_safe::svg::Dom,
+}
 
-struct StyledSvg<'a>(Cow<'a, [u8]>);
+impl SvgDocument{
+  fn from_data(data:&Data) -> Option<Self>{
+    let bytes = Self::inline_styles(data.as_bytes());
+    let dom = skia_safe::svg::Dom::from_bytes(&bytes, FontLibrary::with_shared(|lib| lib.font_mgr())).ok()?;
+    Some(Self{dom})
+  }
 
-impl<'a> StyledSvg<'a> {
-  fn from_data(data: &'a Data) -> Self {
-    let svg = data.as_bytes();
-    if !svg.windows(6).any(|w| w == b"<style") {
-      return Self(Cow::Borrowed(svg)); // bail out early if there are no <style> tags
+  // Skia's SVG DOM ignores <style> elements and CSS selectors (it honors only presentation
+  // attributes and inline style="…"), so we resolve the cascade ourselves and splice the winners
+  // back in as inline styles before handing the bytes to Skia. We resolve it fully rather than
+  // relying on Skia since, among other things, it discards any rule that has an `!important` keyword.
+  //
+  // Limitations: var() only uses 2-level scoping when looking up custom properties: it only looks in
+  // `:root` and in the element's own `style` attr (not through parent <g> groups, etc.). Also, chained
+  // definitions (`--a: var(--b)`) aren't supported. also, shorthand vs. longhand (font vs. font-size)
+  // don't cascade against each other.
+  fn inline_styles(bytes:&[u8]) -> Cow<'_, [u8]>{
+    if !bytes.windows(6).any(|w| w == b"<style") {
+      return Cow::Borrowed(bytes); // bail out early if there are no <style> tags
     }
-    let Ok(text) = std::str::from_utf8(svg) else { return Self(Cow::Borrowed(svg)) };
-    let Ok(doc) = roxmltree::Document::parse(text) else { return Self(Cow::Borrowed(svg)) };
+    let Ok(text) = std::str::from_utf8(bytes) else { return Cow::Borrowed(bytes) };
+    let Ok(doc) = roxmltree::Document::parse(text) else { return Cow::Borrowed(bytes) };
 
     // gather CSS from every <style> element (regardless of the namespace being used)
     let mut css = String::new();
@@ -89,7 +48,7 @@ impl<'a> StyledSvg<'a> {
     }
     let sheet = stylesheet::StyleSheet::parse(&css);
     if sheet.rules.is_empty() {
-      return Self(Cow::Borrowed(svg));
+      return Cow::Borrowed(bytes);
     }
 
     // for each element, resolve the full cascade to one keyword-stripped declaration per property,
@@ -103,7 +62,7 @@ impl<'a> StyledSvg<'a> {
       })
       .collect();
     if edits.is_empty() {
-      return Self(Cow::Borrowed(svg));
+      return Cow::Borrowed(bytes);
     }
 
     // apply the splices back-to-front so earlier offsets stay valid
@@ -112,18 +71,59 @@ impl<'a> StyledSvg<'a> {
     for (start, end, repl) in edits.into_iter().rev() {
       out.replace_range(start..end, &repl);
     }
-    Self(Cow::Owned(out.into_bytes()))
+    Cow::Owned(out.into_bytes())
+  }
+
+  // the document's dimensions and whether they were autosized from the default object size
+  fn size(&self, fit_view_box:bool) -> (Size, bool){
+    let root = self.dom.root();
+    let mut size = root.intrinsic_size();
+    let mut autosized = false;
+
+    // handle files without explicit width/height dimensions
+    if size.is_empty(){
+      autosized = true;
+
+      let Length{ value:width, unit:w_unit } = root.width();
+      let Length{ value:height, unit:h_unit } = root.height();
+
+      size = match root.view_box().filter(|_| fit_view_box){
+        Some(view_box) => {
+          // `loadCanvas` prefers the viewBox dimensions since there isn't an opportunity to resize on draw
+          autosized = false;
+          (view_box.width(), view_box.height()).into()
+        }
+        None => {
+          // follow the CSS default sizing algorithm with a default object size of 300×150
+          let axis = |value:&f32, unit:&LengthUnit| matches!(unit, LengthUnit::Number).then_some(*value);
+          let (w, h) = (axis(width, w_unit), axis(height, h_unit));
+          let ratio = root.view_box().map(|vb| vb.width() / vb.height());
+          match ((w, h), ratio){
+            // one concrete axis plus a ratio fully determines an intrinsic size
+            ((Some(w), None), Some(r)) => { autosized = false; (w, w / r).into() }
+            ((None, Some(h)), Some(r)) => { autosized = false; (h * r, h).into() }
+            // otherwise at least one axis falls back to the default object size, so `autosized`
+            // stays set and the draw/pattern calls scale the whole box to fit the canvas
+            ((Some(w), None), None)    => (w, 150.0).into(),
+            ((None, Some(h)), None)    => (300.0, h).into(),
+            ((None, None),    Some(r)) => if r > 2.0 { (300.0, 300.0 / r) } else { (150.0 * r, 150.0) }.into(),
+            _                          => (300.0, 150.0).into(),
+          }
+        }
+      };
+    }
+    (size, autosized)
+  }
+
+  // record the document to a Picture at the given size
+  fn picture(&mut self, size:Size) -> Option<Picture>{
+    let bounds = Rect::from_size(size);
+    let mut recorder = PictureRecorder::new();
+    self.dom.set_container_size(size);
+    self.dom.render(recorder.begin_recording(bounds, true));
+    recorder.finish_recording_as_picture(None)
   }
 }
-
-// build a Skia SVG DOM from the styled bytes or return Err(LoadError) if Skia can't parse it
-impl<'a> TryFrom<StyledSvg<'a>> for svg::Dom {
-  type Error = svg::LoadError;
-  fn try_from(styled: StyledSvg<'a>) -> Result<Self, Self::Error> {
-    svg::Dom::from_bytes(&styled.0, FontLibrary::with_shared(|lib| lib.font_mgr()))
-  }
-}
-
 
 #[derive(Clone, Copy)]
 struct StyleNode<'a, 'input>(roxmltree::Node<'a, 'input>); // a `stylesheet::Element`-compatible roxml node
