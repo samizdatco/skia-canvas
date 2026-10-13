@@ -309,7 +309,7 @@ Skia Canvas was tested in two modes: ‘serial’ and ‘async’. When running 
 [loadcanvas]: api/canvas.md#loadcanvas
 [ctx_colors]: api/context.md#choosing-colors
 [canvas_saving]: api/canvas.md#saving-graphics-to-files-buffers-and-strings
-[api_docs]: /api
+[api_docs]: api/index.md
 [getting_started]: getting-started.md
 [installation]: getting-started.md#installation
 [global_settings]: getting-started.md#global-settings
