@@ -3,16 +3,16 @@ use winit::event_loop::EventLoopProxy;
 use super::event::AppEvent;
 use super::window_mgr::WindowManager;
 
-// uses the hardware vblank timing to trigger renders at the js App's target fps, tracking
-// fractional frames via `credit` to match the fps on average if it doesn't divide evenly
+// uses hardware vblank timing to trigger renders at the js App's target fps, tracking
+// fractional refresh intervals via `credit` to match the fps on average if it doesn't divide evenly
 // into vblank
+
 pub struct Cadence{
     rate: u64,
     credit: f64,
-    last_tick: Option<Instant>, // None until the first tick seeds the time base
-    refresh: Duration, // cached display interval; re-read whenever the vblank source is (re)built
     needs_cleanup: bool,
-    vblank: Option<vblank::Source>,
+    clock: Clock,
+    source: Option<vblank::Source>,
 }
 
 impl Default for Cadence {
@@ -20,10 +20,9 @@ impl Default for Cadence {
         Self{
             rate: 60,
             credit: 0.0,
-            last_tick: None,
-            refresh: Duration::from_secs_f64(1.0 / 60.0), // 60Hz until the first source is built
+            clock: Clock::new(Duration::from_secs_f64(1.0 / 60.0)), // 60Hz until the first source starts
             needs_cleanup: true, // ensure at least one post-Init loop
-            vblank: None,
+            source: None,
         }
     }
 }
@@ -31,19 +30,18 @@ impl Default for Cadence {
 impl Cadence{
     // start up the vblank source if it's not already running
     pub fn run(&mut self, proxy:EventLoopProxy<AppEvent>, windows:&WindowManager){
-        if self.vblank.is_none(){
-            self.refresh = windows.refresh_interval(); // cache the current display's interval for tick()
-            self.vblank = Some(vblank::Source::start(proxy, windows));
+        if self.source.is_none(){
+            self.clock = Clock::new(windows.refresh_interval()); // pace against the current display's rate
+            self.source = Some(vblank::Source::start(proxy, windows));
 
             // on Wayland we need to kick off an initial redraw request to start ticking
             if self.is_redraw_driven(){ windows.request_redraw_all(); }
         }
     }
 
-    // stop the source and clear pacing state so restarts don't use an ancient last_tick
+    // stop the source and clear its credit (run() re-seeds the clock when it restarts)
     pub fn stop(&mut self){
-        self.vblank = None;
-        self.last_tick = None;
+        self.source = None;
         self.credit = 0.0;
     }
 
@@ -62,39 +60,76 @@ impl Cadence{
 
     // Wayland's redraw-driven mode has no thread — the RedrawRequested handler runs the cadence
     pub fn is_redraw_driven(&self) -> bool{
-        matches!(self.vblank, Some(vblank::Source::RedrawEvent))
+        matches!(self.source, Some(vblank::Source::RedrawEvent))
     }
 
     pub fn is_idle(&self) -> bool{
-        self.vblank.is_none()
+        self.source.is_none()
     }
 
-    // report whether a frame is due (based on target fps) whenever a vblank tick arrives.
-    pub fn tick(&mut self, at:Instant) -> bool{
-        // the first tick just establishes the time base (and draws immediately)
-        let Some(prev) = self.last_tick else {
-            self.last_tick = Some(at);
-            return true;
-        };
+    // report whether a frame is due (based on target fps) whenever a vblank tick arrives, adopting the
+    // display's current refresh interval if the source reported one
+    pub fn tick(&mut self, at:Instant, period:Option<Duration>) -> bool{
+        if let Some(period) = period{ self.clock.set_period(period) }
 
         // vblanks keep arriving even if the js roundtrip is too slow to support them, so only add new
         // Tick events when the vblank's timestamp isn't from multiple vblank-intervals in our past
-        if Instant::now().saturating_duration_since(at) > self.refresh.mul_f64(1.5) {
-            return false; // leave last_tick/credit untouched so the next fresh tick paces from here
+        if Instant::now().saturating_duration_since(at) > self.clock.period.mul_f64(1.5) {
+            return false; // leave the clock/credit untouched so the next fresh tick paces from here
         }
 
-        // compare the elapsed time since our last redraw to the target fps and see if it's time for another
-        let dt = at.saturating_duration_since(prev).as_secs_f64();
-        self.last_tick = Some(at);
-        self.credit += self.rate as f64 * dt;
+        // credit the target fps for the refresh intervals since the last tick (the first tick just
+        // establishes the time base and draws immediately)
+        let Some(vblanks) = self.clock.advance(at) else { return true };
+        self.credit += self.rate as f64 * self.clock.period.as_secs_f64() * vblanks;
 
-        if self.credit >= 1.0 {
+        // allow half a vblank of slack so frames land on the nearest vblank rather than the next one
+        // (otherwise timing jitter makes evenly-divisible rates like 30fps@60Hz flicker between 1v/2v/3v)
+        let slack = 0.5 * (self.rate as f64 * self.clock.period.as_secs_f64()).min(1.0);
+        if self.credit >= 1.0 - slack {
             // preserve fractional remainder so non-perfect divisions will average out
             self.credit = (self.credit - 1.0).min(1.0);
             true
         } else {
             false
         }
+    }
+}
+
+
+// counts the refresh intervals that pass between vblank ticks
+struct Clock{
+    period: Duration, // the display's nominal refresh interval
+    last: Option<Instant>, // when the previous tick arrived
+    drift: f64, // smoothed distance of ticks from whole intervals (~0 unless the period is stale)
+}
+
+const DRIFT_LIMIT: f64 = 0.05; // average fraction of a vblank that ticks may stray from whole intervals
+const DRIFT_STEP: f64 = 0.02; // the most any one tick adds to drift (so a single late tick can't pass the limit)
+
+impl Clock{
+    fn new(period:Duration) -> Self{
+        let mut clock = Self{ period:Duration::ZERO, last:None, drift:0.0 };
+        clock.set_period(period);
+        clock
+    }
+
+    // update the refresh interval (rounded to whole Hz)
+    fn set_period(&mut self, period:Duration){
+        let period = Duration::from_secs_f64(1.0 / (1.0 / period.as_secs_f64()).round().max(1.0));
+        if period != self.period{
+            self.period = period;
+            self.drift = 0.0;
+        }
+    }
+
+    // count the intervals since the last tick (None for the first one)
+    fn advance(&mut self, at:Instant) -> Option<f64>{
+        let last = self.last.replace(at)?;
+        let vblanks = at.saturating_duration_since(last).as_secs_f64() / self.period.as_secs_f64();
+        let offset = (vblanks - vblanks.round()).abs();
+        self.drift = 0.9 * self.drift + (0.1 * offset).min(DRIFT_STEP);
+        Some(if self.drift < DRIFT_LIMIT { vblanks.round() } else { vblanks })
     }
 }
 
@@ -153,10 +188,18 @@ mod vblank {
     }
 
     impl SourceThread{
-        fn spawn<F>(body:F) -> Self where F:FnOnce(Arc<AtomicBool>) + Send + 'static{
+        // wait for the next vblank then post a Tick event (including the source's period)
+        fn spawn(proxy:EventLoopProxy<AppEvent>, mut wait:impl FnMut() -> Option<Duration> + Send + 'static) -> Self{
             let running = Arc::new(AtomicBool::new(true));
             let flag = running.clone();
-            std::thread::spawn(move || body(flag));
+            std::thread::spawn(move ||{
+                while flag.load(Ordering::Relaxed){
+                    let period = wait();
+                    if proxy.send_event(AppEvent::Tick{ at: Instant::now(), period }).is_err(){
+                        break // stop if the event loop has gone away
+                    }
+                }
+            });
             Self{ running }
         }
     }
@@ -169,15 +212,7 @@ mod vblank {
 
     // cross-platform fallback: sleep at the refresh interval, then post a Tick
     fn timer_thread(proxy:EventLoopProxy<AppEvent>, interval:Duration) -> SourceThread{
-        SourceThread::spawn(move |flag|{
-            while flag.load(Ordering::Relaxed){
-                spin_sleep::sleep(interval);
-                // stop spinning if the event loop has gone away
-                if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){
-                    break;
-                }
-            }
-        })
+        SourceThread::spawn(proxy, move ||{ spin_sleep::sleep(interval); None })
     }
 
     //
@@ -195,6 +230,8 @@ mod vblank {
         use objc2_core_video::{kCVReturnSuccess, CVDisplayLink, CVOptionFlags, CVReturn, CVTimeStamp};
         use winit::event_loop::EventLoopProxy;
         use crate::gui::event::AppEvent;
+
+        const VIDEO_REFRESH_PERIOD_VALID:u64 = 1 << 3; // kCVTimeStampVideoRefreshPeriodValid
 
         #[repr(C)]
         struct MachTimebaseInfo{ numer:u32, denom:u32 }
@@ -216,19 +253,23 @@ mod vblank {
                 ctx:*mut c_void, // points to the boxed proxy
             ) -> CVReturn {
                 let proxy = unsafe{ &*(ctx as *const EventLoopProxy<AppEvent>) };
+                let now = unsafe{ now.as_ref() };
+
                 // Instants can't be created from raw timestamps, so cache an initial Instant & hostTime,
                 // then return that Instant plus the (rate-scaled) delta between the current & cached hostTimes
-                let host_time = unsafe{ now.as_ref() }.hostTime;
                 static BASE:OnceLock<(Instant, u64, u32, u32)> = OnceLock::new();
                 let (base_instant, base_host, numer, denom) = *BASE.get_or_init(||{
                     let mut tb = MachTimebaseInfo{ numer:0, denom:0 };
-                    unsafe{ mach_timebase_info(&mut tb); } // record the *rate* that host_time passes at
-                    (Instant::now(), host_time, tb.numer.max(1), tb.denom.max(1))
+                    unsafe{ mach_timebase_info(&mut tb); } // record the *rate* that hostTime passes at
+                    (Instant::now(), now.hostTime, tb.numer.max(1), tb.denom.max(1))
                 });
-                let delta_ns = host_time.saturating_sub(base_host) as u128 * numer as u128 / denom as u128;
+                let delta_ns = now.hostTime.saturating_sub(base_host) as u128 * numer as u128 / denom as u128;
                 let at = base_instant + Duration::from_nanos(delta_ns as u64);
 
-                let _ = proxy.send_event(AppEvent::Tick{ at });
+                // report the current display mode's own interval so the count follows mode changes (e.g., 60↔120Hz)
+                let valid = now.flags & VIDEO_REFRESH_PERIOD_VALID != 0 && now.videoRefreshPeriod > 0 && now.videoTimeScale > 0;
+                let period = valid.then(|| Duration::from_secs_f64(now.videoRefreshPeriod as f64 / now.videoTimeScale as f64));
+                let _ = proxy.send_event(AppEvent::Tick{ at, period });
                 kCVReturnSuccess
             }
         }
@@ -267,17 +308,11 @@ mod vblank {
     //
     #[cfg(target_os = "windows")]
     pub mod windows{
-        use std::sync::atomic::Ordering;
-        use std::time::{Duration, Instant};
+        use std::time::Duration;
+        use windows_sys::Win32::Graphics::Dwm::{DwmFlush, DwmGetCompositionTimingInfo, DwmIsCompositionEnabled, DWM_TIMING_INFO};
         use winit::event_loop::EventLoopProxy;
         use crate::gui::event::AppEvent;
         use super::SourceThread;
-
-        #[link(name = "dwmapi")]
-        unsafe extern "system"{
-            fn DwmFlush() -> i32;
-            fn DwmIsCompositionEnabled(enabled:*mut i32) -> i32;
-        }
 
         pub fn start(proxy:EventLoopProxy<AppEvent>, fallback:Duration) -> Option<SourceThread>{
             // DwmFlush only tracks vblank while the compositor is running (always on for Win8+)
@@ -285,15 +320,20 @@ mod vblank {
             if unsafe{ DwmIsCompositionEnabled(&mut enabled) } != 0 || enabled == 0{
                 return None;
             }
-            Some(SourceThread::spawn(move |flag|{
-                while flag.load(Ordering::Relaxed){
-                    // block until the next DWM vblank
-                    if unsafe{ DwmFlush() } != 0{
-                        // if composition drops out mid-run sleep at the refresh interval so ticks don't stop
-                        spin_sleep::sleep(fallback);
-                    }
-                    if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){ break; }
+            Some(SourceThread::spawn(proxy, move ||{
+                // block until the next DWM vblank
+                if unsafe{ DwmFlush() } != 0{
+                    // if composition drops out mid-run, sleep at the refresh interval so ticks don't stop
+                    spin_sleep::sleep(fallback);
+                    return None;
                 }
+
+                // report the display's current refresh rate so the count follows mode changes
+                let mut info = DWM_TIMING_INFO{ cbSize:size_of::<DWM_TIMING_INFO>() as u32, ..Default::default() };
+                if unsafe{ DwmGetCompositionTimingInfo(std::ptr::null_mut(), &mut info) } != 0{ return None }
+                let rate = info.rateRefresh;
+                (rate.uiNumerator > 0 && rate.uiDenominator > 0)
+                    .then(|| Duration::from_secs_f64(rate.uiDenominator as f64 / rate.uiNumerator as f64))
             }))
         }
     }
@@ -305,8 +345,7 @@ mod vblank {
     pub mod linux{
         use std::fs::{File, OpenOptions};
         use std::os::unix::io::{AsFd, BorrowedFd};
-        use std::sync::atomic::Ordering;
-        use std::time::{Duration, Instant};
+        use std::time::Duration;
         use drm::{Device as DrmDevice, VblankWaitTarget, VblankWaitFlags};
         use winit::event_loop::EventLoopProxy;
         use crate::gui::event::AppEvent;
@@ -334,15 +373,13 @@ mod vblank {
                     Some(device)
                 })?;
 
-            Some(SourceThread::spawn(move |flag|{
-                while flag.load(Ordering::Relaxed){
-                    // block until the next vblank
-                    if device.wait_vblank(VblankWaitTarget::Relative(1), VblankWaitFlags::empty(), 0, 0).is_err(){
-                        // on error, sleep at the refresh interval so ticks don't stop
-                        spin_sleep::sleep(fallback);
-                    }
-                    if proxy.send_event(AppEvent::Tick{ at: Instant::now() }).is_err(){ break; }
+            Some(SourceThread::spawn(proxy, move ||{
+                // block until the next vblank
+                if device.wait_vblank(VblankWaitTarget::Relative(1), VblankWaitFlags::empty(), 0, 0).is_err(){
+                    // on error, sleep at the refresh interval so ticks don't stop
+                    spin_sleep::sleep(fallback);
                 }
+                None // drm doesn't report the refresh period
             }))
         }
     }

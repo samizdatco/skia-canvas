@@ -254,7 +254,7 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
                 if app.cadence.is_redraw_driven(){
                     // on wayland, this event *is* the vblank, so it's time to run the js-roundtrip
                     // (all other platforms trigger the roundtrip through AppEvent::Tick)
-                    if app.cadence.tick(Instant::now()){
+                    if app.cadence.tick(Instant::now(), None){
                         app.roundtrip(cx, With::Events); // may drop vblank need if app goes idle
                     }
                     app.windows.find(&window_id, |win|{
@@ -315,10 +315,10 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
             AppEvent::FrameRate(fps) => {
                 app.cadence.set_frame_rate(fps)
             }
-            AppEvent::Tick{ at } => {
+            AppEvent::Tick{ at, period } => {
                 // a tick arrives every vblank and the cadence decides whether it's time to present (based on target fps).
                 // if there's already a present pending it means we've fallen behind, so skip this frame.
-                if app.cadence.tick(at) && !app.windows.any_present_pending(){
+                if app.cadence.tick(at, period) && !app.windows.any_present_pending(){
                     app.roundtrip(cx, With::Events); // pauses the source if the app just went idle
                 }
             }

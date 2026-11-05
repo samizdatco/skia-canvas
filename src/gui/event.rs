@@ -8,7 +8,7 @@ use winit::{
 };
 
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use crate::gfx::page::Page;
 use super::window::WindowSpec;
 
@@ -17,7 +17,7 @@ pub enum AppEvent{
   Open(WindowSpec, Page),
   Close(u32),
   FrameRate(u64),
-  Tick{ at: Instant },
+  Tick{ at: Instant, period: Option<Duration> },
 }
 
 #[derive(Debug, Serialize)]
