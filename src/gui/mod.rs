@@ -58,8 +58,3 @@ pub fn close(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     App::close_window(token);
     Ok(cx.undefined())
 }
-
-pub fn quit(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-    App::quit();
-    Ok(cx.undefined())
-}

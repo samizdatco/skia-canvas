@@ -18,7 +18,6 @@ pub enum AppEvent{
   Close(u32),
   FrameRate(u64),
   Tick{ at: Instant },
-  Quit,
 }
 
 #[derive(Debug, Serialize)]

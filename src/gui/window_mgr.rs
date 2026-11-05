@@ -55,9 +55,6 @@ impl WindowManager {
         self.windows.retain(|win| win.spec.id != token);
     }
 
-    pub fn remove_all(&mut self){
-        self.windows.clear();
-    }
     pub fn update_window(&mut self, mut spec:WindowSpec, page:Page){
         if let Some(win) = self.windows.iter_mut().find(|win| win.spec.id == spec.id){
             if spec.width != win.spec.width || spec.height != win.spec.height {

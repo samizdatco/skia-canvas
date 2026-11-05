@@ -70,11 +70,6 @@ impl App{
         add_event(AppEvent::Close(token));
     }
 
-    pub fn quit(){
-        APP.with_borrow_mut(|app| app.windows.remove_all() );
-        add_event(AppEvent::Quit);
-    }
-
     pub fn activate(channel:Channel, deferred:neon::types::Deferred, callback:Root<JsFunction>){
         // root the js dispatch callback just for the duration of the session
         APP.with_borrow_mut(|app| app.callback = Some(callback));
@@ -307,8 +302,12 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
             AppEvent::Close(token) => {
                 app.windows.remove_by_token(token);
 
-                // closing the first window can shift which display the vblank source should pace against
-                if app.windows.main_monitor_changed() && !app.cadence.is_idle(){
+                if app.windows.is_empty(){
+                    // stop ticking and run one last event-loop pass to finish closing the windows
+                    app.cadence.stop();
+                    app.cadence.loop_again();
+                }else if app.windows.main_monitor_changed() && !app.cadence.is_idle(){
+                    // closing the first window can shift which display the vblank source should pace against
                     app.cadence.stop();
                     app.roundtrip(cx, With::Events); // rebuilds the source if still animating
                 }
@@ -322,10 +321,6 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
                 if app.cadence.tick(at) && !app.windows.any_present_pending(){
                     app.roundtrip(cx, With::Events); // pauses the source if the app just went idle
                 }
-            }
-            AppEvent::Quit => {
-                app.cadence.stop();
-                event_loop.exit();
             }
         }
     }
