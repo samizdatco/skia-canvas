@@ -267,7 +267,8 @@ impl ApplicationHandler<AppEvent> for AppHandler<'_, '_>{
                     });
                 }else{
                     // on all other platforms, only roundtrip before update if there are UI events to deliver
-                    if app.windows.has_ui_changes(){
+                    // and nothing is animating (otherwise they arrive with the next tick's frame)
+                    if app.cadence.is_idle() && app.windows.has_ui_changes(){
                         app.roundtrip(cx, With::Events);
                     }
                     app.windows.find(&window_id, |win|{ win.redraw(); });
