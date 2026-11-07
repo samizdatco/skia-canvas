@@ -14,7 +14,7 @@ description: The drawing API for a particular Canvas
 | [isPointInPath()][isPointInPath()]                                 | [strokeText()][strokeText()] / [🧪][drawText] | [createRadialGradient()][createRadialGradient()] / [🧪][gradients] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]                | [conicCurveTo() 🧪][conicCurveTo]        | [**fontInstance** 🧪][fontinstance]            | [**textBaseline**][textBaseline]                             | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
 | [isPointInStroke()][isPointInStroke()]                             | [fill()][fill()]                              | [createPattern()][createPattern()]                                 | [**lineWidth**][lineWidth]              | [transform()][transform()] / [🧪][transforms]       | [quadraticCurveTo()][quadraticCurveTo()] | [**fontSmoothing** 🧪][fontsmoothing]          | [**textDecoration** 🧪][textDecoration]                      | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
 | [save()][save()]                                                   | [stroke()][stroke()]                          | [createTexture() 🧪][createTexture()]                              | [**miterLimit**][miterLimit]            | [translate()][translate()]                          | [arc()][arc()]                           | [**fontSynthesis** 🧪][fontsynthesis]          | [**textRendering**][textRendering] / [🧪][c2d_textRendering] | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
-| [restore()][restore()]                                             |                                               | [**gradientDithering** 🧪][gradientdithering]                       | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                                | [ellipse()][ellipse()]                   | [**fontVariant** 🧪][fontvariant]              | [**textWrap** 🧪][textwrap]                                  |                                                              |                                                          |
+| [restore()][restore()]                                             |                                               |                                                                    | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                                | [ellipse()][ellipse()]                   | [**fontVariant** 🧪][fontvariant]              | [**textWrap** 🧪][textwrap]                                  |                                                              |                                                          |
 | [reset()][reset()]                                                 |                                               |                                                                    | [setLineDash()][setLineDash()]          | [scale()][scale()]                                  | [rect()][rect()]                         | [**fontFeatureSettings** 🧪][fontfeatures]     | [measureText()][measureText()] / [🧪][c2d_measuretext]       |                                                              |                                                          |
 | [clip()][clip()]                                                   |                                               |                                                                    |                                         |                                                     | [roundRect()][roundRect()]               | [**fontVariationSettings** 🧪][fontvariations] | [outlineText() 🧪][outlineText()]                            |                                                              |                                                          |
 
@@ -105,16 +105,6 @@ By default, variable fonts’ axis settings are controlled indirectly based on t
 ctx.fontVariationSettings = '"wght" 625, "opsz" 48' // semibold w/ 48pt optical size
 ctx.fontVariationSettings = {wght: 625, opsz: 48} // equivalent settings using object syntax
 ctx.fontVariationSettings = "normal" // back to the font’s defaults
-```
-
-### `.gradientDithering`
-
-Smooth [gradients][gradients] that span only a few color levels can show visible bands when rendered to an 8-bit canvas. Browsers hide this by adding a small amount of ordered noise (‘dithering’) when drawing with a gradient. Set the context’s `.gradientDithering` property to `true` to do the same, for instance when you want gradient fills to match a browser’s output pixel-for-pixel. It defaults to `false`, is saved and restored along with the rest of the context’s state, and has no effect on solid colors, patterns, or images.
-
-```js
-ctx.gradientDithering = true
-ctx.fillStyle = ctx.createLinearGradient(0, 0, 256, 0) // add some color stops…
-ctx.fillRect(0, 0, 256, 64) // the ramp is dithered
 ```
 
 ### `.textAlign`
@@ -968,7 +958,6 @@ for (let i=0; i<8000; i++){
 [fontlibrary-family]: font-library.md#family
 [fontvariant]: #fontvariant
 [fonthinting]: #fonthinting
-[gradientdithering]: #gradientdithering
 [fontinstance]: #fontinstance
 [fontsmoothing]: #fontsmoothing
 [fontsynthesis]: #fontsynthesis

@@ -593,22 +593,6 @@ pub fn putImageData(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-// -- non-standard color extensions -------------------------------------------------
-
-pub fn get_gradientDithering(mut cx: FunctionContext) -> JsResult<JsBoolean> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
-  let this = this.borrow_mut();
-  Ok(cx.boolean(this.state.gradient_dithering))
-}
-
-pub fn set_gradientDithering(mut cx: FunctionContext) -> JsResult<JsUndefined> {
-  let this = cx.argument::<BoxedContext2D>(0)?;
-  let mut this = this.borrow_mut();
-  let flag = bool_arg(&mut cx, 1, "gradientDithering")?;
-  this.state.gradient_dithering = flag;
-  Ok(cx.undefined())
-}
-
 // -- image properties --------------------------------------------------------------
 
 pub fn get_imageSmoothingEnabled(mut cx: FunctionContext) -> JsResult<JsBoolean> {

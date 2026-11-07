@@ -540,37 +540,28 @@ describe("Context2D", ()=>{
 
       test("dithering", () => {
         // a shallow ramp spreads 17 levels over 256px, so undithered rows are identical bands
-        let render = () => {
-          let g = ctx.createLinearGradient(0, 0, 256, 0)
-          g.addColorStop(0, '#000')
-          g.addColorStop(1, '#111')
-          ctx.fillStyle = g
+        let g = ctx.createLinearGradient(0, 0, 256, 0)
+        g.addColorStop(0, '#000')
+        g.addColorStop(1, '#111')
+        ctx.fillStyle = g
+        let distinctRows = () => {
           ctx.fillRect(0, 0, 256, 8)
           let rows = Array.from({length:8}, (_, y) => Array.from(ctx.getImageData(0, y, 256, 1).data).join())
           return new Set(rows).size
         }
 
-        // boolean property, off by default
-        assert.equal(ctx.gradientDithering, false)
-        assert.equal(render(), 1)
+        assert.equal(g.dithering, false)
+        assert.equal(distinctRows(), 1)
 
-        // dithering varies the pattern from row to row
-        ctx.gradientDithering = true
-        assert.equal(ctx.gradientDithering, true)
-        assert(render() > 1)
+        // takes effect even after the gradient has been assigned to fillStyle
+        g.dithering = true
+        assert.equal(g.dithering, true)
+        assert(distinctRows() > 1)
 
-        // truthy coercion, and the setting is part of the save/restore state
-        ctx.save()
         // @ts-expect-error — deliberately mistyped: exercises truthy coercion
-        ctx.gradientDithering = 0
-        assert.equal(ctx.gradientDithering, false)
-        ctx.restore()
-        assert.equal(ctx.gradientDithering, true)
-
-        // solid colors are never dithered
-        ctx.fillStyle = '#080808'
-        ctx.fillRect(0, 0, 256, 8)
-        assert.deepEqual(new Set(Array.from(ctx.getImageData(0, 0, 256, 8).data)), new Set([8, 255]))
+        g.dithering = 0
+        assert.equal(g.dithering, false)
+        assert.equal(distinctRows(), 1)
       })
 
       test("interpolation", () => {

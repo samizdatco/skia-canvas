@@ -64,7 +64,6 @@ pub struct State{
   global_composite_operation: BlendMode,
   image_filter: ImageFilter,
   filter: Filter,
-  gradient_dithering: bool,
 
   font: String,
   font_variant: String,
@@ -124,7 +123,6 @@ impl Default for State {
       global_composite_operation: BlendMode::SrcOver,
       image_filter: ImageFilter{ smoothing:true, quality:FilterQuality::Low },
       filter: Filter::default(),
-      gradient_dithering: false,
 
       shadow_blur: 0.0,
       shadow_color: CssColor::transparent(),
@@ -815,12 +813,7 @@ impl Context2D{
   pub fn paint_for_drawing(&mut self, style:PaintStyle) -> Paint{
     let mut paint = self.state.paint.clone();
     self.state.filter.mix_into(&mut paint, self.state.matrix, false);
-    let dye = self.state.dye(style);
-    dye.mix_into(&mut paint, self.state.global_alpha, self.state.image_filter);
-    if self.state.gradient_dithering && matches!(dye, Dye::Gradient(_)){
-      // break up the banding in smooth color ramps the way browsers do
-      paint.set_dither(true);
-    }
+    self.state.dye(style).mix_into(&mut paint, self.state.global_alpha, self.state.image_filter);
     paint.set_style(style);
 
     if style==PaintStyle::Stroke && !self.state.line_dash_list.is_empty(){
@@ -1028,7 +1021,8 @@ impl Dye{
       },
       Dye::Gradient(gradient) =>{
         paint.set_shader(gradient.shader())
-             .set_alpha_f(alpha);
+             .set_alpha_f(alpha)
+             .set_dither(gradient.dithering());
       },
       Dye::Pattern(pattern) =>{
         paint.set_shader(pattern.shader(image_filter))

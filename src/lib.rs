@@ -112,6 +112,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasGradient_set_hueInterpolationMethod", gradient::set_hueInterpolationMethod)?;
   cx.export_function("CanvasGradient_get_premultipliedAlpha", gradient::get_premultipliedAlpha)?;
   cx.export_function("CanvasGradient_set_premultipliedAlpha", gradient::set_premultipliedAlpha)?;
+  cx.export_function("CanvasGradient_get_dithering", gradient::get_dithering)?;
+  cx.export_function("CanvasGradient_set_dithering", gradient::set_dithering)?;
   cx.export_function("CanvasGradient_repr", gradient::repr)?;
 
   // -- CanvasPattern -----------------------------------------------------------------------------
@@ -205,8 +207,6 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_drawCanvas", ctx::drawCanvas)?;
   cx.export_function("CanvasRenderingContext2D_getImageData", ctx::getImageData)?;
   cx.export_function("CanvasRenderingContext2D_putImageData", ctx::putImageData)?;
-  cx.export_function("CanvasRenderingContext2D_get_gradientDithering", ctx::get_gradientDithering)?;
-  cx.export_function("CanvasRenderingContext2D_set_gradientDithering", ctx::set_gradientDithering)?;
   cx.export_function("CanvasRenderingContext2D_get_imageSmoothingEnabled", ctx::get_imageSmoothingEnabled)?;
   cx.export_function("CanvasRenderingContext2D_set_imageSmoothingEnabled", ctx::set_imageSmoothingEnabled)?;
   cx.export_function("CanvasRenderingContext2D_get_imageSmoothingQuality", ctx::get_imageSmoothingQuality)?;

@@ -14,6 +14,7 @@ enum Gradient{
     stops:Vec<f32>,
     colors:Vec<Color4f>,
     interp:Interpolation,
+    dither:bool,
   },
   Radial{
     start_point:Point,
@@ -23,6 +24,7 @@ enum Gradient{
     stops:Vec<f32>,
     colors:Vec<Color4f>,
     interp:Interpolation,
+    dither:bool,
   },
   Conic{
     center:Point,
@@ -30,6 +32,7 @@ enum Gradient{
     stops:Vec<f32>,
     colors:Vec<Color4f>,
     interp:Interpolation,
+    dither:bool,
   }
 }
 
@@ -63,6 +66,22 @@ impl Gradient{
       Gradient::Linear{interp, ..} => *interp = next,
       Gradient::Radial{interp, ..} => *interp = next,
       Gradient::Conic{interp, ..} => *interp = next,
+    }
+  }
+
+  fn get_dither(&self) -> bool{
+    match self{
+      Gradient::Linear{dither, ..} => *dither,
+      Gradient::Radial{dither, ..} => *dither,
+      Gradient::Conic{dither, ..} => *dither,
+    }
+  }
+
+  fn set_dither(&mut self, next:bool){
+    match self{
+      Gradient::Linear{dither, ..} => *dither = next,
+      Gradient::Radial{dither, ..} => *dither = next,
+      Gradient::Conic{dither, ..} => *dither = next,
     }
   }
 
@@ -159,6 +178,13 @@ impl CanvasGradient{
     self.set_interp(interp);
   }
 
+  pub fn dithering(&self) -> bool{
+    self.gradient.borrow().get_dither()
+  }
+  pub fn set_dithering(&mut self, dither:bool){
+    self.gradient.borrow_mut().set_dither(dither);
+  }
+
   pub fn is_opaque(&self) -> bool{
     // true if all colors are 100% opaque
     let gradient = self.gradient.borrow();
@@ -177,7 +203,7 @@ pub fn linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
 
   let start = Point::new(*x1, *y1);
   let end = Point::new(*x2, *y2);
-  let ramp = Gradient::Linear{ start, end, stops:vec![], colors:vec![], interp };
+  let ramp = Gradient::Linear{ start, end, stops:vec![], colors:vec![], interp, dither:false };
   let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(ramp)) };
   let this = RefCell::new(canvas_gradient);
   Ok(cx.boxed(this))
@@ -190,7 +216,7 @@ pub fn radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
 
   let start_point = Point::new(*x1, *y1);
   let end_point = Point::new(*x2, *y2);
-  let bloom = Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![], interp };
+  let bloom = Gradient::Radial{ start_point, start_radius:*r1, end_point, end_radius:*r2, stops:vec![], colors:vec![], interp, dither:false };
   let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(bloom)) };
   let this = RefCell::new(canvas_gradient);
   Ok(cx.boxed(this))
@@ -203,7 +229,7 @@ pub fn conic(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
 
   let center = Point::new(*x, *y);
   let angle = to_degrees(*theta);
-  let sweep = Gradient::Conic{ center, angle, stops:vec![], colors:vec![], interp };
+  let sweep = Gradient::Conic{ center, angle, stops:vec![], colors:vec![], interp, dither:false };
   let canvas_gradient = CanvasGradient{ gradient:Rc::new(RefCell::new(sweep)) };
   let this = RefCell::new(canvas_gradient);
   Ok(cx.boxed(this))
@@ -270,6 +296,19 @@ pub fn set_premultipliedAlpha(mut cx: FunctionContext) -> JsResult<JsUndefined> 
   let this = cx.argument::<BoxedCanvasGradient>(0)?;
   let premul = bool_arg(&mut cx, 1, "premultipliedAlpha")?;
   this.borrow_mut().set_premultiplied_alpha(premul);
+  Ok(cx.undefined())
+}
+
+pub fn get_dithering(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let this = cx.argument::<BoxedCanvasGradient>(0)?;
+  let dither = this.borrow().dithering();
+  Ok(cx.boolean(dither))
+}
+
+pub fn set_dithering(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedCanvasGradient>(0)?;
+  let dither = bool_arg(&mut cx, 1, "dithering")?;
+  this.borrow_mut().set_dithering(dither);
   Ok(cx.undefined())
 }
 
