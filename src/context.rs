@@ -81,6 +81,7 @@ pub struct State{
   text_rendering: TextRendering,
   text_decoration: DecorationStyle,
   text_wrap: bool,
+  pub ellipse_transform: bool, // build a rotated ellipse() unrotated at the origin, then transform it (Blink)
   letter_spacing: Spacing,
   word_spacing: Spacing,
   line_height: Option<f32>,
@@ -144,6 +145,7 @@ impl Default for State {
       text_baseline: Baseline::Alphabetic,
       text_decoration: DecorationStyle::default(),
       text_wrap: false,
+      ellipse_transform: false,
       letter_spacing: Spacing::default(),
       word_spacing: Spacing::default(),
       line_height: None,
@@ -934,6 +936,15 @@ impl Pen for Context2D {
   }
   fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f64, start:f64, end:f64, ccw:bool){
     let mut sub = Path2D::default();
+    if self.state.ellipse_transform && rot != 0.0 {
+      // Blink's PathBuilder::AddEllipse adds the arc unrotated at the origin and then applies
+      // Translation(x, y).RotateRadians(rotation), which rounds differently from rotating about the center
+      sub.ellipse(0.0, 0.0, xr, yr, 0.0, start, end, ccw);
+      let (sin, cos) = rot.sin_cos();
+      let placed = Matrix::new_all(cos as f32, -sin as f32, x, sin as f32, cos as f32, y, 0.0, 0.0, 1.0);
+      self.path.extend_path(&sub.path(), &Matrix::concat(&self.state.matrix, &placed));
+      return;
+    }
     sub.ellipse(x, y, xr, yr, rot, start, end, ccw);
     self.path.extend_path(&sub.path(), &self.state.matrix);
   }

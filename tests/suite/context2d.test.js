@@ -707,6 +707,19 @@ describe("Context2D", ()=>{
 
   describe("supports", () => {
 
+    test("ellipseTransform", () => {
+      assert.equal(ctx.ellipseTransform, false)
+      ctx.ellipseTransform = true
+      assert.equal(ctx.ellipseTransform, true)
+      ctx.save(); ctx.ellipseTransform = false; ctx.restore()
+      assert.equal(ctx.ellipseTransform, true)
+
+      // a rotated ellipse lands in the same place either way: a wide ellipse turned 90 degrees is tall
+      ctx.beginPath(); ctx.ellipse(100, 100, 60, 10, Math.PI / 2, 0, 2 * Math.PI); ctx.fill()
+      assert.deepEqual(pixel(100, 150), BLACK)
+      assert.deepEqual(pixel(150, 100), CLEAR)
+    })
+
     test("filter", () => {
       // results differ b/t cpu & gpu renderers so make sure test doesn't fail if gpu support isn't present
       let {gpu} = canvas
