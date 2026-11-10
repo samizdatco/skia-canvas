@@ -233,16 +233,16 @@ impl FontLibrary{
 
   fn load_font(&self, path:&Path) -> Result<Typeface, String>{
     let bytes = fs::read(path).map_err(|why| format!("{}: \"{}\"", why, path.display()))?;
+    let undecodable = || format!("Could not decode font data in {}", path.display());
 
-    // if woff/woff2, decode to sfnt
-    let bytes = match path.to_string_lossy().to_ascii_lowercase(){
-      name if name.ends_with(".woff") => wuff::decompress_woff1(&bytes).ok(),
-      name if name.ends_with(".woff2") => wuff::decompress_woff2(&bytes).ok(),
-      _ => None
-    }.unwrap_or(bytes);
+    // decode woff/woff2 to sfnt, rejecting malformed files rather than passing them to skia
+    let bytes = match bytes.get(..4){
+      Some(b"wOFF") => wuff::decompress_woff1(&bytes).ok(),
+      Some(b"wOF2") => wuff::decompress_woff2(&bytes).ok(),
+      _ => Some(bytes),
+    }.ok_or_else(undecodable)?;
 
-    self.mgr.new_from_bytes(&bytes, None)
-      .ok_or_else(|| format!("Could not decode font data in {}", path.display()))
+    self.mgr.new_from_bytes(&bytes, None).ok_or_else(undecodable)
   }
 
   // register each font and return the resolution details for name/style collisions
