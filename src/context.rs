@@ -40,6 +40,19 @@ pub struct Context2D{
   state: State,
   stack: Vec<State>,
   path: Path2D,
+  // a lone arc() on an empty path, kept so fill/stroke can draw it with drawArc like Blink does
+  lone_arc: Option<LoneArc>,
+  // the rect passed to fillRect/strokeRect, drawn with drawRect like Blink does when rect_paint_op is set
+  paint_rect: Option<Rect>,
+}
+
+#[derive(Clone)]
+struct LoneArc{
+  oval: Rect,
+  start: f32,
+  sweep: f32,
+  closed: bool,
+  matrix: Matrix,
 }
 
 #[derive(Clone)]
@@ -53,6 +66,8 @@ pub struct State{
   shadow_blur: f32,
   shadow_color: CssColor,
   shadow_offset: Point,
+  arc_paint_op: bool,
+  rect_paint_op: bool,
 
   stroke_width: f32,
   line_dash_offset: f32,
@@ -127,6 +142,8 @@ impl Default for State {
       shadow_blur: 0.0,
       shadow_color: CssColor::transparent(),
       shadow_offset: (0.0, 0.0).into(),
+      arc_paint_op: false,
+      rect_paint_op: false,
 
       font,
       font_variant,
@@ -262,6 +279,8 @@ impl Context2D{
       bounds,
       recorder: RefCell::new(PageRecorder::new(bounds, color_space, props)),
       path: Path2D::default(),
+      lone_arc: None,
+      paint_rect: None,
       stack: vec![],
       state: State::default(),
     }
@@ -445,9 +464,15 @@ impl Context2D{
 
   pub fn begin_path(&mut self){
     self.path = Path2D::default();
+    self.lone_arc = None;
   }
 
   pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<PathFillType>){
+    let lone_arc = match (&path, &self.lone_arc) {
+      (None, Some(arc)) if self.state.arc_paint_op && arc.matrix == self.state.matrix => Some(arc.clone()),
+      _ => None,
+    };
+    let paint_rect = self.paint_rect.take().filter(|_| self.state.rect_paint_op);
     let mut path = path.unwrap_or_else(|| {
       // the current path has already incorporated its transform state
       let inverse = self.state.matrix.invert().unwrap_or_default();
@@ -514,6 +539,21 @@ impl Context2D{
             canvas.draw_path(&frame, &tile_paint);
             canvas.restore();
           }
+        }
+      }else if let Some(rect) = paint_rect{
+        // Blink records fillRect/strokeRect as a DrawRectOp, so Skia takes its rect paths (e.g. analytic blurs)
+        canvas.draw_rect(rect, paint);
+      }else if let Some(arc) = &lone_arc{
+        // Blink's DrawArcImpl: open arcs use drawArc, closed full circles drawOval, closed partial arcs a closed path
+        if !arc.closed {
+          canvas.draw_arc(arc.oval, arc.start, arc.sweep, false, paint);
+        }else if (arc.sweep.abs() - 360.0).abs() <= 1.0 / 4096.0 {
+          canvas.draw_oval(arc.oval, paint);
+        }else{
+          let mut b = PathBuilder::new();
+          b.arc_to(arc.oval, arc.start, arc.sweep, false);
+          b.close();
+          canvas.draw_path(&b.detach(), paint);
         }
       }else{
         canvas.draw_path(&path, paint);
@@ -892,37 +932,50 @@ impl Context2D{
 // receives line-drawing verbs from the shared DrawList decoder and bakes the CTM into every point
 impl Pen for Context2D {
   fn move_to(&mut self, x:f32, y:f32){
+    self.lone_arc = None;
     if let Some(dst) = self.map_points(&[x, y]).first(){
       self.path.move_to(dst.x, dst.y);
     }
   }
   fn line_to(&mut self, x:f32, y:f32){
+    self.lone_arc = None;
     if let Some(dst) = self.map_points(&[x, y]).first(){
       self.path.line_to(dst.x, dst.y);
     }
   }
   fn bezier_to(&mut self, c1x:f32, c1y:f32, c2x:f32, c2y:f32, x:f32, y:f32){
+    self.lone_arc = None;
     if let [cp1, cp2, dst] = self.map_points(&[c1x, c1y, c2x, c2y, x, y])[..3]{
       self.path.bezier_to(cp1.x, cp1.y, cp2.x, cp2.y, dst.x, dst.y);
     }
   }
   fn quad_to(&mut self, cx:f32, cy:f32, x:f32, y:f32){
+    self.lone_arc = None;
     if let [cp, dst] = self.map_points(&[cx, cy, x, y])[..2]{
       self.path.quad_to(cp.x, cp.y, dst.x, dst.y);
     }
   }
   fn conic_to(&mut self, cx:f32, cy:f32, x:f32, y:f32, w:f32){
+    self.lone_arc = None;
     if let [src, dst] = self.map_points(&[cx, cy, x, y])[..2]{
       self.path.conic_to(src.x, src.y, dst.x, dst.y, w);
     }
   }
   // arc* and ellipse `extend` the path, drawing a connecting line to their starting point
   fn arc(&mut self, x:f32, y:f32, r:f32, start:f64, end:f64, ccw:bool){
+    // Blink records an arc on an empty path (radius >= 1) as an arc op rather than path geometry
+    self.lone_arc = match self.path.path().is_empty() && r >= 1.0 {
+      true => blink_arc_angles(start, end, ccw).map(|(start, sweep)| LoneArc{
+        oval: Rect::new(x - r, y - r, x + r, y + r), start, sweep, closed: false, matrix: self.state.matrix,
+      }),
+      false => None,
+    };
     let mut sub = Path2D::default();
     sub.arc(x, y, r, start, end, ccw);
     self.path.extend_path(&sub.path(), &self.state.matrix);
   }
   fn arc_to(&mut self, x1:f32, y1:f32, x2:f32, y2:f32, r:f32){
+    self.lone_arc = None;
     let mut sub = Path2D::default();
     if let Some(pt) = self.path.last_point(){
       // The arc's initial tangent is based on the path's current point, so begin the subpath with it
@@ -933,22 +986,26 @@ impl Pen for Context2D {
     self.path.extend_path(&sub.path(), &self.state.matrix);
   }
   fn ellipse(&mut self, x:f32, y:f32, xr:f32, yr:f32, rot:f64, start:f64, end:f64, ccw:bool){
+    self.lone_arc = None;
     let mut sub = Path2D::default();
     sub.ellipse(x, y, xr, yr, rot, start, end, ccw);
     self.path.extend_path(&sub.path(), &self.state.matrix);
   }
   // rect and round_rect `append` new subpaths, starting with a moveTo rather than a connecting line
   fn rect(&mut self, x:f32, y:f32, w:f32, h:f32){
+    self.lone_arc = None;
     let mut sub = Path2D::default();
     sub.rect(x, y, w, h);
     self.path.append_path(&sub.path(), &self.state.matrix);
   }
   fn round_rect(&mut self, x:f32, y:f32, w:f32, h:f32, radii:[Point;4]){
+    self.lone_arc = None;
     let mut sub = Path2D::default();
     sub.round_rect(x, y, w, h, radii);
     self.path.append_path(&sub.path(), &self.state.matrix);
   }
   fn close(&mut self){
+    if let Some(arc) = self.lone_arc.as_mut(){ arc.closed = true; }
     self.path.update().close();
   }
 }
@@ -966,8 +1023,8 @@ impl Plotter for Context2D {
   fn reset_transform(&mut self){              self.with_matrix(|ctm| ctm.reset()); }
   fn fill(&mut self, rule:PathFillType){      self.draw_path(None, PaintStyle::Fill, Some(rule)); }
   fn stroke(&mut self){                       self.draw_path(None, PaintStyle::Stroke, None); }
-  fn fill_rect(&mut self, rect:Rect){         self.draw_path(Some(Path::rect(rect, None)), PaintStyle::Fill, None); }
-  fn stroke_rect(&mut self, rect:Rect){       self.draw_path(Some(Path::rect(rect, None)), PaintStyle::Stroke, None); }
+  fn fill_rect(&mut self, rect:Rect){         self.paint_rect = Some(rect); self.draw_path(Some(Path::rect(rect, None)), PaintStyle::Fill, None); }
+  fn stroke_rect(&mut self, rect:Rect){       self.paint_rect = Some(rect); self.draw_path(Some(Path::rect(rect, None)), PaintStyle::Stroke, None); }
   fn clear_rect(&mut self, rect:Rect){        Context2D::clear_rect(self, &rect); }
 }
 
@@ -1033,4 +1090,28 @@ impl Dye{
       }
     };
   }
+}
+
+// Blink's CanonicalizeAngle + AdjustEndAngle (canvas_path.cc), computed in f32 like Blink; returns (start, sweep) in degrees
+fn blink_arc_angles(start:f64, end:f64, ccw:bool) -> Option<(f32, f32)> {
+  let (mut start, mut end) = (start as f32, end as f32);
+  if !start.is_finite() || !end.is_finite() || start == end { return None }
+  let two_pi = std::f32::consts::TAU;
+  let mut new_start = start % two_pi;
+  if new_start < 0.0 {
+    new_start += two_pi;
+    if new_start >= two_pi { new_start -= two_pi; }
+  }
+  end += new_start - start;
+  start = new_start;
+  if !ccw && end - start >= two_pi {
+    end = start + two_pi;
+  }else if ccw && start - end >= two_pi {
+    end = start - two_pi;
+  }else if !ccw && start > end {
+    end = start + (two_pi - (start - end) % two_pi);
+  }else if ccw && start < end {
+    end = start - (two_pi - (end - start) % two_pi);
+  }
+  Some((start.to_degrees(), (end - start).to_degrees()))
 }

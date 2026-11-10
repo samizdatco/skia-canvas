@@ -707,6 +707,23 @@ describe("Context2D", ()=>{
 
   describe("supports", () => {
 
+    test("arcPaintOp", () => {
+      assert.equal(ctx.arcPaintOp, false)
+      ctx.arcPaintOp = true
+      assert.equal(ctx.arcPaintOp, true)
+      ctx.save(); ctx.arcPaintOp = false; ctx.restore()
+      assert.equal(ctx.arcPaintOp, true)
+
+      // a lone open arc fills its chord region, a closed partial arc too, and mixed paths still draw
+      ctx.beginPath(); ctx.arc(100, 100, 50, 0, Math.PI); ctx.fill()
+      assert.deepEqual(pixel(100, 120), BLACK)
+      assert.deepEqual(pixel(100, 80), CLEAR)
+      ctx.beginPath(); ctx.arc(300, 100, 50, 0, 2 * Math.PI); ctx.closePath(); ctx.fill()
+      assert.deepEqual(pixel(300, 100), BLACK)
+      ctx.beginPath(); ctx.moveTo(10, 300); ctx.arc(100, 300, 50, 0, Math.PI); ctx.lineTo(10, 300); ctx.fill()
+      assert.deepEqual(pixel(100, 320), BLACK)
+    })
+
     test("filter", () => {
       // results differ b/t cpu & gpu renderers so make sure test doesn't fail if gpu support isn't present
       let {gpu} = canvas

@@ -209,6 +209,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_putImageData", ctx::putImageData)?;
   cx.export_function("CanvasRenderingContext2D_get_imageSmoothingEnabled", ctx::get_imageSmoothingEnabled)?;
   cx.export_function("CanvasRenderingContext2D_set_imageSmoothingEnabled", ctx::set_imageSmoothingEnabled)?;
+  cx.export_function("CanvasRenderingContext2D_get_arcPaintOp", ctx::get_arcPaintOp)?;
+  cx.export_function("CanvasRenderingContext2D_set_arcPaintOp", ctx::set_arcPaintOp)?;
+  cx.export_function("CanvasRenderingContext2D_get_rectPaintOp", ctx::get_rectPaintOp)?;
+  cx.export_function("CanvasRenderingContext2D_set_rectPaintOp", ctx::set_rectPaintOp)?;
   cx.export_function("CanvasRenderingContext2D_get_imageSmoothingQuality", ctx::get_imageSmoothingQuality)?;
   cx.export_function("CanvasRenderingContext2D_set_imageSmoothingQuality", ctx::set_imageSmoothingQuality)?;
 
