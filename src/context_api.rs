@@ -152,11 +152,11 @@ fn _is_in(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsBoolean> {
   let mut this = this.borrow_mut();
 
   let path = opt_skpath_arg(&mut cx, 1);
-  let (rule_idx, mut target) = match path{
-    Some(path) => (4, path),
+  let (rule_idx, target) = match path{
+    Some(path) => (4, Some(path)),
     None => match cx.len(){
       5 => cx.throw_type_error("Expected a Path2D for 1st arg")?,
-      _ => (3, this.path.path())
+      _ => (3, None)
     }
   };
 
@@ -166,7 +166,7 @@ fn _is_in(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsBoolean> {
   };
 
   if let [x, y] = opt_float_args(&mut cx, 1..4).as_slice(){
-    Ok(cx.boolean(this.hit_test_path(&mut target, (*x, *y), rule, style)))
+    Ok(cx.boolean(this.hit_test_path(target, (*x, *y), rule, style)))
   }else{
     check_argc(&mut cx, 3)?;
     Ok(cx.boolean(false))

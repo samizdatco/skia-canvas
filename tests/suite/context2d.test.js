@@ -1392,6 +1392,34 @@ describe("Context2D", ()=>{
 
       assert.equal(ctx.isPointInPath(...inBoth), true)
       assert.equal(ctx.isPointInStroke(...inBoth), true)
+
+      // nothing is hit while the transform is singular
+      ctx.scale(0, 0)
+      assert.equal(ctx.isPointInPath(...inFill), false)
+      assert.equal(ctx.isPointInStroke(...inStroke), false)
+      ctx.resetTransform()
+      assert.equal(ctx.isPointInPath(...inFill), true)
+
+      // the path keeps the transform it was built with
+      ctx.translate(100, 0)
+      assert.equal(ctx.isPointInPath(...inFill), true)
+      assert.equal(ctx.isPointInStroke(...inStroke), true)
+
+      // line width scales with the transform
+      ctx.resetTransform()
+      ctx.beginPath()
+      ctx.scale(2, 2)
+      ctx.rect(50,50,50,50)
+      ctx.lineWidth = 6
+
+      assert.equal(ctx.isPointInPath(...inStroke), false)
+      assert.equal(ctx.isPointInStroke(...inStroke), true)
+
+      assert.equal(ctx.isPointInPath(...inFill), true)
+      assert.equal(ctx.isPointInStroke(...inFill), false)
+
+      assert.equal(ctx.isPointInPath(...inBoth), true)
+      assert.equal(ctx.isPointInStroke(...inBoth), true)
     })
 
     test("isPointInPath(Path2D)", () => {
@@ -1411,6 +1439,11 @@ describe("Context2D", ()=>{
 
       assert.equal(ctx.isPointInPath(path, ...inBoth), true)
       assert.equal(ctx.isPointInStroke(path, ...inBoth), true)
+
+      // nothing is hit while the transform is singular
+      ctx.scale(0, 0)
+      assert.equal(ctx.isPointInPath(path, ...inFill), false)
+      assert.equal(ctx.isPointInStroke(path, ...inStroke), false)
     })
 
     test("letterSpacing", () => {

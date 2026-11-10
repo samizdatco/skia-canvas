@@ -543,31 +543,30 @@ impl Context2D{
     });
   }
 
-  pub fn hit_test_path(&mut self, path: &mut Path, point:impl Into<Point>, rule:Option<PathFillType>, style: PaintStyle) -> bool {
-    let point = point.into();
-    let point = self.in_local_coordinates(point.x, point.y);
-    let rule = rule.unwrap_or(PathFillType::Winding);
-    let prev_rule = path.fill_type();
-    path.set_fill_type(rule);
+  pub fn hit_test_path(&mut self, path:Option<Path>, point:impl Into<Point>, rule:Option<PathFillType>, style: PaintStyle) -> bool {
+    let Some(inverse) = self.state.matrix.invert() else { return false }; // nothing can be hit if the CTM is singular
+    let point = inverse.map_point(point.into());
+    let mut path = path.unwrap_or_else(||
+      // remove the CTM from the current path (so coords are in user space)
+      self.path.path().with_transform(&inverse)
+    );
+    path.set_fill_type(rule.unwrap_or(PathFillType::Winding));
 
-    let is_in = match style{
+    match style{
       PaintStyle::Stroke => {
         let paint = self.paint_for_drawing(PaintStyle::Stroke);
         let precision = 0.3; // this is what Chrome uses to compute this
         let scale = Matrix::scale((precision, precision));
 
         let mut traced_path = PathBuilder::new();
-        if fill_path_with_paint(path, &paint, &mut traced_path, None, Some(scale)){
+        if fill_path_with_paint(&path, &paint, &mut traced_path, None, Some(scale)){
           traced_path.detach().contains(point)
         }else{
           path.contains(point)
         }
       },
       _ => path.contains(point)
-    };
-
-    path.set_fill_type(prev_rule);
-    is_in
+    }
   }
 
   pub fn clear_rect(&mut self, rect:&Rect){
