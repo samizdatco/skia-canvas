@@ -76,6 +76,37 @@ describe("Context2D", ()=>{
       assert.nearEqual(implicit.fontBoundingBoxAscent, explicit.fontBoundingBoxAscent)
     })
 
+    test('relativeFontBase', () => {
+      let rctx = new Canvas(WIDTH, HEIGHT).getContext('2d'),
+          px = () => css.font(rctx.font).size
+      assert.equal(rctx.relativeFontBase, 16)
+      rctx.font = '2em Arial'
+      assert.equal(px(), 32)
+
+      // browsers resolve relative sizes against the 10px default canvas font
+      rctx.relativeFontBase = 10
+      assert.equal(rctx.relativeFontBase, 10)
+      assert.equal(px(), 32) // the current font is not resized
+      for (let [spec, size] of [['2em Arial', 20], ['150% Arial', 15], ['1.5rem Arial', 15],
+                                ['larger Arial', 12], ['x-large Arial', 24], ['bold 2em/1.5 Arial', 20]]){
+        rctx.font = spec
+        assert.nearEqual(px(), size)
+      }
+      rctx.font = 'smaller Arial'
+      assert.nearEqual(px(), 80 / 9)
+
+      // invalid values are ignored
+      for (let bad of [0, -5, NaN, 'abc']){
+        rctx.relativeFontBase = bad
+        assert.equal(rctx.relativeFontBase, 10)
+      }
+
+      // the same string resolves per base, not from a shared cache entry
+      rctx.relativeFontBase = 16
+      rctx.font = '2em Arial'
+      assert.equal(px(), 32)
+    })
+
     test('globalAlpha', () => {
       assert.equal(ctx.globalAlpha, 1)
       ctx.globalAlpha = 0.25
