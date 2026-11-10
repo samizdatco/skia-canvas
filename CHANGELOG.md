@@ -2,6 +2,55 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
+## 📦 ⟩ [v4.0.1] ⟩ Nov 14, 2026
+
+### New Features
+
+- [**CanvasGradient**][CanvasGradient] objects now have a [`dithering`][gradient_dithering] property that can be set to `true` to overlay a noise pattern, as Chrome does (thanks to @seidnerj #310)
+- [**Window**][window] `close` events can now be ‘vetoed’ by calling [`open()`][win_open()] from within their handler (potentially keeping a quitting application running)
+
+### Bugfixes
+
+#### GUI
+- Calling [`App.quit()`][app_quit] from inside an event handler no longer crashes with a `RefCell already borrowed` panic
+- The [`setup`][win_setup] event now correctly fires before a window’s first frame and frame numbers count from 0 rather than 1
+- Jitter in the display’s timing signal no longer makes individual frames alternate between drawing one refresh early or late
+- Moving the mouse over an animated window on Windows no longer speeds the animation up or makes its frames uneven
+
+#### Paths
+- [`isPointInPath()`][isPointInPath()] and [`isPointInStroke()`][isPointInStroke()] now answer correctly when the context has an active transform. Both now return `false` if the transform is singular (e.g., after `scale(0, 0)`), matching Chrome’s behavior (#324).
+- Calling [`arcTo()`][mdn_arcTo] on the context right after adding a shape or calling [`closePath()`][mdn_closePath] now draws from the start of the closed subpath (#323)
+
+#### Text
+- The context’s `font` property now formats its value closer to the way browsers do, omitting `"normal"` values and escaping special characters in family names. Line-height, `font-stretch` keywords, and `oblique` angles are kept so the value fully captures the font selection.
+- The `bolder` and `lighter` keywords now resolve to 700 and 100 weights (matching browsers)
+- Shadowed text now renders one shadow per glyph (like Chrome & Safari) and no longer disappears from SVG exports. Use a `drop-shadow()` [`filter`][filter] rather than the context’s `shadow*` properties if you’d like the whole text run to cast a single shadow (in exchange for slower rendering).
+
+#### Imagery
+- [`createTexture()`][createTexture()] now creates patterns that consistently cover the shapes they’re drawn to (regardless of transform, origin, or tile spacing)
+- The [`lineDashMarker`][lineDashMarker] setting is no longer applied to the shapes within an [outlined texture][createTexture_outline]’s pattern, just to the path being stroked
+- CSS attribute selectors in SVG `<style>` elements no longer match namespaced attributes (e.g., `[href]` no longer also matches `xlink:href`)
+- A `blur()` [`filter`][filter] is no longer half as strong for images as it is for shapes
+- PDF exports now:
+  - correctly render checkboxes and radio buttons
+  - handle embedded images that identify their color space only by name
+  - avoid double-applying the soft mask to text using Type3 fonts
+
+### Misc. Improvements
+- Shadow rendering is now several times faster, using the shape’s outline rather than rasterizing it first
+- Arc-drawing no longer requires a full snapshot, so `arcTo()` calls no longer slow down as the path grows
+- Fonts with size-specific tracking (via the `trak` table) now include that in [`letterSpacing`][letterSpacing], matching Chrome & Safari
+- The `system-ui` generic family now uses San Francisco on macOS, and `sans-serif` now defaults to Helvetica like browsers do (#319)
+- [`FontLibrary.family()`][FontLibrary.family] will now return details about generic family names, using the fonts they map to
+- The C brotli decoder (vulnerable to CVE-2026-111497) bundled by FreeType on Linux has been removed in favor of using the `wuff` crate for woff/woff2 font handling
+
+
+[app_quit]: /docs/api/app.md#quit
+[win_setup]: /docs/api/window.md#setup
+[mdn_arcTo]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/arcTo
+[mdn_closePath]: https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/closePath
+[gradient_dithering]: /docs/api/context.md#dithering
+
 ## 📦 ⟩ [v4.0.0] ⟩ Oct 12, 2026
 
 ### New Features
@@ -797,7 +846,8 @@
 
 **Initial public release** 🎉
 
-[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v4.0.0...HEAD
+[unreleased]: https://github.com/samizdatco/skia-canvas/compare/v4.0.1...HEAD
+[v4.0.1]: https://github.com/samizdatco/skia-canvas/compare/v4.0.0...v4.0.1
 [v4.0.0]: https://github.com/samizdatco/skia-canvas/compare/v3.0.8...v4.0.0
 [v3.0.8]: https://github.com/samizdatco/skia-canvas/compare/v3.0.7...v3.0.8
 [v3.0.7]: https://github.com/samizdatco/skia-canvas/compare/v3.0.6...v3.0.7
