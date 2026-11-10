@@ -265,7 +265,9 @@ impl Pen for Path2D {
     let rect = Rect::from_xywh(x, y, w, h);
     let rrect = RRect::new_rect_radii(rect, &radii);
     let direction = if w.signum() == h.signum(){ PathDirection::CW }else{ PathDirection::CCW };
-    self.update().add_rrect(rrect, direction, 0);
+    self.update()
+      .add_rrect(rrect, direction, 0)
+      .move_to((x, y)); // the next segment starts from the corner, not on the outline
   }
   fn close(&mut self){ self.update().close(); }
 }

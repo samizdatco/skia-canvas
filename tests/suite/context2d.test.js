@@ -1253,6 +1253,15 @@ describe("Context2D", ()=>{
         assert.deepEqual(pixel(WIDTH - x - 1, y), CLEAR)
         assert.deepEqual(pixel(WIDTH - x - 1, HEIGHT - y - 1), CLEAR)
       }
+
+      // the next segment starts from the (x, y) corner, not where the rounded outline began
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      ctx.beginPath()
+      ctx.roundRect(10, 10, 30, 30, 10)
+      ctx.lineTo(10, 90)
+      ctx.lineWidth = 2
+      ctx.stroke()
+      assert.deepEqual(pixel(10, 12), BLACK)
     })
 
     test('getImageData()', () => {
