@@ -6,7 +6,7 @@ use skia_safe::{
   Rect, IRect, Point, Size, ColorSpace, Color4f, PathFillType, SurfaceProps,
   PaintStyle, BlendMode, ClipOp, PictureRecorder, Picture, FontHinting,
   font::Edging,
-  images, image_filters, dash_path_effect, path_1d_path_effect,
+  images, image_filters, color_filters, dash_path_effect, path_1d_path_effect, MaskFilter, BlurStyle,
   matrix::{ Matrix, TypeMask },
   textlayout::{ParagraphStyle, TextStyle, StrutStyle},
   canvas::SrcRectConstraint::Strict,
@@ -53,6 +53,7 @@ pub struct State{
   shadow_blur: f32,
   shadow_color: CssColor,
   shadow_offset: Point,
+  shadow_mask_filter: bool,
 
   stroke_width: f32,
   line_dash_offset: f32,
@@ -127,6 +128,7 @@ impl Default for State {
       shadow_blur: 0.0,
       shadow_color: CssColor::transparent(),
       shadow_offset: (0.0, 0.0).into(),
+      shadow_mask_filter: false,
 
       font,
       font_variant,
@@ -320,11 +322,12 @@ impl Context2D{
     });
   }
 
-  pub fn render_to_canvas<F>(&self, paint:&Paint, f:F)
+  // `shape` marks draws of paths & glyphs (whose shadows can be blurred as a mask rather than an image)
+  pub fn render_to_canvas<F>(&self, paint:&Paint, shape:bool, f:F)
     where F:Fn(&SkCanvas, &Paint)
   {
     let render_shadow = |canvas:&SkCanvas, paint:&Paint|{
-      if let Some(shadow_paint) = self.paint_for_shadow(paint){
+      if let Some(shadow_paint) = self.paint_for_shadow(paint, shape){
         canvas.save();
         canvas.set_matrix(&Matrix::translate(self.state.shadow_offset).into());
         canvas.concat(&self.state.matrix);
@@ -475,7 +478,7 @@ impl Context2D{
     }
 
     let paint = self.paint_for_drawing(style);
-    self.render_to_canvas(&paint, |canvas, paint| {
+    self.render_to_canvas(&paint, true, |canvas, paint| {
       if let Some(tile) = self.state.texture(style){
         // paint containing the PathEffect
         let mut tile_paint = paint.clone();
@@ -613,7 +616,7 @@ impl Context2D{
     let paint = self.paint_for_image();
     let matrix = Self::fit_matrix(src_rect, dst_rect);
 
-    self.render_to_canvas(&paint, |canvas, paint| {
+    self.render_to_canvas(&paint, false, |canvas, paint| {
       // only use paint if we need it for alpha, blend, shadow, or effect since otherwise
       // the SVG exporter will omit the picture altogether
       let paint = match Self::is_pass_through(paint){ true => None, false => Some(paint) };
@@ -678,7 +681,7 @@ impl Context2D{
 
   pub fn draw_image(&mut self, image:&Image, src_rect:&Rect, dst_rect:&Rect){
     let paint = self.paint_for_image();
-    self.render_to_canvas(&paint, |canvas, paint| {
+    self.render_to_canvas(&paint, false, |canvas, paint| {
       let sampling = self.state.image_filter.sampling();
       canvas.draw_image_rect_with_sampling_options(image, Some((src_rect, Strict)), dst_rect, sampling, paint);
     });
@@ -787,15 +790,16 @@ impl Context2D{
       let mut invisible = Paint::default();
       invisible.set_color4f(Color4f::new(0.0, 0.0, 0.0, 0.0), None);
       self.with_canvas(|canvas| layout.draw_glyphs(canvas, &invisible));
-    }else if self.has_shadow() && layout.is_multi_op(){
+    }else if self.has_shadow() && layout.is_multi_op() && !self.state.shadow_mask_filter{
       // shadows + mutiple lines and/or text decorations can get wildly expensive because they're
       // separate draw-ops that the shadow is applied to independently. instead, flatten to a picture
-      // so the shadow blur only has to composite *once*
+      // so the shadow blur only has to composite *once* (mask-filter shadows are cheap per-op and
+      // can't be applied to a picture, so they skip this step)
       if let Some(pic) = layout.to_picture(&paint){
-        self.render_to_canvas(&paint, |canvas, paint| { canvas.draw_picture(&pic, None, Some(paint)); });
+        self.render_to_canvas(&paint, false, |canvas, paint| { canvas.draw_picture(&pic, None, Some(paint)); });
       }
     }else{
-      self.render_to_canvas(&paint, |canvas, paint| layout.draw(canvas, paint));
+      self.render_to_canvas(&paint, true, |canvas, paint| layout.draw(canvas, paint));
     }
   }
 
@@ -856,8 +860,8 @@ impl Context2D{
     shadow_color.color.a != 0.0 && (*shadow_blur != 0.0 || !shadow_offset.is_zero())
   }
 
-  pub fn paint_for_shadow(&self, base_paint:&Paint) -> Option<Paint> {
-    let State {shadow_color, mut shadow_blur, shadow_offset, ..} = self.state;
+  pub fn paint_for_shadow(&self, base_paint:&Paint, shape:bool) -> Option<Paint> {
+    let State {shadow_color, mut shadow_blur, shadow_offset, shadow_mask_filter, ..} = self.state;
     if shadow_color.color.a == 0.0 || (shadow_blur == 0.0 && shadow_offset.is_zero()){
       return None
     }
@@ -865,6 +869,18 @@ impl Context2D{
     // Per spec, sigma is exactly half the blur radius:
     // https://www.w3.org/TR/css-backgrounds-3/#shadow-blur
     shadow_blur *= 0.5;
+
+    if shadow_mask_filter && shape && base_paint.image_filter().is_none(){
+      // blur the shape's coverage mask in device space (ignoring the CTM, like the offset) and
+      // tint it with the shadow color, keeping the paint's own alpha
+      let mut paint = base_paint.clone();
+      if shadow_blur > 0.0 {
+        paint.set_mask_filter(MaskFilter::blur(BlurStyle::Normal, shadow_blur, false));
+      }
+      paint.set_color_filter(color_filters::blend_with_color_space(shadow_color.color, ColorSpace::new_srgb(), BlendMode::SrcIn));
+      return Some(paint)
+    }
+
     let mut sigma = Point::new(shadow_blur, shadow_blur);
     // Apply scaling from the current transform matrix to blur radius, if there is any of either.
     if self.state.matrix.get_type().contains(TypeMask::SCALE) && !almost_zero(shadow_blur) {

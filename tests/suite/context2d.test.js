@@ -893,6 +893,42 @@ describe("Context2D", ()=>{
       assert.notEqual(pixel(143, 117), BLACK)
     })
 
+    test('shadowMaskFilter', async() => {
+      assert.equal(ctx.shadowMaskFilter, false)
+      ctx.shadowMaskFilter = true
+      assert.strictEqual(ctx.shadowMaskFilter, true)
+      ctx.save()
+      ctx.shadowMaskFilter = false
+      ctx.restore()
+      assert.strictEqual(ctx.shadowMaskFilter, true)
+
+      let render = (masked, draw) => {
+        let c = new Canvas(60, 60),
+            cx = c.getContext("2d")
+        cx.shadowMaskFilter = masked
+        cx.shadowColor = '#f0f'
+        cx.shadowBlur = 10
+        cx.shadowOffsetX = 5
+        draw(cx)
+        return cx.getImageData(0, 0, 60, 60).data
+      }
+
+      // shapes get a different (mask-blurred) shadow that is still fuzzy & offset
+      let stroke = cx => { cx.lineWidth = 2; cx.strokeRect(15, 15, 20, 20) }
+      let plain = render(false, stroke),
+          masked = render(true, stroke)
+      assert.notDeepEqual(masked, plain)
+      let alpha = (data, x, y) => data[(y * 60 + x) * 4 + 3]
+      assert.ok(alpha(masked, 45, 25) > 0 && alpha(masked, 45, 25) < 255)
+      assert.ok(alpha(masked, 10, 25) < alpha(masked, 45, 25))
+
+      // images keep using the image-filter shadow
+      let src = new Canvas(10, 10), sx = src.getContext("2d")
+      sx.fillRect(2, 2, 6, 6)
+      let image = cx => cx.drawCanvas(src, 20, 20)
+      assert.deepEqual(render(true, image), render(false, image))
+    })
+
     test("globalCompositeOperation", () => {
       let RED = [255,0,0,255],
           BLUE = [0,0,255,255],

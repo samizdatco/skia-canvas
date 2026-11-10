@@ -14,7 +14,7 @@ description: The drawing API for a particular Canvas
 | [isPointInPath()][isPointInPath()]                                 | [strokeText()][strokeText()] / [🧪][drawText] | [createRadialGradient()][createRadialGradient()] / [🧪][gradients] | [**lineJoin**][lineJoin]                | [resetTransform()][resetTransform()]                | [conicCurveTo() 🧪][conicCurveTo]        | [**fontInstance** 🧪][fontinstance]            | [**textBaseline**][textBaseline]                             | [putImageData()][putImageData()]                             | [**shadowColor**][shadowColor]                           |
 | [isPointInStroke()][isPointInStroke()]                             | [fill()][fill()]                              | [createPattern()][createPattern()]                                 | [**lineWidth**][lineWidth]              | [transform()][transform()] / [🧪][transforms]       | [quadraticCurveTo()][quadraticCurveTo()] | [**fontSmoothing** 🧪][fontsmoothing]          | [**textDecoration** 🧪][textDecoration]                      | [drawCanvas() 🧪][drawcanvas]                                | [**shadowOffsetX**][shadowOffsetX]                       |
 | [save()][save()]                                                   | [stroke()][stroke()]                          | [createTexture() 🧪][createTexture()]                              | [**miterLimit**][miterLimit]            | [translate()][translate()]                          | [arc()][arc()]                           | [**fontSynthesis** 🧪][fontsynthesis]          | [**textRendering**][textRendering] / [🧪][c2d_textRendering] | [drawImage()][drawImage()] / [🧪][drawimage]                 | [**shadowOffsetY**][shadowOffsetY]                       |
-| [restore()][restore()]                                             |                                               |                                                                    | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                                | [ellipse()][ellipse()]                   | [**fontVariant** 🧪][fontvariant]              | [**textWrap** 🧪][textwrap]                                  |                                                              |                                                          |
+| [restore()][restore()]                                             |                                               |                                                                    | [getLineDash()][getLineDash()]          | [rotate()][rotate()]                                | [ellipse()][ellipse()]                   | [**fontVariant** 🧪][fontvariant]              | [**textWrap** 🧪][textwrap]                                  |                                                              | [**shadowMaskFilter** 🧪][shadowmaskfilter]              |
 | [reset()][reset()]                                                 |                                               |                                                                    | [setLineDash()][setLineDash()]          | [scale()][scale()]                                  | [rect()][rect()]                         | [**fontFeatureSettings** 🧪][fontfeatures]     | [measureText()][measureText()] / [🧪][c2d_measuretext]       |                                                              |                                                          |
 | [clip()][clip()]                                                   |                                               |                                                                    |                                         |                                                     | [roundRect()][roundRect()]               | [**fontVariationSettings** 🧪][fontvariations] | [outlineText() 🧪][outlineText()]                            |                                                              |                                                          |
 
@@ -182,6 +182,10 @@ drawArc(400, "#aaa")
 ### `.lineDashFit`
 
 The `lineDashFit` attribute can be set to `"move"`, `"turn"`, or `"follow"` and controls how the marker is transformed with each repetition along the path. `"move"`  and `"turn"` use simple translation and rotation, whereas `"follow"` will bend the marker to match the dashed path’s contours.
+
+### `.shadowMaskFilter`
+
+By default, shadows are rendered with an image filter that blurs the full-color result of each drawing operation. Browsers instead draw the shadows of shapes and text by blurring their coverage mask in device space and tinting it with the `shadowColor`, which produces subtly different pixels (especially for thin strokes and at the edges of large blurs). Set `.shadowMaskFilter` to `true` to use the browser approach for `fill()`, `stroke()`, `fillRect()`, `strokeRect()`, `fillText()`, and `strokeText()`. Images, canvases, and drawing operations while a `.filter` is active continue to use the image-filter shadow.
 
 ------
 
@@ -978,6 +982,7 @@ for (let i=0; i<8000; i++){
 [p2d_transform]: path2d.md#transform
 [toFile]: canvas.md#tofile
 [textDecoration]: #textdecoration
+[shadowmaskfilter]: #shadowmaskfilter
 [textwrap]: #textwrap
 [transforms]: #transform--settransform
 [matte]: canvas.md#matte

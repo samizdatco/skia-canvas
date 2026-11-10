@@ -1110,3 +1110,16 @@ pub fn set_shadowOffsetY(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   this.state.shadow_offset.y = float_arg_or_bail(&mut cx, 1, "shadowOffsetY")?;
   Ok(cx.undefined())
 }
+
+pub fn get_shadowMaskFilter(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow_mut();
+  Ok(cx.boolean(this.state.shadow_mask_filter))
+}
+
+pub fn set_shadowMaskFilter(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  this.state.shadow_mask_filter = bool_arg(&mut cx, 1, "shadowMaskFilter")?;
+  Ok(cx.undefined())
+}
