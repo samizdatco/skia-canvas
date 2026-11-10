@@ -29,6 +29,7 @@ pub struct Typesetter{
   text_decoration: DecorationStyle,
   text_rendering: TextRendering,
   text_wrap: bool,
+  browser_glyph_bounds: bool, // measure glyph ink like Blink: control-point path bounds at the actual size
   utf16: Utf16Offsets, // for converting skparagraph's byte ranges to js string indices
 }
 
@@ -69,7 +70,7 @@ impl Typesetter{
     });
 
     let utf16 = Utf16Offsets::new(&text);
-    Typesetter{text, width, text_align, typefaces, char_style, graf_style, text_decoration, text_rendering, text_wrap, utf16}
+    Typesetter{text, width, text_align, typefaces, char_style, graf_style, text_decoration, text_rendering, text_wrap, browser_glyph_bounds:state.browser_glyph_bounds, utf16}
   }
 
   // shape & line-break the text into a Paragraph (shared by `layout`, `metrics`, and `path`)
@@ -201,7 +202,7 @@ impl Typesetter{
           line,
           family: info.font().typeface().family_name(),
           font: info.font().metrics().1,
-          bounds: Self::ink_bounds(info.font(), info.glyphs(), info.positions(), run_origin),
+          bounds: Self::ink_bounds(info.font(), info.glyphs(), info.positions(), run_origin, self.browser_glyph_bounds),
         });
       }
     });
@@ -279,15 +280,17 @@ impl Typesetter{
   }
 
   // bounds of all the actual glyph outlines (at Skia's canonical 64px size) in a run
-  fn ink_bounds(font:&Font, glyphs:&[GlyphId], positions:&[Point], origin:Point) -> Rect {
+  fn ink_bounds(font:&Font, glyphs:&[GlyphId], positions:&[Point], origin:Point, browser:bool) -> Rect {
     let (face, fake_bold) = (font.typeface().unique_id(), font.is_embolden());
-    let size = if fake_bold { font.size() } else { 64.0 }; // fake bold is size-dependent
+    // browsers take each outline's control-point bounds at the actual size (Blink's SkFontGetBoundsForGlyph on
+    // Apple: path.getBounds()); otherwise use tight bounds at a canonical 64px (fake bold is size-dependent)
+    let size = if fake_bold || browser { font.size() } else { 64.0 };
     let scale = font.size() / size;
 
     // get each glyph's outline bounds (empty for blank glyphs like spaces, None for glyphs without an outline)
-    let outlines = cached_glyph_bounds(face, size, fake_bold, glyphs, |glyph| {
+    let outlines = cached_glyph_bounds(face, size, fake_bold || browser, glyphs, |glyph| {
       let font = font.with_size(size)?;
-      font.get_path(glyph).map(|path| path.compute_tight_bounds())
+      font.get_path(glyph).map(|path| if browser { *path.bounds() } else { path.compute_tight_bounds() })
         .or_else(|| font.measure_text([glyph].as_slice(), None).1.is_empty().then(Rect::new_empty))
     });
 

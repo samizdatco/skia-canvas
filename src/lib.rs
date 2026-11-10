@@ -231,6 +231,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasRenderingContext2D_set_letterSpacing", ctx::set_letterSpacing)?;
   cx.export_function("CanvasRenderingContext2D_get_wordSpacing", ctx::get_wordSpacing)?;
   cx.export_function("CanvasRenderingContext2D_set_wordSpacing", ctx::set_wordSpacing)?;
+  cx.export_function("CanvasRenderingContext2D_get_browserGlyphBounds", ctx::get_browserGlyphBounds)?;
+  cx.export_function("CanvasRenderingContext2D_set_browserGlyphBounds", ctx::set_browserGlyphBounds)?;
   cx.export_function("CanvasRenderingContext2D_get_fontHinting", ctx::get_fontHinting)?;
   cx.export_function("CanvasRenderingContext2D_set_fontHinting", ctx::set_fontHinting)?;
   cx.export_function("CanvasRenderingContext2D_get_fontSmoothing", ctx::get_fontSmoothing)?;

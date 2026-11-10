@@ -890,6 +890,7 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
    *  whenever a new `ctx.font` value is assigned. */
   fontInstance: string
   fontHinting: boolean
+  browserGlyphBounds: boolean
   fontSmoothing: boolean
   fontSynthesis: boolean
   textWrap: boolean
