@@ -47,6 +47,8 @@ ctx.font = "24px Avenir" // uses the default leading in the font metrics
 ctx.font = "24px/1.5 Avenir" // sets the line height to 1.5 ems
 ```
 
+Reading the property back returns the font the way browsers serialize it, leaving out default values (e.g., `"normal 400 12px Arial"` reads back as `"12px Arial"` and `"700 12px Arial"` as `"bold 12px Arial"`). The few components browsers drop entirely—an `oblique` angle, a `font-stretch` keyword, and the line-height—are kept so that the value can be assigned back without changing the font.
+
 ### `.fontHinting`
 
 By default the canvas disables Skia’s [font hinting](https://en.wikipedia.org/wiki/Font_hinting) when rendering text in order to better match the text rendering produced by browsers. To enable hinting, set the context’s `.fontHinting` property to `true`, but note that only Linux and Windows renderers support the feature. On macOS, enabling hinting has no effect since CoreText has no support for it (though see the [`.textRendering`][c2d_textRendering] property’s `optimizeLegibility` setting if you’d like to enable the ‘text smoothing’ that hinting used to trigger in earlier Skia Canvas releases).
