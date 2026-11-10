@@ -112,6 +112,8 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("CanvasGradient_set_hueInterpolationMethod", gradient::set_hueInterpolationMethod)?;
   cx.export_function("CanvasGradient_get_premultipliedAlpha", gradient::get_premultipliedAlpha)?;
   cx.export_function("CanvasGradient_set_premultipliedAlpha", gradient::set_premultipliedAlpha)?;
+  cx.export_function("CanvasGradient_get_dithering", gradient::get_dithering)?;
+  cx.export_function("CanvasGradient_set_dithering", gradient::set_dithering)?;
   cx.export_function("CanvasGradient_repr", gradient::repr)?;
 
   // -- CanvasPattern -----------------------------------------------------------------------------

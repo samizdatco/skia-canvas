@@ -1021,7 +1021,8 @@ impl Dye{
       },
       Dye::Gradient(gradient) =>{
         paint.set_shader(gradient.shader())
-             .set_alpha_f(alpha);
+             .set_alpha_f(alpha)
+             .set_dither(gradient.dithering());
       },
       Dye::Pattern(pattern) =>{
         paint.set_shader(pattern.shader(image_filter))

@@ -534,6 +534,8 @@ interface CanvasGradient {
   hueInterpolationMethod: HueInterpolationMethod;
   /** Whether colors are interpolated with premultiplied alpha (default `false`). */
   premultipliedAlpha: boolean;
+  /** Whether Chrome-style dithering is used to reduce banding (default `false`). */
+  dithering: boolean;
 }
 
 declare var CanvasGradient: {
