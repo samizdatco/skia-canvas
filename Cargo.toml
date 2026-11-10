@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 
 [profile.release]
 lto = "fat"
+strip = "none" # rustc's default debuginfo strip leaves a misaligned LINKEDIT that dyld 27 rejects
 
 [features]
 freetype = ["skia-safe/embed-freetype", "skia-safe/freetype-woff2"]
