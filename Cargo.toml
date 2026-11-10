@@ -47,6 +47,8 @@ read-fonts = "0.43" # must be the same version hayro uses
 write-fonts = "=0.52.0" # must be the sibling release to read-fonts
 wuff = "0.2"
 skia-safe = { version = "0.153.3", features = ["textlayout", "webp", "svg"] }
+# writes PNGs the way browsers do when the `browserPng` export option is set
+png = "0.18"
 
 # vulkan
 ash = { version = "0.38.0", optional = true }

@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use neon::prelude::*;
 use skia_safe::{
   svg::{self, canvas::Flags},
-  image::BitDepth, images, pdf, BlendMode,
+  image::{BitDepth, CachingHint}, images, pdf, BlendMode,
   canvas::SaveLayerRec,
   Canvas as SkCanvas, ClipOp, Color4f, ColorSpace, ColorType, AlphaType, Document, Paint,
   Image as SkImage, ImageInfo, Pixmap, Matrix, Path, Picture, PictureRecorder, Point, Rect, IRect, Size, ISize,
@@ -700,6 +700,10 @@ impl Page{
             })
           }
 
+          "png" if options.browser_png && image.color_space().is_none_or(|cs| cs.is_srgb()) => {
+            browser_png(&image)
+          }
+
           "png" => {
             let mut png_opts = png_encoder::Options::default();
             png_opts.filter_flags = filters.flags_for(&image);
@@ -888,6 +892,35 @@ fn pdf_document<'a>(buffer:&'a mut impl std::io::Write, metadata:&'a pdf::Metada
   pdf::new_document(buffer, Some(metadata))
 }
 
+// encode the way browsers do for canvas.toDataURL() & toBlob(): unpremultiplied 8-bit RGBA written by the
+// `png` crate with zlib level 1 and the Up filter, streamed (so the final deflate block gets its own IDAT)
+// and without a pHYs chunk
+fn browser_png(image:&SkImage) -> Option<Vec<u8>>{
+  // the stream writer must own its output, so collect it through a shared handle
+  #[derive(Clone, Default)]
+  struct Sink(Arc<Mutex<Vec<u8>>>);
+  impl std::io::Write for Sink{
+    fn write(&mut self, buf:&[u8]) -> std::io::Result<usize>{ self.0.lock().unwrap().write(buf) }
+    fn flush(&mut self) -> std::io::Result<()>{ Ok(()) }
+  }
+
+  let info = ImageInfo::new(image.dimensions(), ColorType::RGBA8888, AlphaType::Unpremul, None);
+  let mut pixels = vec![0u8; info.compute_min_byte_size()];
+  if !image.read_pixels(&info, &mut pixels, info.min_row_bytes(), (0, 0), CachingHint::Allow){ return None }
+
+  let sink = Sink::default();
+  let mut encoder = png::Encoder::new(sink.clone(), info.width() as u32, info.height() as u32);
+  encoder.set_color(png::ColorType::Rgba);
+  encoder.set_depth(png::BitDepth::Eight);
+  encoder.set_deflate_compression(png::DeflateCompression::Level(1));
+  encoder.set_filter(png::Filter::Up);
+  let mut stream = encoder.write_header().ok()?.into_stream_writer().ok()?;
+  std::io::Write::write_all(&mut stream, &pixels).ok()?;
+  stream.finish().ok()?;
+  let bytes = std::mem::take(&mut *sink.0.lock().unwrap());
+  Some(bytes)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PngFilters{
   None, // fast: best for flat graphics & text
@@ -971,6 +1004,7 @@ pub struct ExportOptions{
   pub text_gamma: f32,
   pub premultiplied: bool,
   pub filters: PngFilters,
+  pub browser_png: bool,
 }
 
 impl Default for ExportOptions{
@@ -979,7 +1013,7 @@ impl Default for ExportOptions{
       format:"raw".to_string(), quality:0.92, density:1.0, matte:None,
       jpeg_downsample:false, text_contrast:0.0, text_gamma:1.4, msaa:None,
       color_type:ColorType::RGBA8888, outline:true, premultiplied:false,
-      filters:PngFilters::None,
+      filters:PngFilters::None, browser_png:false,
     }
   }
 }

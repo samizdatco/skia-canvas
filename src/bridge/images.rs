@@ -158,8 +158,10 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
     Some("auto") => PngFilters::Auto,
     _ => PngFilters::None,
   };
+  let browser_png = bool_for_key(cx, &opts, "browserPng")?;
 
   Ok(ExportOptions{
-    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma, premultiplied, filters
+    format, quality, density, outline, matte, msaa, color_type, jpeg_downsample, text_contrast, text_gamma, premultiplied, filters,
+    browser_png
   })
 }
