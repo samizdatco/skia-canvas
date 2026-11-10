@@ -231,6 +231,28 @@ describe("Context2D", ()=>{
       assert.equal(plain.getContextAttributes().colorSpace, 'srgb')
     })
 
+    test('unpremultiplied readback matches across engines', async () => {
+      // every alpha level over a spread of colors, so any rounding difference in the conversion shows up
+      let draw = gpu => {
+        let canvas = new Canvas(256, 1)
+        canvas.gpu = gpu
+        let ctx = canvas.getContext('2d')
+        for (let a=0; a<256; a++){
+          ctx.fillStyle = `rgba(${a*97%256}, ${a*53%256}, ${a*29%256}, ${a/255})`
+          ctx.fillRect(a, 0, 1, 1)
+        }
+        return canvas
+      }
+
+      let cpu = draw(false),
+          gpu = draw(true)
+      if (!gpu.gpu) return // no GPU available to compare against
+
+      let pixels = canvas => Array.from(canvas.getContext('2d').getImageData(0, 0, 256, 1).data)
+      assert.deepEqual(pixels(gpu), pixels(cpu))
+      assert.deepEqual(Array.from(await gpu.toBuffer('raw')), Array.from(await cpu.toBuffer('raw')))
+    })
+
     test('multiple pages', () => {
       let ctx2 = canvas.newPage(WIDTH*2, HEIGHT*2);
       assert.equal(canvas.width, WIDTH*2)
