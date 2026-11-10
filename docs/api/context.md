@@ -77,6 +77,8 @@ ctx.fontInstance = "auto" // returns to using the default Jost weight & style
 
 Text is rendered with standard greyscale antialiasing and sub-pixel positioning by default. Setting `.fontSmoothing` to `false` disables AA entirely and aligns each glyph to the pixel grid, producing hard-edged letterforms with no shading. Note that GPU canvases apply additional [`msaa`][msaa] antialiasing by default, so you’ll need to disable that for truly pixelated text.
 
+Setting it to `"subpixel"` requests subpixel (LCD) antialiasing instead, which is what browsers ask for when drawing canvas text. Since a canvas’s pixel layout is unknown, Skia renders the glyphs as if for an LCD screen and then reduces the result to greyscale coverage. On macOS this also selects CoreText’s slightly heavier subpixel-AA glyph shapes (unless [`.textRendering`][c2d_textRendering] is `"geometricPrecision"`), which together with the Canvas’s [`textContrast` and `textGamma`][textContrast] options lets you match browser text rendering on that platform.
+
 ### `.fontSynthesis`
 
 When the family selected via [`.font`][font] doesn’t include a face matching the requested weight or slant, a synthetic bold or oblique will be generated from the nearest real face. Setting `.fontSynthesis` to `false` will disable this, causing the nearest available face to be used as-is. Note that this now defaults to `true` (matching browser behavior) which is a change from earlier versions of Skia Canvas.
@@ -983,6 +985,7 @@ for (let i=0; i<8000; i++){
 [matte]: canvas.md#matte
 [density]: canvas.md#density
 [msaa]: canvas.md#msaa
+[textContrast]: canvas.md#controlling-font-rendering
 [gradients]: #createlineargradient-createradialgradient-createconicgradient
 [css_color_4]: https://developer.mozilla.org/en-US/blog/css-color-module-level-4/
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext

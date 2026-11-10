@@ -74,6 +74,7 @@ pub struct State{
   font_features: FontFeatures,
   font_hinting: bool,
   font_smoothing: bool,
+  font_subpixel: bool,
   font_synthesis: bool,
   char_style: TextStyle,
   graf_style: ParagraphStyle,
@@ -137,6 +138,7 @@ impl Default for State {
       font_features: FontFeatures::default(),
       font_hinting: false,
       font_smoothing: true,
+      font_subpixel: false,
       font_synthesis: true,
       char_style,
       graf_style,
@@ -176,9 +178,17 @@ impl State{
     char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));
 
     // reflect context's `fontHinting`, `fontSmoothing`, & `textRendering` settings
-    let (edging, subpixel) = if self.font_smoothing{ (Edging::AntiAlias, true) }else{ (Edging::Alias, false) };
-    let hinted = self.font_hinting && self.text_rendering != TextRendering::GeometricPrecision;
-    char_style.set_font_hinting(if hinted && !cfg!(target_os = "macos"){ FontHinting::Normal }else{ FontHinting::None });
+    let (edging, subpixel) = match (self.font_smoothing, self.font_subpixel){
+      (true, true) => (Edging::SubpixelAntiAlias, true),
+      (true, false) => (Edging::AntiAlias, true),
+      (false, _) => (Edging::Alias, false),
+    };
+    let precise = self.text_rendering == TextRendering::GeometricPrecision;
+    let hinted = self.font_hinting && !precise;
+    // CoreText's only form of hinting is the outline dilation it applies to subpixel-AA text, so keep it
+    // when subpixel AA is requested (as browsers on macOS do), even though bitmaps fall back to greyscale
+    let mac_subpixel = cfg!(target_os = "macos") && self.font_smoothing && self.font_subpixel && !precise;
+    char_style.set_font_hinting(if (hinted && !cfg!(target_os = "macos")) || mac_subpixel { FontHinting::Normal }else{ FontHinting::None });
     char_style.set_font_edging(edging);
     char_style.set_subpixel(subpixel);
 
@@ -230,7 +240,7 @@ impl State{
       self.graf_style.text_direction() as i32,
       self.text_wrap,
       self.line_height.map(f32::to_bits),
-      (self.font_hinting, self.font_smoothing, self.font_synthesis, self.text_rendering),
+      (self.font_hinting, self.font_smoothing, self.font_subpixel, self.font_synthesis, self.text_rendering),
     ).hash(&mut h);
 
     (h.finish(), text.to_string(), width.map(f32::to_bits))

@@ -890,7 +890,8 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
    *  whenever a new `ctx.font` value is assigned. */
   fontInstance: string
   fontHinting: boolean
-  fontSmoothing: boolean
+  /** `true` for greyscale antialiasing (the default), `false` for none, or `"subpixel"` to request subpixel antialiasing */
+  fontSmoothing: boolean | "subpixel"
   fontSynthesis: boolean
   textWrap: boolean
   textDecoration: TextDecorationSetting
