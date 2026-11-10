@@ -254,16 +254,24 @@ describe("Path2D", ()=>{
       // radius wouldn't. ctx.arcTo bakes the CTM as it builds, so drawing the same Path2D through
       // the transformed context (the browser reference) must match under a scale (before the fix
       // ctx kept the radius in device space and diverged by thousands of pixels)
-      let render = (target) => {
+      let render = (target, build) => {
         scrub(); ctx.save(); ctx.translate(30, 20); ctx.scale(1.6, 1.6)
-        let build = o => { o.moveTo(40, 40); o.arcTo(160, 40, 160, 160, 50); o.lineTo(40, 160) }
         if (target == 'ctx'){ ctx.beginPath(); build(ctx); ctx.fillStyle = 'black'; ctx.fill() }
         else { let q = new Path2D(); build(q); ctx.fillStyle = 'black'; ctx.fill(q) }
         ctx.restore()
         return ctx.getImageData(0, 0, WIDTH, HEIGHT).data
       }
       let diff = (a, b) => { let n = 0; for (let i=0; i<a.length; i++) if (a[i] !== b[i]) n++; return n }
-      assert.equal(diff(render('ctx'), render('path')), 0)
+
+      // after a closed subpath, the arc starts from that subpath's first point
+      let builds = {
+        open: o => { o.moveTo(40, 40); o.arcTo(160, 40, 160, 160, 50); o.lineTo(40, 160) },
+        rect: o => { o.rect(40, 40, 40, 40); o.arcTo(160, 40, 160, 160, 50); o.lineTo(40, 160) },
+        closePath: o => { o.moveTo(40, 40); o.lineTo(80, 40); o.lineTo(80, 80); o.closePath(); o.arcTo(160, 40, 160, 160, 50); o.lineTo(40, 160) },
+      }
+      for (let [name, build] of Object.entries(builds)){
+        assert.equal(diff(render('ctx', build), render('path', build)), 0, name)
+      }
     })
 
     test("rect", () => {

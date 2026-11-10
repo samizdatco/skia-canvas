@@ -4,7 +4,7 @@ use std::cell::{Ref, RefCell};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 use std::fmt::Write;
 use neon::prelude::*;
-use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, StrokeRec};
+use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, PathVerb, Rect, RRect, Matrix, StrokeRec};
 use skia_safe::{PathEffect, trim_path_effect, ContourMeasure, ContourMeasureIter};
 use skia_safe::path::{self, AddPathMode, Verb};
 use svgtypes::{PathParser, PathSegment};
@@ -133,7 +133,26 @@ impl Path2D{
 
   // the current point (end of the last-added verb), or None if the path is empty
   pub fn last_point(&self) -> Option<Point> {
-    self.path().last_pt()
+    let (verbs, mut points) = (self.builder.verbs(), self.builder.points());
+    match verbs.last()?{
+      PathVerb::Close => {
+        // walk backward to find the Move at the start of the subpath that's being closed
+        for verb in verbs.iter().rev(){
+          let skip = match verb{
+            PathVerb::Move => return points.last().copied(),
+            PathVerb::Line => 1,
+            PathVerb::Quad | PathVerb::Conic => 2,
+            PathVerb::Cubic => 3,
+            PathVerb::Close => 0,
+          };
+          points = &points[..points.len().saturating_sub(skip)];
+        }
+        None
+      },
+
+      // otherwise just use the point from the last verb
+      _ => points.last().copied()
+    }
   }
 
   pub fn append_path(&mut self, src:&Path, matrix:&Matrix){
