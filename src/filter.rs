@@ -80,8 +80,8 @@ impl Filter {
           FilterSpec::Plain{ name, value } => match name.as_ref() {
             "blur" => {
               if raster {
-                let sigma_x = value / (2.0 * matrix.scale_x());
-                let sigma_y = value / (2.0 * matrix.scale_y());
+                let sigma_x = value / matrix.scale_x();
+                let sigma_y = value / matrix.scale_y();
                 image_filters::blur((sigma_x, sigma_y), TileMode::Decal, chain, None)
               } else {
                 mask_filter = MaskFilter::blur(BlurStyle::Normal, *value, false);

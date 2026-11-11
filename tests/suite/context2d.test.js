@@ -5,7 +5,7 @@
 
 const {assert} = require('../runner/assert'),
       {describe, test, beforeEach, afterEach} = require('node:test'),
-      {Canvas, DOMMatrix, DOMPoint, ImageData, Path2D, FontLibrary, loadImage, loadCanvas} = require('../../lib'),
+      {Canvas, DOMMatrix, DOMPoint, Image, ImageData, Path2D, FontLibrary, loadImage, loadCanvas} = require('../../lib'),
       css = require('../../lib/classes/css')
 
 const BLACK = [0,0,0,255],
@@ -859,6 +859,22 @@ describe("Context2D", ()=>{
       ctx.fillRect(10, 10, 20, 20)
       assert.deepEqual(pixel(60, 60), BLACK)
       ctx.filter = 'none'
+
+      // blur spreads images as far as shapes (both use the length as the standard deviation)
+      let spread = draw => {
+        ctx.reset()
+        ctx.filter = 'blur(6px)'
+        draw()
+        return ctx.getImageData(0, 100, WIDTH, 1).data.filter((v, i) => i % 4 == 3 && v > 8).length
+      }
+      let tile = new Canvas(100, 40)
+      tile.getContext('2d').fillRect(0, 0, 100, 40)
+      let image = new Image(tile.toBufferSync('png')),
+          rect = spread(() => ctx.fillRect(50, 80, 100, 40)),
+          drawn = spread(() => ctx.drawImage(image, 50, 80))
+      assert(rect > 100 + 2 * 6)
+      assert(Math.abs(drawn - rect) <= 2, `image blur spread ${drawn}px vs ${rect}px for a shape`)
+      ctx.reset()
     })
 
     test("filter with em lengths", () => {
