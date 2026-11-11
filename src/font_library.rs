@@ -181,7 +181,12 @@ impl FontLibrary{
     names
   }
 
-  fn family_faces(&self, family:&str) -> Vec<Typeface>{
+  // the concrete family a generic name (e.g., `system-ui`) is mapped to
+  fn generic_family(&mut self, generic:&str) -> Option<String>{
+    self.generics().iter().find(|(_, alias)| alias.as_deref() == Some(generic)).map(|(font, _)| font.family_name())
+  }
+
+  fn family_faces(&mut self, family:&str) -> Vec<Typeface>{
     let registered:Vec<Typeface> = self.fonts.iter()
       .filter(|(font, alias)| alias.as_deref().map_or_else(
         || font.family_name() == family,
@@ -192,11 +197,18 @@ impl FontLibrary{
     // user-registered fonts shadow system fonts of the same name
     if !registered.is_empty(){ return registered }
 
+    // generic names report the fonts they're mapped to
+    let generic:Vec<Typeface> = self.generics().iter()
+      .filter(|(_, alias)| alias.as_deref() == Some(family))
+      .map(|(font, _)| font.clone())
+      .collect();
+    if !generic.is_empty(){ return generic }
+
     let mut set = self.mgr.match_family(family);
     (0..set.count()).filter_map(|i| set.new_typeface(i)).collect()
   }
 
-  fn family_details(&self, family:&str) -> (Vec<f32>, Vec<String>, Vec<String>, FontCapabilities){
+  fn family_details(&mut self, family:&str) -> (Vec<f32>, Vec<String>, Vec<String>, FontCapabilities){
     // pull style values out of each font in the family
     let mut weights:Vec<i32> = vec![];
     let mut widths:Vec<String> = vec![];
@@ -565,7 +577,7 @@ pub fn get_families(mut cx: FunctionContext) -> JsResult<JsArray> {
 pub fn has(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let family = string_arg(&mut cx, 1, "familyName")?;
   let found = FontLibrary::with_shared(|lib|
-    lib.families().contains(&family)
+    lib.families().contains(&family) || lib.generic_family(&family).is_some()
   );
   Ok(cx.boolean(found))
 }
@@ -579,6 +591,9 @@ pub fn family(mut cx: FunctionContext) -> JsResult<JsValue> {
   if weights.is_empty() {
     return Ok(cx.undefined().upcast())
   }
+
+  // generic names report the concrete family they're mapped to
+  let family = FontLibrary::with_shared(|lib| lib.generic_family(&family)).unwrap_or(family);
 
   let instances = caps.instances_object(&mut cx, styles.len() > 1)?;
   let weights = floats_to_array(&mut cx, &weights)?;

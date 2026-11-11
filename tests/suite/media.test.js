@@ -1801,6 +1801,19 @@ describe("FontLibrary", ()=>{
     assert.equal(info && typeof info.styles[0], 'string');
   })
 
+  test("can describe generic families", ()=>{
+    // generics report the concrete family they're mapped to (when the system has one)
+    for (let generic of ['serif', 'sans-serif', 'monospace', 'system-ui']){
+      let info = FontLibrary.family(generic)
+      assert.equal(FontLibrary.has(generic), info !== undefined)
+      if (info){
+        assert.notEqual(info.family, generic)
+        assert.deepEqual(info.weights, FontLibrary.family(info.family).weights)
+      }
+    }
+    if (process.platform == 'darwin') assert.equal(FontLibrary.family('system-ui').family, '.AppleSystemUIFont')
+  })
+
   test("can identify variable fonts", ()=>{
     let [statik] = useTestFace(),
         [variable] = FontLibrary.use("VariableFace", [findFont("AmstelvarAlpha-VF.ttf")]);
