@@ -65,6 +65,20 @@ describe("Context2D", ()=>{
       ctx.font = 'invalid'
       assert.equal(ctx.font, canonical)
 
+      // reads back the way browsers serialize it (plus oblique, stretch & line height), and can be reassigned
+      _each({
+        'normal 400 12px Arial': '12px Arial',
+        'bolder small-caps italic 12px Arial': 'italic small-caps bold 12px Arial',
+        'oblique 10deg condensed 16pt Times New Roman': 'oblique 10deg condensed 21.333334px "Times New Roman"',
+        '12px/1.5 Arial, SANS-SERIF': '12px/18px Arial, sans-serif',
+        '12px "Quoted\\\\\\"Font", \'1Font\'': '12px "Quoted\\\\\\"Font", "1Font"',
+      }, (expected, font) => {
+        ctx.font = font
+        assert.equal(ctx.font, expected)
+        ctx.font = ctx.font
+        assert.equal(ctx.font, expected)
+      })
+
       // re-assigning `font` to the value it already reports is a no-op — the implicit default must
       // resolve the same metrics as an explicit assignment (fresh ctx so no font was ever set)
       let dctx = new Canvas(WIDTH, HEIGHT).getContext('2d')
@@ -2722,10 +2736,10 @@ describe("Context2D", ()=>{
         'normal 20px Arial': { size: 20, style: 'normal', family: ['Arial'] },
         '300 20px Arial': { size: 20, weight: 300, family: ['Arial'] },
         '800 20px Arial': { size: 20, weight: 800, family: ['Arial'] },
-        'bolder 20px Arial': { size: 20, weight: 800, family: ['Arial'] },
-        'lighter 20px Arial': { size: 20, weight: 300, family: ['Arial'] },
+        'bolder 20px Arial': { size: 20, weight: 700, family: ['Arial'] },
+        'lighter 20px Arial': { size: 20, weight: 100, family: ['Arial'] },
         'normal normal normal 16px Impact': { size: 16, weight: 400, family: ['Impact'], style: 'normal', variant: 'normal' },
-        'italic small-caps bolder 16px cursive': { size: 16, style: 'italic', variant: 'small-caps', weight: 800, family: ['cursive'] },
+        'italic small-caps bolder 16px cursive': { size: 16, style: 'italic', variant: 'small-caps', weight: 700, family: ['cursive'] },
         // `normal` is a no-op token in the shorthand: it must not cancel a sub-property that a
         // preceding (or following) keyword already set — regression guards for #278.
         'italic normal 20px Arial': { size: 20, style: 'italic', family: ['Arial'] },
