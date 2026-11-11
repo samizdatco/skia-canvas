@@ -971,6 +971,18 @@ describe("Context2D", ()=>{
         let svg = svgCanvas.toBufferSync('svg').toString()
         assert.equal(svg.match(/<text/g)?.length, count)
       }
+
+      // opaque images cast their shadow from their bounds, which svg exports keep
+      let shadowRects = format => {
+        let svgCanvas = new Canvas(300, 200), svgCtx = svgCanvas.getContext('2d')
+        svgCtx.shadowColor = '#000'
+        svgCtx.shadowBlur = 6
+        svgCtx.drawImage(new Image(tile.toBufferSync(format)), 10, 10)
+        let svg = svgCanvas.toBufferSync('svg').toString()
+        return svg.match(/<rect/g)?.length ?? 0
+      }
+      assert.equal(shadowRects('jpg'), 1)
+      assert.equal(shadowRects('png'), 0)
     })
 
     test("globalCompositeOperation", () => {

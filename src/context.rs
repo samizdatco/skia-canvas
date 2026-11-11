@@ -679,10 +679,16 @@ impl Context2D{
 
   pub fn draw_image(&mut self, image:&Image, src_rect:&Rect, dst_rect:&Rect){
     let paint = self.paint_for_image();
-    let shadow_paint = self.shadow_paint_for_image(&paint);
-    self.render_to_canvas(&paint, shadow_paint, |canvas, paint| {
-      let sampling = self.state.image_filter.sampling();
-      canvas.draw_image_rect_with_sampling_options(image, Some((src_rect, Strict)), dst_rect, sampling, paint);
+    let shadow_paint = match image.is_opaque(){
+      true => self.shadow_paint_for_drawing(&paint),
+      false => self.shadow_paint_for_image(&paint),
+    };
+    self.render_to_canvas(&paint, shadow_paint, |canvas, paint| match paint.mask_filter(){
+      Some(_) => { canvas.draw_rect(dst_rect, paint); }, // shadows for opaque images can just use blurred rects
+      None => {
+        let sampling = self.state.image_filter.sampling();
+        canvas.draw_image_rect_with_sampling_options(image, Some((src_rect, Strict)), dst_rect, sampling, paint);
+      },
     });
   }
 
