@@ -55,6 +55,18 @@ impl Filter {
     Filter{ css, specs, _raster:None, _vector:None }
   }
 
+  // the filter's net opacity (or None if it modifies anything but colors or opacity)
+  pub fn opacity(&self) -> Option<f32> {
+    self.specs.iter().try_fold(1.0, |alpha, spec| match spec {
+      FilterSpec::Plain{ name, value } => match name.as_ref() {
+        "opacity" => Some(alpha * value.clamp(0.0, 1.0)),
+        "brightness" | "contrast" | "grayscale" | "invert" | "saturate" | "sepia" | "hue-rotate" => Some(alpha),
+        "blur" | _ => None,
+      },
+      FilterSpec::Shadow{ .. } => None,
+    })
+  }
+
   pub fn mix_into<'a>(&mut self, paint:&'a mut Paint, matrix:Matrix, raster:bool) -> &'a mut Paint {
     let filters = self.filters_for(matrix, raster);
     paint.set_image_filter(filters.image)

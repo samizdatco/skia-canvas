@@ -922,6 +922,17 @@ describe("Context2D", ()=>{
       // ensure that the shadow is actually fuzzy despite the transforms
       assert.notEqual(pixel(143, 117), BLACK)
 
+      // the blur scales with the export density (sampled 15px outside the rect's edge)
+      let halo = density => {
+        let c = new Canvas(200, 200), shadowed = c.getContext('2d')
+        shadowed.shadowColor = '#000'
+        shadowed.shadowBlur = 20
+        shadowed.fillRect(50, 50, 100, 100)
+        return c.toBufferSync('raw', {density})[(100 * density * 200 * density + 165 * density) * 4 + 3]
+      }
+      assert(halo(1) > 5)
+      assert(Math.abs(halo(2) - halo(1)) <= 3)
+
       // the shadow is cast from the filtered drawing (measured along a row & column of a shadow-only render)
       let tile = new Canvas(200, 80)
       tile.getContext('2d').fillRect(0, 0, 200, 80)
@@ -948,6 +959,18 @@ describe("Context2D", ()=>{
         assert.equal(castBy('brightness(0.5)', draw).width, plain.width)
       }
       assert(castBy('drop-shadow(0 30px 0 red)', rect).height >= castBy('none', rect).height + 25)
+
+      // wrapped text keeps both itself & its shadow in svg exports (and itself when the shadow needs an image filter)
+      for (let [filter, count] of Object.entries({'none': 6, 'blur(1px)': 3})){
+        let svgCanvas = new Canvas(300, 200), svgCtx = svgCanvas.getContext('2d')
+        svgCtx.filter = filter
+        svgCtx.shadowColor = '#000'
+        svgCtx.shadowBlur = 6
+        svgCtx.textWrap = true
+        svgCtx.fillText('some wrapped text', 10, 40, 50)
+        let svg = svgCanvas.toBufferSync('svg').toString()
+        assert.equal(svg.match(/<text/g)?.length, count)
+      }
     })
 
     test("globalCompositeOperation", () => {

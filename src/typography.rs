@@ -442,11 +442,6 @@ impl Layout{
     path.detach()
   }
 
-  // flag whether there are multiple glyph runs or a decoration (implying to_picture should be used for render)
-  pub fn is_multi_op(&self) -> bool {
-    self.runs.len() > 1 || self.decorations.is_some()
-  }
-
   // flatten the draw into a Picture, condensing multiple ops into a single draw_picture
   pub fn to_picture(&self, paint:&Paint) -> Option<Picture> {
     // Record with a flattened paint (alpha 1, no image filter) so the outer paint applies
