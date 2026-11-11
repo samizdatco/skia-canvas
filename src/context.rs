@@ -881,8 +881,12 @@ impl Context2D{
         }
       }
     }
+
+    // chain shadow to existing image filters
     let mut paint = base_paint.clone();
-    paint.set_image_filter(image_filters::drop_shadow_only((0.0, 0.0), (sigma.x, sigma.y), shadow_color.color, ColorSpace::new_srgb(), None, None));
+    paint.set_image_filter(image_filters::drop_shadow_only(
+      (0.0, 0.0), (sigma.x, sigma.y), shadow_color.color, ColorSpace::new_srgb(), paint.image_filter(), None
+    ));
     Some(paint)
   }
 

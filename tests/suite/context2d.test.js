@@ -921,6 +921,33 @@ describe("Context2D", ()=>{
 
       // ensure that the shadow is actually fuzzy despite the transforms
       assert.notEqual(pixel(143, 117), BLACK)
+
+      // the shadow is cast from the filtered drawing (measured along a row & column of a shadow-only render)
+      let tile = new Canvas(200, 80)
+      tile.getContext('2d').fillRect(0, 0, 200, 80)
+      let image = new Image(tile.toBufferSync('png'))
+      let castBy = (filter, draw) => {
+        let c = new Canvas(400, 300), shadowed = c.getContext('2d')
+        shadowed.filter = filter
+        shadowed.shadowColor = '#000'
+        shadowed.shadowBlur = 8
+        shadowed.shadowOffsetY = 1000
+        draw(shadowed)
+        let a = shadowed.getImageData(0, 0, 400, 300).data, peak = 0, width = 0, height = 0
+        for (let i = 3; i < a.length; i += 4) peak = Math.max(peak, a[i])
+        for (let x = 0; x < 400; x++) if (a[(100 * 400 + x) * 4 + 3] > 8) width++
+        for (let y = 0; y < 300; y++) if (a[(y * 400 + 200) * 4 + 3] > 8) height++
+        return {peak, width, height}
+      }
+      let rect = s => s.fillRect(100, -940, 200, 80),
+          picture = s => s.drawImage(image, 100, -940)
+      for (let draw of [rect, picture]){
+        let plain = castBy('none', draw)
+        assert(castBy('opacity(0.3)', draw).peak < plain.peak / 2)
+        assert(castBy('blur(6px)', draw).width > plain.width + 6)
+        assert.equal(castBy('brightness(0.5)', draw).width, plain.width)
+      }
+      assert(castBy('drop-shadow(0 30px 0 red)', rect).height >= castBy('none', rect).height + 25)
     })
 
     test("globalCompositeOperation", () => {
