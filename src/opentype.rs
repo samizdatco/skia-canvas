@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use neon::prelude::*;
-use read_fonts::{FontData, FontRead, TableProvider, TopLevelTable, types::{Tag, Fixed, F2Dot14}, tables::{name::Name, hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, head::Head, layout::FeatureParams}};
+use read_fonts::{FontData, FontRead, TableProvider, TopLevelTable, types::{Tag, Fixed, F2Dot14}, tables::{name::Name, hhea::Hhea, os2::Os2, base::Base, fvar::Fvar, avar::Avar, mvar::Mvar, gsub::Gsub, gpos::Gpos, head::Head, stat::Stat, trak::Trak, layout::FeatureParams}};
 use skia_safe::{Data, FontArguments, FourByteTag, Typeface};
 use skia_safe::font_style::{FontStyle, Weight, Slant};
 use skia_safe::font_parameters::VariationAxis;
@@ -37,6 +37,22 @@ impl FontTables{
   // tables for FontCapabilities
   pub fn capabilities(face:&Typeface) -> Self{
     Self::from_face(Some(face), &[Fvar::TAG, Gsub::TAG, Gpos::TAG])
+  }
+
+  // tables for FontAxes' tracking
+  pub fn tracking(face:&Typeface) -> Self{
+    Self::from_face(Some(face), &[Trak::TAG, Stat::TAG, Head::TAG])
+  }
+
+  // the standard-spacing track's (point size, em) pairs
+  pub fn normal_track(&self) -> Option<Vec<(f32, f32)>>{
+    let (trak, _) = (self.trak().ok()?, self.stat().ok()?); // only use `trak` if `STAT` is also defined
+    let upm = self.head().ok()?.units_per_em() as f32;
+    let data = trak.horiz()?.ok()?;
+    let entry = data.track_table().iter().find(|entry| entry.track() == Fixed::ZERO)?;
+    let sizes = data.size_table(trak.offset_data()).ok()?;
+    let values = entry.per_size_values(trak.offset_data(), data.n_sizes()).ok()?;
+    Some(sizes.iter().zip(values).map(|(size, value)| (size.get().to_f32(), value.get() as f32 / upm)).collect())
   }
 
   // the `MVAR` deltas for the given metric tags at a variation position (normalized via `fvar` & `avar`)
@@ -339,11 +355,12 @@ pub struct FontAxes{
   variations: Vec<(String, f32)>,  // decoded fontVariationSettings (overrides any instance settings)
   layout_style: Option<FontStyle>, // the style to request in layout (if the instance/variations differ from the font's)
   allows_synthesis: bool, // false when synthetic bold/italic would misrepresent the axis values
+  tracking: Vec<(f32, f32)>, // the face's `trak` values as (point size, em) pairs
 }
 
 impl Default for FontAxes{
   fn default() -> Self{
-    FontAxes{ instance:None, variations:vec![], layout_style:None, allows_synthesis:true }
+    FontAxes{ instance:None, variations:vec![], layout_style:None, allows_synthesis:true, tracking:vec![] }
   }
 }
 
@@ -360,6 +377,19 @@ impl FontAxes{
     self.allows_synthesis
   }
 
+  // the face's tracking in px at a given size (minus the 12pt tracking harfbuzz applies)
+  pub fn tracking(&self, size:f32) -> f32{
+    let em = |size:f32| match self.tracking.iter().position(|&(pt, _)| pt >= size){
+      Some(0) => self.tracking[0].1,
+      Some(i) => {
+        let ((s0, v0), (s1, v1)) = (self.tracking[i - 1], self.tracking[i]);
+        v0 + (v1 - v0) * (size - s0) / (s1 - s0)
+      },
+      None => self.tracking.last().map_or(0.0, |&(_, em)| em),
+    };
+    (em(size) - em(12.0)) * size
+  }
+
   // update layout_style to match instance & variation settings (so fallback fonts match and synthetic bold/ital aren't
   // over-applied) unless it would cause skia to match a different face altogether
   pub fn resolve_style(&mut self, char_style:&TextStyle, stretch:f32, oblique:Option<f32>){
@@ -368,8 +398,9 @@ impl FontAxes{
     let (face, matching_style) = match (&self.instance, font_face){
       (Some(inst), _) => (inst.face.clone(), inst.face.font_style()),
       (None, Some(face)) => (face, char_style.font_style()),
-      (None, None) => { (self.layout_style, self.allows_synthesis) = (None, true); return }
+      (None, None) => { (self.layout_style, self.allows_synthesis, self.tracking) = (None, true, vec![]); return }
     };
+    self.tracking = FontTables::tracking(&face).normal_track().unwrap_or_default();
 
     // determine which axes the face supports
     let axes:Vec<VariationAxis> = face.variation_design_parameters().unwrap_or_default().into_iter()

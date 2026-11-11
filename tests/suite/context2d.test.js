@@ -1503,6 +1503,27 @@ describe("Context2D", ()=>{
         assert.nearEqual(ctx.measureText(text).width, 94)
     })
 
+    test("font tracking", {skip: process.platform != 'darwin' && "san francisco is only on macOS"}, () => {
+      // fonts with `trak` & `STAT` tables get their size-specific tracking (widths measured in chrome)
+      let text = 'Hamburgefonstiv 0123456789'
+      _each({12: 173.13, 20: 270.89, 40: 535.90}, (width, size) => {
+        ctx.font = `${size}px system-ui`
+        assert.nearEqual(ctx.measureText(text).width, width, 0.05)
+      })
+
+      // and any letterSpacing is added to it
+      ctx.letterSpacing = '2px'
+      assert.nearEqual(ctx.measureText(text).width, 535.90 + 26 * 2, 0.05)
+      ctx.letterSpacing = '0px'
+
+      // harfbuzz's 12pt tracking isn't counted twice for fonts where it's non-zero (widths measured in webkit)
+      FontLibrary.use('NYTest', ['/System/Library/Fonts/NewYork.ttf'])
+      _each({12: 168.46, 24: 321.73}, (width, size) => {
+        ctx.font = `${size}px NYTest`
+        assert.nearEqual(ctx.measureText(text).width, width, 0.05)
+      })
+    })
+
     test("textWrap", () => {
       FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
       let inkHeight = () => {

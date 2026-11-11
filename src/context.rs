@@ -173,7 +173,7 @@ impl State{
     // set vertical offset and horizontal spacing
     char_style.set_baseline_shift(BaselineMetrics::for_style(&char_style).get_offset(self.text_baseline));
     char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
-    char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));
+    char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()) + self.font_axes.tracking(char_style.font_size()));
 
     // reflect context's `fontHinting`, `fontSmoothing`, & `textRendering` settings
     let (edging, subpixel) = if self.font_smoothing{ (Edging::AntiAlias, true) }else{ (Edging::Alias, false) };
