@@ -325,7 +325,7 @@ ctx.fillStyle = g
 ctx.fillRect(0, 0, 200, 200)
 ```
 
-Skia Canvas’s `CanvasGradient` objects give you additional control over how the colors between the stops are interpolated. Each gradient object has a `colorInterpolationMethod` property (defining its colorspace), a `hueInterpolationMethod` property (controlling how angle-based values are interpolated), and a `premultipliedAlpha` property (allowing you to opt into the transparency model used by normal CSS gradients):
+Skia Canvas’s `CanvasGradient` objects give you additional control over how the colors between the stops are interpolated. Each gradient object has a `colorInterpolationMethod` property (defining its colorspace), a `hueInterpolationMethod` property (controlling how angle-based values are interpolated), a `premultipliedAlpha` property (allowing you to opt into the transparency model used by normal CSS gradients), and a `dithering` flag (to smooth banding):
 
 #### `colorInterpolationMethod`
 
@@ -347,12 +347,13 @@ Only applies when a **polar** color interpolation method has been chosen and det
 |clockwise around the circle | `increasing` |
 |counter-clockwise around the circle | `decreasing` |
 
-
 #### `premultipliedAlpha`
 
 Whether or not interpolation should include premultiplied alpha. Defaults to `false`, but setting it to `true` can improve gradients that include `transparent` (since the default will cause the color to become washed out as it decreases in opacity).
 
+#### `dithering`
 
+Whether to overlay a noise pattern on the gradient, potentially disguising banding on shallow gradients. Defaults to `false` since dithered gradients compress poorly, making PNG exports several times larger. CPU and GPU renderers use different dithering patterns due to a Skia bug, but the CPU dithering will match Chrome’s.
 
 ### `createTexture()`
 ```js returns="CanvasTexture"
@@ -543,6 +544,8 @@ The text-drawing methods’ behavior is mostly standard unless `.textWrap` has b
   3. The line-height setting in the `.font` value will be used to set the inter-line leading rather than simply being ignored.
 
 Even when `.textWrap` is `false`, the text-drawing methods will never choose a more-condensed weight or otherwise attempt to squeeze your entire string into the measure specified by `width`. Instead the text will be typeset up through the last word that fits and the rest will be omitted. This can be used in conjunction with the `.lines` property of the object returned by `measureText()` to incrementally lay out a long string into, for example, a multi-column layout with an even number of lines in each.
+
+Text shadows will render differently when applied via the context’s `shadow*` properties versus a `drop-shadow()` in its [`filter`][filter] settings. When [`shadowColor`][shadowColor] is non-transparent and [`shadowBlur`][shadowBlur] or [`shadowOffsetX`][shadowOffsetX]/[`Y`][shadowOffsetY] is set to a non-zero value, shadows will be drawn for each glyph individually—potentially leading to darkening in places where tightly-tracked characters overlap or where text decorations are overdrawn. When the shadow is drawn as a `filter`, the full run of text will first be flattened into a single outline, resulting in a consistent, non-overlapping shadow, albeit at a substantially higher runtime cost.
 
 ### `measureText()`
 ```js returns="TextMetrics"

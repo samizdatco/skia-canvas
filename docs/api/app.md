@@ -24,7 +24,7 @@ By default, each window will attempt to re-render its content every time the dis
 > This setting is only relevant if you are listening for [`frame`][frame] or [`draw`][draw] events (or have a pending `requestAnimationFrame`) on your windows. Otherwise the canvas will only be updated when responding to UI interactions like keyboard and mouse events.
 
 ####  `.running`
-A read-only boolean flagging whether any GUI windows are currently active. It is `true` while the Promise returned by [`launch()`][launch] is still pending.  
+A read-only boolean flagging whether any GUI windows are currently active. It is `true` while the Promise returned by [`launch()`][launch] is still pending.
 
 ####  `.windows`
 An array of references to all of the `Window` objects that have been created and not yet [closed][close].
@@ -43,7 +43,7 @@ Any `Window` you create will schedule the `App` to begin running as soon as the 
 App.quit()
 ```
 
-By default your process will terminate once the final window has closed (and any timers or intervals you’ve set up have been cleared). If you wish to bring things to a swifter conclusion from code, call the `App.quit()` method from one of your event handlers instead.
+By default your process will terminate once the final window has closed (and any timers or intervals you’ve set up have been cleared). If you wish to bring things to a swifter conclusion from code, call the `App.quit()` method from one of your event handlers instead. Each window will be sent a [`close` event][close-event] as it is shut down (during which it could potentially re-[`open()`][open] itself, cancelling the quit).
 
 ### Events
 
@@ -53,6 +53,8 @@ Emitted when the final active window is closed via a user interface click on its
 
 <!-- references_begin -->
 [close]: window.md#close
+[close-event]: window.md#close-1
+[open]: window.md#open
 [draw]: window.md#draw
 [frame]: window.md#frame
 [launch]: #launch

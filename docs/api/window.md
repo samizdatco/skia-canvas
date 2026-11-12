@@ -284,7 +284,7 @@ The events emitted by the `Window` object are mostly consistent with browser-bas
 
 ### `close`
 
-Emitted when a window is closed via a user interface click on its close widget or by a programmatic call to the window’s [`close()`][close] method.
+Emitted when a window is closed via a user interface click on its close widget or, programmatically, by a call to the window’s [`close()`][close] method or [`App.quit()`][quit].
 
 ### `fullscreen`
 Emitted when a window switches into or out of full-screen mode. The event object includes a boolean `enabled` property flagging the new state.
@@ -317,6 +317,7 @@ The `draw` event fires immediately after `frame` and has the potentially conveni
 [frame]: #frame
 [fullscreen]: #fullscreen
 [fullscreen-event]: #fullscreen-1
+[quit]: app.md#quit
 [move-event]: #move
 [newPage]: canvas.md#newpage
 [resizable]: #resizable
