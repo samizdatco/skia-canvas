@@ -4,7 +4,7 @@ use std::cell::{Ref, RefCell};
 use std::f64::consts::{FRAC_PI_2, PI, TAU};
 use std::fmt::Write;
 use neon::prelude::*;
-use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, Rect, RRect, Matrix, StrokeRec};
+use skia_safe::{Path, Point, Vector, PathFillType, PathDirection, PathBuilder, PathVerb, Rect, RRect, Matrix, StrokeRec};
 use skia_safe::{PathEffect, trim_path_effect, ContourMeasure, ContourMeasureIter};
 use skia_safe::path::{self, AddPathMode, Verb};
 use svgtypes::{PathParser, PathSegment};
@@ -131,9 +131,17 @@ impl Path2D{
     }
   }
 
-  // the current point (end of the last-added verb), or None if the path is empty
-  pub fn last_point(&self) -> Option<Point> {
-    self.path().last_pt()
+  // the canvas "current point" (None if the path is empty): the end of the last-added verb, but after
+  // a close it's the start of the closed subpath (where the next segment begins), not its last point
+  pub fn current_point(&self) -> Option<Point> {
+    let path = self.path();
+    if path.verbs().last() != Some(&PathVerb::Close) {
+      return path.last_pt()
+    }
+    path::Iter::new(&path, false)
+      .filter(|(verb, _)| *verb == Verb::Move)
+      .last()
+      .and_then(|(_, pts)| pts.first().copied())
   }
 
   pub fn append_path(&mut self, src:&Path, matrix:&Matrix){
