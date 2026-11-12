@@ -266,6 +266,36 @@ describe("Path2D", ()=>{
       assert.equal(diff(render('ctx'), render('path')), 0)
     })
 
+    test("arcTo after a closed subpath", () => {
+      // after rect() or closePath() the current point is the start of the closed subpath, so
+      // arcTo begins with a line from there (along y=10 here), as it does after moveTo()
+      let starts = {
+        moveTo: o => o.moveTo(10, 10),
+        rect: o => o.rect(10, 10, 30, 30),
+        closePath: o => { o.moveTo(10, 10); o.lineTo(40, 10); o.lineTo(40, 40); o.closePath() },
+      }
+      for (let [name, start] of Object.entries(starts)){
+        for (let target of ['ctx', 'path']){
+          scrub()
+          ctx.lineWidth = 2
+          if (target == 'ctx'){
+            ctx.beginPath(); start(ctx); ctx.arcTo(90, 10, 90, 90, 20); ctx.stroke()
+          }else{
+            let q = new Path2D(); start(q); q.arcTo(90, 10, 90, 90, 20); ctx.stroke(q)
+          }
+          assert.equal(pixel(60, 10)[3], 255, `${target} ${name}: line to the arc`)
+          assert.equal(pixel(90, 50)[3], 0, `${target} ${name}: arc ends at its tangent point`)
+        }
+      }
+
+      // the closed contour is left as is and the arc starts a new one at its first point
+      let q = new Path2D()
+      q.rect(10, 10, 30, 30)
+      q.arcTo(90, 10, 90, 90, 20)
+      let close = q.edges.findIndex(([verb]) => verb == "closePath")
+      assert.deepEqual(q.edges[close + 1], ["moveTo", 10, 10])
+    })
+
     test("rect", () => {
       p.rect(50,50,100,100)
       ctx.lineWidth = 6

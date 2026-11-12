@@ -924,7 +924,7 @@ impl Pen for Context2D {
   }
   fn arc_to(&mut self, x1:f32, y1:f32, x2:f32, y2:f32, r:f32){
     let mut sub = Path2D::default();
-    if let Some(pt) = self.path.last_point(){
+    if let Some(pt) = self.path.current_point(){
       // The arc's initial tangent is based on the path's current point, so begin the subpath with it
       let local = self.in_local_coordinates(pt.x, pt.y);
       sub.move_to(local.x, local.y);
