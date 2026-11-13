@@ -1413,6 +1413,44 @@ describe("Context2D", ()=>{
       assert.equal(ctx.isPointInStroke(path, ...inBoth), true)
     })
 
+    test("isPointInPath() with a transform", () => {
+      // x & y are in canvas coordinates, unaffected by the current transform
+      ctx.translate(100, 0)
+      ctx.rect(0, 0, 50, 50) // covers x 100..150 on the canvas
+      assert.equal(ctx.isPointInPath(125, 25), true)
+      assert.equal(ctx.isPointInPath(25, 25), false)
+      assert.equal(ctx.isPointInPath(225, 25), false)
+
+      ctx.beginPath()
+      ctx.moveTo(0, 80)
+      ctx.lineTo(50, 80) // covers x 100..150 at y=80
+      ctx.lineWidth = 4
+      assert.equal(ctx.isPointInStroke(125, 80), true)
+      assert.equal(ctx.isPointInStroke(25, 80), false)
+
+      // the stroke is as wide as stroke() would draw it (scaled by the transform)
+      ctx.resetTransform()
+      ctx.scale(2, 2)
+      ctx.beginPath()
+      ctx.moveTo(0, 40)
+      ctx.lineTo(50, 40) // covers x 0..100 at y=80, 8px wide
+      assert.equal(ctx.isPointInStroke(50, 83), true)
+      assert.equal(ctx.isPointInStroke(50, 86), false)
+
+      // the path keeps its canvas position, but the line width uses the current transform (like stroke())
+      ctx.resetTransform()
+      assert.equal(ctx.isPointInStroke(50, 81), true)
+      assert.equal(ctx.isPointInStroke(50, 83), false)
+      assert.equal(ctx.isPointInStroke(25, 40), false)
+
+      // Path2D arguments are in local coordinates
+      let path = new Path2D()
+      path.rect(0, 0, 50, 50)
+      ctx.translate(100, 0)
+      assert.equal(ctx.isPointInPath(path, 125, 25), true)
+      assert.equal(ctx.isPointInPath(path, 25, 25), false)
+    })
+
     test("letterSpacing", () => {
         FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
 
