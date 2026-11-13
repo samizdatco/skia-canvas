@@ -447,12 +447,15 @@ impl Context2D{
     self.path = Path2D::default();
   }
 
+  // the current path has already incorporated its transform state, so map it back into
+  // the local coordinate space that Path2D arguments (and the current matrix) use
+  pub fn path_in_local_coordinates(&self) -> Path{
+    let inverse = self.state.matrix.invert().unwrap_or_default();
+    self.path.path().with_transform(&inverse)
+  }
+
   pub fn draw_path(&mut self, path:Option<Path>, style:PaintStyle, rule:Option<PathFillType>){
-    let mut path = path.unwrap_or_else(|| {
-      // the current path has already incorporated its transform state
-      let inverse = self.state.matrix.invert().unwrap_or_default();
-      self.path.path().with_transform(&inverse)
-    });
+    let mut path = path.unwrap_or_else(|| self.path_in_local_coordinates());
     path.set_fill_type(rule.unwrap_or(PathFillType::Winding));
 
     // if path will fill the whole canvas and paint/blend are fully opaque...

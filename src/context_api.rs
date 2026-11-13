@@ -156,7 +156,7 @@ fn _is_in(mut cx: FunctionContext, style:PaintStyle) -> JsResult<JsBoolean> {
     Some(path) => (4, path),
     None => match cx.len(){
       5 => cx.throw_type_error("Expected a Path2D for 1st arg")?,
-      _ => (3, this.path.path())
+      _ => (3, this.path_in_local_coordinates())
     }
   };
 
