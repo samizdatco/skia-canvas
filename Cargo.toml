@@ -30,7 +30,6 @@ rayon = "^1.5"
 once_cell = "1.13"
 little_exif = "0.6.8"
 ahash = "0.8"
-process_path = "0.1.4"
 hayro-interpret = "0.8"
 kurbo = "0.13"
 # finds where an invalid Path2D string stops being valid (skia's parser is all-or-nothing)
@@ -76,3 +75,7 @@ windows-sys = { version = "0.61", optional = true, features = ["Win32_Foundation
 objc2-core-foundation = { version = "0.3", optional = true, default-features = false, features = ["std", "CFCGTypes"] }
 objc2-core-video = { version = "0.3.2", optional = true, default-features = false, features = ["std", "CVBase", "CVReturn", "CVDisplayLink", "objc2-core-graphics"] }
 objc2-core-graphics = { version = "0.3", optional = true, default-features = false, features = ["std", "CGColorSpace"] }
+
+# linux-only: finds bundled fallback fonts.conf
+[target.'cfg(target_os = "linux")'.dependencies]
+process_path = "0.1.4"
