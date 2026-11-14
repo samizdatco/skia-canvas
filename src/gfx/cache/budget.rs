@@ -37,7 +37,7 @@ pub fn charge<V>(entry:&Entry<V>){
 
 pub fn credit<V>(entry:&Entry<V>){
   if !entry.pinned{
-    LIVE_BYTES.fetch_update(Ordering::Relaxed, Ordering::Relaxed,
+    LIVE_BYTES.try_update(Ordering::Relaxed, Ordering::Relaxed,
       |live| Some(live.saturating_sub(entry.bytes))).ok(); // clamp subtraction at 0
   }
 }

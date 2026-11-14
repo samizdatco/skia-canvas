@@ -176,7 +176,7 @@ jobs:
       env:
         CACHE_REF: ${{ steps.skia-cache.outputs.ref }}
       run: |
-        out=$(find skia-canvas/target/release/build -maxdepth 3 -type d -path '*skia-bindings-*/out/skia' | head -1)
+        out=$(find skia-canvas/target/release/build -type d -path '*skia-bindings*/out/skia' | head -1)
         [ -n "$out" ] || { echo "no skia build output to cache"; exit 1; }
         mkdir -p /tmp/pkg/skia-binaries
         cp "$out"/*.a "$out"/bindings.rs /tmp/pkg/skia-binaries/

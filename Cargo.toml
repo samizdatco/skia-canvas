@@ -5,6 +5,7 @@ description = "A canvas environment for Node"
 authors = ["Christian Swinehart <drafting@samizdat.co>"]
 license = "MIT"
 edition = "2024"
+rust-version = "1.95"
 exclude = ["index.node"]
 
 [lib]
@@ -26,10 +27,8 @@ libloading = "0.9"
 crc = "^3.0"
 color = "0.3"
 rayon = "^1.5"
-crossbeam = "0.8.2"
 once_cell = "1.13"
 little_exif = "0.6.8"
-dashmap = "6.1.0"
 ahash = "0.8"
 process_path = "0.1.4"
 hayro-interpret = "0.8"

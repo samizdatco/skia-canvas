@@ -65,7 +65,7 @@ jobs:
     - name: Save Skia for later runs (Linux only)
       if: ${{ startsWith(matrix.os, 'ubuntu') && steps.skia-cache.outputs.cache-hit != 'true' }}
       run: |
-        out=$(find target/release/build -maxdepth 3 -type d -path '*skia-bindings-*/out/skia' | head -1)
+        out=$(find target/release/build -type d -path '*skia-bindings*/out/skia' | head -1)
         [ -n "$out" ] || { echo "no skia build output to cache"; exit 1; }
         mkdir -p /tmp/pkg/skia-binaries /tmp/skia-binaries
         cp "$out"/*.a "$out"/bindings.rs /tmp/pkg/skia-binaries/
