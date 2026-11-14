@@ -49,9 +49,11 @@ bump:
 	  printf "Current version: $(PACKAGE_VERSION:v%=%)\n\nUsage: make bump version=<semver>\n       (e.g. make bump version=1.2.3-rc.4)\n"; exit 1; fi
 	@/bin/echo -n "Update $(PACKAGE_VERSION:v%=%) -> $(version)? [y/N] "
 	@read line; if [[ $$line != "y" ]]; then exit 1; fi
+	@if [[ `jj log --no-graph -r @ -T 'if(empty && description == "", "fresh")'` != "fresh" ]]; then jj new --quiet; fi
 	@npm version $(version) --no-git-tag-version
 	@sed -i '' -e '1,/^version = /s/^version = .*/version = "$(version)"/' Cargo.toml
 	@cargo update -p skia-canvas
+	@jj describe --quiet -m "version $(version)"
 
 release:
 	@if [[ `jj diff --from main --to @ package.json` != "" ]]; then \
