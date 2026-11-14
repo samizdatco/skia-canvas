@@ -119,7 +119,7 @@ impl FontLibrary{
       font_stacks.insert("system-ui", vec![".AppleSystemUIFont", "Helvetica Neue", "Ubuntu", "Segoe UI", "Fira Sans", "Roboto", "DroidSans", "Tahoma"]);
       // see also: https://modernfontstacks.com | https://systemfontstack.com | https://www.ctrl.blog/entry/font-stack-text.html
 
-      // Set up mappings for generic font names based on the first match found on the system
+      // Set up mappings for generic font names based on the first match found on the system (or fall back to the system's selection)
       for (generic_name, families) in font_stacks.into_iter() {
         let best_match = families.iter().find_map(|fam| {
           let mut style_set = self.mgr.match_family(fam);
@@ -127,6 +127,9 @@ impl FontLibrary{
             true => Some(style_set),
             false => None
           }
+        }).or_else(|| {
+          let fallback = self.mgr.match_family_style(generic_name, FontStyle::normal())?.family_name();
+          Some(self.mgr.match_family(fallback))
         });
 
         let alias = Some(generic_name.to_string());
