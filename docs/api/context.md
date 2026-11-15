@@ -124,6 +124,14 @@ The `.textRendering` setting controls what the renderer prioritizes when convert
 
 ![rasterization differences depending on textRendering mode](../assets/text-rendering.svg)
 
+### `.arcPaintOp`
+
+Browsers record an `arc()` drawn on an empty path as a dedicated arc operation and rasterize it with Skia's `drawArc` (or `drawOval` for a closed full circle) rather than as general path geometry, which gives slightly different edge pixels. Set `.arcPaintOp` to `true` to do the same when the current path holds only that one arc (radius of at least 1, no transform change before filling or stroking). It defaults to `false` and is saved and restored with the rest of the context's state.
+
+### `.rectPaintOp`
+
+Browsers record `fillRect()` and `strokeRect()` as dedicated rectangle operations and rasterize them with Skia's `drawRect` rather than as a rectangular path. Skia's GPU backends handle the two differently in places (a blurred shadow under a rect uses an analytic blur, a path does not), so their pixels can differ. Set `.rectPaintOp` to `true` to draw these calls with `drawRect` too. It defaults to `false` and is saved and restored with the rest of the context's state.
+
 ### `.textWrap`
 
 The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()` methods.
