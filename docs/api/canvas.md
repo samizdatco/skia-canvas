@@ -210,6 +210,7 @@ toFile(filename, {
   outline=false,      // SVG: font embedding
   downsample=false,   // JPG: edge sharpness
   filters='none',     // PNG: compression
+  browserPng=false,   // PNG: browser-style encoding
   colorType='rgba',   // RAW: pixel format
   premultiplied=false // RAW: opacity encoding
 })
@@ -217,7 +218,7 @@ toFile(filename, {
 
 ##### Synchronous version
 ```js returns="void"
-toFileSync(filename, {format, matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
+toFileSync(filename, {format, matte, density, quality, page, msaa, outline, downsample, filters, browserPng, colorType, premultiplied})
 ```
 
 The `toFile` method takes a file path and writes the canvas’s current contents to disk. If the filename ends with an extension that makes its format clear, the second argument is optional. If the filename is ambiguous, you can pass an options object with a `format` string using names like `"png"` and `"jpeg"` or a full mime type like `"application/pdf"`.
@@ -290,6 +291,13 @@ By default, PNG exports disable [‘adaptive filtering’][png_adaptive] since t
 
 The `filters` option can also be set to `"auto"`, a middle-ground that tests the canvas content’s compressibility on a subset of its pixels, then uses that measurement to decide between `"all"` or `"none"`. It generally minimizes output file size and avoids the expense of unnecessary `"all"` encodes, but it’s a few milliseconds slower than the default in the cases where it ultimately selects `"none"` anyway.
 
+#### `browserPng`
+:::format[PNG format only]
+*Default value: __`false`__*
+:::
+
+Browsers encode canvas PNGs (from `toDataURL()` and `toBlob()`) with fast, fixed settings: the Rust [`png`][png_crate] crate, zlib level 1, the ‘Up’ filter on every row, no `pHYs` chunk, and the final deflate block in its own `IDAT` chunk. Setting `browserPng` to `true` encodes the same way, so a canvas whose pixels match the browser’s also produces the same PNG file. It ignores the `quality` and `filters` options and applies to sRGB canvases only (other color spaces fall back to the default encoder).
+
 #### `colorType`
 
 :::format[RAW format only]
@@ -309,20 +317,20 @@ By default, pixel values in `"raw"` exports will use ‘straight’ (unpremultip
 
 ### `toBuffer()`
 ```js returns="Promise<Buffer>"
-toBuffer(format, {matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
+toBuffer(format, {matte, density, quality, page, msaa, outline, downsample, filters, browserPng, colorType, premultiplied})
 ```
 ```js returns="Buffer"
-toBufferSync(format, {matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
+toBufferSync(format, {matte, density, quality, page, msaa, outline, downsample, filters, browserPng, colorType, premultiplied})
 ```
 
 Node [`Buffer`][Buffer] objects containing various image formats can be created by passing either a format string like `"svg"` or a mime-type like `"image/svg+xml"`. An ‘@’ suffix can be added to the format string to specify a pixel-density (for instance, `"jpg@2x"`). The optional arguments behave the same as their equivalents in the [`toFile`][toFile] method.
 
 ### `toURL()`
 ```js returns="Promise<String>"
-toURL(format, {matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
+toURL(format, {matte, density, quality, page, msaa, outline, downsample, filters, browserPng, colorType, premultiplied})
 ```
 ```js returns="String"
-toURLSync(format, {matte, density, quality, page, msaa, outline, downsample, filters, colorType, premultiplied})
+toURLSync(format, {matte, density, quality, page, msaa, outline, downsample, filters, browserPng, colorType, premultiplied})
 ```
 
 This method accepts the same arguments and behaves similarly to [.toBuffer()][toBuffer]. However instead of returning a Buffer, it returns a string of the form `"data:<mime-type>;base64,<image-data>"` which can be used as a `src` attribute in `<img>` tags, embedded into CSS, etc.
@@ -445,6 +453,7 @@ Use `loadCanvas()` when you want to draw *onto* some existing content and then r
 [sharp]: https://sharp.pixelplumbing.com
 [sharp_npm]: https://www.npmjs.com/package/sharp
 [png_adaptive]: https://observablehq.com/@smitop/png-filters
+[png_crate]: https://crates.io/crates/png
 [canvas_width]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/width
 [canvas_height]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/height
 [getContext]: https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/getContext

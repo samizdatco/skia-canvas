@@ -756,6 +756,44 @@ describe("Canvas", ()=>{
       assert.throws(() => canvas.toBuffer('png', {filters:'some'}), TypeError)
     })
 
+    test("browserPng", async () => {
+      let chunks = buf => {
+        let list = []
+        for (let o=8; o<buf.length; o+=12+buf.readUInt32BE(o)){
+          list.push({type:buf.toString('latin1', o+4, o+8), data:buf.subarray(o+8, o+8+buf.readUInt32BE(o))})
+        }
+        return list
+      }
+
+      ctx.fillStyle = 'rgba(0, 128, 255, 0.5)'
+      ctx.fillRect(10, 10, 100, 50)
+      let standard = canvas.toBufferSync('png'),
+          browser = canvas.toBufferSync('png', {browserPng:true})
+
+      // fixed browser settings: no pHYs, zlib level 1, every row Up-filtered, and the
+      // final deflate block flushed into an IDAT of its own
+      let types = chunks(browser).map(c => c.type).join(' ')
+      assert.match(types, /^IHDR (IDAT )+IDAT IEND$/)
+      assert.contains(chunks(standard).map(c => c.type), 'pHYs')
+      let ihdr = chunks(browser)[0].data,
+          idats = chunks(browser).filter(c => c.type == 'IDAT').map(c => c.data)
+      assert.equal(ihdr[8], 8)  // bit depth
+      assert.equal(ihdr[9], 6)  // RGBA
+      assert.deepEqual([...idats[0].subarray(0, 2)], [0x78, 0x01])
+      assert.deepEqual([...idats.at(-1).subarray(0, 2)], [0x03, 0x00])
+      let raw = require('zlib').inflateSync(Buffer.concat(idats)),
+          stride = WIDTH * 4 + 1
+      for (let y=0; y<HEIGHT; y++) assert.equal(raw[y * stride], 2)
+
+      // the pixels survive the round trip unchanged
+      let decode = async buf => {
+        let img = await loadImage(buf), c = new Canvas(WIDTH, HEIGHT), cx = c.getContext('2d')
+        cx.drawImage(img, 0, 0)
+        return cx.getImageData(0, 0, WIDTH, HEIGHT).data
+      }
+      assert.deepEqual(await decode(browser), await decode(standard))
+    })
+
     test("outline", async () => {
       FontLibrary.use(`tests/assets/fonts/Monoton-Regular.woff`)
       ctx.font = '40px Monoton'

@@ -345,6 +345,9 @@ export interface ExportOptions extends RenderOptions {
   /** Select an adaptive filtering mode (PNG only) */
   filters?: PngFilters
 
+  /** Encode PNGs the way browsers do for toDataURL() & toBlob() (PNG only, ignores `quality` & `filters`) */
+  browserPng?: boolean
+
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType
 
