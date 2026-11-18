@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::Instant;
 
-use skia_safe::{Color, ColorType, Data, IRect, ImageInfo, Surface, image::images};
+use skia_safe::{AlphaType, Color, ColorType, Data, IRect, ImageInfo, Surface, image::images};
 use crate::gfx::page::{Page, PageVersion, ExportOptions, Replay};
 use crate::gfx::RenderingEngine;
 use crate::mem;
@@ -75,14 +75,20 @@ impl ReadbackSurface{
   }
 
   pub fn copy_pixels(&mut self, dst_info: &ImageInfo, src: IRect, pixels: &mut [u8]) -> bool{
+    let gpu = self.is_gpu_backed();
     let Some(surface) = self.surface.as_mut() else { return false };
-    if surface.read_pixels(dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y())){
+
+    // GPU backends unpremultiply in a shader whose rounding differs from the CPU conversion, so
+    // read premultiplied pixels and convert them below to get the same bytes on either engine
+    let unpremul_on_gpu = gpu && dst_info.alpha_type() == AlphaType::Unpremul;
+    if !unpremul_on_gpu && surface.read_pixels(dst_info, pixels, dst_info.min_row_bytes(), (src.x(), src.y())){
       return true
     }
 
     // GPU surfaces refuse to read back in certain color types (e.g., `BGR101010x` on Metal).
     // Rather than throwing, perform the readback through a supported type...
-    let staged = dst_info.with_color_type(ColorType::RGBA8888);
+    let mut staged = dst_info.with_color_type(ColorType::RGBA8888);
+    if unpremul_on_gpu { staged = staged.with_alpha_type(AlphaType::Premul) }
     let mut rgba = vec![0u8; staged.compute_min_byte_size()];
     if !surface.read_pixels(&staged, &mut rgba, staged.min_row_bytes(), (src.x(), src.y())){
       return false

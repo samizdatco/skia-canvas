@@ -655,7 +655,17 @@ impl Page{
               let alpha_type = if opts.premultiplied{ AlphaType::Premul }else{ AlphaType::Unpremul };
               let dst_info = ImageInfo::new(page.scaled_dimensions(opts.density), opts.color_type, alpha_type, Some(color_space.clone()));
               let mut buffer: Vec<u8> = vec![0; dst_info.compute_min_byte_size()];
-              match surface.read_pixels(&dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0)){
+
+              // convert from a raster copy rather than reading from the surface, since GPU backends
+              // unpremultiply in a shader whose rounding differs from the CPU conversion
+              let raster = match image.is_texture_backed(){
+                true => image.make_non_texture_image(&mut surface.direct_context()),
+                false => Some(image),
+              };
+              let read = raster.is_some_and(|image| image.read_pixels(
+                &dst_info, &mut buffer, dst_info.min_row_bytes(), (0,0), skia_safe::image::CachingHint::Allow
+              ));
+              match read{
                 true => Ok(Rendered::Raw(buffer)),
                 false => Err(format!("Could not encode as raw ({:?})", opts.color_type))
               }
