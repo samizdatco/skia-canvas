@@ -854,6 +854,19 @@ pub fn set_wordSpacing(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
 // -- non-standard typography extensions --------------------------------------------
 
+pub fn get_browserGlyphBounds(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let this = this.borrow_mut();
+  Ok(cx.boolean(this.state.browser_glyph_bounds))
+}
+
+pub fn set_browserGlyphBounds(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+  let this = cx.argument::<BoxedContext2D>(0)?;
+  let mut this = this.borrow_mut();
+  this.state.browser_glyph_bounds = bool_arg(&mut cx, 1, "browserGlyphBounds")?;
+  Ok(cx.undefined())
+}
+
 pub fn get_fontHinting(mut cx: FunctionContext) -> JsResult<JsBoolean> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();
