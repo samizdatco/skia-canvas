@@ -163,6 +163,26 @@ describe("Typography", () => {
     let smoothed = render(true)
     assert(differs(render(false), smoothed))
     assert(!differs(render(true), smoothed))
+
+    // "subpixel" requests subpixel AA (rendered to greyscale on canvas bitmaps); other strings are just truthy
+    ctx.fontSmoothing = "subpixel"
+    assert.equal(ctx.fontSmoothing, "subpixel")
+    assert(census("subpixel").partial > 0)
+    // @ts-expect-error — deliberately mistyped: exercises truthy coercion
+    ctx.fontSmoothing = "lcd"
+    assert.equal(ctx.fontSmoothing, true)
+
+    // on macOS it uses CoreText's heavier subpixel-AA glyph shapes, unless geometricPrecision is selected
+    let subpixel = render("subpixel")
+    assert(!differs(render("subpixel"), subpixel))
+    if (process.platform == "darwin"){
+      assert(differs(subpixel, smoothed))
+      ctx.textRendering = "geometricPrecision"
+      let precise = render(true)
+      assert(!differs(render("subpixel"), precise))
+      ctx.textRendering = "auto"
+    }
+    assert(!differs(render(true), smoothed))
   })
 
   test("fontKerning", () => {

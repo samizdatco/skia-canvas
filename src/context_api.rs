@@ -868,17 +868,22 @@ pub fn set_fontHinting(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   Ok(cx.undefined())
 }
 
-pub fn get_fontSmoothing(mut cx: FunctionContext) -> JsResult<JsBoolean> {
+pub fn get_fontSmoothing(mut cx: FunctionContext) -> JsResult<JsValue> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let this = this.borrow_mut();
-  Ok(cx.boolean(this.state.font_smoothing))
+  Ok(match (this.state.font_smoothing, this.state.font_subpixel){
+    (true, true) => cx.string("subpixel").upcast(),
+    (flag, _) => cx.boolean(flag).upcast(),
+  })
 }
 
 pub fn set_fontSmoothing(mut cx: FunctionContext) -> JsResult<JsUndefined> {
   let this = cx.argument::<BoxedContext2D>(0)?;
   let mut this = this.borrow_mut();
-  let flag = bool_arg(&mut cx, 1, "fontSmoothing")?;
+  let subpixel = opt_string_arg(&mut cx, 1).is_some_and(|mode| mode == "subpixel");
+  let flag = subpixel || bool_arg(&mut cx, 1, "fontSmoothing")?;
   this.state.font_smoothing = flag;
+  this.state.font_subpixel = subpixel;
   Ok(cx.undefined())
 }
 
