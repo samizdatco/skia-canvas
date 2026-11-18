@@ -798,6 +798,9 @@ interface CanvasTextDrawingStyles {
      * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/font)
      */
     font: string;
+    /** The size in pixels that relative `font` sizes (`em`, `rem`, `%`, `larger`, `smaller`) scale.
+     * Defaults to 16; browsers use 10, the size of the canvas default font `10px sans-serif`. */
+    relativeFontBase: number;
     /** A CSS `font-stretch` keyword or percentage string (e.g. `"condensed"` or `"75%"`).
      * Percentages set the `wdth` variation axis directly on variable fonts.
      *

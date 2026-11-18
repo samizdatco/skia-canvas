@@ -47,6 +47,19 @@ ctx.font = "24px Avenir" // uses the default leading in the font metrics
 ctx.font = "24px/1.5 Avenir" // sets the line height to 1.5 ems
 ```
 
+### `.relativeFontBase`
+
+Relative sizes in a [`.font`][c2d_font] specification (`em`, `rem`, `%`, `larger` and `smaller`) are resolved against this many pixels when the font is assigned. It defaults to `16`. Browsers resolve them against the canvas's default font, `10px sans-serif`, so set it to `10` to get the same sizes a browser would:
+
+```js
+ctx.font = "2em Arial"     // 32px
+ctx.relativeFontBase = 10
+ctx.font = "2em Arial"     // 20px, as in a browser
+ctx.font = "150% Arial"    // 15px
+```
+
+Absolute keywords such as `large` and `x-small` are unaffected, since they scale the fixed 16px `medium` size. Changing the property does not resize the current font; it applies to the next assignment.
+
 ### `.fontHinting`
 
 By default the canvas disables Skia’s [font hinting](https://en.wikipedia.org/wiki/Font_hinting) when rendering text in order to better match the text rendering produced by browsers. To enable hinting, set the context’s `.fontHinting` property to `true`, but note that only Linux and Windows renderers support the feature. On macOS, enabling hinting has no effect since CoreText has no support for it (though see the [`.textRendering`][c2d_textRendering] property’s `optimizeLegibility` setting if you’d like to enable the ‘text smoothing’ that hinting used to trigger in earlier Skia Canvas releases).
