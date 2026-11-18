@@ -701,6 +701,8 @@ interface CanvasImageData {
 interface CanvasImageSmoothing {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/imageSmoothingEnabled) */
   imageSmoothingEnabled: boolean;
+  /** Build a rotated ellipse() the way Blink does, unrotated at the origin then transformed (default false) */
+  ellipseTransform: boolean;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/imageSmoothingQuality) */
   imageSmoothingQuality: ImageSmoothingQuality;
 }

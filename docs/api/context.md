@@ -124,6 +124,10 @@ The `.textRendering` setting controls what the renderer prioritizes when convert
 
 ![rasterization differences depending on textRendering mode](../assets/text-rendering.svg)
 
+### `.ellipseTransform`
+
+Browsers build an `ellipse()` with a non-zero rotation by adding the unrotated arc at the origin and then translating and rotating it into place, which rounds the curve's points slightly differently from rotating the arc about its center. Set `.ellipseTransform` to `true` to build rotated ellipses the same way. It defaults to `false` and is saved and restored with the rest of the context's state.
+
 ### `.textWrap`
 
 The standard canvas has a rather impoverished typesetting system, allowing for only a single line of text and an approach to width-management that horizontally scales the letterforms (a type-crime if ever there was one). Skia Canvas allows you to opt-out of this single-line world by setting the `.textWrap` property to `true`. Doing so affects the behavior of the `fillText()`, `strokeText()`, and `measureText()` methods.
